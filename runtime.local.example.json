@@ -1,0 +1,5 @@
+{
+  "hip_visible_devices": "0",
+  "disable_cudnn": false,
+  "drama_design_device": "cpu"
+}

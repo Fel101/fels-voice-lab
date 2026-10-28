@@ -1,0 +1,5 @@
+# Isolated transcript-suggestion environment (.venv-asr). Keep it separate from .venv and every model environment.
+# Pins match the faster-whisper set used by transcript drafts: faster-whisper 1.2.1, ctranslate2 4.8.0, av 17.1.0.
+faster-whisper==1.2.1
+ctranslate2==4.8.0
+av==17.1.0

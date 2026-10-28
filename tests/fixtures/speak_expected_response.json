@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "content_type": "audio/wav",
+  "cache_control": "no-store",
+  "required_headers": [
+    "Content-Length",
+    "X-Gen-Seconds",
+    "X-Audio-Seconds",
+    "X-First-Chunk"
+  ],
+  "sample_rate_hz": 24000,
+  "channels": 1
+}

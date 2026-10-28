@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" data-theme="system"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fel's Voice Lab Compare</title>
+<style>
+:root{color-scheme:light;--bg:#f3f5f4;--fg:#202b29;--muted:#596b66;--card:#fff;--line:#d6e0dc;--accent:#187562;--err:#b52d22}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#101817;--fg:#e5eeeb;--muted:#a4b9b1;--card:#192320;--line:#34463f;--accent:#72d5b5;--err:#ff8a7a}
+@media(prefers-color-scheme:dark){:root[data-theme="system"]{color-scheme:dark;--bg:#101817;--fg:#e5eeeb;--muted:#a4b9b1;--card:#192320;--line:#34463f;--accent:#72d5b5;--err:#ff8a7a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:1020px;margin:auto;padding:24px 16px 64px}h1{font-size:1.5rem;margin:0}h2{font-size:1.08rem;margin:0 0 8px}p{margin:6px 0 14px}.muted{color:var(--muted);font-size:.9rem}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}button,select,input{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}button{cursor:pointer}button.primary{background:var(--accent);color:white}.trial{border-top:1px solid var(--line);padding:14px 0}.players{display:grid;grid-template-columns:1fr 1fr;gap:14px}.player{border:1px solid var(--line);border-radius:8px;padding:10px}.player strong{font-size:1.1rem}audio{display:block;width:100%;margin-top:6px}.ratings{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:8px}.ratings label{display:flex;flex-direction:column;font-size:.85rem}.ratings select{margin-top:3px}.notes{width:100%;box-sizing:border-box;min-height:44px;margin:8px 0}.err{color:var(--err)}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}@media(max-width:720px){.players{grid-template-columns:1fr}.ratings{grid-template-columns:1fr 1fr}}
+.app-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.theme-control{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}.theme-status{color:var(--err);font-size:.8rem}.theme-status:empty{display:none}a{color:var(--accent)}button.primary{color:var(--bg)}textarea{background:var(--bg);color:var(--fg);font:inherit;border:1px solid var(--line);border-radius:8px}.card,.player{min-width:0;overflow-wrap:anywhere}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.rating-grid{display:grid;gap:8px;margin-top:14px}.rating-grid label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.88rem}.rating-grid select{min-width:85px}
+.app-footer{max-width:1020px;margin:0 auto;padding:0 16px 32px;color:var(--muted);font-size:.85rem}
+</style><script src="/theme.js" defer></script></head><body><main>
+<header class="app-header"><h1>Compare voices</h1><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></header>
+<p class="muted">Local, concealed A/B listening for saved evaluation runs. Each pair uses loudness-matched audition copies; source takes stay unchanged. Results remain hidden until every trial is rated and you reveal the mapping.</p>
+<p><a href="/">Back to Fel's Voice Lab</a></p>
+<section class="card" aria-labelledby="savedTakeHeading"><h2 id="savedTakeHeading">Compare saved performances</h2>
+<p class="muted">Choose 2–20 takes from Perform or Scenes &amp; batch. Every selected take needs a partner with exactly the same text, spoken text, language and direction. Different voices from the same model can be compared. This auditions candidates; differing voices, references and settings do not make a controlled model benchmark.</p>
+<div class="row"><label>Find performances <input id="takeFilter" type="search" placeholder="Character, voice, model or test line"></label><button id="refreshTakes" type="button">Refresh saved takes</button><span id="takeCount" class="muted" role="status"></span></div>
+<div id="castTakeList"></div>
+<div class="row"><label>Comparison title <input id="comparisonTitle" value="Saved voice comparison" maxlength="120"></label><button class="primary" id="importCast" type="button">Create comparison from selected takes</button></div>
+<p id="castImportStatus" class="muted" role="status"></p>
+</section>
+<section class="card"><h2>Evaluation runs</h2><div class="row"><label>Run <select id="runSelect"></select></label><label>Evaluator label <input id="evaluator" value="local listener" maxlength="120"></label><button class="primary" id="createSession">Create blind A/B session</button></div><div id="runSummary" class="muted"></div>
+<div class="row"><label>Saved session <select id="sessionSelect"></select></label><button id="openSession">Open session</button><span id="sessionStatus" class="muted"></span></div></section>
+<div id="session"></div><p id="error" class="err" role="alert"></p>
+</main><footer class="app-footer">Fel's Voice Lab <span id="appVersion">__APP_VERSION__</span></footer><script>
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var dimensions=[['intelligibility','Intelligibility'],['identity_consistency','Identity consistency'],['acting_fit','Acting fit'],['naturalness','Naturalness'],['artifacts','Artifacts (5 = fewest)']];
+var compareCastTakes=[],selectedTakeIds=new Set(),candidateNames=Object.create(null);
+function request(path,body){return fetch(path,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store'}).then(function(r){return r.json().then(function(data){if(!r.ok)throw new Error(data.error||('HTTP '+r.status));return data;});});}
+function elem(name,text,cls){var n=document.createElement(name);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;}
+function reportError(err){$('error').textContent=err&&err.message?err.message:String(err);}
+function takeSearchText(take){return [take.character_name,take.identity_label,take.engine_id,take.text,take.language,take.direction].join(' ').toLowerCase();}
+function renderCastTakes(){var root=$('castTakeList');root.replaceChildren();var query=$('takeFilter').value.trim().toLowerCase();var rows=compareCastTakes.filter(function(take){return !query||takeSearchText(take).indexOf(query)>=0;});$('takeCount').textContent=selectedTakeIds.size+' selected · '+rows.length+'/'+compareCastTakes.length+' shown';$('importCast').disabled=selectedTakeIds.size<2||selectedTakeIds.size>20;if(!rows.length){root.appendChild(elem('p',compareCastTakes.length?'No matching performances.':'No saved performances yet. Generate and save the same test line for two voices in Perform, then refresh.','muted'));return;}rows.forEach(function(take){var card=elem('article');card.className='trial';var label=elem('label'),check=elem('input');check.type='checkbox';check.checked=selectedTakeIds.has(take.id);check.addEventListener('change',function(){if(check.checked&&selectedTakeIds.size>=20){check.checked=false;reportError(new Error('Choose up to 20 takes per comparison.'));return;}if(check.checked)selectedTakeIds.add(take.id);else selectedTakeIds.delete(take.id);$('takeCount').textContent=selectedTakeIds.size+' selected · '+rows.length+'/'+compareCastTakes.length+' shown';$('importCast').disabled=selectedTakeIds.size<2;});label.appendChild(check);label.appendChild(document.createTextNode(' '+take.character_name+' / '+take.identity_label+' / '+take.engine_id+' / take '+take.id.slice(0,8)));card.appendChild(label);card.appendChild(elem('p',take.text));card.appendChild(elem('p',(take.language||'Language unknown')+' · '+Number(take.duration_seconds||0).toFixed(2)+' s · '+(take.direction?'Direction: '+take.direction:'No delivery direction')+' · '+(take.created_at||''),'muted'));var terms=(take.provenance||{}).allowed_use;if(terms)card.appendChild(elem('p','Saved use terms: '+terms,'muted'));var audio=elem('audio');audio.controls=true;audio.preload='none';audio.src='/api/takes/'+encodeURIComponent(take.id)+'/audio';audio.setAttribute('aria-label','Preview '+take.character_name+' '+take.identity_label);card.appendChild(audio);root.appendChild(card);});}
+function refreshCastTakes(){return request('/api/takes').then(function(data){compareCastTakes=(data.takes||[]).filter(function(take){return !take.retired;}).slice().reverse();var available=new Set(compareCastTakes.map(function(take){return take.id;}));selectedTakeIds.forEach(function(id){if(!available.has(id))selectedTakeIds.delete(id);});renderCastTakes();});}
+function refresh(preferredRun){var previousRun=preferredRun||$('runSelect').value,previousSession=$('sessionSelect').value;return Promise.all([request('/api/evaluations'),request('/api/evaluations/blind-sessions')]).then(function(values){var data=values[0],sessions=values[1].sessions;var runs=$('runSelect');runs.replaceChildren();data.runs.forEach(function(run){var o=elem('option',run.title+' — '+run.suite_id);o.value=run.id;runs.appendChild(o);});if(data.runs.some(function(run){return run.id===previousRun;}))runs.value=previousRun;var ss=$('sessionSelect');ss.replaceChildren();sessions.forEach(function(s){var o=elem('option',s.title+' — '+s.state+' — '+s.rated_count+'/'+s.trial_count+' A/B ratings'+(s.legacy_rated_count?' · '+s.legacy_rated_count+' legacy pair ratings':''));o.value=s.id;ss.appendChild(o);});if(sessions.some(function(s){return s.id===previousSession;}))ss.value=previousSession;if(!data.runs.length)$('runSummary').textContent='No evaluation run yet. Create one from saved performances above.';else return loadRunSummary();});}
+function loadRunSummary(){var id=$('runSelect').value;if(!id)return Promise.resolve();return request('/api/evaluations/runs/'+encodeURIComponent(id)).then(function(r){var run=r.run;var sections=[];Object.keys(run.summary||{}).forEach(function(engine){var s=run.summary[engine];if(s&&typeof s==='object')sections.push(engine+': '+JSON.stringify(s));});$('runSummary').textContent='Samples: '+run.samples.length+' · Reference: '+((run.manifest.reference||{}).sha256||'unknown')+' · '+sections.join(' | ');});}
+function showSession(session){
+  var root=$('session');root.replaceChildren();
+  var header=elem('section');header.className='card';
+  header.appendChild(elem('h2','Blind session · '+session.state));
+  var completed=session.trials.filter(function(trial){return trial.rating_complete;}).length;
+  header.appendChild(elem('p',session.evaluator+' · '+completed+'/'+session.trials.length+' A/B ratings saved.','muted'));
+  header.appendChild(elem('p','Score A and B separately: 1 = worst, 5 = best. For artifacts, 5 means fewest. A preference is optional. Legacy pair scores are preserved separately and do not supply scores for either voice.','muted'));
+  session.trials.forEach(function(trial){
+    var card=elem('article');card.className='trial';
+    card.appendChild(elem('h3',trial.case_id));card.appendChild(elem('p',trial.text));
+    if(trial.revealed)card.appendChild(elem('p','Revealed mapping: A = '+trial.revealed.left_engine+'; B = '+trial.revealed.right_engine,'muted'));
+    var players=elem('div');players.className='players';var picks={left:{},right:{}};
+    var saved=trial.rating_complete?trial.rating:null;
+    [['left','A'],['right','B']].forEach(function(pair){
+      var player=elem('div');player.className='player';player.appendChild(elem('strong','Sample '+pair[1]));
+      var audio=elem('audio');audio.controls=true;audio.preload='none';audio.src=trial[pair[0]].audio_url;
+      audio.setAttribute('aria-label','Play sample '+pair[1]+' for '+trial.case_id);player.appendChild(audio);
+      var form=elem('div');form.className='rating-grid';
+      dimensions.forEach(function(dimension){
+        var label=elem('label',dimension[1]+' · '+pair[1]),select=elem('select');
+        var blank=elem('option','Rate 1–5');blank.value='';select.appendChild(blank);
+        for(var n=1;n<=5;n++){var option=elem('option',String(n));option.value=String(n);select.appendChild(option);}
+        if(saved)select.value=String(saved[pair[0]][dimension[0]]);
+        select.disabled=session.state!=='blind';picks[pair[0]][dimension[0]]=select;
+        label.appendChild(select);form.appendChild(label);
+      });
+      player.appendChild(form);players.appendChild(player);
+    });
+    card.appendChild(players);
+    var preferenceLabel=elem('label','Overall preference (optional) '),preference=elem('select');
+    [['','No preference recorded'],['A','A sounds better'],['B','B sounds better'],['tie','Tie / no audible preference']].forEach(function(choice){var option=elem('option',choice[1]);option.value=choice[0];preference.appendChild(option);});
+    if(saved)preference.value=saved.preference||'';preference.disabled=session.state!=='blind';
+    preferenceLabel.appendChild(preference);var preferenceRow=elem('div');preferenceRow.className='row';preferenceRow.appendChild(preferenceLabel);card.appendChild(preferenceRow);
+    var notes=elem('textarea');notes.className='notes';notes.placeholder='Optional comparison notes';notes.maxLength=2000;
+    if(saved)notes.value=saved.notes||'';notes.disabled=session.state!=='blind';card.appendChild(notes);
+    if(trial.legacy_rating){
+      var legacy=elem('details');legacy.appendChild(elem('summary','Legacy pair-level rating — no A/B attribution'));
+      legacy.appendChild(elem('p','Saved before separate voice scores were available. These values apply to the pair as a whole; neither side is inferred.','muted'));
+      dimensions.forEach(function(dimension){legacy.appendChild(elem('p',dimension[1]+': '+trial.legacy_rating[dimension[0]],'muted'));});
+      if(trial.legacy_rating.notes)legacy.appendChild(elem('p','Original notes: '+trial.legacy_rating.notes,'muted'));
+      card.appendChild(legacy);
+    }
+    var actions=elem('div');actions.className='row';var save=elem('button','Save A and B ratings');save.disabled=session.state!=='blind';
+    save.addEventListener('click',function(){
+      var ratings={left:{},right:{},preference:preference.value||null};
+      var missing=['left','right'].some(function(side){return dimensions.some(function(dimension){return !picks[side][dimension[0]].value;});});
+      if(missing){reportError(new Error('Choose all five scores for A and all five scores for B before saving.'));return;}
+      ['left','right'].forEach(function(side){dimensions.forEach(function(dimension){ratings[side][dimension[0]]=Number(picks[side][dimension[0]].value);});});
+      save.disabled=true;$('error').textContent='';
+      request('/api/evaluations/blind-sessions/'+session.session_id+'/ratings',{trial_id:trial.trial_id,ratings:ratings,notes:notes.value}).then(function(result){showSession(result.session);return refresh();}).catch(function(error){save.disabled=false;reportError(error);});
+    });
+    actions.appendChild(save);card.appendChild(actions);header.appendChild(card);
+  });
+  var footer=elem('div');footer.className='row';
+  if(session.state==='blind'){
+    var reveal=elem('button','Reveal model mapping and ratings');reveal.disabled=session.trials.some(function(trial){return !trial.rating_complete;});
+    reveal.addEventListener('click',function(){request('/api/evaluations/blind-sessions/'+session.session_id+'/reveal',{}).then(function(result){showSession(result.session);return refresh();}).catch(reportError);});footer.appendChild(reveal);
+  }
+  root.appendChild(header);root.appendChild(footer);
+}
+$('takeFilter').addEventListener('input',renderCastTakes);
+$('refreshTakes').addEventListener('click',function(){refreshCastTakes().catch(reportError);});
+$('importCast').addEventListener('click',function(){var ids=Array.from(selectedTakeIds);if(ids.length<2||ids.length>20){reportError(new Error('Select 2–20 saved performances first.'));return;}$('error').textContent='';$('importCast').disabled=true;$('castImportStatus').textContent='Verifying source audio and making loudness-matched listening copies…';request('/api/evaluations/cast-import',{title:$('comparisonTitle').value,take_ids:ids}).then(function(result){$('castImportStatus').textContent='Created '+result.run.title+' with '+result.run.samples.length+' candidates. Choose Create blind A/B session below to rate them. No model was loaded and no ratings were assigned.';return refresh(result.run.id);}).catch(function(err){$('castImportStatus').textContent='Comparison was not created.';reportError(err);}).finally(function(){$('importCast').disabled=selectedTakeIds.size<2;});});
+var renderBlindSession=showSession;
+showSession=function(session){if(session.state!=='revealed'){return renderBlindSession(session);}function renderRevealed(){var labels=candidateNames[session.run_id]||{};var visible=Object.assign({},session,{trials:session.trials.map(function(trial){return Object.assign({},trial,{revealed:{left_engine:labels[trial.revealed.left_engine]||trial.revealed.left_engine,right_engine:labels[trial.revealed.right_engine]||trial.revealed.right_engine}});})});return renderBlindSession(visible);}if(candidateNames[session.run_id])return renderRevealed();return request('/api/evaluations/runs/'+encodeURIComponent(session.run_id)).then(function(result){candidateNames[session.run_id]=result.run.manifest.candidate_labels||{};return renderRevealed();}).catch(reportError);};
+$('runSelect').addEventListener('change',function(){loadRunSummary().catch(reportError);});
+$('createSession').addEventListener('click',function(){var id=$('runSelect').value;if(!id){reportError(new Error('Select an evaluation run first.'));return;}request('/api/evaluations/blind-sessions',{run_id:id,evaluator:$('evaluator').value}).then(function(r){showSession(r.session);return refresh();}).catch(reportError);});
+$('openSession').addEventListener('click',function(){var id=$('sessionSelect').value;if(!id){reportError(new Error('Select a saved session first.'));return;}request('/api/evaluations/blind-sessions/'+id).then(function(r){showSession(r.session);$('error').textContent='';}).catch(reportError);});
+refresh().catch(reportError);
+refreshCastTakes().catch(reportError);
+</script></body></html>

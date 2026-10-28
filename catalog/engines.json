@@ -1,0 +1,350 @@
+{
+  "catalog_version": 1,
+  "worker_protocol_version": 1,
+  "audio_transport": "Complete-WAV jobs use temporary NumPy float32 audio under out/workers; native Qwen streaming sends bounded PCM16LE chunks over the worker protocol.",
+  "service_streaming": {
+    "status": "native_qwen_generator_available",
+    "endpoint": "/api/stream",
+    "transport": "application/x-ndjson with ordered pcm_s16le chunks; maximum 8192 samples per transport chunk",
+    "native_generator_engines": [
+      "qwen3-tts-1.7b-voice-design",
+      "qwen3-tts-1.7b-base",
+      "qwen3-tts-0.6b-base",
+      "qwen3-tts-1.7b-custom-voice"
+    ],
+    "sentence_at_a_time": {"status": "not_implemented"},
+    "full_file": {"status": "available", "endpoint": "/api/speak", "content_type": "audio/wav"},
+    "note": "The /api/stream endpoint exposes faster-Qwen generator PCM; Drama has a separate polling studio transport at /api/drama3. /api/speak remains complete WAV."
+  },
+  "reserved_interfaces": {
+    "streaming": {"operation": "generate_stream", "status": "implemented_for_faster_qwen"}
+  },
+  "engines": [
+    {
+      "id": "kokoro",
+      "name": "Kokoro 82M",
+      "family": "kokoro",
+      "checkpoint": "hexgrad/Kokoro-82M",
+      "local_revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+      "parameters": "82M",
+      "backend": {"name": "kokoro", "package_version": "0.9.4", "transformers_version": "5.2.0"},
+      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "runtime_default_not_measured", "value": null},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported"},
+        "voice_cloning": {"status": "unsupported"},
+        "voice_direction": {"status": "unsupported"},
+        "voice_selection": {"status": "supported", "kind": "fixed_speaker_embeddings", "api_field": "voice"},
+        "acting_controls": [{"id": "speed", "status": "supported", "minimum": 0.5, "maximum": 2.0}],
+        "native_vocal_events": {"status": "unsupported"},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
+      }
+    },
+    {
+      "id": "turbo",
+      "name": "Chatterbox Turbo 350M",
+      "family": "chatterbox",
+      "checkpoint": "ResembleAI/chatterbox-turbo",
+      "local_revision": "749d1c1a46eb10492095d68fbcf55691ccf137cd",
+      "parameters": "350M",
+      "backend": {"name": "chatterbox-tts", "package_version": "0.1.7", "transformers_version": "5.2.0", "variant": "turbo"},
+      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "runtime_default_not_measured", "value": null},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported"},
+        "voice_cloning": {"status": "supported", "input": "reference_audio", "default_api_behavior": "clone_from_local_af_heart_reference"},
+        "voice_direction": {"status": "unsupported"},
+        "voice_selection": {"status": "supported", "kind": "reference_or_checkpoint_default"},
+        "acting_controls": [{"id": "native_vocal_events", "status": "supported", "examples": ["[laugh]", "[chuckle]", "[cough]"]}],
+        "native_vocal_events": {"status": "supported", "syntax": "square_bracket_tags"},
+        "sampling_controls": {"status": "worker_verified", "defaults": {"temperature": 0.8, "top_k": 1000, "top_p": 0.95, "repetition_penalty": 1.2}, "controls": ["temperature", "top_k", "top_p", "repetition_penalty"]},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
+      }
+    },
+    {
+      "id": "orig",
+      "name": "Chatterbox 500M",
+      "family": "chatterbox",
+      "checkpoint": "ResembleAI/chatterbox",
+      "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
+      "parameters": "500M",
+      "backend": {"name": "chatterbox-tts", "package_version": "0.1.7", "transformers_version": "5.2.0", "variant": "original"},
+      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "runtime_default_not_measured", "value": null},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported"},
+        "voice_cloning": {"status": "supported", "input": "reference_audio", "default_api_behavior": "checkpoint_default_voice"},
+        "voice_direction": {"status": "unsupported", "note": "The legacy exaggeration and CFG controls affect generation; they are not a text instruction interface."},
+        "voice_selection": {"status": "supported", "kind": "reference_or_checkpoint_default"},
+        "acting_controls": [
+          {"id": "exaggeration", "status": "supported", "default": 0.5},
+          {"id": "cfg_weight", "status": "supported", "default": 0.5}
+        ],
+        "sampling_controls": {"status": "worker_verified", "defaults": {"exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8, "top_p": 1.0, "repetition_penalty": 1.2, "min_p": 0.05}, "controls": ["temperature", "top_p", "repetition_penalty", "min_p"]},
+        "native_vocal_events": {"status": "unsupported"},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
+      }
+    },
+    {
+      "id": "chatterbox-vc",
+      "name": "Chatterbox Voice Conversion",
+      "family": "chatterbox",
+      "checkpoint": "ResembleAI/chatterbox",
+      "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
+      "parameters": "S3Gen conversion path",
+      "backend": {"name": "chatterbox-vc", "package_version": "0.1.7", "variant": "voice_conversion"},
+      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "runtime_default_not_measured", "value": null},
+      "integration": {"status": "integrated", "service_api": true, "task_only": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported"},
+        "voice_cloning": {"status": "unsupported", "note": "This is audio-to-audio conversion, not text synthesis."},
+        "voice_conversion": {"status": "worker_verified", "input": "source_performance_and_separate_target_reference",
+                             "source_limit_seconds": 60, "target_reference_limit_seconds": 10},
+        "watermark": {"status": "worker_verified", "kind": "PerthImplicitWatermarker"},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
+      }
+    },
+    {
+      "id": "breeze-tts-2",
+      "name": "Breeze TTS 2 BF16",
+      "family": "breeze-tts-2",
+      "checkpoint": "drbaph/Breeze-TTS-2-comfyui",
+      "local_revision": "a6bfd9d0d4e8b3b61c3a5ed3ecf55468c8ab88e4",
+      "parameters": "3B",
+      "backend": {"name": "local-vendored-breeze-runtime", "transformers_version": "5.17.0", "source_commit": "not preserved"},
+      "runtime": {"environment": ".venv-breeze", "python": ".venv-breeze/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "runtime_default_not_measured", "value": null},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "worker_verified", "input": "voice_description", "api_mode": "design"},
+        "voice_cloning": {"status": "worker_verified", "input": "reference_audio_and_transcript", "api_mode": "clone",
+                           "reference_cache": "content_sha256_plus_runtime_identity"},
+        "voice_direction": {"status": "worker_verified", "input": "reference_audio_transcript_and_instruction",
+                             "api_mode": "direction", "adherence": "generated_but_not_perceptually_scored"},
+        "acting_controls": [{"id": "direction", "status": "worker_verified", "presets": 5}],
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "cfg_scale", "max_new_tokens",
+                                "temperature", "top_k", "top_p", "repetition_penalty", "depth_temperature",
+                                "depth_top_k", "depth_top_p"]},
+        "runtime_profiles": {"status": "worker_verified", "profiles": ["eager", "cuda_graphs"],
+                              "effective_profile_reported": true},
+        "native_vocal_events": {"status": "generated_with_tags", "syntax": "parenthesized_tags",
+                                 "adherence": "not_perceptually_scored"},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"},
+        "license_note": "BreezeBlue Research and Non-Commercial License 1.1 for weights, derivatives and self-hosted outputs; application/code licenses do not replace these terms."
+      }
+    },
+    {
+      "id": "qwen3-tts-1.7b-voice-design",
+      "name": "Qwen3-TTS 1.7B VoiceDesign",
+      "family": "qwen3-tts",
+      "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "local_revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+      "parameters": "1.7B",
+      "backend": {"name": "faster-qwen3-tts", "package_version": "0.4.0", "transformers_version": "5.15.1",
+                   "comparison_runtime": {"name": "qwen-tts", "package_version": "0.1.1", "transformers_version": "4.57.3",
+                                          "environment": ".venv-qwen", "service_api": false}},
+      "runtime": {"environment": ".venv-fqwen", "python": ".venv-fqwen/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "sdpa"},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "worker_verified", "input": "voice_description", "api_mode": "design"},
+        "voice_cloning": {"status": "unsupported_by_checkpoint"},
+        "voice_direction": {"status": "unsupported_by_checkpoint"},
+        "native_vocal_events": {"status": "unsupported"},
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "max_new_tokens", "temperature", "top_k", "top_p", "repetition_penalty"]},
+        "streaming": {"status": "real_gpu_smoke_verified", "kind": "native_generator", "endpoint": "/api/stream",
+                       "api_output": "incremental_pcm_s16le_ndjson", "verified_modes": ["design"]}
+      }
+    },
+    {
+      "id": "qwen3-tts-1.7b-base",
+      "name": "Qwen3-TTS 1.7B Base",
+      "family": "qwen3-tts",
+      "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "local_revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "parameters": "1.7B",
+      "backend": {"name": "faster-qwen3-tts", "package_version": "0.4.0", "transformers_version": "5.15.1",
+                   "comparison_runtime": {"name": "qwen-tts", "package_version": "0.1.1", "transformers_version": "4.57.3",
+                                          "environment": ".venv-qwen", "service_api": false}},
+      "runtime": {"environment": ".venv-fqwen", "python": ".venv-fqwen/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "sdpa"},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported_by_checkpoint"},
+        "voice_cloning": {"status": "worker_verified", "input": "reference_audio_and_transcript", "reference_cache": "content_sha256_plus_runtime_identity"},
+        "voice_direction": {"status": "experimental", "note": "The installed method accepts an instruction; Base checkpoint direction adherence is not established."},
+        "native_vocal_events": {"status": "unsupported"},
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "max_new_tokens", "temperature", "top_k", "top_p", "repetition_penalty"]},
+        "speaker_embedding_only": {"status": "experimental", "tradeoff": "Transcript-free x-vector conditioning can reduce reference information."},
+        "streaming": {"status": "implemented_real_inference_pending", "kind": "native_generator", "endpoint": "/api/stream",
+                       "api_output": "incremental_pcm_s16le_ndjson", "modes": ["clone"]}
+      }
+    },
+    {
+      "id": "qwen3-tts-0.6b-base",
+      "name": "Qwen3-TTS 0.6B Base",
+      "family": "qwen3-tts",
+      "checkpoint": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+      "local_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "parameters": "0.6B",
+      "backend": {"name": "faster-qwen3-tts", "package_version": "0.4.0", "transformers_version": "5.15.1",
+                   "comparison_runtime": {"name": "qwen-tts", "package_version": "0.1.1", "transformers_version": "4.57.3",
+                                          "environment": ".venv-qwen", "service_api": false}},
+      "runtime": {"environment": ".venv-fqwen", "python": ".venv-fqwen/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "sdpa"},
+      "integration": {"status": "integrated", "service_api": true},
+      "capabilities": {
+        "voice_design": {"status": "unsupported_by_checkpoint"},
+        "voice_cloning": {"status": "worker_verified", "input": "reference_audio_and_transcript", "reference_cache": "content_sha256_plus_runtime_identity"},
+        "voice_direction": {"status": "experimental", "note": "Base checkpoint direction adherence is not established."},
+        "native_vocal_events": {"status": "unsupported"},
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "max_new_tokens", "temperature", "top_k", "top_p", "repetition_penalty"]},
+        "speaker_embedding_only": {"status": "experimental", "tradeoff": "Transcript-free x-vector conditioning can reduce reference information."},
+        "streaming": {"status": "implemented_real_inference_pending", "kind": "native_generator", "endpoint": "/api/stream",
+                       "api_output": "incremental_pcm_s16le_ndjson", "modes": ["clone"]}
+      }
+    },
+    {
+      "id": "qwen3-tts-1.7b-custom-voice",
+      "name": "Qwen3-TTS 1.7B CustomVoice",
+      "family": "qwen3-tts",
+      "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "local_revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+      "parameters": "1.7B",
+      "backend": {"name": "faster-qwen3-tts", "package_version": "0.4.0", "transformers_version": "5.15.1",
+                   "comparison_runtime": {"name": "qwen-tts", "package_version": "0.1.1", "transformers_version": "4.57.3",
+                                          "environment": ".venv-qwen", "service_api": false}},
+      "runtime": {"environment": ".venv-fqwen", "python": ".venv-fqwen/Scripts/python.exe", "python_version": "3.12.10"},
+      "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "sdpa"},
+      "integration": {"status": "integrated", "service_api": true},
+      "license": "Apache-2.0",
+      "capabilities": {
+        "voice_design": {"status": "unsupported_by_checkpoint"},
+        "voice_cloning": {"status": "unsupported_by_checkpoint"},
+        "voice_direction": {"status": "supported", "input": "optional_instruct"},
+        "voice_selection": {"status": "worker_verified", "source": "get_supported_speakers() from loaded checkpoint"},
+        "acting_controls": {"status": "worker_verified", "input": "optional_instruct"},
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "max_new_tokens", "temperature", "top_k", "top_p", "repetition_penalty"]},
+        "native_vocal_events": {"status": "unsupported"},
+        "streaming": {"status": "implemented_real_inference_pending", "kind": "native_generator", "endpoint": "/api/stream",
+                       "api_output": "incremental_pcm_s16le_ndjson", "modes": ["custom_voice"]}
+      }
+    },
+    {
+      "id": "voxcpm2",
+      "name": "VoxCPM2 2B",
+      "family": "voxcpm2",
+      "checkpoint": "openbmb/VoxCPM2",
+      "local_revision": "32279effe8c19989596f05d353d1447f51d9e915",
+      "parameters": "2B",
+      "backend": {"name": "voxcpm2-local-source", "source_commit": "f772e498a45fbb5fb8e13fbf9b9c48be9fe33e69"},
+      "runtime": {"environment": ".venv-voxcpm", "python": ".venv-voxcpm/Scripts/python.exe", "python_version": "3.12.10",
+                  "rocm_packages": "read-only site-packages overlay from .venv-fqwen; existing torch 2.12.0+rocm7.14.0; worker-only"},
+      "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "upstream default; optimize=false"},
+      "integration": {"status": "integrated", "service_api": true},
+      "license": "Apache-2.0",
+      "capabilities": {
+        "voice_design": {"status": "worker_verified", "input": "voice_description prefixed in parentheses"},
+        "voice_cloning": {"status": "worker_verified", "input": "reference_audio"},
+        "voice_continuation": {"status": "worker_verified", "input": "prompt_audio_and_exact_transcript; optional identity reference"},
+        "voice_direction": {"status": "experimental", "input": "parenthesized text prefix in clone mode", "adherence": "generated; not perceptually scored"},
+        "acting_controls": [{"id": "direction", "status": "experimental", "clone_direction_prefix": true}],
+        "sampling_controls": {"status": "worker_verified", "controls": ["seed", "cfg_value", "inference_timesteps"]},
+        "native_sample_rate": {"status": "worker_verified", "hz": 48000},
+        "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
+      },
+      "limitations": ["ROCm inference worked on the local R9700 but upstream only documents CUDA/MPS; AMD support is not promised.",
+                      "Generation is slower than real time in the initial design smoke.",
+                      "The current worker uses the existing ROCm wheels through an isolated read-only Python path overlay."]
+    },
+    {
+      "id": "drama-3",
+      "name": "Fish Audio Drama 3 (35B MoE / Q4_K)",
+      "family": "fish-audio",
+      "checkpoint": "fishaudio/drama-3",
+      "local_revision": "e0a9218aa48888270f06ef1ed9ea67622c0e17d2",
+      "parameters": "35B total / 3B active",
+      "backend": {
+        "name": "speech.cpp-vulkan",
+        "package_version": "0.8.10",
+        "quantization": "Q4_K",
+        "derivative": "sakasegawa/drama-3-GGUF",
+        "derivative_revision": "9a01354d04ab6eb521bc9cdfc56ab6824c474af2"
+      },
+      "runtime": {
+        "environment": ".venv",
+        "python": ".venv/Scripts/python.exe",
+        "note": "Portable speech.cpp: Vulkan1 design, CPU cloning after R9700 device loss/Windows 0x116. No ROCm package changes."
+      },
+      "precision": {
+        "status": "pinned_quantization",
+        "value": "Q4_K"
+      },
+      "integration": {
+        "status": "integrated",
+        "service_api": true
+      },
+      "license": {
+        "name": "Fish Audio Community License 1.0",
+        "attribution": "Built with Fish Audio",
+        "conditional_commercial_use": true
+      },
+      "capabilities": {
+        "voice_design": {
+          "status": "experimental",
+          "input": "inline natural language cue"
+        },
+        "voice_cloning": {
+          "status": "supported",
+          "input": "reference_audio_and_exact_transcript",
+          "execution": "CPU only on this host; GPU cloning disabled after graphics-driver crash"
+        },
+        "voice_direction": {
+          "status": "experimental",
+          "input": "inline cue; may be ignored or spoken"
+        },
+        "voice_selection": {
+          "status": "supported",
+          "kind": "reference_or_model_selected"
+        },
+        "native_vocal_events": {
+          "status": "supported",
+          "syntax": "square_bracket_tags",
+          "examples": [
+            "[laughs]",
+            "[sighs]",
+            "[whispers]"
+          ]
+        },
+        "sampling_controls": {
+          "status": "supported",
+          "controls": [
+            "seed",
+            "temperature",
+            "top_k",
+            "top_p",
+            "max_seconds"
+          ]
+        },
+        "multi_speaker": {
+          "status": "native",
+          "speakers": 16,
+          "syntax": "<|speaker:0|> through <|speaker:15|>"
+        },
+        "streaming": {
+          "status": "supported",
+          "api_output": "studio_incremental_pcm_preview_and_final_wav",
+          "note": "Drama production studio polls native PCM as it is generated. The original simple speech endpoint returns a complete WAV."
+        },
+        "editing": {
+          "status": "not_exposed_by_selected_runtime",
+          "note": "No previous-take token injection in speech.cpp 0.8.10 worker API."
+        }
+      }
+    }
+  ]
+}

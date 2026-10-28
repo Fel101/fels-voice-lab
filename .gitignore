@@ -1,0 +1,44 @@
+# Python bytecode and local logs
+__pycache__/
+*.py[cod]
+*.log
+
+# Existing per-engine Python environments and model caches
+/.venv/
+/.venv-*/
+/hf-cache/
+/breeze/models/
+
+# Private recordings and generated audio/site output (kept locally)
+/reference/**/*.wav
+/reference/**/*.flac
+/reference/**/*.mp3
+/reference/**/*.ogg
+/reference/**/*.m4a
+/reference/**/*.opus
+/reference/**/*.aac
+/reference/**/*.wma
+/out/
+/data/voices/
+/data/cast/
+/data/scenes/
+/data/evaluations/
+/data/datasets/
+/data/ui/
+/data/engines/
+/backups/
+/restored/
+
+# Local settings, private evidence and build output
+/*.local.json
+/.env
+/.env.*
+!/.env.example
+/dist/
+/build/
+*.sqlite3
+*.sqlite3-*
+*.gguf
+*.safetensors
+/reference/
+/.pytest_cache/

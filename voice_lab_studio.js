@@ -1,0 +1,284 @@
+// Voice Lab studio: model catalog, engine status and the saved-clip history.
+var $ = function (id) { return document.getElementById(id); };
+var hints = {
+  kokoro: 'Kokoro has fixed voices and speed control. It does not accept reference audio or perform vocal events.',
+  turbo: 'Chatterbox Turbo clones a reference and supports tags such as [laugh], [chuckle] and [cough].',
+  orig: 'Chatterbox supports reference cloning plus exaggeration and CFG controls. It ignores event tags.',
+  'breeze-tts-2': 'Breeze supports voice design, reference cloning, text direction and parenthesized vocal events. Outputs are full WAV files.',
+  'qwen3-tts-1.7b-voice-design': 'Qwen VoiceDesign creates a reusable voice from a spoken sample and natural-language voice description.',
+  'qwen3-tts-1.7b-base': 'Qwen Base clones a local reference and transcript. Optional Base acting instruction is experimental.',
+  'qwen3-tts-0.6b-base': 'Qwen Base clones a local reference and transcript. Optional Base acting instruction is experimental.',
+  'qwen3-tts-1.7b-custom-voice': 'Qwen CustomVoice uses one of the actual speaker presets reported by the loaded checkpoint, with optional delivery instruction.',
+  'voxcpm2': 'VoxCPM2 supports voice design, reference cloning, and transcript-conditioned continuation. Clone direction is experimental; output is native 48 kHz.'
+};
+var descriptions = {
+  warm: 'A warm, soft-spoken young woman with a gentle, affectionate tone.',
+  playful: 'A playful, energetic young woman with a bright, teasing tone and a hint of a laugh in her voice.',
+  low: 'A calm, low-pitched woman with a slow, unhurried delivery.',
+  custom: ''
+};
+var lastEngine = null;
+var activeStream = null;
+var lastPerformanceSamplingEngine = null;
+var catalog = null;
+var referenceRows = [];
+var performanceCapabilitiesByEngine = {};
+var performanceUnscreenedByEngine = {};
+var lastPerformanceIdentityId = null;
+var sceneDirty = false;
+function guardUnsavedSceneUnload(event){if(sceneDirty){event.preventDefault();event.returnValue='';}}
+window.addEventListener('beforeunload',guardUnsavedSceneUnload);
+
+function option(select, value, label, disabled) {
+  var item = document.createElement('option'); item.value = value; item.textContent = label; item.disabled = !!disabled; select.appendChild(item);
+}
+function selectedValues(select) { return Array.from(select.selectedOptions || []).map(function (item) { return item.value; }); }
+function qwenModeFor(engine) {
+  if (engine === 'qwen3-tts-1.7b-voice-design') { return 'design'; }
+  if (engine === 'qwen3-tts-1.7b-base' || engine === 'qwen3-tts-0.6b-base') { return 'clone'; }
+  if (engine === 'qwen3-tts-1.7b-custom-voice') { return 'custom_voice'; }
+  return null;
+}
+function refresh() {
+  var e = $('engine').value, mode = $('mode').value, qwenMode = qwenModeFor(e);
+  var breeze = e === 'breeze-tts-2';
+  var drama = e === 'drama-3';
+  $('dramaPanel').hidden=!drama;
+  $('dramaDescriptionWrap').hidden=$('dramaMode').value!=='design';
+  $('dramaReferenceWrap').hidden=$('dramaMode').value!=='clone';
+  var voxcpm = e === 'voxcpm2', voxMode = $('voxMode').value;
+  $('breezePanel').hidden = !breeze;
+  $('qwenPanel').hidden = !qwenMode;
+  $('voxPanel').hidden = !voxcpm;
+  $('voiceWrap').hidden = e !== 'kokoro'; $('kokoroLanguageWrap').hidden = e !== 'kokoro';
+  $('kokoroTools').hidden = e !== 'kokoro'; $('speedWrap').hidden = e !== 'kokoro';
+  $('chatterboxSampling').hidden = e !== 'orig' && e !== 'turbo';
+  $('origOpts').hidden = e !== 'orig'; $('turboOpts').hidden = e !== 'turbo';
+  $('cloneWrap').hidden = e === 'kokoro' || breeze || !!qwenMode || voxcpm || drama;
+  $('chatterboxReferenceWrap').hidden = !$('clone').checked;
+  $('designFields').hidden = !breeze || mode !== 'design';
+  $('referenceFields').hidden = !breeze || mode === 'design';
+  $('directionFields').hidden = !breeze || mode !== 'direction';
+  $('reroll').hidden = !breeze || mode !== 'design';
+  $('stream').hidden = !qwenMode;
+  $('cfgWrap').hidden = breeze && mode === 'clone';
+  $('qwenDesignFields').hidden = qwenMode !== 'design';
+  $('qwenCloneFields').hidden = qwenMode !== 'clone';
+  $('qwenCustomFields').hidden = qwenMode !== 'custom_voice';
+  $('voxDesignFields').hidden = !voxcpm || voxMode !== 'design';
+  $('voxCloneFields').hidden = !voxcpm || voxMode !== 'clone';
+  $('voxContinuationFields').hidden = !voxcpm || voxMode !== 'continuation';
+  $('voxCloneDirectionWrap').hidden = !voxcpm || voxMode !== 'clone';
+  if (e !== lastEngine) {
+    $('clone').checked = e === 'turbo';
+    if (e === 'orig') { $('cbTopP').value = '1'; }
+    else if (e === 'turbo') { $('cbTopP').value = '0.95'; }
+    lastEngine = e;
+    updateValues();
+  }
+  $('chatterboxReferenceWrap').hidden = !$('clone').checked;
+  $('hint').textContent = hints[e] || '';
+}
+function updateValues() {
+  [['speed','speedV',2],['exag','exagV',2],['cfg','cfgV',2],['cfgScale','cfgScaleV',1],['maxTokens','maxTokensV',0],
+   ['temperature','temperatureV',2],['topK','topKV',0],['topP','topPV',2],['repetitionPenalty','repetitionPenaltyV',2],
+   ['depthTemperature','depthTemperatureV',2],['depthTopK','depthTopKV',0],['depthTopP','depthTopPV',2],
+   ['qwenMaxTokens','qwenMaxTokensV',0],['qwenTemperature','qwenTemperatureV',2],['qwenTopK','qwenTopKV',0],
+   ['qwenTopP','qwenTopPV',2],['qwenRepetition','qwenRepetitionV',2]].forEach(function (x) {
+    $(x[1]).textContent = Number($(x[0]).value).toFixed(x[2]);
+  });
+}
+function fetchJson(url, body) {
+  return fetch(url, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {})
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) { throw new Error(j.error || r.status); } return j; }); });
+}
+function loadReferences(choosePath) {
+  return fetchJson('/api/references').then(function (result) {
+    referenceRows = result.references || [];
+    VoiceLabWorkflows.render(referenceRows, choosePath);
+  }).catch(function (e) { $('err').textContent = 'Could not list local references: ' + e.message; });
+}
+function unscreenedLanguages(engine) { return performanceUnscreenedByEngine[engine] || []; }
+function languageOptionLabel(engine, language) { return unscreenedLanguages(engine).indexOf(language) >= 0 ? language + ' (unscreened)' : language; }
+function applyQwenCapabilities(info, engine) {
+  if (!info) { return; }
+  var languages = info.supported_languages || [];
+  if (languages.length) {
+    var currentLanguage = $('qwenLanguage').value;
+    $('qwenLanguage').textContent = '';
+    languages.forEach(function (language) { option($('qwenLanguage'), language, languageOptionLabel(engine, language)); });
+    $('qwenLanguage').value = languages.indexOf(currentLanguage) >= 0 ? currentLanguage : (languages.indexOf('English') >= 0 ? 'English' : languages[0]);
+  }
+  if (qwenModeFor($('engine').value) === 'custom_voice' && Array.isArray(info.supported_speakers)) {
+    var currentSpeaker = $('qwenSpeaker').value;
+    $('qwenSpeaker').textContent = '';
+    info.supported_speakers.forEach(function (speaker) { option($('qwenSpeaker'), speaker, speaker); });
+    if (!info.supported_speakers.length) { option($('qwenSpeaker'), '', 'Loaded model reported no speakers', true); }
+    else { $('qwenSpeaker').value = info.supported_speakers.indexOf(currentSpeaker) >= 0 ? currentSpeaker : info.supported_speakers[0]; }
+  }
+}
+function refreshLoadedQwenInfo() {
+  var engine = $('engine').value;
+  if (!qwenModeFor(engine)) { return; }
+  fetchJson('/api/health').then(function (health) {
+    var worker = (health.workers || []).find(function (row) { return row.engine === engine && row.model_loaded; });
+    if (worker) { applyQwenCapabilities(worker.model_info, engine); }
+  }).catch(function () {});
+}
+function openHistoryDb() {
+  return new Promise(function (resolve, reject) {
+    if (!window.indexedDB) { reject(new Error('This browser does not provide IndexedDB.')); return; }
+    var request = window.indexedDB.open('voice-lab-studio', 1);
+    request.onupgradeneeded = function () {
+      var db = request.result;
+      if (!db.objectStoreNames.contains('runs')) { db.createObjectStore('runs', {keyPath:'id', autoIncrement:true}); }
+    };
+    request.onsuccess = function () { resolve(request.result); };
+    request.onerror = function () { reject(request.error || new Error('Could not open local generation history.')); };
+  });
+}
+function persistHistory(blob, body, meta) {
+  return openHistoryDb().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction('runs', 'readwrite'), store = tx.objectStore('runs');
+      store.add({body:body, meta:meta, audio:blob, createdAt:Date.now()});
+      tx.oncomplete = function () { db.close(); resolve(); };
+      tx.onerror = function () { db.close(); reject(tx.error || new Error('Could not save the generated clip locally.')); };
+      tx.onabort = function () { db.close(); reject(tx.error || new Error('Local generation history write was cancelled.')); };
+    });
+  }).then(function () {
+    return openHistoryDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('runs', 'readwrite'), store = tx.objectStore('runs'), request = store.getAll();
+        request.onsuccess = function () {
+          var rows = request.result.sort(function (a,b) { return a.id - b.id; });
+          rows.slice(0, Math.max(0, rows.length - 20)).forEach(function (row) { store.delete(row.id); });
+        };
+        tx.oncomplete = function () { db.close(); resolve(); };
+        tx.onerror = function () { db.close(); reject(tx.error || new Error('Could not trim local generation history.')); };
+        tx.onabort = function () { db.close(); reject(tx.error || new Error('Local generation history update was cancelled.')); };
+      });
+    });
+  });
+}
+function restoreHistory() {
+  return openHistoryDb().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction('runs', 'readonly'), request = tx.objectStore('runs').getAll();
+      request.onsuccess = function () {
+        var rows = request.result.sort(function (a,b) { return a.id - b.id; });
+        rows.forEach(function (row) { makeHistory(row.audio, row.body, row.meta); });
+      };
+      tx.oncomplete = function () { db.close(); resolve(); };
+      tx.onerror = function () { db.close(); reject(tx.error || new Error('Could not restore local generation history.')); };
+    });
+  }).catch(function (error) { $('err').textContent = 'Local generation history is unavailable: ' + error.message; });
+}
+function fillCatalog() {
+  return fetchJson('/api/catalog').then(function (result) {
+    catalog = result;
+    $('engine').textContent = '';
+    (result.engines || []).forEach(function (entry) {
+      var ready = entry.integration && entry.integration.service_api && !entry.integration.task_only;
+      if (!(entry.integration && entry.integration.task_only)) {
+        option($('engine'), entry.id, entry.name + (ready ? '' : ' (not integrated yet)'), !ready);
+      }
+    });
+    $('identityEngine').textContent = '';
+    (result.engines || []).forEach(function (entry) {
+      var caps = entry.capabilities || {}, clone = caps.voice_cloning || {}, selection = caps.voice_selection || {};
+      var preset = entry.id==='qwen3-tts-1.7b-custom-voice' && selection.status==='worker_verified';
+      if (entry.integration && entry.integration.service_api &&
+          ((clone.status === 'supported' || clone.status === 'worker_verified') || entry.id === 'kokoro' && selection.status === 'supported' || preset)) {
+        option($('identityEngine'), entry.id, entry.name);
+      }
+    });
+    $('engine').value = 'kokoro';
+    fillFixedVoices();
+    updateIdentityEngineKind();
+    renderModelOverview(result);
+    refreshEngineStatus();
+    return fetchJson('/api/performance/settings').then(function (schema) {
+      performanceCapabilitiesByEngine={};(schema.engines||[]).forEach(function(entry){performanceCapabilitiesByEngine[entry.engine_id]=entry;});
+      performanceUnscreenedByEngine=schema.unscreened_languages||{};
+    });
+  });
+}
+var modelCards={};
+var engineStateNames={not_integrated:'Not integrated',not_installed:'Not installed',conversion_task:'Conversion task'};
+function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':String(device||'');}
+function engineStateText(row,device){
+  if(row.state==='usable'){return 'Speaks now on '+deviceLabel(device);}
+  if(row.state==='check_failed'){return 'Check failed on '+deviceLabel(device);}
+  if(row.state==='not_checked'){return 'Installed, not checked on '+deviceLabel(device);}
+  if(row.state==='check_outdated'){return 'Installed, check out of date on '+deviceLabel(device);}
+  return engineStateNames[row.state]||row.state;
+}
+function utcStamp(value){return String(value||'').replace('T',' ').slice(0,16)+' UTC';}
+function engineDetailText(row,device){
+  var check=row.check,install=row.installation||{};
+  if(row.state==='not_installed'){
+    return 'Missing: '+(install.missing||[]).join('; ')+'.'+(install.installer?' To install it, run '+install.installer+' in the lab folder, then reload this page. docs/SETUP.md says what it installs.':'');
+  }
+  if(row.state==='conversion_task'){return 'Checked from Voice conversion, because it needs source audio.';}
+  if(row.state==='not_integrated'){return 'This build does not expose the engine.';}
+  if(!check){return 'Click Check to load the model and speak one short sentence on this device.';}
+  if(row.state==='check_outdated'){return 'The last check ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before checks recorded that. Click Check again to confirm it still speaks.';}
+  if(check.status==='passed'){
+    return 'Checked '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+(check.ran_on&&check.ran_on!==device?', on '+check.ran_on:'')+'.';
+  }
+  return 'Failed '+utcStamp(check.checked_at)+': '+check.reason;
+}
+function renderModelOverview(result){
+  var container=$('modelOverview');container.textContent='';modelCards={};
+  (result.engines||[]).forEach(function(entry){
+    var card=document.createElement('article'),title=document.createElement('h3'),integrated=document.createElement('p'),state=document.createElement('p'),details=document.createElement('p'),features=document.createElement('p'),button=document.createElement('button');
+    card.className='model-card';title.textContent=entry.name;integrated.className='eyebrow';state.className='engine-state';details.className='meta';features.className='meta';
+    var integration=entry.integration||{},caps=entry.capabilities||{};
+    integrated.textContent=integration.service_api?(integration.task_only?'Integrated · conversion':'Integrated'):'Not integrated';
+    features.textContent=['voice_design','voice_cloning','voice_direction','voice_selection'].filter(function(key){return caps[key]&&['supported','worker_verified'].indexOf(caps[key].status)>=0;}).map(function(key){return key.replace(/_/g,' ');}).join(' · ')||(integration.task_only?'Audio-to-audio voice conversion':'See model-specific controls');
+    button.type='button';button.textContent='Check it speaks';
+    button.addEventListener('click',function(){checkEngine(entry.id);});
+    card.appendChild(title);card.appendChild(integrated);card.appendChild(state);card.appendChild(details);card.appendChild(features);
+    if(!integration.task_only){card.appendChild(button);}
+    container.appendChild(card);
+    modelCards[entry.id]={name:entry.name,state:state,details:details,button:button};
+  });
+}
+function refreshEngineStatus(){
+  return fetchJson('/api/engines/status').then(function(status){renderEngineStatus(status);}).catch(function(e){$('err').textContent='Could not read model checks: '+e.message;});
+}
+function renderEngineStatus(status){
+  (status.engines||[]).forEach(function(row){
+    var view=modelCards[row.id];if(!view){return;}
+    view.state.textContent=engineStateText(row,status.device);
+    view.details.textContent=engineDetailText(row,status.device);
+    view.button.textContent=row.check?'Check again':'Check it speaks';
+    view.button.disabled=!!status.busy||['not_installed','not_integrated','conversion_task'].indexOf(row.state)>=0;
+  });
+  renderSpeedRows(status);
+}
+function checkEngine(engineId){
+  var view=modelCards[engineId];if(!view){return;}
+  Object.keys(modelCards).forEach(function(key){modelCards[key].button.disabled=true;});
+  view.button.textContent='Checking…';
+  view.details.textContent='Checking now. Loading the model can take a minute or more; other model requests are refused until it finishes.';
+  $('err').textContent='';
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/check',{}).catch(function(e){$('err').textContent='Check did not finish: '+e.message;}).then(refreshEngineStatus);
+}
+function renderSpeedRows(status){
+  var body=$('speedRows');body.textContent='';
+  var rows=status.speed||[];
+  if(!rows.length){
+    var empty=document.createElement('tr'),cell=document.createElement('td');
+    cell.colSpan=5;cell.textContent='No clips measured yet. Run a check or generate a clip to fill this table.';
+    empty.appendChild(cell);body.appendChild(empty);return;
+  }
+  rows.forEach(function(row){
+    var tr=document.createElement('tr');
+    var name=modelCards[row.engine]?modelCards[row.engine].name:row.engine;
+    var cells=[name,deviceLabel(row.device),String(row.clips),row.median_real_time_factor==null?'—':row.median_real_time_factor.toFixed(2),row.last_total_s.toFixed(2)+' s for '+row.last_audio_seconds.toFixed(2)+' s of audio'];
+    cells.forEach(function(text){var td=document.createElement('td');td.textContent=text;tr.appendChild(td);});
+    body.appendChild(tr);
+  });
+}

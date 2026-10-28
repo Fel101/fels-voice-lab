@@ -1,0 +1,4639 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fel's Voice Lab HTTP API",
+    "version": "0.1.0",
+    "summary": "The local service behind the Voice Lab's pages, for scripts and other programs.",
+    "description": "Listens on 127.0.0.1 only. JSON in, JSON out, except where a call returns audio. Every error is a JSON object with an `error` message. See docs/API.md for the conventions, the speaking calls and the command-line tool.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765",
+      "description": "The default port. `serve.py --port` changes it."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Service",
+      "description": "Is it running, what is loaded, which engines exist. None of these makes audio, except an engine check."
+    },
+    {
+      "name": "Speaking",
+      "description": "Turn text into audio. `speak` and `performance` answer with the finished WAV file in one response."
+    },
+    {
+      "name": "Cast",
+      "description": "Characters, the voices (identities) they speak with, the recordings that clone those voices, and pronunciations. Retiring blocks new use of an item and everything made from it; purging deletes it."
+    },
+    {
+      "name": "Takes",
+      "description": "Saved performances. Every `performance` call and every scene render saves a take with its text, settings, model and provenance. An edit of a take (a trim, a cut of the silence, fades, a gain) is saved as a new take that names its original."
+    },
+    {
+      "name": "Scenes",
+      "description": "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in [scene-schema-v1.md](scenes/scene-schema-v1.md)."
+    },
+    {
+      "name": "Exports",
+      "description": "Delivery packages: a scene's selected takes, converted, checked and written to `out/exports`."
+    },
+    {
+      "name": "Comparisons",
+      "description": "Listening comparisons and blind A/B sessions. See [evaluation-schema-v1.md](evaluation/evaluation-schema-v1.md)."
+    },
+    {
+      "name": "Conversion",
+      "description": "Voice conversion: say a recording again in another voice."
+    },
+    {
+      "name": "System",
+      "description": "The service's report, folder sizes, library backups and housekeeping."
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "get_api_health",
+        "summary": "Say whether the service is ready, and which version it is.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error` and `last_unload`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/info": {
+      "get": {
+        "operationId": "get_api_info",
+        "summary": "Name the device, the loaded engines, the Kokoro voices found and the free memory.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages` and `free_ram_gb`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/catalog": {
+      "get": {
+        "operationId": "get_api_catalog",
+        "summary": "List every engine the Lab knows, with its pinned checkpoint, capabilities and license.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/engines/status": {
+      "get": {
+        "operationId": "get_api_engines_status",
+        "summary": "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`), `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/engines/{engine_id}/check": {
+      "post": {
+        "operationId": "post_api_engines_engine_id_check",
+        "summary": "Check that one engine can speak now: confirm its files, load it and speak one short clip.",
+        "tags": [
+          "Service"
+        ],
+        "parameters": [
+          {
+            "name": "engine_id",
+            "in": "path",
+            "required": true,
+            "description": "An engine id from `GET /api/catalog`.",
+            "example": "kokoro",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,80}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`check`: `status` (`passed`, `failed` or `not_installed`), `device`, `ran_on`, `checked_at`, `reason`, `load_seconds`, `total_s`, `audio_seconds`, `real_time_factor` and, for a missing install, `missing`. Takes seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The engine is unknown, or is not a speech engine.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/load": {
+      "post": {
+        "operationId": "post_api_load",
+        "summary": "Load an engine into memory ahead of its first use.",
+        "tags": [
+          "Service"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "engine": {
+                    "type": "string",
+                    "description": "An engine id. Default `kokoro`."
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": "Breeze only: its decode profile. Default `eager`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`engine`, `loaded`, `load_seconds`, `sample_rate`, `memory`, `backend`, `checkpoint`, `checkpoint_revision`, `supported_speakers` and `supported_languages`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The engine could not load or run. When it is not installed and has a launcher in the lab folder (Kokoro: `setup-kokoro.bat`), `error` begins by naming the launcher.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/unload": {
+      "post": {
+        "operationId": "post_api_unload",
+        "summary": "Unload every engine and free the GPU.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`{\"ok\": true}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/prepare-reference": {
+      "post": {
+        "operationId": "post_api_prepare_reference",
+        "summary": "Prepare a reference recording for an engine so its first clone is quick.",
+        "tags": [
+          "Service"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "engine": {
+                    "type": "string",
+                    "description": "An engine id that clones from a recording."
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "A recording inside the Lab's reference storage."
+                  },
+                  "reference_text": {
+                    "type": "string",
+                    "description": "The exact transcript, which Breeze, Qwen Base and Drama 3 need."
+                  },
+                  "exaggeration": {
+                    "type": "number",
+                    "description": "Chatterbox: how strongly to act. Default 0.5."
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": "Breeze only: its decode profile."
+                  },
+                  "xvec_only": {
+                    "type": "boolean",
+                    "description": "Qwen Base only: use the speaker embedding alone, without a transcript."
+                  }
+                },
+                "required": [
+                  "engine",
+                  "path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What the engine reports about the prepared reference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/performance/settings": {
+      "get": {
+        "operationId": "get_api_performance_settings",
+        "summary": "Describe the settings each engine's performance takes, and the languages its picker offers.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`engines`: for each engine its controls (name, type, range, default), whether it takes a direction, and its `languages`; and `unscreened_languages`: per engine, the languages the language screen did not clear.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "get_api_openapi_json",
+        "summary": "Return this API as an OpenAPI 3.1 document.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "The same document as `openapi.json` in the program folder, built from the route table.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/speak": {
+      "post": {
+        "operationId": "post_api_speak",
+        "summary": "Speak text with one engine and answer with the finished WAV file.",
+        "tags": [
+          "Speaking"
+        ],
+        "description": "Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "What to say, 1 to 1200 characters."
+                  },
+                  "engine": {
+                    "type": "string",
+                    "description": "An engine id from `GET /api/catalog` whose `integration.service_api` is true. Default `kokoro`."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "description": "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."
+                  },
+                  "speed": {
+                    "type": "number",
+                    "description": "Kokoro: speaking rate. Default 1.0."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Kokoro and Qwen: the language. Default `English`."
+                  },
+                  "voice_description": {
+                    "type": "string",
+                    "description": "Qwen VoiceDesign, VoxCPM2 and Breeze design mode: the voice to invent, in words."
+                  },
+                  "mode": {
+                    "type": "string",
+                    "description": "For engines with several modes: `design`, `clone`, `continuation`, `custom_voice` or, for Breeze, `direction`. A checkpoint accepts the modes it supports."
+                  },
+                  "reference_path": {
+                    "type": "string",
+                    "description": "Cloning: a recording inside the Lab's reference storage."
+                  },
+                  "reference_text": {
+                    "type": "string",
+                    "description": "Cloning: the exact transcript of that recording."
+                  },
+                  "direction": {
+                    "type": "string",
+                    "description": "Engines with a direction control: how to deliver the line, up to 1000 characters."
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "Engines that take one: the random seed. Default 42."
+                  },
+                  "save_voice_as": {
+                    "type": "string",
+                    "description": "Design mode only: keep the invented voice as a reusable reference under this name, letters, digits, `_` and `-`, up to two folders deep."
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is finished; there is no streaming and no partial answer. Other engine-specific fields are listed under each engine's `capabilities` in `GET /api/catalog`.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Gen-Seconds": {
+                "description": "Seconds the engine took.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Audio-Seconds": {
+                "description": "Seconds of audio in the file.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-First-Chunk": {
+                "description": "Seconds to the first audio, when the engine reports it; otherwise empty.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Generation-Mode": {
+                "description": "The mode the engine ran in, when it reports one.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Voice-Backend": {
+                "description": "The backend, when reported.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Model-Checkpoint": {
+                "description": "The checkpoint, when reported.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Checkpoint-Revision": {
+                "description": "The checkpoint's pinned revision, when reported.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Voice-Asset-Path": {
+                "description": "With `save_voice_as`: the file the voice was saved to.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request is over 64 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The engine could not load or run. When it is not installed and has a launcher in the lab folder (Kokoro: `setup-kokoro.bat`), `error` begins by naming the launcher.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The engine did not answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/stream": {
+      "post": {
+        "operationId": "post_api_stream",
+        "summary": "Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made.",
+        "tags": [
+          "Speaking"
+        ],
+        "description": "Use `POST /api/speak` when you want a file.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "What to say, 1 to 1200 characters."
+                  },
+                  "engine": {
+                    "type": "string",
+                    "description": "A Qwen3-TTS engine id."
+                  },
+                  "mode": {
+                    "type": "string",
+                    "description": "`design`, `clone` or `custom_voice`, as the checkpoint supports."
+                  },
+                  "voice_description": {
+                    "type": "string",
+                    "description": "VoiceDesign: the voice to invent, in words."
+                  },
+                  "reference_path": {
+                    "type": "string",
+                    "description": "Base (clone): a recording inside the Lab's reference storage."
+                  },
+                  "reference_text": {
+                    "type": "string",
+                    "description": "Base (clone): the exact transcript."
+                  },
+                  "speaker": {
+                    "type": "string",
+                    "description": "CustomVoice: a speaker the loaded checkpoint reports."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "The language. Default `English`."
+                  },
+                  "save_voice_as": {
+                    "type": "string",
+                    "description": "VoiceDesign only: keep the voice as a reusable reference under this name."
+                  }
+                },
+                "required": [
+                  "text",
+                  "engine"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Newline-delimited JSON: one `start` line, `audio` lines (`sequence`, `sample_start`, `sample_count`, `sample_rate`, `sample_format` `pcm_s16le` and the PCM as base64 in `data`) and a closing `complete` line with the timings. A failure after the first line arrives as an `error` line, not a status code.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/performance": {
+      "post": {
+        "operationId": "post_api_performance",
+        "summary": "Speak a line as a Cast voice and save it as a take.",
+        "tags": [
+          "Speaking"
+        ],
+        "description": "See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "identity_id": {
+                    "type": "string",
+                    "description": "The voice identity to speak with, from `GET /api/cast`."
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "The line, 1 to 1200 characters."
+                  },
+                  "line_id": {
+                    "type": "string",
+                    "description": "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line."
+                  },
+                  "reference_version_id": {
+                    "type": "string",
+                    "description": "The recording to clone from. Default: the identity's approved recording. Refused for a fixed or preset voice."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Default: the voice's own language, else `English`."
+                  },
+                  "direction": {
+                    "type": "string",
+                    "description": "How to deliver the line, up to 1000 characters. An engine with no verified direction control refuses a non-empty one."
+                  },
+                  "settings": {
+                    "type": "object",
+                    "description": "The engine's performance settings; see `GET /api/performance/settings`."
+                  },
+                  "use_pronunciations": {
+                    "type": "boolean",
+                    "description": "Apply the character's pronunciation dictionary to the spoken text. The take keeps both texts. Default false."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "description": "1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again."
+                  },
+                  "identity_snapshot": {
+                    "type": "object",
+                    "description": "Used by scene batches: the voice's `identity_type`, `engine_id` and `engine_options` as the scene saved them. The call is refused if the voice has changed since."
+                  }
+                },
+                "required": [
+                  "identity_id",
+                  "text",
+                  "line_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The take's 16-bit WAV file, in one response. The call blocks until the clip is finished and saved.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Take-Id": {
+                "description": "The saved take's id.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Cast-Character": {
+                "description": "The character's name.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Cast-Identity": {
+                "description": "The voice's label.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Cast-Line-Id": {
+                "description": "The `line_id` you sent.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Gen-Seconds": {
+                "description": "Seconds the engine took.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Audio-Seconds": {
+                "description": "Seconds of audio in the file.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Voice-Backend": {
+                "description": "The backend.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Model-Checkpoint": {
+                "description": "The checkpoint.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Checkpoint-Revision": {
+                "description": "The checkpoint's pinned revision.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Generation-Mode": {
+                "description": "`clone`, `direction`, `custom_voice` or `fixed_voice`.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Idempotent-Replay": {
+                "description": "`true` when the answer is an earlier take for the same key; then only `X-Take-Id` and the three `X-Cast-*` headers come with it.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit of a take.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The identity or the recording does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy. One generation runs at a time; a second request is refused, not queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The engine did not answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/kokoro/phonemize": {
+      "post": {
+        "operationId": "post_api_kokoro_phonemize",
+        "summary": "Show the phonemes Kokoro would speak for a text, without loading a model.",
+        "tags": [
+          "Speaking"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "1 to 1200 characters."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Default `English`."
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/cast": {
+      "get": {
+        "operationId": "get_api_cast",
+        "summary": "List every character with its voices and their recordings.",
+        "tags": [
+          "Cast"
+        ],
+        "responses": {
+          "200": {
+            "description": "`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds` and `audio_url`). Retired items say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/characters": {
+      "post": {
+        "operationId": "post_api_characters",
+        "summary": "Create a character.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "1 to 80 characters."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Up to 2000 characters."
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Up to 40 characters each."
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`character`, as in `GET /api/cast`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/characters/{character_id}": {
+      "post": {
+        "operationId": "post_api_characters_character_id",
+        "summary": "Rename a character or change its description.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "1 to 80 characters. Leave out to keep it."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Up to 2000 characters. Leave out to keep it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "character_id",
+            "in": "path",
+            "required": true,
+            "description": "A character's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`character`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/characters/{character_id}/identities": {
+      "post": {
+        "operationId": "post_api_characters_character_id_identities",
+        "summary": "Add a voice to a character.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "A cloning voice has no recording yet: upload one with [`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "engine_id": {
+                    "type": "string",
+                    "description": "A recording-cloning engine, `kokoro` or the Qwen CustomVoice engine that the service exposes."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "1 to 80 characters."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Up to 2000 characters."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "description": "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."
+                  },
+                  "speaker": {
+                    "type": "string",
+                    "description": "CustomVoice: a speaker the loaded checkpoint reports."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "CustomVoice: a language the loaded checkpoint reports."
+                  },
+                  "default_direction": {
+                    "type": "string",
+                    "description": "CustomVoice: the delivery instruction to use when a line gives none."
+                  }
+                },
+                "required": [
+                  "engine_id",
+                  "label"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "character_id",
+            "in": "path",
+            "required": true,
+            "description": "A character's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`identity`. A new voice is a `candidate` until it is approved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/identities/{identity_id}/update": {
+      "post": {
+        "operationId": "post_api_identities_identity_id_update",
+        "summary": "Rename a voice, change its notes or Kokoro voice, or approve or reject it.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another approved voice of the same character and engine back to `candidate`.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "1 to 80 characters."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Up to 2000 characters."
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "`candidate`, `approved` or `rejected`."
+                  },
+                  "reference_version_id": {
+                    "type": "string",
+                    "description": "The recording to approve; needed to approve a cloning voice."
+                  },
+                  "engine_options": {
+                    "type": "object",
+                    "description": "Kokoro: `{\"voice\": \"af_heart\"}`. Preset voices cannot change."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "required": true,
+            "description": "A voice identity's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`identity`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/identities/{identity_id}/references": {
+      "post": {
+        "operationId": "post_api_identities_identity_id_references",
+        "summary": "Upload a recording for a cloning voice and save it as a reference version.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, base64url-encoded JSON: `{\"filename\": \"nell.wav\", \"transcript\": \"...\", \"origin\": \"...\", \"allowed_use\": \"...\", \"edits\": {\"start_seconds\": 0.5, \"end_seconds\": 9.0, \"target_sample_rate\": 24000, \"channel\": \"mono\", \"noise_reduction\": {\"enabled\": false}}}`. `filename` sets the format; `edits` is optional. The saved reference is 0.5 to 60 seconds.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "required": true,
+            "description": "A voice identity's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "X-Reference-Metadata",
+            "in": "header",
+            "required": true,
+            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and optional `edits`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`reference`: the saved version with its quality readings and `audio_url`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The recording is over 32 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/identities/{identity_id}/references/preview": {
+      "post": {
+        "operationId": "post_api_identities_identity_id_references_preview",
+        "summary": "Process a recording the way an upload would, and return the result without saving anything.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "Same body and `X-Reference-Metadata` header as the upload.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "required": true,
+            "description": "A voice identity's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "X-Reference-Metadata",
+            "in": "header",
+            "required": true,
+            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and optional `edits`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The processed WAV. Its quality readings are in the `X-Reference-*` headers.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Reference-Duration": {
+                "description": "Seconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Reference-Sample-Rate": {
+                "description": "Hertz.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Reference-RMS": {
+                "description": "dBFS.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Reference-Quality": {
+                "description": "Base64url-encoded JSON of the quality assessment.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The recording is over 32 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/identities/{identity_id}/references/from-take": {
+      "post": {
+        "operationId": "post_api_identities_identity_id_references_from_take",
+        "summary": "Save a take as a new reference recording for a cloning voice.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "take_id": {
+                    "type": "string",
+                    "description": "The take to copy."
+                  },
+                  "transcript": {
+                    "type": "string",
+                    "description": "Default: the take's spoken text."
+                  },
+                  "edits": {
+                    "type": "object",
+                    "description": "Trim, rate and channel edits, as for an upload."
+                  },
+                  "origin": {
+                    "type": "string",
+                    "description": "Default: a note naming the take."
+                  },
+                  "allowed_use": {
+                    "type": "string",
+                    "description": "Added to the take's own terms, which always carry over."
+                  }
+                },
+                "required": [
+                  "take_id"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "required": true,
+            "description": "A voice identity's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`reference`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/references/{reference_id}/versions": {
+      "post": {
+        "operationId": "post_api_references_reference_id_versions",
+        "summary": "Save a new version of a reference recording with a different transcript or trim.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "transcript": {
+                    "type": "string",
+                    "description": "Up to 1200 characters. Default: the current one."
+                  },
+                  "origin": {
+                    "type": "string",
+                    "description": "Cannot be blank."
+                  },
+                  "allowed_use": {
+                    "type": "string",
+                    "description": "Cannot be blank."
+                  },
+                  "start_seconds": {
+                    "type": "number",
+                    "description": "Trim start in the source recording."
+                  },
+                  "end_seconds": {
+                    "type": "number",
+                    "description": "Trim end."
+                  },
+                  "target_sample_rate": {
+                    "type": "integer",
+                    "description": "8000 to 192000."
+                  },
+                  "channel": {
+                    "type": "string",
+                    "description": "`mono`, `left` or `right`."
+                  },
+                  "noise_reduction": {
+                    "type": "object",
+                    "description": "`enabled`, `profile_start_seconds`, `profile_end_seconds`, `strength`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "description": "A reference recording version's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`reference`: the new version. The earlier one is kept as it was.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/references/{reference_id}/audio": {
+      "get": {
+        "operationId": "get_api_references_reference_id_audio",
+        "summary": "Download a reference version's processed WAV.",
+        "tags": [
+          "Cast"
+        ],
+        "parameters": [
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "description": "A reference recording version's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The WAV.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Reference-Version": {
+                "description": "The version's id.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/references/{reference_id}/source": {
+      "get": {
+        "operationId": "get_api_references_reference_id_source",
+        "summary": "Download the recording a reference version was made from.",
+        "tags": [
+          "Cast"
+        ],
+        "parameters": [
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "description": "A reference recording version's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The recording as it was uploaded.",
+            "content": {
+              "audio/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/references/{reference_id}/transcript-suggestion": {
+      "post": {
+        "operationId": "post_api_references_reference_id_transcript_suggestion",
+        "summary": "Draft a transcript of a reference recording. Nothing is saved.",
+        "tags": [
+          "Cast"
+        ],
+        "parameters": [
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "description": "A reference recording version's id, from `GET /api/cast`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`suggestion`: the drafted text and how it was made. Check it before saving it with a new version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A transcription is already running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The transcription failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No transcription model is installed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/pronunciations": {
+      "get": {
+        "operationId": "get_api_pronunciations",
+        "summary": "List pronunciation entries.",
+        "tags": [
+          "Cast"
+        ],
+        "parameters": [
+          {
+            "name": "character_id",
+            "in": "query",
+            "required": false,
+            "description": "A character's entries together with the shared ones. Default: only the shared ones.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`pronunciations`: `id`, `character_id` (null when shared), `source`, `replacement`, `notes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_pronunciations",
+        "summary": "Add a pronunciation, or change the one with the same term.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "The written term, 1 to 100 characters."
+                  },
+                  "replacement": {
+                    "type": "string",
+                    "description": "How to spell it for the engine, 1 to 200 characters."
+                  },
+                  "character_id": {
+                    "type": "string",
+                    "description": "Omit for a shared entry."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Up to 500 characters."
+                  }
+                },
+                "required": [
+                  "source",
+                  "replacement"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`pronunciation`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/retirements": {
+      "post": {
+        "operationId": "post_api_retirements",
+        "summary": "Retire a character, voice, recording or take: block new use of it and of everything made from it. Nothing is deleted.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "`character`, `identity`, `reference` or `take`."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "The item's id."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Up to 300 characters."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`retirement` and `affected`: how many items of each kind it reaches.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/retirements/restore": {
+      "post": {
+        "operationId": "post_api_retirements_restore",
+        "summary": "Lift a retirement.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "As for retiring."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "The item's id."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{\"restored\": true}`. Something retired because it came from a retired source stays blocked until that source is restored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/purges/preview": {
+      "get": {
+        "operationId": "get_api_purges_preview",
+        "summary": "Show what purging a retired item would delete.",
+        "tags": [
+          "Cast"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "description": "`character`, `identity`, `reference` or `take`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "The item's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`would_purge` (counts by kind), `media_files` and `external_copies`: copies of the audio outside Cast storage, which a purge lists but never deletes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The item is not retired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/purges": {
+      "post": {
+        "operationId": "post_api_purges",
+        "summary": "Permanently delete a retired item, everything made from it, and their audio.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "As for retiring."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "The item's id."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Up to 300 characters."
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "Must be `true`; anything else is refused."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`batch_id`, `purged` (counts by kind), `media_files` and `external_copies`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The item is not retired, `confirm` is not `true`, or a file could not be removed (nothing is purged then, so the call can be repeated).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes": {
+      "get": {
+        "operationId": "get_api_takes",
+        "summary": "List takes, oldest first.",
+        "tags": [
+          "Takes"
+        ],
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "query",
+            "required": false,
+            "description": "Only this voice's takes.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "line_id",
+            "in": "query",
+            "required": false,
+            "description": "Only takes for this line.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, `reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, `provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, `waveform_checks`, `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the take is an edit of another take), `audio_url` and its retirement state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}": {
+      "get": {
+        "operationId": "get_api_takes_take_id",
+        "summary": "Read one take.",
+        "tags": [
+          "Takes"
+        ],
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`take`, as in `GET /api/takes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/audio": {
+      "get": {
+        "operationId": "get_api_takes_take_id_audio",
+        "summary": "Download a take's WAV.",
+        "tags": [
+          "Takes"
+        ],
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The WAV.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Take-Id": {
+                "description": "The take's id.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/waveform": {
+      "get": {
+        "operationId": "get_api_takes_take_id_waveform",
+        "summary": "Draw a take: its peaks, its level and where the speech is.",
+        "tags": [
+          "Takes"
+        ],
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "points",
+            "in": "query",
+            "required": false,
+            "description": "How many slices to summarise the take in, 10 to 2000. Default 600.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`duration_seconds`, `sample_rate`, `points`, `peaks` (a `[min, max]` pair from -1 to 1 for each slice), `peak_dbfs` and `rms_dbfs` (null for silence), and `speech`: the part louder than -50 dB, with its `start_seconds` and `end_seconds`, or null when nothing is.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`points` is not a whole number from 10 to 2000, or the stored audio is missing or has changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/edit-preview": {
+      "post": {
+        "operationId": "post_api_takes_take_id_edit_preview",
+        "summary": "Hear an edit of a take without saving anything.",
+        "tags": [
+          "Takes"
+        ],
+        "description": "An edit never changes the take it starts from. The steps run in this order: trim to `start_seconds` to `end_seconds`; auto-trim inside that range (quiet inside the speech is never cut); the two fades, on a raised-cosine curve; then the gain. A trim alone copies the samples exactly; a fade or a gain recalculates them and rounds back to 16 bits. The new take keeps the parent's text, voice, settings and model, starts as a `candidate`, and has its loudness and checks measured again. Its word and phoneme times, when the parent has them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring a take retires its edits, and purging it deletes them.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "start_seconds": {
+                    "type": "number",
+                    "description": "Where the kept part starts, in seconds from the start of the take. Default 0."
+                  },
+                  "end_seconds": {
+                    "type": "number",
+                    "description": "Where the kept part ends. Default the end of the take. It must be after `start_seconds`."
+                  },
+                  "auto_trim": {
+                    "type": "boolean",
+                    "description": "Cut the quiet before and after the speech inside that range. Default false."
+                  },
+                  "silence_threshold_db": {
+                    "type": "number",
+                    "description": "Auto-trim: anything quieter than this counts as silence, from -90 to -10 dB. Default -50."
+                  },
+                  "keep_silence_ms": {
+                    "type": "number",
+                    "description": "Auto-trim: how much of the silence to leave at each end, 0 to 2000 ms. Default 80."
+                  },
+                  "fade_in_ms": {
+                    "type": "number",
+                    "description": "A fade in over the start of the result, 0 to 5000 ms. Default 0."
+                  },
+                  "fade_out_ms": {
+                    "type": "number",
+                    "description": "A fade out over the end of the result, 0 to 5000 ms. Default 0."
+                  },
+                  "gain_db": {
+                    "type": "number",
+                    "description": "Make the result louder or quieter, -60 to 24 dB. A gain that would clip is refused. Default 0."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The edited audio as a 16-bit mono WAV. Nothing is saved, and the take is not changed.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Audio-Seconds": {
+                "description": "Seconds of audio in the edited clip.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Edit-Start-Seconds": {
+                "description": "Where in the take the kept part starts.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Edit-End-Seconds": {
+                "description": "Where in the take the kept part ends.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Peak-Dbfs": {
+                "description": "The loudest sample of the edited clip in dBFS; empty for silence.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field is unknown, not a number (or not true or false) or out of range; `end_seconds` is not after `start_seconds`; the edit changes nothing; the result would be under 0.05 seconds; the two fades are longer than the result; auto-trim finds nothing louder than the threshold; a gain would clip the loudest sample (the answer says how much the take can take); the take is retired; or its stored audio is missing or no longer matches its checksum.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/edit": {
+      "post": {
+        "operationId": "post_api_takes_take_id_edit",
+        "summary": "Save an edit of a take as a new take.",
+        "tags": [
+          "Takes"
+        ],
+        "description": "An edit never changes the take it starts from. The steps run in this order: trim to `start_seconds` to `end_seconds`; auto-trim inside that range (quiet inside the speech is never cut); the two fades, on a raised-cosine curve; then the gain. A trim alone copies the samples exactly; a fade or a gain recalculates them and rounds back to 16 bits. The new take keeps the parent's text, voice, settings and model, starts as a `candidate`, and has its loudness and checks measured again. Its word and phoneme times, when the parent has them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring a take retires its edits, and purging it deletes them.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "start_seconds": {
+                    "type": "number",
+                    "description": "Where the kept part starts, in seconds from the start of the take. Default 0."
+                  },
+                  "end_seconds": {
+                    "type": "number",
+                    "description": "Where the kept part ends. Default the end of the take. It must be after `start_seconds`."
+                  },
+                  "auto_trim": {
+                    "type": "boolean",
+                    "description": "Cut the quiet before and after the speech inside that range. Default false."
+                  },
+                  "silence_threshold_db": {
+                    "type": "number",
+                    "description": "Auto-trim: anything quieter than this counts as silence, from -90 to -10 dB. Default -50."
+                  },
+                  "keep_silence_ms": {
+                    "type": "number",
+                    "description": "Auto-trim: how much of the silence to leave at each end, 0 to 2000 ms. Default 80."
+                  },
+                  "fade_in_ms": {
+                    "type": "number",
+                    "description": "A fade in over the start of the result, 0 to 5000 ms. Default 0."
+                  },
+                  "fade_out_ms": {
+                    "type": "number",
+                    "description": "A fade out over the end of the result, 0 to 5000 ms. Default 0."
+                  },
+                  "gain_db": {
+                    "type": "number",
+                    "description": "Make the result louder or quieter, -60 to 24 dB. A gain that would clip is refused. Default 0."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "description": "1 to 200 characters. Repeating the call with the same key and the same edit returns the take that was made instead of making another."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`take`, the new take as in `GET /api/takes` (its `parent_take_id` is this take and its `edit` says what was done), and `replayed`. A repeat with the same `idempotency_key` answers `200` with `replayed: true` and the take made the first time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field is unknown, not a number (or not true or false) or out of range; `end_seconds` is not after `start_seconds`; the edit changes nothing; the result would be under 0.05 seconds; the two fades are longer than the result; auto-trim finds nothing louder than the threshold; a gain would clip the loudest sample (the answer says how much the take can take); the take is retired; or its stored audio is missing or no longer matches its checksum. An `idempotency_key` used before for a different edit, another take or a performance is refused too.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/update": {
+      "post": {
+        "operationId": "post_api_takes_take_id_update",
+        "summary": "Mark a take selected, rejected or candidate, rate it, or note it.",
+        "tags": [
+          "Takes"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "`candidate`, `selected` or `rejected`. Selecting a take returns the line's other selected take to `candidate`."
+                  },
+                  "rating": {
+                    "type": "integer",
+                    "description": "1 to 5."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Up to 2000 characters."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`take`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The take is retired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/takes/{take_id}/voice-match": {
+      "get": {
+        "operationId": "get_api_takes_take_id_voice_match",
+        "summary": "Score how closely a take's voice matches its reference recording, with the optional speaker model.",
+        "tags": [
+          "Takes"
+        ],
+        "parameters": [
+          {
+            "name": "take_id",
+            "in": "path",
+            "required": true,
+            "description": "A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`voice_match`: `available`; when true, a `score`, a `band` (`likely_same`, `uncertain` or `likely_different`), the `reference_version_id` and `proxy: true`; when false, a `reason` (a preset voice has no recording to compare with, or the speaker model is not installed). A proxy for review, not an acceptance result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes": {
+      "get": {
+        "operationId": "get_api_scenes",
+        "summary": "List scenes.",
+        "tags": [
+          "Scenes"
+        ],
+        "responses": {
+          "200": {
+            "description": "`schema_version` and `scenes`: every scene in full, the most recently changed first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_scenes",
+        "summary": "Create a scene from a manifest.",
+        "tags": [
+          "Scenes"
+        ],
+        "description": "Get a template from `GET /api/scenes/template.json` and fill in ids from `GET /api/cast`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "1 to 120 characters. Default `Untitled scene`."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "1 to 500 lines, in order; see the scene schema."
+                  },
+                  "schema_version": {
+                    "type": "integer",
+                    "description": "Default 1."
+                  }
+                },
+                "required": [
+                  "lines"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`scene`, with its `scene_id`, `revision`, `checksum` and computed `segments`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request is over 2 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/template.json": {
+      "get": {
+        "operationId": "get_api_scenes_template_json",
+        "summary": "Download a scene manifest template.",
+        "tags": [
+          "Scenes"
+        ],
+        "responses": {
+          "200": {
+            "description": "A manifest with placeholder ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/template.csv": {
+      "get": {
+        "operationId": "get_api_scenes_template_csv",
+        "summary": "Download the scene CSV header and one sample row.",
+        "tags": [
+          "Scenes"
+        ],
+        "responses": {
+          "200": {
+            "description": "The CSV.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/import": {
+      "post": {
+        "operationId": "post_api_scenes_import",
+        "summary": "Create a scene from JSON or CSV text.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "description": "`json` or `csv`."
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "The text, up to 2 MiB."
+                  }
+                },
+                "required": [
+                  "format",
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`scene`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request is over 2 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id",
+        "summary": "Read a scene.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`scene`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_scenes_scene_id",
+        "summary": "Replace a scene's name and lines.",
+        "tags": [
+          "Scenes"
+        ],
+        "description": "There is no PUT: a scene is updated with this POST.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "1 to 120 characters."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "The full list of lines."
+                  },
+                  "expected_revision": {
+                    "type": "integer",
+                    "description": "The revision you last read. A different one is refused, so a stale edit cannot overwrite a newer one."
+                  }
+                },
+                "required": [
+                  "lines"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`scene` at its next revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`expected_revision` is stale, or the manifest is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request is over 2 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/export.json": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_export_json",
+        "summary": "Download a scene as a manifest.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The manifest as a JSON file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/export.csv": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_export_csv",
+        "summary": "Download a scene as CSV.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The CSV file.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/segments": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_segments",
+        "summary": "Show how each line splits into synthesis segments.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "line_id",
+            "in": "query",
+            "required": false,
+            "description": "Only this line.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`segments`: `seg-001`, `seg-002` and so on, per line.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/jobs": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_jobs",
+        "summary": "List a scene's batch jobs, newest first.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`jobs`, each as `GET /api/scenes/jobs/{job_id}` gives it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_scenes_scene_id_jobs",
+        "summary": "Queue a batch that renders the scene's lines as takes.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "line_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only these lines. Default: every line."
+                  },
+                  "segment_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only these segments, as `line-id/seg-001`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "`job`. Jobs run one take at a time; poll `GET /api/scenes/jobs/{job_id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_api_scenes_jobs_job_id",
+        "summary": "Read a job's progress.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`job`: its `status` (`queued`, `running`, `paused`, `completed`, `failed` or `cancelled`), the counts `total`, `queued`, `running`, `completed`, `failed` and `cancelled`, `progress` from 0 to 1, and `rows`: one per segment to render, with its `status`, `take_id`, `attempts` and `error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}/manifest.json": {
+      "get": {
+        "operationId": "get_api_scenes_jobs_job_id_manifest_json",
+        "summary": "Download a finished job's result manifest.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The manifest, only when its checksum verifies.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The manifest's checksum does not match.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}/pause": {
+      "post": {
+        "operationId": "post_api_scenes_jobs_job_id_pause",
+        "summary": "Pause a job after the take in progress.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`job`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}/resume": {
+      "post": {
+        "operationId": "post_api_scenes_jobs_job_id_resume",
+        "summary": "Resume a paused job.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`job`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "post_api_scenes_jobs_job_id_cancel",
+        "summary": "Cancel a job. A take already being made is not undone.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`job`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "post_api_scenes_jobs_job_id_retry",
+        "summary": "Queue the failed rows of a job again.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`job`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/select": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_select",
+        "summary": "Choose which take a line, or one of its segments, uses.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "line_id": {
+                    "type": "string",
+                    "description": "The line."
+                  },
+                  "take_id": {
+                    "type": "string",
+                    "description": "The take."
+                  },
+                  "segment_id": {
+                    "type": "string",
+                    "description": "For a line with several segments."
+                  }
+                },
+                "required": [
+                  "line_id",
+                  "take_id"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`scene`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/preview": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_preview",
+        "summary": "Assemble the selected takes into one preview.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`preview`: `audio_url` for the raw assembly, `mastered_audio_url` for the loudness-normalized copy, and the measurements.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A line has no selected take, or its audio is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/previews/{preview_file}.wav": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_previews_preview_file_wav",
+        "summary": "Download a preview's WAV.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "preview_file",
+            "in": "path",
+            "required": true,
+            "description": "The file name in a preview answer's `audio_url`, without its `.wav`.",
+            "example": "preview",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/exports": {
+      "get": {
+        "operationId": "get_api_exports",
+        "summary": "List export packages and say which formats FFmpeg can write.",
+        "tags": [
+          "Exports"
+        ],
+        "parameters": [
+          {
+            "name": "recheck",
+            "in": "query",
+            "required": false,
+            "description": "`1` asks FFmpeg again, after an install.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and `ffmpeg` (`found`, `ready`, `version`, `formats` and a `message`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_exports",
+        "summary": "Write an export package. An existing package is never overwritten.",
+        "tags": [
+          "Exports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scene_id": {
+                    "type": "string",
+                    "description": "The scene to export."
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."
+                  },
+                  "filename_template": {
+                    "type": "string",
+                    "description": "Default `{line_id}`."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The package folder's name."
+                  },
+                  "output_rate": {
+                    "type": "integer",
+                    "description": "Sample rate in hertz."
+                  },
+                  "trim_start_seconds": {
+                    "type": "number",
+                    "description": "Cut from the start of each clip."
+                  },
+                  "trim_end_seconds": {
+                    "type": "number",
+                    "description": "Cut from the end of each clip."
+                  },
+                  "fade_in_ms": {
+                    "type": "integer",
+                    "description": "Fade in."
+                  },
+                  "fade_out_ms": {
+                    "type": "integer",
+                    "description": "Fade out."
+                  },
+                  "loudness_lufs": {
+                    "type": "number",
+                    "description": "Normalize each clip to this loudness."
+                  },
+                  "loudness_true_peak": {
+                    "type": "number",
+                    "description": "True-peak ceiling with `loudness_lufs`. Default -1."
+                  },
+                  "limiter_dbfs": {
+                    "type": "number",
+                    "description": "Peak limiter ceiling."
+                  }
+                },
+                "required": [
+                  "scene_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`ok`, `export` (the package's summary) and `log`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another package is still being written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/exports/preview": {
+      "post": {
+        "operationId": "post_api_exports_preview",
+        "summary": "Check an export request and report what it would write, writing nothing.",
+        "tags": [
+          "Exports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scene_id": {
+                    "type": "string",
+                    "description": "The scene to export."
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."
+                  },
+                  "filename_template": {
+                    "type": "string",
+                    "description": "Default `{line_id}`."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The package folder's name."
+                  },
+                  "output_rate": {
+                    "type": "integer",
+                    "description": "Sample rate in hertz."
+                  },
+                  "trim_start_seconds": {
+                    "type": "number",
+                    "description": "Cut from the start of each clip."
+                  },
+                  "trim_end_seconds": {
+                    "type": "number",
+                    "description": "Cut from the end of each clip."
+                  },
+                  "fade_in_ms": {
+                    "type": "integer",
+                    "description": "Fade in."
+                  },
+                  "fade_out_ms": {
+                    "type": "integer",
+                    "description": "Fade out."
+                  },
+                  "loudness_lufs": {
+                    "type": "number",
+                    "description": "Normalize each clip to this loudness."
+                  },
+                  "loudness_true_peak": {
+                    "type": "number",
+                    "description": "True-peak ceiling with `loudness_lufs`. Default -1."
+                  },
+                  "limiter_dbfs": {
+                    "type": "number",
+                    "description": "Peak limiter ceiling."
+                  }
+                },
+                "required": [
+                  "scene_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`dry_run` and `log`: the plan, line by line.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/exports/{export_id}/verify": {
+      "post": {
+        "operationId": "post_api_exports_export_id_verify",
+        "summary": "Check a written package against its manifest.",
+        "tags": [
+          "Exports"
+        ],
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "description": "An export package's folder name under `out/exports`, from `GET /api/exports`.",
+            "example": "panel-20261025T120000Z-1a2b3c4d",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,89}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`ok`, `name` and `log`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The package is missing or does not verify.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/suites": {
+      "get": {
+        "operationId": "get_api_evaluations_suites",
+        "summary": "List the named test suites.",
+        "tags": [
+          "Comparisons"
+        ],
+        "responses": {
+          "200": {
+            "description": "The suite definitions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations": {
+      "get": {
+        "operationId": "get_api_evaluations",
+        "summary": "List registered runs.",
+        "tags": [
+          "Comparisons"
+        ],
+        "responses": {
+          "200": {
+            "description": "`runs`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/runs/{run_id}": {
+      "get": {
+        "operationId": "get_api_evaluations_runs_run_id",
+        "summary": "Read a run with its samples, unblinded.",
+        "tags": [
+          "Comparisons"
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "description": "A registered comparison run's id, from `GET /api/evaluations`.",
+            "example": "neutral-clone-1",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`run`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/runs/import": {
+      "post": {
+        "operationId": "post_api_evaluations_runs_import",
+        "summary": "Register a checksummed run manifest from `out/comparisons`.",
+        "tags": [
+          "Comparisons"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "manifest_path": {
+                    "type": "string",
+                    "description": "The manifest's path."
+                  }
+                },
+                "required": [
+                  "manifest_path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`run`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/cast-import": {
+      "post": {
+        "operationId": "post_api_evaluations_cast_import",
+        "summary": "Make a run from saved Cast takes, to compare them.",
+        "tags": [
+          "Comparisons"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "take_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The takes to compare."
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Default `Saved voice comparison`."
+                  }
+                },
+                "required": [
+                  "take_ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`run`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/blind-sessions": {
+      "get": {
+        "operationId": "get_api_evaluations_blind_sessions",
+        "summary": "List blind listening sessions.",
+        "tags": [
+          "Comparisons"
+        ],
+        "responses": {
+          "200": {
+            "description": "`sessions`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_evaluations_blind_sessions",
+        "summary": "Start a blind A/B session over a run.",
+        "tags": [
+          "Comparisons"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "run_id": {
+                    "type": "string",
+                    "description": "The run to compare."
+                  },
+                  "evaluator": {
+                    "type": "string",
+                    "description": "Who is listening. Default `local listener`."
+                  }
+                },
+                "required": [
+                  "run_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`session`: trials with A and B labels and opaque audio URLs only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/blind-sessions/{session_id}": {
+      "get": {
+        "operationId": "get_api_evaluations_blind_sessions_session_id",
+        "summary": "Read a session. Models stay hidden until reveal.",
+        "tags": [
+          "Comparisons"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`session`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/blind-sessions/{session_id}/ratings": {
+      "post": {
+        "operationId": "post_api_evaluations_blind_sessions_session_id_ratings",
+        "summary": "Save or revise the scores for a trial.",
+        "tags": [
+          "Comparisons"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "trial_id": {
+                    "type": "string",
+                    "description": "The trial."
+                  },
+                  "ratings": {
+                    "type": "object",
+                    "description": "`left` and `right`, each with integer scores 1 to 5 for `intelligibility`, `identity_consistency`, `acting_fit`, `naturalness` and `artifacts`; and an optional `preference` of `A`, `B`, `tie` or null."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Free text."
+                  }
+                },
+                "required": [
+                  "trial_id",
+                  "ratings"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`session`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/blind-sessions/{session_id}/reveal": {
+      "post": {
+        "operationId": "post_api_evaluations_blind_sessions_session_id_reveal",
+        "summary": "Reveal which engine made which sample, once every trial is scored on both sides.",
+        "tags": [
+          "Comparisons"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`session`, now revealed and locked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/blind-audio/{item_id}": {
+      "get": {
+        "operationId": "get_api_evaluations_blind_audio_item_id",
+        "summary": "Play one concealed audition copy.",
+        "tags": [
+          "Comparisons"
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "description": "A compared sample's id.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The WAV.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/items/{item_id}": {
+      "get": {
+        "operationId": "get_api_evaluations_items_item_id",
+        "summary": "Read the diagnostics for a sample, unblinded.",
+        "tags": [
+          "Comparisons"
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "description": "A compared sample's id.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`item`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/evaluations/items/{item_id}/transcript": {
+      "post": {
+        "operationId": "post_api_evaluations_items_item_id_transcript",
+        "summary": "Attach a heard transcript to a sample.",
+        "tags": [
+          "Comparisons"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "heard_text": {
+                    "type": "string",
+                    "description": "What was heard."
+                  },
+                  "evaluator": {
+                    "type": "object",
+                    "description": "Who or what transcribed it: its `name` and `version`."
+                  }
+                },
+                "required": [
+                  "heard_text",
+                  "evaluator"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "description": "A compared sample's id.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`item_id` and `diagnostics`, including the comparison with the expected text: word and character error rates and the differences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/convert": {
+      "post": {
+        "operationId": "post_api_convert",
+        "summary": "Say a recording again in another voice, with Chatterbox voice conversion.",
+        "tags": [
+          "Conversion"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source_path": {
+                    "type": "string",
+                    "description": "The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's reference, saved-voice, Cast, scene or conversion folders."
+                  },
+                  "target_reference_path": {
+                    "type": "string",
+                    "description": "The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in the reference, saved-voice or Cast reference folders."
+                  },
+                  "target_reference_id": {
+                    "type": "string",
+                    "description": "A Cast reference version; its recording must be the target file."
+                  }
+                },
+                "required": [
+                  "source_path",
+                  "target_reference_path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both inputs by checksum.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system": {
+      "get": {
+        "operationId": "get_api_system",
+        "summary": "Report the version, the system, the library, FFmpeg, disk space and engine states.",
+        "tags": [
+          "System"
+        ],
+        "parameters": [
+          {
+            "name": "recheck",
+            "in": "query",
+            "required": false,
+            "description": "`1` asks FFmpeg again.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`generated_at`, `app`, `system`, `library`, `ffmpeg`, `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/storage": {
+      "get": {
+        "operationId": "get_api_system_storage",
+        "summary": "Measure the library's folders and what a cleanup would remove.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "`library`, `other` and `cleanup`. Never walks the Drama model folder.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/backups": {
+      "get": {
+        "operationId": "get_api_system_backups",
+        "summary": "List backups, what a new one would include, and the running job.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "`folder`, `backups`, `plan`, `task` and `suggested_folder`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_system_backups",
+        "summary": "Back up the library to one ZIP, in the background.",
+        "tags": [
+          "System"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The optional sections to add: `voices`, `exports`, `drama`. Default: all of them."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "`task`: poll `GET /api/system/task`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A backup, check or restore is already running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/backups/verify": {
+      "post": {
+        "operationId": "post_api_system_backups_verify",
+        "summary": "Read a backup back in full and check every file, in the background.",
+        "tags": [
+          "System"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The backup's file name, from the list."
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "`task`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A backup, check or restore is already running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/backups/restore": {
+      "post": {
+        "operationId": "post_api_system_backups_restore",
+        "summary": "Restore a backup into a new folder inside the library, in the background.",
+        "tags": [
+          "System"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The backup's file name."
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "A new folder's name: letters, digits, spaces, dots, dashes and underscores."
+                  }
+                },
+                "required": [
+                  "name",
+                  "folder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "`task`. The library in use is never touched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A backup, check or restore is already running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/task": {
+      "get": {
+        "operationId": "get_api_system_task",
+        "summary": "Say how the running backup, check or restore is getting on.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "`task`: its kind, state and progress, or null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/system/cleanup": {
+      "post": {
+        "operationId": "post_api_system_cleanup",
+        "summary": "Remove old worker scratch folders, desktop sessions and service logs.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "What was removed, and anything that could not be.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong."
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Any other failure: a JSON object with an `error` message.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-internal-routes": [
+    "GET /",
+    "GET /api/conversion/sources",
+    "GET /api/conversion/targets",
+    "GET /api/drama3/*",
+    "GET /api/drama3/info",
+    "GET /api/drama3/jobs/{job_id}",
+    "GET /api/drama3/jobs/{job_id}/audio",
+    "GET /api/drama3/jobs/{job_id}/metadata",
+    "GET /api/drama3/jobs/{job_id}/package",
+    "GET /api/preferences",
+    "GET /api/reference-audio",
+    "GET /api/references",
+    "GET /api/voice-library",
+    "GET /compare",
+    "GET /compare.html",
+    "GET /drama3-studio.js",
+    "GET /index.html",
+    "GET /out/*",
+    "GET /theme.js",
+    "GET /voice_lab_app.js",
+    "GET /voice_lab_cast.js",
+    "GET /voice_lab_cast_bindings.js",
+    "GET /voice_lab_drama.js",
+    "GET /voice_lab_generate.js",
+    "GET /voice_lab_scenes.js",
+    "GET /voice_lab_studio.js",
+    "GET /voice_lab_system.js",
+    "GET /voice_lab_take_edit.js",
+    "GET /voice_library.js",
+    "GET /voice_workflows.js",
+    "POST /api/drama3/jobs",
+    "POST /api/drama3/jobs/{job_id}/cancel",
+    "POST /api/preferences",
+    "POST /api/system/use-library"
+  ]
+}

@@ -1,0 +1,2 @@
+# Lint gate for contributors and CI. The service never needs it.
+ruff==0.15.20

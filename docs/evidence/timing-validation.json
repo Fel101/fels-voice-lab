@@ -1,0 +1,291 @@
+{
+  "schema": 1,
+  "reference": "Kokoro af_heart predicted durations at 25 ms frames: the synthesis model's own timing, not a human label",
+  "generated_at": "2026-10-23T07:31:09+00:00",
+  "aligner": {
+    "id": "faster-whisper-tiny-cross-attention",
+    "method": "Whisper cross-attention, teacher-forced on the given text",
+    "version": 1
+  },
+  "voice": "af_heart",
+  "utterances_measured": 40,
+  "utterances_skipped": [],
+  "sequence_mismatch": 0,
+  "word_start_error": {
+    "count": 341,
+    "median_ms": 35.0,
+    "p90_ms": 90.0
+  },
+  "word_end_error": {
+    "count": 341,
+    "median_ms": 60.0,
+    "p90_ms": 280.0
+  },
+  "word_end_error_excluding_final_word": {
+    "count": 301,
+    "median_ms": 50.0,
+    "p90_ms": 105.0
+  },
+  "phoneme_start_error_distributed_from_aligned_words": {
+    "count": 1145,
+    "median_ms": 39.3,
+    "p90_ms": 98.5
+  },
+  "phoneme_end_error_distributed_from_aligned_words": {
+    "count": 1145,
+    "median_ms": 37.6,
+    "p90_ms": 98.7
+  },
+  "phoneme_start_error_distributed_from_reference_words": {
+    "count": 1145,
+    "median_ms": 12.5,
+    "p90_ms": 78.4
+  },
+  "phoneme_end_error_distributed_from_reference_words": {
+    "count": 1145,
+    "median_ms": 7.2,
+    "p90_ms": 81.7
+  },
+  "utterances": [
+    {
+      "id": "utt-000",
+      "words": 7,
+      "phonemes": 26,
+      "duration_seconds": 2.775
+    },
+    {
+      "id": "utt-001",
+      "words": 10,
+      "phonemes": 30,
+      "duration_seconds": 2.95
+    },
+    {
+      "id": "utt-002",
+      "words": 9,
+      "phonemes": 25,
+      "duration_seconds": 2.7
+    },
+    {
+      "id": "utt-003",
+      "words": 9,
+      "phonemes": 33,
+      "duration_seconds": 3.0
+    },
+    {
+      "id": "utt-004",
+      "words": 7,
+      "phonemes": 25,
+      "duration_seconds": 2.45
+    },
+    {
+      "id": "utt-005",
+      "words": 13,
+      "phonemes": 43,
+      "duration_seconds": 4.175
+    },
+    {
+      "id": "utt-006",
+      "words": 10,
+      "phonemes": 34,
+      "duration_seconds": 3.575
+    },
+    {
+      "id": "utt-007",
+      "words": 8,
+      "phonemes": 28,
+      "duration_seconds": 2.825
+    },
+    {
+      "id": "utt-008",
+      "words": 14,
+      "phonemes": 40,
+      "duration_seconds": 4.0
+    },
+    {
+      "id": "utt-009",
+      "words": 10,
+      "phonemes": 34,
+      "duration_seconds": 3.375
+    },
+    {
+      "id": "utt-010",
+      "words": 9,
+      "phonemes": 24,
+      "duration_seconds": 2.6
+    },
+    {
+      "id": "utt-011",
+      "words": 8,
+      "phonemes": 24,
+      "duration_seconds": 2.5
+    },
+    {
+      "id": "utt-012",
+      "words": 12,
+      "phonemes": 37,
+      "duration_seconds": 3.7
+    },
+    {
+      "id": "utt-013",
+      "words": 9,
+      "phonemes": 23,
+      "duration_seconds": 2.375
+    },
+    {
+      "id": "utt-014",
+      "words": 8,
+      "phonemes": 25,
+      "duration_seconds": 2.625
+    },
+    {
+      "id": "utt-015",
+      "words": 7,
+      "phonemes": 25,
+      "duration_seconds": 2.6
+    },
+    {
+      "id": "utt-016",
+      "words": 11,
+      "phonemes": 37,
+      "duration_seconds": 3.675
+    },
+    {
+      "id": "utt-017",
+      "words": 8,
+      "phonemes": 29,
+      "duration_seconds": 2.5
+    },
+    {
+      "id": "utt-018",
+      "words": 8,
+      "phonemes": 24,
+      "duration_seconds": 2.575
+    },
+    {
+      "id": "utt-019",
+      "words": 8,
+      "phonemes": 28,
+      "duration_seconds": 2.95
+    },
+    {
+      "id": "utt-020",
+      "words": 8,
+      "phonemes": 35,
+      "duration_seconds": 3.325
+    },
+    {
+      "id": "utt-021",
+      "words": 7,
+      "phonemes": 27,
+      "duration_seconds": 2.45
+    },
+    {
+      "id": "utt-022",
+      "words": 6,
+      "phonemes": 27,
+      "duration_seconds": 2.725
+    },
+    {
+      "id": "utt-023",
+      "words": 9,
+      "phonemes": 25,
+      "duration_seconds": 2.7
+    },
+    {
+      "id": "utt-024",
+      "words": 7,
+      "phonemes": 31,
+      "duration_seconds": 2.625
+    },
+    {
+      "id": "utt-025",
+      "words": 7,
+      "phonemes": 27,
+      "duration_seconds": 2.875
+    },
+    {
+      "id": "utt-026",
+      "words": 7,
+      "phonemes": 20,
+      "duration_seconds": 2.225
+    },
+    {
+      "id": "utt-027",
+      "words": 8,
+      "phonemes": 25,
+      "duration_seconds": 2.725
+    },
+    {
+      "id": "utt-028",
+      "words": 9,
+      "phonemes": 30,
+      "duration_seconds": 3.075
+    },
+    {
+      "id": "utt-029",
+      "words": 9,
+      "phonemes": 27,
+      "duration_seconds": 2.7
+    },
+    {
+      "id": "utt-030",
+      "words": 9,
+      "phonemes": 26,
+      "duration_seconds": 2.775
+    },
+    {
+      "id": "utt-031",
+      "words": 7,
+      "phonemes": 28,
+      "duration_seconds": 2.925
+    },
+    {
+      "id": "utt-032",
+      "words": 7,
+      "phonemes": 29,
+      "duration_seconds": 2.875
+    },
+    {
+      "id": "utt-033",
+      "words": 8,
+      "phonemes": 27,
+      "duration_seconds": 2.825
+    },
+    {
+      "id": "utt-034",
+      "words": 8,
+      "phonemes": 29,
+      "duration_seconds": 2.775
+    },
+    {
+      "id": "utt-035",
+      "words": 9,
+      "phonemes": 27,
+      "duration_seconds": 2.95
+    },
+    {
+      "id": "utt-036",
+      "words": 8,
+      "phonemes": 30,
+      "duration_seconds": 2.9
+    },
+    {
+      "id": "utt-037",
+      "words": 7,
+      "phonemes": 30,
+      "duration_seconds": 3.075
+    },
+    {
+      "id": "utt-038",
+      "words": 8,
+      "phonemes": 28,
+      "duration_seconds": 2.875
+    },
+    {
+      "id": "utt-039",
+      "words": 8,
+      "phonemes": 28,
+      "duration_seconds": 2.9
+    }
+  ]
+}

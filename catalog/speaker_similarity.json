@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "encoder": "chatterbox-turbo ve.safetensors (speaker encoder, CPU)",
+  "measure": "cosine similarity of two speaker embeddings, in [-1, 1]",
+  "measured": "2026-10-19, on the development machine",
+  "target_voice": "Kokoro af_heart",
+  "ground_truth": "How each clip was made, not a listener's judgement. Same voice: clips made to clone af_heart (Kokoro itself, Chatterbox clones, Breeze and Qwen clones). Other voice: other Kokoro voices, Chatterbox's built-in voice, and Breeze and Qwen designed voices. Each clip was scored against a clip of af_heart.",
+  "bands": {
+    "likely_same_voice_at_or_above": 0.847,
+    "likely_different_voice_below": 0.796
+  },
+  "how_the_bands_were_set": "likely_same_voice_at_or_above is the 10th percentile of the same-voice scores and likely_different_voice_below is the 90th percentile of the other-voice scores. A score between the two is uncertain.",
+  "groups": {
+    "same_voice": {
+      "n": 41,
+      "min": 0.77,
+      "p10": 0.847,
+      "median": 0.925,
+      "p90": 0.947,
+      "max": 0.969
+    },
+    "other_voice": {
+      "n": 87,
+      "min": 0.528,
+      "p10": 0.634,
+      "median": 0.716,
+      "p90": 0.796,
+      "max": 0.868
+    }
+  },
+  "separation_auc": 0.988,
+  "note": "A proxy, measured once, against one target voice. The clips are not part of this repository, so the bands cannot be remade from it. They answer 'same voice or another?' for clones of one target. They are not an identity verdict, and a listener may disagree."
+}

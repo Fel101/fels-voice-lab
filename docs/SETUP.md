@@ -1,0 +1,171 @@
+# Setup
+
+This is an early Windows release that runs from source, not a bundled
+installer with every model. Python 3.12 x64 is the supported starting point.
+Models and their runtime packages must be installed separately. A fresh core
+installation opens the studio and its stores; it cannot synthesize speech until
+a compatible model runtime and checkpoint are available. `setup-kokoro.bat`
+installs one, [Kokoro](#kokoro-on-the-cpu), which speaks on an ordinary CPU.
+
+## Core and desktop
+
+Clone the repository, or download it from GitHub as a ZIP and extract it, into a
+writable folder. Install Python 3.12 from
+[python.org](https://www.python.org/downloads/windows/), including its launcher.
+Run `setup.bat`, then `setup-desktop.bat`. The second command installs pywebview
+in `.venv-desktop`, creates **Fel's Voice Lab** on your Desktop, and uses the installed
+[Microsoft WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+If WebView2 is missing, install it from Microsoft and retry; the app does not
+silently change your browser or download a runtime.
+
+An existing `.venv` is checked and preserved rather than repaired or upgraded
+automatically. If its import check fails, inspect the error and restore its
+requirements in a separate environment. Never replace working AMD/model pins
+by running a generic `pip install --upgrade`.
+
+The shortcut starts a dedicated window and hidden backend on a free loopback
+port. Closing that window cancels its work and stops its backend/children.
+Closing just an inner studio panel does not close the app. Another instance
+started through a terminal or by another program remains independent.
+Logs are under `out/desktop/session-*/backend.log` and `out/desktop/launcher.log`.
+No model preloads; the normal idle unload timeout remains ten minutes.
+
+The shortcut is named **Fel's Voice Lab**. Rerunning desktop setup renames the
+old **Voice Lab** shortcut only when it belongs to this installation. Project
+folder names and existing voice libraries stay at their current paths.
+
+Choose Light, Dark or System in the header. Appearance is saved under
+`data/ui/preferences.json` inside the selected `--state-root` (the project folder
+by default), rather than being tied to a browser port. This local file is not part of
+the repository. Separate state roots keep separate theme preferences.
+
+For browser/API mode:
+
+```powershell
+.venv\Scripts\python.exe serve.py --port 8768 --device cpu
+```
+
+Open `http://127.0.0.1:8768/`. The default CLI port remains 8765 for compatibility;
+choose a free port explicitly if another app uses it. In browser mode the
+terminal controls the service lifetime; closing a browser tab does not stop it.
+`serve.bat` is the foreground fallback.
+
+## Kokoro on the CPU
+
+Kokoro is the quickest way to hear the studio speak: a small model that runs on an ordinary computer. After `setup.bat`, run
+
+```powershell
+setup-kokoro.bat
+```
+
+or `.venv\Scripts\python.exe tools\install_kokoro.py`. It prints its plan and asks before it changes anything.
+`--dry-run` shows the plan and runs the checks without changing anything, and `--yes` accepts the plan without asking.
+Until it has run, the Kokoro card on the **Models & features** page reads *Not installed*, lists the files that are missing and
+names this launcher. Reload the page afterwards, then press **Check it speaks**. Speaking before it has run fails with an
+error that begins by naming the same launcher; once it has run, **Generate** reads the new voices by itself, so a studio
+page that was already open needs no reload.
+
+It installs into this folder, in `.venv`, `hf-cache` and `out\kokoro`:
+
+1. **89 pinned Python packages** from [requirements/kokoro-cpu.txt](../requirements/kokoro-cpu.txt), among them the CPU build of
+   PyTorch, Transformers and spaCy: 222 MB to download and about 1 GB installed. pip checks every file against the SHA-256 in that
+   list. The versions are the ones Kokoro was checked with on the development machine, except PyTorch, whose CPU build comes from
+   PyPI where the development machine uses a ROCm build. pip also keeps its downloads in its usual cache in your user profile.
+2. **The Kokoro checkpoint** at the pinned revision of `hexgrad/Kokoro-82M` on Hugging Face, with its model card and 41 voices
+   (about 350 MB). Every file is checked against the SHA-256 in [catalog/kokoro_snapshot.json](../catalog/kokoro_snapshot.json).
+   An interrupted download resumes where it stopped, and a file that fails its check is deleted rather than kept.
+3. **A speech check.** A fresh process loads Kokoro without using the network and speaks the sentence the Models page uses. The
+   clip stays in `out\kokoro\install-check.wav` beside a small receipt of what was installed.
+
+Run it again to continue after an interruption or to repair a damaged file: it installs only what is missing. It stops before it
+changes anything when it is not run with this folder's own Python, when a package it pins is already installed at another version
+(an environment that has its own PyTorch keeps it), when this folder's path is too long for Windows' 259-character limit
+(move the lab to a path such as `C:\voice-lab`, or switch on long paths in Windows), or when the disk is too full. If Kokoro
+already works in an environment of your own, `--checkpoint-only` fetches the model files and leaves the packages alone.
+
+`--voices` chooses the voices: `supported` (the default: the 41 voices that work with these packages, in American and British
+English, Spanish, French, Hindi, Italian and Brazilian Portuguese), `english` (28), `all` (54), or voice IDs such as `bm_george`.
+The 13 Japanese and Mandarin Chinese voices also need Misaki language packages that the installer does not add. More voices can
+be added later with the same command.
+
+Licences: the Kokoro weights are Apache-2.0. Most of the packages are MIT, BSD or Apache. phonemizer-fork and the espeak-ng
+library inside espeakng-loader are GPL-3.0, num2words is LGPL, and certifi and tqdm are MPL-2.0. They are installed on your
+computer at your request and are not part of this repository.
+
+To remove Kokoro, delete `.venv` (`setup.bat` makes it again), `hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
+
+The recipe was checked from an empty folder on one Windows 11 computer with Python 3.12.10, using only the CPU: the packages and
+checkpoint installed, a speech recognizer read the check clip back as the check sentence, and the studio started from that folder
+passed **Check it speaks**. If the speech check fails with a message about a missing DLL, install the
+[Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again.
+Other Windows setups have not been tried.
+
+## Model runtimes
+
+The [catalog](../catalog/engines.json) records exact checkpoint revisions and
+interpreter paths used by the adapters. A catalog entry means integration exists,
+not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Check it speaks** loads the model and speaks one sentence on the service device.
+
+Two packages are optional and not part of the core install: `misaki` (English phoneme rules for the lip-sync
+tracks of aligned takes; it comes with Kokoro) and `librosa` (the time-stretch in `fit.py`, which the exporter does
+not use). The app, Cast and scene export run without them.
+
+| Family | Runtime path | Setup status |
+|---|---|---|
+| Kokoro | `.venv/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned CPU runtime and checkpoint ([above](#kokoro-on-the-cpu)). |
+| Chatterbox Original/Turbo/VC | `.venv/Scripts/python.exe` | Install matching engine packages and checkpoints after choosing CPU/CUDA/ROCm PyTorch. Existing runtime verified on Windows/AMD; universal installation has not been established. |
+| Breeze | `.venv-breeze/Scripts/python.exe` | Separate environment, BF16 standalone wrapper. Needs the pinned checkpoint and text/audio tokenizer files. Review its non-commercial model license first. |
+| faster-Qwen | `.venv-fqwen/Scripts/python.exe` | Separate environment; faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1, Transformers 5.15.1 were tested locally. Needs exact catalog snapshots. Stock qwen-tts is a different comparison runtime. |
+| VoxCPM2 | Dedicated catalog environment and pinned source/ROCm overlay | Needs a GPU with at least 8 GB of memory (it peaked at 5.6 GB). Tested only on one AMD Radeon AI PRO R9700 with ROCm. It reads pinned source under `out/voxcpm2/source/src` and the Qwen environment's packages, so it is not a portable automatic installation. |
+| Drama 3 | Core environment plus separate speech.cpp | Pinned native download installer below; studio and cloning use CPU. |
+
+Do not install every family's dependencies into the core environment. Runtime
+dependency conflicts are why the workers are separate. This release does not
+claim turnkey NVIDIA/Linux/macOS support or reproducible builds of all optional
+model environments. Public installer recipes for the other families are not written yet.
+
+For Drama, first read its [model license](https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE),
+then explicitly run:
+
+```powershell
+.venv\Scripts\python.exe tools/install_drama3.py
+```
+
+This downloads a 20.8 GB Q4 model and portable speech.cpp 0.8.10 runtime, verifies
+hashes, and retains license/derivative notices under `out/drama3`. Allow additional
+space for the runtime archive and temporary/resumable download. Studio inference
+needs at least 26 GB free RAM and may take several minutes. No model download
+occurs during ordinary generation. Keep the installer receipt with the model.
+
+## Hardware and state settings
+
+`runtime.local.json` optionally supplies `hip_visible_devices` and
+`disable_cudnn` and `drama_design_device`; copy/edit the provided example for your own hardware only. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
+Environment `HIP_VISIBLE_DEVICES` takes precedence. The public default does not
+hide GPU 0. `--device cpu` avoids GPU selection.
+
+`desktop.local.json` optionally contains `{"state_root":"relative/or/absolute/folder"}`.
+Its default is this project directory. A different state root changes the Cast,
+Scenes and Evaluation stores; do not move a database without its media. Model
+caches and worker logs stay under the source installation. **System & backups**
+(and `tools\backup_library.py use`) writes this file when you choose to open a restored library:
+it keeps any other setting in it and never overwrites a file it cannot read. See
+[back up and restore the library](USER_GUIDE.md#back-up-and-restore-the-library).
+
+`ffmpeg` and `ffprobe` are needed for scene export and transcoding, for importing M4A references, and for
+MP3 and AAC export (the build needs its `libmp3lame` and `aac` encoders; the usual full build has both). The lab
+finds them on PATH or in the folder WinGet unpacks them into (`winget install Gyan.FFmpeg`), so a desktop
+shortcut works before PATH has been refreshed. Neither tool is bundled. Without them WAV, FLAC, OGG and MP3
+references still import, and the export panel and the import errors say what is missing. Transcript drafts optionally
+use an isolated `.venv-asr` environment built from `requirements/asr-faster-whisper.txt` and a local copy of the Systran faster-whisper-tiny snapshot (revision d90ca5fe) in `hf-cache/faster-whisper-tiny-d90ca5fe`; `align_takes.py` uses the same pair for word times ([alignment notes](ALIGNMENT.md)).
+The UI reports unavailable if they are absent. Speaker matching (the voice match on
+takes, the second-voice warning in the reference screen, and the identity checks on
+cleaned and imported clips) needs the Chatterbox Turbo speaker encoder: the `chatterbox`
+package in `.venv` and `ve.safetensors` from the pinned Chatterbox Turbo snapshot in
+`hf-cache` (the checkpoint the Turbo engine uses). The two bands that label a score
+ship in [catalog/speaker_similarity.json](../catalog/speaker_similarity.json), so
+nothing needs measuring first. The encoder is not required to start; without it those
+checks say they did not run.
+
+The app's default local-only boundary and optional-model limits are described
+in [SECURITY.md](../SECURITY.md) and [model capabilities](../MODEL_CAPABILITIES.md).

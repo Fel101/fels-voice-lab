@@ -1,0 +1,6 @@
+{
+  "engine": "kokoro",
+  "text": "Hello there, this is a Voice Lab API compatibility check.",
+  "voice": "af_heart",
+  "speed": 1.0
+}

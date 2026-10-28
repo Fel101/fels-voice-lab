@@ -1,0 +1,11 @@
+Fel's Voice Lab
+Copyright 2026 Pete Hudson
+
+Includes Apache-2.0 adaptations of ComfyUI-Breeze-TTS-2 by saganaki22,
+BreezeBlue Breeze TTS, Qwen3-TTS by The Qwen team / Alibaba Group,
+and configuration/model components credited to Sesame and The HuggingFace Inc.
+See THIRD_PARTY_NOTICES.md and licenses/ for scope and full license texts.
+
+Modified files retain their original attribution and document local changes.
+Third-party names identify compatibility and do not imply endorsement.
+No model weights, user recordings or generated voices are part of this repository.

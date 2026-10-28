@@ -1,0 +1,8 @@
+# The lint gate CI runs: `ruff check .`
+# Only rules that point at real mistakes: syntax errors, undefined names, unused imports and unused variables.
+# Style is left to the author, and the vendored Breeze sources are not ours to reformat.
+target-version = "py312"
+extend-exclude = ["breeze/vendor"]
+
+[lint]
+select = ["F", "E9"]
