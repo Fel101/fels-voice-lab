@@ -7,4 +7,4 @@ if not exist ".venv\Scripts\python.exe" (
   exit /b 1
 )
 ".venv\Scripts\python.exe" tools\setup_desktop.py
-if errorlevel 1 pause
+pause

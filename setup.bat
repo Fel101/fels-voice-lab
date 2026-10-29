@@ -2,4 +2,4 @@
 setlocal
 cd /d "%~dp0"
 py -3.12 tools\setup_core.py
-if errorlevel 1 pause
+pause

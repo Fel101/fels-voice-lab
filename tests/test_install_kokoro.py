@@ -196,6 +196,12 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_kokoro.py %*', text)
         self.assertIn("Run setup.bat first.", text)
 
+    def test_every_setup_window_waits_for_a_key_so_a_double_click_can_be_read(self):
+        for name in ("setup.bat", "setup-desktop.bat", "setup-kokoro.bat"):
+            lines = [line.strip() for line in (ROOT / name).read_text("utf-8").splitlines() if line.strip()]
+            last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
+            self.assertIn("pause", lines[last_run + 1:], name)
+
     def test_the_core_setup_points_at_the_installer(self):
         self.assertIn("setup-kokoro.bat", (ROOT / "tools" / "setup_core.py").read_text("utf-8"))
 
