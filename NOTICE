@@ -9,3 +9,6 @@ See THIRD_PARTY_NOTICES.md and licenses/ for scope and full license texts.
 Modified files retain their original attribution and document local changes.
 Third-party names identify compatibility and do not imply endorsement.
 No model weights, user recordings or generated voices are part of this repository.
+
+Third-party code listed in THIRD_PARTY_NOTICES.md retains its original license.
+Model weights, recordings and outputs are not granted rights by the MIT license in LICENSE.
