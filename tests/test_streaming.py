@@ -174,7 +174,7 @@ class StreamingTests(unittest.TestCase):
             return worker
 
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             pool = EnginePool("cpu", 0, worker_factory=factory, idle_poll_seconds=0.1)
             server = ThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
             server.RequestHandlerClass = serve.make_handler(pool, server.server_address[1], CastStore(root))

@@ -403,6 +403,7 @@ class ExportTakeLoadingTests(ExportPanelBase):
             scene_export.load_takes(self.root, scene_export.load_scene(self.root, scene_id))
 
 
+@unittest.skipUnless(HAS_FFMPEG, "ffmpeg and ffprobe are required for real package output")
 class WordCaptionExportTests(ExportPanelBase):
     def test_a_line_with_word_times_gets_phrase_captions_and_the_package_verifies(self):
         scene_id = self.render_selected_scene()
@@ -429,6 +430,7 @@ class WordCaptionExportTests(ExportPanelBase):
         self.assertTrue(export_panel.verify(self.root, folder)["ok"])
 
 
+@unittest.skipUnless(HAS_FFMPEG, "ffmpeg and ffprobe are required for real package output")
 class LipSyncExportTests(ExportPanelBase):
     SPANS = [("The", 0.0, 0.2), ("road", 0.2, 0.45), ("is", 0.45, 0.6), ("clear.", 0.6, 0.95)]
 

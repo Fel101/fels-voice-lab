@@ -33,6 +33,7 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import ffmpeg_tools
 import serve
 from app_version import VERSION
 from cast_store import CastStore
@@ -62,6 +63,7 @@ CTRL, SHIFT, ALT = 2, 8, 1  # DevTools modifier bits
 SAVED_LINE_IDS = ("fetch('/api/scenes/' + JSON.parse(document.getElementById('sceneEditor').value).scene_id)"
                   ".then((r) => r.json()).then((j) => j.scene.lines.map((l) => l.line_id).join(','))")
 BROWSER = find_browser()
+FFMPEG_READY = bool(ffmpeg_tools.find_ffmpeg() and ffmpeg_tools.find_ffprobe())  # what the page's export will find
 SHOTS = Path(os.environ["VOICE_LAB_BROWSER_SHOTS"]) if os.environ.get("VOICE_LAB_BROWSER_SHOTS") else None
 
 
@@ -577,20 +579,26 @@ class BrowserFlowTests(unittest.TestCase):
                 page.wait_until("document.getElementById('scenePreviewPlayer').getAttribute('src')")
                 page.screenshot("scene", "label:has(#sceneName)", to="#scenePreviewPlayer")
 
-                # Export: write the package, then verify it.
+                # Export: write the package, then verify it. (Without FFmpeg the page says so, and that is checked instead.)
                 page.evaluate("document.getElementById('sceneExport').open = true")
                 page.wait_until("document.getElementById('exportCreate') && !document.getElementById('exportCreate').disabled")
                 page.click("#exportCreate")
-                page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Package written to')", timeout=120)
-                # The status says "written" before the package list is refreshed, so wait for the list as a person would.
-                page.wait_until("document.getElementById('exportSelect').value !== ''")
-                page.click("#exportVerify")
-                page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Verification passed')", timeout=120)
-                page.screenshot("export", "#sceneExport")
+                if FFMPEG_READY:
+                    page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Package written to')", timeout=120)
+                    # The status says "written" before the package list is refreshed, so wait for the list as a person would.
+                    page.wait_until("document.getElementById('exportSelect').value !== ''")
+                    page.click("#exportVerify")
+                    page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Verification passed')", timeout=120)
+                    page.screenshot("export", "#sceneExport")
 
-                packages = sorted((root / "out" / "exports").iterdir())
-                self.assertEqual(len(packages), 1)
-                self.assertTrue((packages[0] / "manifest.json").is_file())
+                    packages = sorted((root / "out" / "exports").iterdir())
+                    self.assertEqual(len(packages), 1)
+                    self.assertTrue((packages[0] / "manifest.json").is_file())
+                else:
+                    # A computer without FFmpeg (a CI runner, say) is told so in the page, and nothing is written.
+                    page.wait_until("document.getElementById('exportError').textContent.startsWith('FFmpeg was not found')")
+                    self.assertEqual(page.evaluate("document.getElementById('exportStatus').textContent"), "")
+                    self.assertEqual(list((root / "out").glob("exports/*")), [])
 
                 # System: the report, then a backup that is read back, checked by hand, and restored into a new folder.
                 # (Cleanup and "open the restored library" are left alone: they act on the project's own folders.)

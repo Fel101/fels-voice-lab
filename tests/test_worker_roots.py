@@ -24,7 +24,7 @@ import serve
 class IsolatedWorkerRootsTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="voice-lab-root-regression-")
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.refs = self.root / "data/cast/media/references"
         self.takes = self.root / "data/cast/media/takes"
         self.refs.mkdir(parents=True)

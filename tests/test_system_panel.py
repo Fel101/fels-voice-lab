@@ -44,7 +44,7 @@ class FakeEngines:
 class SystemPanelBase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="voice-lab-system-")
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.root, self.app, self.out = self.base / "lab", self.base / "program", self.base / "program" / "out"
         self.app.mkdir()
         self.cast = build_library(self.root)

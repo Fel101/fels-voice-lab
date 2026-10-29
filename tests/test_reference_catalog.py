@@ -41,7 +41,7 @@ def synthetic_wav(seconds=1):
 class ReferenceFixtures(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="voice-lab-reference-catalog-")
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.lab = self.root / "lab"
         self.selected = self.root / "selected-state"
         self.lab.mkdir()
