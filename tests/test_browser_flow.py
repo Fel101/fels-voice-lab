@@ -202,6 +202,7 @@ class DevToolsPage:
              "--remote-debugging-port=0", f"--user-data-dir={self.profile}", "about:blank"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.problems = []
+        self.failed, self.requests, self.port = [], {}, None  # the requests that failed while a page was opened (see open)
         self.next_id = 0
         try:
             self.socket = WebSocket(self._page_url())
@@ -215,16 +216,21 @@ class DevToolsPage:
         """Wait for the browser to open its DevTools port, remember its browser endpoint, and return the page's."""
         port_file = Path(self.profile) / "DevToolsActivePort"
         deadline = time.monotonic() + 30
+        pages = []
         while time.monotonic() < deadline:
             try:
                 # Port first, then the browser endpoint. Windows refuses a read while the browser is still writing the file.
                 port, browser_path = port_file.read_text(encoding="utf-8").splitlines()[:2]
                 self.browser_url = f"ws://127.0.0.1:{port}{browser_path}"
+                self.port = port
                 targets = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10).read())
-                return next(target["webSocketDebuggerUrl"] for target in targets if target["type"] == "page")
+                pages = [target for target in targets if target["type"] == "page"]
+                # The tab the browser was started with, not just the first page: Edge lists a page of its own (a sync dialog)
+                # within a second of starting, and once it is there it comes first.
+                return next(page["webSocketDebuggerUrl"] for page in pages if page["url"] == "about:blank")
             except (OSError, ValueError, StopIteration):
                 time.sleep(0.1)
-        raise RuntimeError("the browser did not open a DevTools port")
+        raise RuntimeError(f"the browser did not open a DevTools port with a blank tab to drive (pages: {[p['url'] for p in pages]})")
 
     def call(self, method, params=None):
         self.next_id += 1
@@ -240,11 +246,18 @@ class DevToolsPage:
 
     def _remember(self, message):
         params = message.get("params", {})
-        if message.get("method") == "Runtime.exceptionThrown":
+        method = message.get("method")
+        if method == "Runtime.exceptionThrown":
             details = params.get("exceptionDetails", {})
             self.problems.append(details.get("exception", {}).get("description") or details.get("text", "page error"))
-        elif message.get("method") == "Runtime.consoleAPICalled" and params.get("type") == "error":
+        elif method == "Runtime.consoleAPICalled" and params.get("type") == "error":
             self.problems.append(" ".join(str(arg.get("value", arg.get("description", ""))) for arg in params.get("args", [])))
+        elif method == "Network.requestWillBeSent":
+            self.requests[params.get("requestId")] = params.get("request", {}).get("url", "?")
+        elif method == "Network.loadingFailed":
+            self.failed.append(f"{self.requests.get(params.get('requestId'), '?')}: {params.get('errorText')}")
+        elif method == "Network.responseReceived" and params.get("response", {}).get("status", 0) >= 400:
+            self.failed.append(f"{params['response'].get('url')}: HTTP {params['response']['status']}")
 
     def evaluate(self, expression):
         result = self.call("Runtime.evaluate", {"expression": expression, "returnByValue": True, "awaitPromise": True})
@@ -275,9 +288,40 @@ class DevToolsPage:
                              " return el && el.textContent ? id + ': ' + el.textContent : ''; }"
                              ").filter(Boolean).join('\\n'))()")
 
-    def open(self, url):
-        self.call("Page.navigate", {"url": url})
-        self.wait_until("document.documentElement.classList.contains('workspace-ready')")
+    def look(self):
+        """What the browser is showing, for a failure message: its tabs, how far this page got and what went wrong."""
+        try:
+            listing = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/json/list", timeout=5).read()
+            tabs = [target["url"] for target in json.loads(listing) if target["type"] == "page"]
+        except (OSError, ValueError) as error:
+            tabs = f"unavailable ({error})"
+        try:
+            page = self.evaluate("[location.href, document.readyState, document.title, document.scripts.length].join(' | ')")
+        except (RuntimeError, OSError) as error:
+            page = f"no answer ({error})"
+        return (f"browser tabs: {tabs}\nthis page (address | state | title | scripts): {page}\n"
+                f"failed requests: {self.failed[-10:] or 'none'}\npage errors: {self.problems[-10:] or 'none'}")
+
+    def open(self, url, patience=(30, 60)):
+        """Load the page and wait until its scripts have run. The first load in a fresh browser on a slow computer can stall
+        (a CI runner once left it for 60 s with nothing to show), so a page that is not ready within the first wait is
+        loaded once more; one that never gets ready is reported with what the browser was showing."""
+        self.failed, self.requests = [], {}
+        self.call("Network.enable")  # only while the page loads: it is what says which request failed
+        notes = []
+        try:
+            for attempt, seconds in enumerate(patience, start=1):
+                started = self.call("Page.navigate", {"url": url})
+                try:
+                    return self.wait_until("document.documentElement.classList.contains('workspace-ready')", timeout=seconds)
+                except AssertionError:
+                    notes.append(f"load {attempt}, after {seconds} s: Page.navigate answered {started}\n{self.look()}")
+            raise AssertionError(f"{url} was not ready after {len(patience)} loads\n" + "\n".join(notes))
+        finally:
+            try:
+                self.call("Network.disable")
+            except (RuntimeError, OSError):
+                pass
 
     def show(self, section):
         self.evaluate(f"location.hash = {json.dumps('#' + section)}")
