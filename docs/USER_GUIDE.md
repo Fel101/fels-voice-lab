@@ -7,8 +7,8 @@ at the foot of every page and in `/api/health`; `python serve.py --version` prin
 
 ## Appearance and navigation
 
-The header's **Theme** menu offers **Light**, **Dark**, and **System**. System
-follows the operating system; an explicit choice overrides it. The choice is
+The header's **Theme** menu offers **Light**, **Dark** (neutral grey), **Forest** (dark green), and **System**. System
+follows the operating system (Light, or Dark when Windows is in dark mode); an explicit choice overrides it. The choice is
 saved in the selected app state folder and survives closing/reopening the desktop
 window, whose local port can change. Compare uses the same preference when opened.
 

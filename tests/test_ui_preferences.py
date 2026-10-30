@@ -21,7 +21,7 @@ class PreferencesTests(unittest.TestCase):
     def test_save_survives_new_store_and_renders_only_validated_theme(self):
         with tempfile.TemporaryDirectory() as temp:
             store = UiPreferences(temp)
-            for theme in ("light", "dark", "system"):
+            for theme in UiPreferences.THEMES:
                 self.assertEqual(store.save({"theme": theme}), {"theme": theme})
                 reopened = UiPreferences(temp)
                 self.assertEqual(reopened.get()["theme"], theme)

@@ -130,8 +130,9 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
               "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
               "a take retires its edits, and purging it deletes them.")
 
-ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a launcher in the lab folder "
-                        "(Kokoro: `setup-kokoro.bat`), `error` begins by naming the launcher.")
+ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro), "
+                        "`error` begins by saying where to install it: Install on its Models & features card, or the launcher "
+                        "`setup-kokoro.bat` in the lab folder.")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
@@ -636,7 +637,7 @@ ROUTES = [
     # ---------------------------------------------------------------- Page helpers (internal)
     R("GET", "/api/preferences", "Page helpers", "Read the saved appearance choice.", internal=True),
     R("POST", "/api/preferences", "Page helpers", "Save the appearance choice.", internal=True,
-      body=(F("theme", "string", "`system`, `light` or `dark`."),)),
+      body=(F("theme", "string", "`system`, `light`, `dark` or `forest`."),)),
     R("GET", "/api/reference-audio", "Page helpers", "Play a recording from the reference screen by path.", internal=True,
       reply_kind="audio"),
     R("GET", "/api/references", "Page helpers", "List the recordings the reference screen offers.", internal=True),

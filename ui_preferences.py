@@ -7,7 +7,7 @@ import threading
 
 
 class UiPreferences:
-    THEMES = ("system", "light", "dark")
+    THEMES = ("system", "light", "dark", "forest")
 
     def __init__(self, root):
         self.path = Path(root) / "data" / "ui" / "preferences.json"
@@ -26,7 +26,7 @@ class UiPreferences:
 
     def save(self, data):
         if not isinstance(data, dict) or set(data) != {"theme"} or data["theme"] not in self.THEMES:
-            raise ValueError("Choose a theme: system, light, or dark.")
+            raise ValueError("Choose a theme: system, light, dark, or forest.")
         preference = {"theme": data["theme"]}
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)

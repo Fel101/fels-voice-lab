@@ -14,8 +14,13 @@ function sourceBetween(start, end) {
 }
 
 function element(tag) {
-  const item = {tag, children: [], className: '', disabled: false, hidden: false, colSpan: 0, handlers: {},
-    appendChild(child) { this.children.push(child); return child; },
+  const item = {tag, children: [], className: '', disabled: false, hidden: false, colSpan: 0, handlers: {}, parentNode: null,
+    appendChild(child) {    // as the DOM does: a node that is added somewhere else leaves where it was
+      if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(other => other !== child);
+      child.parentNode = this;
+      this.children.push(child);
+      return child;
+    },
     addEventListener(type, handler) { this.handlers[type] = handler; }};
   let text = '';
   Object.defineProperty(item, 'textContent', {
@@ -77,7 +82,7 @@ test('state text names the device and keeps install and conversion states apart'
 test('detail text lists what is missing and what the last test measured', () => {
   const {context: c} = harness();
   assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing: ['.venv/python.exe', 'hf/snapshot']}}, 'cpu'),
-    'Missing: .venv/python.exe; hf/snapshot. The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs.');
+    'The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs. Missing: .venv/python.exe; hf/snapshot.');
   assert.equal(c.engineDetailText({state: 'not_checked', check: null}, 'cpu'),
     'Press Test to load the model and speak one short sentence on this device.');
   const passed = {state: 'usable', check: {status: 'passed', checked_at: '2026-10-22T10:00:00+00:00',
@@ -99,7 +104,7 @@ test('a missing engine with an installer is told to press Install, and one witho
     'Missing: hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff. Press Install to add it to this folder, or run '
     + 'setup-kokoro.bat in the lab folder. docs/SETUP.md says what it installs.');
   assert.match(c.engineDetailText({state: 'not_installed', installation: {missing}}, 'cpu'),
-    /^Missing: hf-cache\/hub\/models--hexgrad--Kokoro-82M\/snapshots\/f3ff\. The app cannot install this model yet/);
+    /^The app cannot install this model yet: .* Missing: hf-cache\/hub\/models--hexgrad--Kokoro-82M\/snapshots\/f3ff\.$/);
   assert.doesNotMatch(c.engineDetailText({state: 'not_checked', check: null, installation: {missing: [], installer: 'setup-kokoro.bat'}}, 'cpu'),
     /setup-kokoro|Install/);
 });
@@ -413,6 +418,86 @@ test('an install that could not start says so and still refreshes the status', a
   assert.equal(fields.err.textContent, 'The install did not start: The GPU worker is busy while a clip is made.');
   assert.equal(calls[calls.length - 1].url, '/api/engines/status');
   assert.equal(c.modelCards.kokoro.go.disabled, false);
+});
+
+const NAMED = {name: 'Kokoro 82M', integrated: true};
+const kokoroMissing = {...missingKokoro, ...NAMED};
+const kokoroReady = {...readyKokoro, ...NAMED};
+const manual = (id, name, extra = {}) => ({id, name, integrated: true, state: 'not_installed', check: null, min_free_ram_gb: 12,
+  installation: {installed: false, missing: [`.venv-${id}/Scripts/python.exe`]}, ...extra});
+const snapshot = (engines, extra = {}) => ({device: 'cpu', busy: false, speed: [], engines, ...extra});
+
+test('a model the app cannot install goes under More models, which counts them, and comes back when it is installed', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M'), breeze: card('Breeze'), qwen: card('Qwen')};
+  c.renderEngineStatus(snapshot([kokoroMissing, manual('breeze', 'Breeze')]));
+  assert.equal(c.modelCards.kokoro.card.parentNode, fields.modelOverview);
+  assert.equal(c.modelCards.breeze.card.parentNode, fields.modelMore);
+  assert.equal(fields.modelsMoreBox.hidden, false);
+  assert.equal(fields.modelsMoreSummary.textContent, '1 more model needs manual setup');
+  c.renderEngineStatus(snapshot([kokoroMissing, manual('breeze', 'Breeze'), manual('qwen', 'Qwen')]));
+  assert.equal(fields.modelsMoreSummary.textContent, '2 more models need manual setup');
+  assert.deepEqual(fields.modelMore.children, [c.modelCards.breeze.card, c.modelCards.qwen.card]);
+  c.renderEngineStatus(snapshot([kokoroMissing, manual('breeze', 'Breeze', {state: 'not_checked', installation: {installed: true, missing: []}}),
+    manual('qwen', 'Qwen')]));
+  assert.equal(c.modelCards.breeze.card.parentNode, fields.modelOverview);
+  assert.deepEqual(fields.modelMore.children, [c.modelCards.qwen.card]);
+  assert.equal(fields.modelsMoreSummary.textContent, '1 more model needs manual setup');
+});
+
+test('the More models fold stays hidden while every model is installed or can be installed', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(snapshot([kokoroMissing]));
+  assert.equal(fields.modelsMoreBox.hidden, true);
+  assert.equal(c.modelCards.kokoro.card.parentNode, fields.modelOverview);
+});
+
+test('a studio with no model installed says so and points at the card that can install one', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M'), breeze: card('Breeze')};
+  const none = snapshot([kokoroMissing, manual('breeze', 'Breeze')]);
+  c.renderEngineStatus(none);
+  assert.equal(fields.firstRun.hidden, false);
+  assert.equal(fields.firstRunTitle.textContent, 'No voice model is installed yet');
+  assert.equal(fields.firstRunText.textContent, 'Press Install on the Kokoro 82M card in Models & features. It shows what it will do first.');
+  c.renderEngineStatus({...none, busy: true, install: job()});
+  assert.equal(fields.firstRunTitle.textContent, 'Installing Kokoro 82M…');
+  assert.equal(fields.firstRunText.textContent, 'Follow it in Models & features. Nothing can speak until it finishes.');
+  const conversionOnly = {id: 'vc', name: 'Chatterbox Voice Conversion', integrated: true, task_only: true, state: 'conversion_task',
+    installation: {installed: true, missing: []}};
+  c.modelCards.vc = card('Chatterbox Voice Conversion');
+  c.renderEngineStatus(snapshot([kokoroMissing, conversionOnly]));
+  assert.equal(fields.firstRun.hidden, false);    // a conversion tool cannot speak a line
+  c.renderEngineStatus(snapshot([kokoroReady, manual('breeze', 'Breeze')]));
+  assert.equal(fields.firstRun.hidden, true);
+});
+
+test('the model pickers mark what is not installed, and the studio picker says what to do about it', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M'), breeze: card('Breeze TTS 2 BF16')};
+  const options = () => [{value: 'kokoro', textContent: 'Kokoro 82M'}, {value: 'breeze', textContent: 'Breeze TTS 2 BF16'},
+    {value: 'future', textContent: 'Future (not integrated yet)'}];
+  fields.engine = Object.assign(element('engine'), {options: options(), value: 'breeze'});
+  fields.identityEngine = Object.assign(element('identityEngine'), {options: options().slice(0, 2), value: 'kokoro'});
+  c.renderEngineStatus(snapshot([kokoroReady, manual('breeze', 'Breeze TTS 2 BF16')]));
+  const labels = select => select.options.map(option => option.textContent);
+  assert.deepEqual(labels(fields.engine), ['Kokoro 82M', 'Breeze TTS 2 BF16 (not installed)', 'Future (not integrated yet)']);
+  assert.deepEqual(labels(fields.identityEngine), ['Kokoro 82M', 'Breeze TTS 2 BF16 (not installed)']);
+  assert.equal(fields.engineHint.hidden, false);
+  assert.equal(fields.engineHint.textContent,
+    'This model is not installed, so Generate cannot use it yet. See what it needs in Models & features');
+  assert.equal(fields.engineHint.children[1].href, '#models');
+  fields.engine.value = 'kokoro';
+  c.showEngineHint();
+  assert.equal(fields.engineHint.hidden, true);
+  assert.equal(fields.engineHint.textContent, '');
+  c.renderEngineStatus(snapshot([kokoroMissing, manual('breeze', 'Breeze TTS 2 BF16', {state: 'not_checked',
+    installation: {installed: true, missing: []}})]));
+  assert.equal(labels(fields.engine)[1], 'Breeze TTS 2 BF16');
+  assert.equal(labels(fields.engine)[0], 'Kokoro 82M (not installed)');
+  assert.equal(fields.engineHint.textContent,
+    'This model is not installed, so Generate cannot use it yet. Install it in Models & features');
 });
 
 test('the page has the line that says how much RAM this computer has', () => {

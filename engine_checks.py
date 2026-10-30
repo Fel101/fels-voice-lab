@@ -101,7 +101,7 @@ def installation(entry, root=LAB):
 
 
 def install_pointer(entry, probe):
-    """Name the launcher to run, when an engine that has one is missing files; otherwise None.
+    """Say where to install an engine that has a guided installer and is missing files; otherwise None.
 
     `probe` is installation() or a stand-in for it, and is called only for an engine with a launcher. EnginePool leads the
     error of a failed load with this sentence, since that error is the first thing someone who has not installed the engine
@@ -111,7 +111,8 @@ def install_pointer(entry, probe):
     if launcher is None or probe(entry)["installed"]:
         return None
     name = entry.get("name", entry["id"])
-    return f"{name} is not installed. To install it, run {launcher} in the lab folder, then try again."
+    return (f"{name} is not installed. Open Models & features and press Install on its card, or run {launcher} in the lab "
+            "folder, then try again.")
 
 
 def _dist_infos(site_packages):

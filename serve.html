@@ -3,8 +3,9 @@
 <title>Fel's Voice Lab</title>
 <style>
 :root { color-scheme:light; --bg:#f3f5f4; --fg:#202b29; --muted:#596b66; --card:#fff; --line:#d6e0dc; --accent:#187562; --soft:#eaf4ef; --err:#b52d22; }
-:root[data-theme="dark"] { color-scheme:dark; --bg:#101817; --fg:#e5eeeb; --muted:#a4b9b1; --card:#192320; --line:#34463f; --accent:#72d5b5; --soft:#233e33; --err:#ff8a7a; }
-@media(prefers-color-scheme:dark){:root[data-theme="system"]{color-scheme:dark;--bg:#101817;--fg:#e5eeeb;--muted:#a4b9b1;--card:#192320;--line:#34463f;--accent:#72d5b5;--soft:#233e33;--err:#ff8a7a}}
+:root[data-theme="dark"] { color-scheme:dark; --bg:#121212; --fg:#e8e8ea; --muted:#a1a1a8; --card:#1c1c1e; --line:#333336; --accent:#72d5b5; --soft:#26332f; --err:#ff8a7a; }
+:root[data-theme="forest"] { color-scheme:dark; --bg:#101817; --fg:#e5eeeb; --muted:#a4b9b1; --card:#192320; --line:#34463f; --accent:#72d5b5; --soft:#233e33; --err:#ff8a7a; }
+@media(prefers-color-scheme:dark){:root[data-theme="system"]{color-scheme:dark;--bg:#121212;--fg:#e8e8ea;--muted:#a1a1a8;--card:#1c1c1e;--line:#333336;--accent:#72d5b5;--soft:#26332f;--err:#ff8a7a}}
 body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,sans-serif; }
 main { max-width:900px; margin:0 auto; padding:24px 16px 64px; }
 h1 { font-size:1.5rem; margin:0 0 4px; } h2 { font-size:1.08rem; margin:0 0 10px; }
@@ -99,7 +100,7 @@ pre { white-space:pre-wrap; }
 .model-card p { margin:8px 0; }
 .engine-state { font-weight:600; }
 .model-card.wide { grid-column:1 / -1; }
-.model-card .warn { color:var(--err); }
+.model-card .warn, #engineHint { color:var(--err); }
 .install-box p { max-width:80ch; }
 .install-box { margin:10px 0; } .install-box button { margin:4px 8px 4px 0; }
 .install-log { margin:10px 0; padding:8px 10px; max-height:12em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
@@ -111,6 +112,7 @@ pre { white-space:pre-wrap; }
 .speed-table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .speed-table th, .speed-table td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
 .workflow-note { background:var(--soft); border-radius:10px; padding:16px 18px; margin:20px 0; }
+#firstRun { border:1px solid var(--accent); }
 .reference-tools { margin:8px 0 18px; padding:12px; border:1px solid var(--line); border-radius:10px; min-width:0; }
 .reference-details,#cloneSourceInfo { white-space:pre-line; }
 fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
@@ -118,7 +120,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:700px){main{display:block;padding:0 16px 40px}.app-header{padding:22px 0 18px}.local-badge{display:none}.workspace-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px;margin:16px 0}.workspace-nav .eyebrow{display:none}.workspace-nav a{padding:8px 10px;font-size:.85rem}.workspace-nav .nav-secondary{margin:0;padding-top:8px;border:0}.workspace{margin:18px 0;padding:20px}.workspace h2{font-size:1.35rem}.field.compact{flex:1 1 140px}.scene-line{padding:14px}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script src="/theme.js" defer></script></head><body><main>
-<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
+<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a></nav>
 
 <section class="card" id="cloning">
@@ -326,12 +328,13 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="studio">
   <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or audition a reference. Save the voice you like, then build its character in the Cast library.</p>
+  <div class="workflow-note" id="firstRun" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><a href="#models">Open Models &amp; features →</a></div>
   <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including fixed speaker blends that do not use a reference recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
   <label class="field">Text to speak
     <textarea id="text">Hey, you're back. I was hoping you'd stop by tonight. How was your day?</textarea>
   </label>
   <div class="row">
-    <label class="field compact">Model<select id="engine"></select></label>
+    <label class="field compact">Model<select id="engine"></select><span class="meta" id="engineHint" hidden></span></label>
     <label class="field compact" id="voiceWrap" hidden>Kokoro speaker presets / equal blend<select id="voice" multiple size="5"></select>
       <span class="meta">Licensed Kokoro speaker packs, not uploaded recordings. Select one or more to blend equally. New recordings belong in Voice cloning; Kokoro cannot clone them.</span></label>
     <label class="field compact" id="kokoroLanguageWrap" hidden>Spoken language<select id="kokoroLanguage"><option>American English</option></select></label>
@@ -514,7 +517,10 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <audio id="player" controls></audio>
 </section>
 <section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
-<section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device; the test loads the model and speaks one sentence. An integrated model does not mean every upstream feature has been exposed or tested. A card offers Install only for a model that has an installer; for the others it says what is missing. The RAM on a card is the free memory the Lab wants before it loads that model.</p><p class="meta" id="modelsRam"></p><div id="modelOverview" class="model-grid"></div>
+<section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Each card is a voice model. Press Install on a model the app can install itself, and Test to check that an installed model speaks on this computer: the test loads it and speaks one short sentence. Models the app cannot install yet are listed under More models, with what each one needs.</p>
+<details><summary>What these words mean</summary><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device. An integrated model does not mean every upstream feature has been exposed or tested. The RAM on a card is the free memory the Lab wants before it loads that model.</p></details>
+<p class="meta" id="modelsRam"></p><div id="modelOverview" class="model-grid"></div>
+<details id="modelsMoreBox" hidden><summary id="modelsMoreSummary">More models</summary><p class="meta">The app cannot install these yet. docs/SETUP.md (Model runtimes) says what each one needs.</p><div id="modelMore" class="model-grid"></div></details>
 <h3>Measured speed on this service</h3><p class="meta">Real-time factor is seconds to generate divided by seconds of audio, so below 1 is faster than real time. Rows come from the clips and checks this service ran on each device. Precision is not measured; this table records speed only.</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Device</th><th scope="col">Clips</th><th scope="col">Median real-time factor</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>
 <div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset speakers are reusable Cast identities and do not require a cloned reference. Qwen VoiceDesign creates references for a cloning identity.</p></div>

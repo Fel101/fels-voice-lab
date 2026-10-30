@@ -32,7 +32,8 @@ from worker_pool import EnginePool, WorkerBusy, read_catalog
 from worker_process import WorkerRequestError, WorkerTimeout, WorkerUnavailable
 
 CATALOG = {entry["id"]: entry for entry in read_catalog()["engines"]}
-POINTER = "Kokoro 82M is not installed. To install it, run setup-kokoro.bat in the lab folder, then try again."
+POINTER = ("Kokoro 82M is not installed. Open Models & features and press Install on its card, or run setup-kokoro.bat in the "
+           "lab folder, then try again.")
 
 
 def installed_probe(entry):

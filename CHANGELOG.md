@@ -103,7 +103,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 - **Models & features** reports three states for each family: integrated, installed (its environment and pinned checkpoint
   files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
-  missing Kokoro names `setup-kokoro.bat`, as does the error of speaking before it is installed. Results are
+  missing Kokoro points to Install on its card and to `setup-kokoro.bat`, as does the error of speaking before it is
+  installed. Results are
   kept per device. A stored test carries a fingerprint of the model pin and the packages installed in its environment, and
   reads "test out of date" when either changes. A speed table shows the median real-time factor per family and device from
   clips and tests this service generated.
@@ -115,6 +116,16 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   cannot install that model yet. (`POST /api/engines/{engine_id}/install`; `GET /api/engines/status` reports the install.)
 - **RAM on each card.** Every card says how much free RAM the Lab wants before it loads that model, and the section says how
   much RAM this computer has. A card turns red when the whole computer has less than that or when less is free right now.
+- **First run.** A studio with no model installed says so at the top of Model studio and links to Models & features. The
+  model pickers in Model studio and Voice cloning mark each model that is not installed, and Model studio says what to do
+  about the one you picked. On Models & features the models the app cannot install yet are folded under "More models", with a
+  count, and the glossary sits under "What these words mean".
+- **Themes.** **Dark** is now neutral grey. The earlier dark green theme is still there as **Forest**, and System follows
+  Windows to Light or the neutral Dark. Compare uses the same choice. Its primary button had white text on the light accent in
+  both dark themes (1.8 to 1 contrast); it is dark text now, as on the other pages. A test keeps every theme on both pages
+  and checks that text and buttons stay readable (4.5 to 1 or better) in each.
+- **Removing the Lab.** [docs/SETUP.md](docs/SETUP.md#removing-the-lab) says what to back up, what to delete (the folder and
+  the Desktop shortcut) and what lives outside the folder (pip's cache and the programs installed separately).
 - **Language screen.** It speaks each language an engine claims, has a speech recognizer write the words back, and records a
   word error rate for each engine and language (character error rate for Chinese and Japanese). The run covered 75 claimed
   cells from 216 generated clips on an AMD Radeon AI PRO R9700: 56 understood, 10 partial, 4 not understood, 2 inconclusive
@@ -134,7 +145,7 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 - **Desktop.** `setup-desktop.bat` creates a **Fel's Voice Lab** shortcut that opens a dedicated window over a hidden backend
   on a free loopback port. Closing the window cancels its work and stops the backend and its children, and never closes a
-  service that was started separately. Light, Dark and System themes are saved with the library.
+  service that was started separately. The Light, Dark, Forest and System themes are saved with the library.
 - **System & backups.** One page for the version, Python and Windows, the device and free memory, the library folder with
   the schema number of each database and how much is in it, FFmpeg and which formats this build can write, free space
   (flagged under 5 GB), and the models counted by state. Nothing on it loads a model. **Copy report for a bug report** puts
@@ -176,8 +187,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1110 Python
-  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 175 Node
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1114 Python
+  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 180 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
@@ -194,6 +205,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   output following along on the card, and finished in 277 seconds with the card reading *Installed, not tested on CPU*. A page
   reloaded in the middle picked the install up again, and **Test** then loaded the model and spoke one sentence (2.7 s of
   audio in 0.8 s).
+- The new Models & features layout, the first-run banner and the Dark and Forest themes were looked at in a browser at phone
+  width. The Light theme was not changed.
 
 ### Known limits
 

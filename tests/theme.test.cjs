@@ -26,6 +26,15 @@ test('theme restores saved choice and applies changes before the save completes'
   assert.equal(status.textContent,'');
 });
 
+test('every theme in the menu is applied and saved, and an unknown one is ignored', async () => {
+  const calls=[];
+  const {root,picker}=fixture((url,options)=>{calls.push(JSON.parse(options.body).theme);return Promise.resolve({ok:true});});
+  for (const theme of ['forest','dark','light','system']) {picker.value=theme;picker.change();assert.equal(root.dataset.theme,theme);}
+  await flush();assert.deepEqual(calls,['forest','dark','light','system']);
+  picker.value='auto';picker.change();await flush();
+  assert.equal(root.dataset.theme,'system');assert.equal(calls.length,4);
+});
+
 test('rapid changes save in order and recover after a failed write', async () => {
   const calls=[],replies=[];
   const {root,picker,status}=fixture((url,options)=>{

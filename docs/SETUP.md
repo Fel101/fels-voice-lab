@@ -67,8 +67,10 @@ the text `--dry-run` prints, with the reasons it would refuse if this computer c
 installer, and the card shows the end of its output. While it runs nothing else loads a model or speaks, and a page that is
 reloaded shows the progress again. There is no Stop button: closing the studio stops the install, and running it again
 continues where it stopped. The whole output of each run is kept in `out\install`. When it ends the card reads *Installed,
-not tested*; press **Test**. Speaking before the install has run fails with an error that begins by naming `setup-kokoro.bat`;
-once it has run, **Generate** reads the new voices by itself, so a studio page that was already open needs no reload.
+not tested*; press **Test**. A studio with no model installed says so at the top of **Model studio** and links to that page, and
+its model picker marks the models that are not installed. Speaking before the install has run fails with an error that begins by
+saying Kokoro is not installed and where to install it; once it has run, **Generate** reads the new voices by itself, so a studio
+page that was already open needs no reload.
 
 It installs into this folder, in `.venv`, `hf-cache` and `out\kokoro`:
 
@@ -174,3 +176,32 @@ checks say they did not run.
 
 The app's default local-only boundary and optional-model limits are described
 in [SECURITY.md](../SECURITY.md) and [model capabilities](../MODEL_CAPABILITIES.md).
+
+## Removing the Lab
+
+The Lab has no installer and writes nothing to the registry, so it does not appear in Settings, Apps. Nearly everything it
+adds sits in its own folder, and deleting that folder removes it. In this order:
+
+1. **Close the Lab.** Its window stops its own backend. A service started by hand stops when its console closes. Windows
+   will not delete files that a running program holds.
+2. **Keep what you want.** Your voices, takes and scenes live in the library, which is this folder unless `desktop.local.json`
+   sets a `state_root` (see above). On **System & backups**, press **Back up now** (tick **Saved voices** and **Export
+   packages** to include those), then copy the ZIP out of `backups\`. That folder is inside the one you are about to delete.
+   [Back up and restore the library](USER_GUIDE.md#back-up-and-restore-the-library) has the details.
+3. **Delete the shortcut.** `setup-desktop.bat` put **Fel's Voice Lab** on your Desktop, outside the folder, and it would
+   otherwise be left pointing at nothing.
+4. **Delete the Lab folder.** The environments (`.venv`, `.venv-desktop` and any other `.venv-` folder), `hf-cache`, `data` and
+   `out` go with it. A library that `state_root` moved elsewhere stays where it is: delete that folder too if you want it gone.
+
+Three things are outside the folder:
+
+- **pip's download cache,** `%LOCALAPPDATA%\pip\Cache`, which can hold a gigabyte or more of PyTorch downloads. pip shares it
+  with every other Python project on the computer, so clearing it only makes the next download fresh. Run
+  `.venv\Scripts\python.exe -m pip cache purge` before step 4, or delete that folder afterwards.
+- **Programs you installed separately:** Python 3.12, FFmpeg (`winget uninstall Gyan.FFmpeg`) and the Microsoft Visual C++
+  Redistributable, which other programs use too. Remove them from Settings, Apps when nothing else needs them.
+- **[Fel's Voice Slate](https://github.com/Fel101/fels-voice-slate),** the companion recorder, which is a separate program in
+  its own folder.
+
+The desktop window runs in private mode and deletes its temporary browser data when it closes, so it leaves nothing behind. To
+remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu).

@@ -10,7 +10,7 @@
   var revision = 0;
   picker.addEventListener('change', function () {
     var theme = picker.value;
-    if (['system', 'light', 'dark'].indexOf(theme) < 0) return;
+    if (['system', 'light', 'dark', 'forest'].indexOf(theme) < 0) return;
     root.dataset.theme = theme;
     var current = ++revision;
     status.textContent = '';

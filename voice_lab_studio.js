@@ -40,6 +40,7 @@ function qwenModeFor(engine) {
   return null;
 }
 function refresh() {
+  showEngineHint();
   var e = $('engine').value, mode = $('mode').value, qwenMode = qwenModeFor(e);
   var breeze = e === 'breeze-tts-2';
   var drama = e === 'drama-3';
@@ -224,7 +225,7 @@ function engineDetailText(row,device,job){
     var missing='Missing: '+(install.missing||[]).join('; ')+'.';
     if(job&&job.state==='failed'){return missing+' The install stopped (exit code '+job.exit_code+') after '+elapsedText(job.seconds)+'. The end of its output is below, and all of it is in '+job.log+'. Press Install to try again: it continues where it stopped.';}
     if(install.installer){return missing+' Press Install to add it to this folder, or run '+install.installer+' in the lab folder. docs/SETUP.md says what it installs.';}
-    return missing+' The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs.';
+    return 'The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs. '+missing;
   }
   if(row.state==='conversion_task'){return 'Tested from Voice conversion, because it needs source audio.';}
   if(row.state==='not_integrated'){return 'This build does not expose the engine.';}
@@ -242,6 +243,47 @@ function ramText(row,ram){
   if(ram&&ram.total_gb<need){return {text:text+' This computer has only '+ram.total_gb+' GB of RAM, so it cannot load this model.',short:true};}
   if(ram&&ram.free_gb<need){return {text:text+' Only '+ram.free_gb+' GB is free right now; close other programs before you use it.',short:true};}
   return {text:text,short:false};
+}
+var engineRows={};
+function markEngineOptions(){
+  ['engine','identityEngine'].forEach(function(id){
+    Array.prototype.forEach.call($(id).options||[],function(option){
+      var row=engineRows[option.value],view=modelCards[option.value];
+      if(row&&view&&row.integrated){option.textContent=view.name+(row.state==='not_installed'?' (not installed)':'');}
+    });
+  });
+}
+function showEngineHint(){
+  var hint=$('engineHint'),row=engineRows[$('engine').value];
+  if(!hint){return;}
+  hint.hidden=!(row&&row.state==='not_installed');
+  hint.textContent='';
+  if(hint.hidden){return;}
+  var text=document.createElement('span'),link=document.createElement('a');
+  text.textContent='This model is not installed, so Generate cannot use it yet. ';
+  link.href='#models';link.textContent=(row.installation||{}).installer?'Install it in Models & features':'See what it needs in Models & features';
+  hint.appendChild(text);hint.appendChild(link);
+}
+function renderFirstRun(status){
+  var rows=status.engines||[],job=status.install||null,box=$('firstRun');
+  var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only;});
+  var running=!!job&&job.state==='running';
+  var offer=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;})[0];
+  box.hidden=installed||!(running||offer);
+  if(box.hidden){return;}
+  $('firstRunTitle').textContent=running?'Installing '+job.name+'…':'No voice model is installed yet';
+  $('firstRunText').textContent=running?'Follow it in Models & features. Nothing can speak until it finishes.':'Press Install on the '+offer.name+' card in Models & features. It shows what it will do first.';
+}
+function placeCards(status){
+  var main=$('modelOverview'),more=$('modelMore'),apart=0;
+  (status.engines||[]).forEach(function(row){
+    var view=modelCards[row.id];if(!view){return;}
+    var manual=row.state==='not_installed'&&!(row.installation||{}).installer,target=manual?more:main;
+    if(manual){apart+=1;}
+    if(view.card.parentNode!==target){target.appendChild(view.card);}
+  });
+  $('modelsMoreBox').hidden=!apart;
+  $('modelsMoreSummary').textContent=apart+(apart===1?' more model needs':' more models need')+' manual setup';
 }
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
@@ -297,6 +339,8 @@ function renderEngineStatus(status){
     showInstallLog(view.log,mine?mine.lines||[]:[]);
   });
   $('modelsRam').textContent=status.ram?'This computer has '+status.ram.total_gb+' GB of RAM, '+status.ram.free_gb+' GB free right now.':'';
+  engineRows={};(status.engines||[]).forEach(function(row){engineRows[row.id]=row;});
+  placeCards(status);markEngineOptions();showEngineHint();renderFirstRun(status);
   renderSpeedRows(status);
   watchInstall(installRunning);
 }

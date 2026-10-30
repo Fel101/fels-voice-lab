@@ -526,7 +526,7 @@ test('Generate for another engine never reads the Kokoro voices', async () => {
 
 test('when no voices turn up, Generate asks once and shows what the service says; pressing it again reads once more', async () => {
   const sent = [];
-  const notInstalled = 'Kokoro 82M is not installed. To install it, run setup-kokoro.bat in the lab folder, then try again.';
+  const notInstalled = 'Kokoro 82M is not installed. Open Models & features and press Install on its card, or run setup-kokoro.bat in the lab folder, then try again.';
   const fixture = generateFixture((url, request) => { sent.push(JSON.parse(request.body)); return Promise.reject(new Error(notInstalled)); });
   const {refreshed} = openedBeforeTheInstall(fixture, {installed: []});
   fixture.c.generate(); await settle();

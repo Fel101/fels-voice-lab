@@ -124,8 +124,8 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
    window runs without a console; closing it stops its backend.
 
 FFmpeg is not bundled. Install it (`winget install Gyan.FFmpeg`) for scene export, MP3 and AAC
-output, and M4A references. Choose **Light**, **Dark** or **System** from the header's **Theme**
-menu; the choice is saved locally.
+output, and M4A references. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
+the header's **Theme** menu; the choice is saved locally. To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
 
 Browser mode, without the desktop window:
 
@@ -141,7 +141,7 @@ Read [desktop and state behavior](docs/SETUP.md).
 
 | Guide | Purpose |
 |---|---|
-| [Setup](docs/SETUP.md) | Environments, hardware, desktop launch and known installation limits |
+| [Setup](docs/SETUP.md) | Environments, hardware, desktop launch, known installation limits and removing the Lab |
 | [User guide](docs/USER_GUIDE.md) | Design through delivery, stopping and backups |
 | [Capabilities](MODEL_CAPABILITIES.md) | Integrated features versus trials and blocked models |
 | [Language screen](docs/LANGUAGE_MATRIX.md) | Languages each engine was screened in, with word error rates and the hardware used |

@@ -330,7 +330,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a launcher in the lab folder (Kokoro: `setup-kokoro.bat`), `error` begins by naming the launcher.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {
@@ -655,7 +655,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a launcher in the lab folder (Kokoro: `setup-kokoro.bat`), `error` begins by naming the launcher.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {

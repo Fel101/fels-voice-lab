@@ -126,7 +126,7 @@ def main(argv=None):
         # Downloads remain ordinary local exports; no Python API is exposed to the page.
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window("Fel's Voice Lab", backend.start(), width=1440, height=960,
-                                      min_size=(960, 650), background_color="#10141c")
+                                      min_size=(960, 650), background_color="#121212")    # the neutral Dark background, until the page paints
         def started():
             if args.smoke_seconds is not None:
                 time.sleep(args.smoke_seconds)

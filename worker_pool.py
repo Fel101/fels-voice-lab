@@ -175,7 +175,8 @@ class EnginePool:
 
     def _raise_with_install_pointer(self, entry, exc):
         """Re-raise a failure to bring an engine up. When the engine has a launcher and its files are missing, the same
-        kind of error leads with the launcher's name, so the first thing someone who has not installed it sees says what to run."""
+        kind of error leads with a sentence saying where to install it, so the first thing someone who has not installed it
+        sees says what to do."""
         pointer = None
         if isinstance(exc, WorkerError):
             try:
