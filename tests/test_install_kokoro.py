@@ -789,7 +789,7 @@ class RunTests(ServerCase):
         self.assertIn("[1/6] config.json", out)
         self.assertIn("Kokoro is installed and spoke a test sentence (2.6 s of audio in 1.1 s after a 4 s load).", out)
         self.assertIn("Listen to it: out\\kokoro\\install-check.wav", out)
-        self.assertIn("press Check it speaks", out)
+        self.assertIn("press Test.", out)
         receipt = json.loads((self.base / "out" / "kokoro" / "installation.json").read_text("utf-8"))
         self.assertEqual(receipt["revision"], REAL_MANIFEST["revision"])
         self.assertEqual(receipt["files"][-1], "voices/ef_dora.pt")

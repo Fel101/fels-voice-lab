@@ -97,8 +97,9 @@ package back and checks every hash, the captions, and each file's codec and leng
 Integrated families are Kokoro, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS
 VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means the adapter and the
 interface exist. The **Models & features** page says whether a family is *installed* (its
-environment and pinned files are on disk) and *usable* (a check on your device loaded it and it
-spoke one sentence). Which languages and devices were actually tried is written down in
+environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
+spoke one sentence), shows how much free RAM each family needs, and can install Kokoro for you.
+Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
 
 Drama studio and all Drama cloning use CPU after a local Vulkan device-loss incident. Experimental

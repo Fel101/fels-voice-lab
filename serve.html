@@ -98,6 +98,11 @@ pre { white-space:pre-wrap; }
 .model-card h3 { margin:0 0 10px; }
 .model-card p { margin:8px 0; }
 .engine-state { font-weight:600; }
+.model-card.wide { grid-column:1 / -1; }
+.model-card .warn { color:var(--err); }
+.install-box p { max-width:80ch; }
+.install-box { margin:10px 0; } .install-box button { margin:4px 8px 4px 0; }
+.install-log { margin:10px 0; padding:8px 10px; max-height:12em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
 .table-wrap { overflow-x:auto; margin:12px 0; }
 .facts { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 18px; margin:14px 0; }
 .facts dt { color:var(--muted); } .facts dd { margin:0; overflow-wrap:anywhere; }
@@ -509,7 +514,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <audio id="player" controls></audio>
 </section>
 <section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
-<section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short check passed on this device; the check loads the model and speaks one sentence. An integrated model does not mean every upstream feature has been exposed or tested.</p><div id="modelOverview" class="model-grid"></div>
+<section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device; the test loads the model and speaks one sentence. An integrated model does not mean every upstream feature has been exposed or tested. A card offers Install only for a model that has an installer; for the others it says what is missing. The RAM on a card is the free memory the Lab wants before it loads that model.</p><p class="meta" id="modelsRam"></p><div id="modelOverview" class="model-grid"></div>
 <h3>Measured speed on this service</h3><p class="meta">Real-time factor is seconds to generate divided by seconds of audio, so below 1 is faster than real time. Rows come from the clips and checks this service ran on each device. Precision is not measured; this table records speed only.</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Device</th><th scope="col">Clips</th><th scope="col">Median real-time factor</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>
 <div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset speakers are reusable Cast identities and do not require a cloned reference. Qwen VoiceDesign creates references for a cloning identity.</p></div>

@@ -79,7 +79,7 @@ class EnginePool:
     def __init__(self, device, idle_minutes, *, worker_factory=None, resource_check=None,
                  catalog=None, worker_timeouts=None, idle_poll_seconds=30,
                  residency_lock_path=None, reference_roots=(), conversion_source_roots=(), media_guard=None,
-                 check_store=None, install_probe=None, fingerprint_probe=None):
+                 check_store=None, install_probe=None, fingerprint_probe=None, ram_needs=None, ram_probe=None):
         self.device = device
         self.catalog = catalog or read_catalog()
         self.entries = {entry["id"]: entry for entry in self.catalog["engines"]}
@@ -99,7 +99,12 @@ class EnginePool:
         self.install_probe = install_probe or (lambda entry: engine_checks.installation(entry, LAB))
         # Names the model pin and installed packages a check was made against; a stored check is out of date once they change.
         self.fingerprint_probe = fingerprint_probe or (lambda entry: engine_checks.engine_fingerprint(entry, LAB))
+        # The free RAM in GB the Lab wants before it loads each engine, and a call that reports this computer's RAM. The Models
+        # page shows them on the cards; neither changes what a load does (resource_check does that).
+        self.ram_needs = dict(ram_needs or {})
+        self.ram_probe = ram_probe
         self._gpu_job = threading.Lock()
+        self._held_for = None
         # Model residency, not just individual calls, is exclusive across local services.
         lock_path = residency_lock_path or (OUT / "runtime-locks" / "model-residency.lock")
         self._residency = LocalOwnership(lock_path) if worker_factory is None or residency_lock_path else None
@@ -259,7 +264,20 @@ class EnginePool:
 
     def _acquire_job(self):
         if not self._gpu_job.acquire(blocking=False):
-            raise WorkerBusy("The GPU worker is busy with another load or generation request.")
+            held = self._held_for
+            raise WorkerBusy(f"The GPU worker is busy while {held}." if held
+                             else "The GPU worker is busy with another load or generation request.")
+
+    def hold(self, reason):
+        """Keep every load, test and clip out while something long changes what is installed, such as an install from the
+        Models page. `reason` finishes the sentence "The GPU worker is busy while ..." in the refusals. Raises WorkerBusy when a
+        request already holds the worker; release_hold() gives it back."""
+        self._acquire_job()
+        self._held_for = reason
+
+    def release_hold(self):
+        self._held_for = None
+        self._gpu_job.release()
 
     def load(self, key, profile=None):
         self._acquire_job()
@@ -316,7 +334,8 @@ class EnginePool:
         """Installed, usable and measured state for every catalog engine. Reads files and stored results only."""
         return engine_checks.status_payload(self.entries, device=self.device, busy=self.busy,
                                             store=self.check_store, probe=self.install_probe,
-                                            fingerprint_of=self.fingerprint_probe)
+                                            fingerprint_of=self.fingerprint_probe, ram_needs=self.ram_needs,
+                                            ram=self.ram_probe() if self.ram_probe else None)
 
     def prepare_reference(self, key, path, *, exaggeration=0.5, profile=None,
                           reference_text="", xvec_only=False):

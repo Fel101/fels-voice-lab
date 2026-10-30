@@ -147,9 +147,14 @@ ROUTES = [
     R("GET", "/api/engines/status", "Service",
       "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
       reply="`device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, "
-            "`check`, `check_outdated`), `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not "
-            "found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, "
-            "`installer`: the launcher in the lab folder that installs it."),
+            "`check`, `check_outdated`, `min_free_ram_gb`), `ram`, `install`, `speed` and `store_error`. `installation` holds "
+            "`installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an "
+            "engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. "
+            "`min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and "
+            "`ram` is this computer's `total_gb` and `free_gb`. `install` is the latest install started from the Models page, "
+            "or `null` when none has run since the service started: `engine`, `name`, `state` (`running`, `finished` or "
+            "`failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of "
+            "it, a path under the lab folder)."),
     R("POST", "/api/engines/{engine_id}/check", "Service",
       "Check that one engine can speak now: confirm its files, load it and speak one short clip.",
       body_kind="none",
@@ -157,6 +162,17 @@ ROUTES = [
             "`load_seconds`, `total_s`, `audio_seconds`, `real_time_factor` and, for a missing install, `missing`. Takes "
             "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
       errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The GPU worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/install", "Service",
+      "Install an engine that has a guided installer (Kokoro): read its plan, or run the installer.",
+      body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
+                                    "Nothing is changed. Default false, which starts the install."),),
+      reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) "
+            "and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in "
+            "`GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's "
+            "launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
+      errors=((400, "The engine is unknown, has no installer in the app, or is installed already; or `dry_run` is not true "
+                    "or false."),
+              (409, "An install is already running, or the GPU worker is busy."))),
     R("POST", "/api/load", "Service", "Load an engine into memory ahead of its first use.",
       body=(F("engine", "string", "An engine id. Default `kokoro`."),
             F("profile", "string", "Breeze only: its decode profile. Default `eager`.")),

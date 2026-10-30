@@ -28,7 +28,7 @@ function diskSummary(label,row){
   return {low:!!row.low,text:label+': '+formatBytes(row.free_bytes)+' free of '+formatBytes(row.total_bytes)+(row.low?'. That is low; a backup and new takes need room.':'.')};
 }
 function modelsSummary(engines){
-  var words={usable:'usable',not_checked:'installed but not checked',check_outdated:'check out of date',check_failed:'check failed',not_installed:'not installed',conversion_task:'conversion tools'};
+  var words={usable:'usable',not_checked:'installed but not tested',check_outdated:'test out of date',check_failed:'test failed',not_installed:'not installed',conversion_task:'conversion tools'};
   var parts=Object.keys(engines.counts).filter(function(key){return engines.counts[key];}).map(function(key){return engines.counts[key]+' '+(words[key]||key);});
   return (parts.length?parts.join(', '):'No models are integrated')+' (device '+engines.device+').';
 }

@@ -482,7 +482,7 @@ def run(args, *, say=say_now, ask=input, interactive=None):
         f"after a {check['load_seconds']:.0f} s load). The whole install took {time.monotonic() - started:.0f} s.")
     say(f"  Listen to it: {Path(check['wav']).relative_to(root)}")
     say(f"  Receipt: {receipt.relative_to(root)}")
-    say("  Next: start the studio (the Fel's Voice Lab shortcut, or serve.bat), open Models & features and press Check it speaks.")
+    say("  Next: start the studio (the Fel's Voice Lab shortcut, or serve.bat), open Models & features and press Test.")
     return 0
 
 

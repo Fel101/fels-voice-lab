@@ -296,11 +296,14 @@ def _state(integrated, installed, task_only, current, outdated=False):
     return "usable" if current.get("status") == "passed" else "check_failed"
 
 
-def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine_fingerprint):
+def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine_fingerprint, ram_needs=None, ram=None):
     """One row per catalog engine: integrated, installed and usable on this device, plus the speed table.
 
     A stored check counts only while its fingerprint matches the engine's current one. Checks made before fingerprints
-    were recorded have none, so they read as out of date until the engine is checked again."""
+    were recorded have none, so they read as out of date until the engine is checked again. `ram_needs` maps an engine to the
+    free RAM in GB the Lab wants before it loads it, and `ram` is this computer's total and free RAM; the Models page sets one
+    beside the other."""
+    ram_needs = ram_needs or {}
     rows = []
     for entry in entries.values():
         integration = entry.get("integration", {})
@@ -316,7 +319,8 @@ def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine
         rows.append({"id": entry["id"], "name": entry.get("name", entry["id"]), "integrated": integrated,
                      "task_only": task_only, "installation": install,
                      "state": _state(integrated, install["installed"], task_only, current, outdated),
-                     "check": current, "check_outdated": outdated, "checks": checks})
-    return {"device": device, "busy": bool(busy), "engines": rows,
+                     "check": current, "check_outdated": outdated, "checks": checks,
+                     "min_free_ram_gb": ram_needs.get(entry["id"])})
+    return {"device": device, "busy": bool(busy), "engines": rows, "ram": ram,
             "speed": store.speed_rows() if store is not None else [],
             "store_error": store.write_error if store is not None else None}

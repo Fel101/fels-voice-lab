@@ -207,64 +207,131 @@ function fillCatalog() {
 var modelCards={};
 var engineStateNames={not_integrated:'Not integrated',not_installed:'Not installed',conversion_task:'Conversion task'};
 function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':String(device||'');}
-function engineStateText(row,device){
+function engineStateText(row,device,job){
+  if(job&&job.state==='running'){return 'Installing…';}
   if(row.state==='usable'){return 'Speaks now on '+deviceLabel(device);}
-  if(row.state==='check_failed'){return 'Check failed on '+deviceLabel(device);}
-  if(row.state==='not_checked'){return 'Installed, not checked on '+deviceLabel(device);}
-  if(row.state==='check_outdated'){return 'Installed, check out of date on '+deviceLabel(device);}
+  if(row.state==='check_failed'){return 'Test failed on '+deviceLabel(device);}
+  if(row.state==='not_checked'){return 'Installed, not tested on '+deviceLabel(device);}
+  if(row.state==='check_outdated'){return 'Installed, test out of date on '+deviceLabel(device);}
   return engineStateNames[row.state]||row.state;
 }
 function utcStamp(value){return String(value||'').replace('T',' ').slice(0,16)+' UTC';}
-function engineDetailText(row,device){
+function elapsedText(seconds){var total=Math.round(seconds||0),minutes=Math.floor(total/60);return minutes?minutes+' min '+(total%60)+' s':total+' s';}
+function engineDetailText(row,device,job){
   var check=row.check,install=row.installation||{};
+  if(job&&job.state==='running'){return 'Installing for '+elapsedText(job.seconds)+'. Nothing else can run until it finishes, and downloads and packages can take several minutes. The end of its output is below.';}
   if(row.state==='not_installed'){
-    return 'Missing: '+(install.missing||[]).join('; ')+'.'+(install.installer?' To install it, run '+install.installer+' in the lab folder, then reload this page. docs/SETUP.md says what it installs.':'');
+    var missing='Missing: '+(install.missing||[]).join('; ')+'.';
+    if(job&&job.state==='failed'){return missing+' The install stopped (exit code '+job.exit_code+') after '+elapsedText(job.seconds)+'. The end of its output is below, and all of it is in '+job.log+'. Press Install to try again: it continues where it stopped.';}
+    if(install.installer){return missing+' Press Install to add it to this folder, or run '+install.installer+' in the lab folder. docs/SETUP.md says what it installs.';}
+    return missing+' The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs.';
   }
-  if(row.state==='conversion_task'){return 'Checked from Voice conversion, because it needs source audio.';}
+  if(row.state==='conversion_task'){return 'Tested from Voice conversion, because it needs source audio.';}
   if(row.state==='not_integrated'){return 'This build does not expose the engine.';}
-  if(!check){return 'Click Check to load the model and speak one short sentence on this device.';}
-  if(row.state==='check_outdated'){return 'The last check ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before checks recorded that. Click Check again to confirm it still speaks.';}
+  if(!check){return 'Press Test to load the model and speak one short sentence on this device.';}
+  if(row.state==='check_outdated'){return 'The last test ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before tests recorded that. Press Test again to confirm it still speaks.';}
   if(check.status==='passed'){
-    return 'Checked '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+(check.ran_on&&check.ran_on!==device?', on '+check.ran_on:'')+'.';
+    return 'Tested '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+(check.ran_on&&check.ran_on!==device?', on '+check.ran_on:'')+'.';
   }
   return 'Failed '+utcStamp(check.checked_at)+': '+check.reason;
+}
+function ramText(row,ram){
+  var need=row.min_free_ram_gb;
+  if(typeof need!=='number'){return {text:'',short:false};}
+  var text='Needs '+need+' GB of free RAM to load.';
+  if(ram&&ram.total_gb<need){return {text:text+' This computer has only '+ram.total_gb+' GB of RAM, so it cannot load this model.',short:true};}
+  if(ram&&ram.free_gb<need){return {text:text+' Only '+ram.free_gb+' GB is free right now; close other programs before you use it.',short:true};}
+  return {text:text,short:false};
 }
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
   (result.engines||[]).forEach(function(entry){
-    var card=document.createElement('article'),title=document.createElement('h3'),integrated=document.createElement('p'),state=document.createElement('p'),details=document.createElement('p'),features=document.createElement('p'),button=document.createElement('button');
-    card.className='model-card';title.textContent=entry.name;integrated.className='eyebrow';state.className='engine-state';details.className='meta';features.className='meta';
+    var card=document.createElement('article'),title=document.createElement('h3'),integrated=document.createElement('p'),state=document.createElement('p'),details=document.createElement('p'),features=document.createElement('p'),ram=document.createElement('p'),box=document.createElement('div'),plan=document.createElement('div'),go=document.createElement('button'),stop=document.createElement('button'),log=document.createElement('pre'),button=document.createElement('button');
+    card.className='model-card';title.textContent=entry.name;integrated.className='eyebrow';state.className='engine-state';details.className='meta';features.className='meta';ram.className='meta';
     var integration=entry.integration||{},caps=entry.capabilities||{};
     integrated.textContent=integration.service_api?(integration.task_only?'Integrated · conversion':'Integrated'):'Not integrated';
     features.textContent=['voice_design','voice_cloning','voice_direction','voice_selection'].filter(function(key){return caps[key]&&['supported','worker_verified'].indexOf(caps[key].status)>=0;}).map(function(key){return key.replace(/_/g,' ');}).join(' · ')||(integration.task_only?'Audio-to-audio voice conversion':'See model-specific controls');
-    button.type='button';button.textContent='Check it speaks';
-    button.addEventListener('click',function(){checkEngine(entry.id);});
-    card.appendChild(title);card.appendChild(integrated);card.appendChild(state);card.appendChild(details);card.appendChild(features);
+    button.type='button';button.textContent='Test';
+    go.type='button';go.className='go';go.textContent='Install now';stop.type='button';stop.textContent='Cancel';
+    box.className='install-box';box.hidden=true;log.className='install-log';log.hidden=true;
+    button.addEventListener('click',function(){if(modelCards[entry.id].action==='install'){planInstall(entry.id);}else{checkEngine(entry.id);}});
+    go.addEventListener('click',function(){startInstall(entry.id);});
+    stop.addEventListener('click',function(){closePlan(entry.id);});
+    box.appendChild(plan);box.appendChild(go);box.appendChild(stop);
+    card.appendChild(title);card.appendChild(integrated);card.appendChild(state);card.appendChild(details);card.appendChild(features);card.appendChild(ram);card.appendChild(box);card.appendChild(log);
     if(!integration.task_only){card.appendChild(button);}
     container.appendChild(card);
-    modelCards[entry.id]={name:entry.name,state:state,details:details,button:button};
+    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,ram:ram,button:button,box:box,plan:plan,go:go,stop:stop,log:log,action:'test',planOpen:false};
   });
 }
+var installRunning=false,installTimer=null;
 function refreshEngineStatus(){
-  return fetchJson('/api/engines/status').then(function(status){renderEngineStatus(status);}).catch(function(e){$('err').textContent='Could not read model checks: '+e.message;});
+  return fetchJson('/api/engines/status').then(function(status){renderEngineStatus(status);}).catch(function(e){$('err').textContent='Could not read the model tests: '+e.message;watchInstall(installRunning);});
+}
+function watchInstall(running){
+  if(!running||installTimer){return;}
+  installTimer=setTimeout(function(){installTimer=null;refreshEngineStatus();},1500);
+}
+function showInstallLog(log,lines){
+  if(log.hidden){log.textContent='';return;}
+  var follow=log.scrollTop+log.clientHeight>=log.scrollHeight-4;
+  log.textContent=lines.slice(-12).join('\n');
+  if(follow){log.scrollTop=log.scrollHeight;}
 }
 function renderEngineStatus(status){
+  var job=status.install||null;
+  installRunning=!!job&&job.state==='running';
   (status.engines||[]).forEach(function(row){
     var view=modelCards[row.id];if(!view){return;}
-    view.state.textContent=engineStateText(row,status.device);
-    view.details.textContent=engineDetailText(row,status.device);
-    view.button.textContent=row.check?'Check again':'Check it speaks';
-    view.button.disabled=!!status.busy||['not_installed','not_integrated','conversion_task'].indexOf(row.state)>=0;
+    var mine=job&&job.engine===row.id?job:null,running=!!mine&&mine.state==='running',missing=row.state==='not_installed',install=row.installation||{},need=ramText(row,status.ram);
+    view.action=missing?(install.installer?'install':'none'):(row.state==='not_integrated'||row.state==='conversion_task'?'none':'test');
+    view.state.textContent=engineStateText(row,status.device,mine);
+    view.details.textContent=engineDetailText(row,status.device,mine);
+    view.ram.textContent=need.text;view.ram.className=need.short?'meta warn':'meta';
+    view.button.textContent=view.action==='install'?'Install':(row.check?'Test again':'Test');
+    view.button.hidden=view.action==='none'||running||view.planOpen;
+    view.button.disabled=!!status.busy||view.action==='none';
+    if(running){view.planOpen=false;view.box.hidden=true;}
+    view.log.hidden=!(mine&&(running||(mine.state==='failed'&&missing)));
+    view.card.className='model-card'+(view.planOpen||!view.log.hidden?' wide':'');
+    showInstallLog(view.log,mine?mine.lines||[]:[]);
   });
+  $('modelsRam').textContent=status.ram?'This computer has '+status.ram.total_gb+' GB of RAM, '+status.ram.free_gb+' GB free right now.':'';
   renderSpeedRows(status);
+  watchInstall(installRunning);
 }
 function checkEngine(engineId){
   var view=modelCards[engineId];if(!view){return;}
   Object.keys(modelCards).forEach(function(key){modelCards[key].button.disabled=true;});
-  view.button.textContent='Checking…';
-  view.details.textContent='Checking now. Loading the model can take a minute or more; other model requests are refused until it finishes.';
+  view.button.textContent='Testing…';
+  view.details.textContent='Testing now. Loading the model can take a minute or more; other model requests are refused until it finishes.';
   $('err').textContent='';
-  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/check',{}).catch(function(e){$('err').textContent='Check did not finish: '+e.message;}).then(refreshEngineStatus);
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/check',{}).catch(function(e){$('err').textContent='Test did not finish: '+e.message;}).then(refreshEngineStatus);
+}
+function addNote(parent,text,className){var note=document.createElement('p');note.className=className;note.textContent=text;parent.appendChild(note);}
+function planInstall(engineId){
+  var view=modelCards[engineId];if(!view){return;}
+  Object.keys(modelCards).forEach(function(key){modelCards[key].button.disabled=true;});
+  view.details.textContent='Reading what the installer will do…';
+  $('err').textContent='';
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{dry_run:true}).then(function(result){
+    var plan=result.plan||{};
+    view.plan.textContent='';
+    (plan.paragraphs||[]).forEach(function(text){addNote(view.plan,text,'meta');});
+    (plan.problems||[]).forEach(function(text){addNote(view.plan,text,'meta warn');});
+    view.go.hidden=!plan.ok;view.stop.textContent=plan.ok?'Cancel':'Close';view.box.hidden=false;view.planOpen=true;
+  }).catch(function(e){$('err').textContent='Could not read the install plan: '+e.message;}).then(refreshEngineStatus);
+}
+function closePlan(engineId){
+  var view=modelCards[engineId];if(!view){return;}
+  view.planOpen=false;view.box.hidden=true;
+  return refreshEngineStatus();
+}
+function startInstall(engineId){
+  var view=modelCards[engineId];if(!view){return;}
+  view.go.disabled=true;
+  $('err').textContent='';
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{}).catch(function(e){$('err').textContent='The install did not start: '+e.message;}).then(function(){view.go.disabled=false;view.planOpen=false;view.box.hidden=true;return refreshEngineStatus();});
 }
 function renderSpeedRows(status){
   var body=$('speedRows');body.textContent='';

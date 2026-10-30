@@ -19,8 +19,8 @@ import library_backup
 
 LOW_DISK_BYTES = 5 * 1024 ** 3
 ENGINE_STATES = ("usable", "not_checked", "check_outdated", "check_failed", "not_installed", "conversion_task")
-STATE_WORDS = {"usable": "usable", "not_checked": "installed, not checked", "check_outdated": "check out of date",
-               "check_failed": "check failed", "not_installed": "not installed", "conversion_task": "conversion task"}
+STATE_WORDS = {"usable": "usable", "not_checked": "installed, not tested", "check_outdated": "test out of date",
+               "check_failed": "test failed", "not_installed": "not installed", "conversion_task": "conversion task"}
 COUNT_LABELS = (("characters", "character", "characters"), ("identities", "voice identity", "voice identities"),
                 ("references", "reference", "references"), ("takes", "take", "takes"), ("scenes", "scene", "scenes"))
 

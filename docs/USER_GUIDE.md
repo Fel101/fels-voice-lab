@@ -286,16 +286,25 @@ the local API but has no button yet. Make a [library backup](#back-up-and-restor
 
 Open **Models & features** to see each engine's state. **Integrated** means this build contains
 its adapter. **Installed** means its Python environment and pinned checkpoint files are on disk;
-the page checks this without loading a model. **Usable** means a check on the current device
-loaded the model and spoke one short sentence. A check describes the engine as it was when it ran, so it
+the page checks this without loading a model. **Usable** means a test on the current device
+loaded the model and spoke one short sentence. A test describes the engine as it was when it ran, so it
 records the model pin and the packages installed in the engine's environment. If either changes, the card
-reads **check out of date** until you press **Check again**. Checks saved by an older build have no record
+reads **test out of date** until you press **Test again**. Tests saved by an older build have no record
 of either and read as out of date once.
 
-Press **Check it speaks** on a card to run that check. The first check loads the model, which can
-take a minute or more, and other model requests are refused until it finishes. A failed check shows its
+Press **Test** on a card to run that test. The first test loads the model, which can
+take a minute or more, and other model requests are refused until it finishes. A failed test shows its
 reason. Results are saved per device in `data/engines/checks.json` under the state root, so a
-check on the GPU does not mark the CPU as usable.
+test on the GPU does not mark the CPU as usable.
+
+Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
+this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
+red when the whole computer has less RAM than the model needs, or when less is free at the moment: close other programs, and
+then press **Test**. The figure is the Lab's own rule for loading, not a measurement of what the model uses.
+
+A model that is not installed shows the files it is missing. The Kokoro card has an **Install** button: it shows what the
+installer will do and whether this computer can take it, and **Install now** runs it with the end of its output on the card
+(more in [setting up](SETUP.md#kokoro-on-the-cpu)). The other cards say that the app cannot install that model yet.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed

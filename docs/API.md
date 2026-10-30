@@ -199,6 +199,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
+| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro): read its plan, or run the installer. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
@@ -235,7 +236,7 @@ List every engine the Lab knows, with its pinned checkpoint, capabilities and li
 
 Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.
 
-**Answer:** `200`, JSON. `device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`), `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it.
+**Answer:** `200`, JSON. `device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).
 
 <a id="post-api-engines-engine_id-check"></a>
 
@@ -253,6 +254,27 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 |---|---|
 | `400` | The engine is unknown, or is not a speech engine. |
 | `409` | The GPU worker is busy. |
+
+<a id="post-api-engines-engine_id-install"></a>
+
+#### `POST /api/engines/{engine_id}/install`
+
+Install an engine that has a guided installer (Kokoro): read its plan, or run the installer.
+
+| Path parameter | Meaning |
+|---|---|
+| `engine_id` | An engine id from `GET /api/catalog`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `dry_run` | boolean | Only read the plan: what the installer would do and whether this computer can take it. Nothing is changed. Default false, which starts the install. |
+
+**Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.
+
+| Also answers | When |
+|---|---|
+| `400` | The engine is unknown, has no installer in the app, or is installed already; or `dry_run` is not true or false. |
+| `409` | An install is already running, or the GPU worker is busy. |
 
 <a id="post-api-load"></a>
 

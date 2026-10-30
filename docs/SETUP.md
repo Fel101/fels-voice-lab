@@ -60,10 +60,15 @@ setup-kokoro.bat
 
 or `.venv\Scripts\python.exe tools\install_kokoro.py`. It prints its plan and asks before it changes anything.
 `--dry-run` shows the plan and runs the checks without changing anything, and `--yes` accepts the plan without asking.
-Until it has run, the Kokoro card on the **Models & features** page reads *Not installed*, lists the files that are missing and
-names this launcher. Reload the page afterwards, then press **Check it speaks**. Speaking before it has run fails with an
-error that begins by naming the same launcher; once it has run, **Generate** reads the new voices by itself, so a studio
-page that was already open needs no reload.
+
+The studio can run the same installer for you. Until it has run, the Kokoro card on the **Models & features** page reads
+*Not installed*, lists the files that are missing and has an **Install** button. **Install** shows the installer's own plan,
+the text `--dry-run` prints, with the reasons it would refuse if this computer cannot take it. **Install now** then runs the
+installer, and the card shows the end of its output. While it runs nothing else loads a model or speaks, and a page that is
+reloaded shows the progress again. There is no Stop button: closing the studio stops the install, and running it again
+continues where it stopped. The whole output of each run is kept in `out\install`. When it ends the card reads *Installed,
+not tested*; press **Test**. Speaking before the install has run fails with an error that begins by naming `setup-kokoro.bat`;
+once it has run, **Generate** reads the new voices by itself, so a studio page that was already open needs no reload.
 
 It installs into this folder, in `.venv`, `hf-cache` and `out\kokoro`:
 
@@ -96,7 +101,7 @@ To remove Kokoro, delete `.venv` (`setup.bat` makes it again), `hf-cache\hub\mod
 
 The recipe was checked from an empty folder on one Windows 11 computer with Python 3.12.10, using only the CPU: the packages and
 checkpoint installed, a speech recognizer read the check clip back as the check sentence, and the studio started from that folder
-passed **Check it speaks**. If the speech check fails with a message about a missing DLL, install the
+passed **Test**. If the speech check fails with a message about a missing DLL, install the
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again.
 Other Windows setups have not been tried.
 
@@ -104,7 +109,7 @@ Other Windows setups have not been tried.
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
 interpreter paths used by the adapters. A catalog entry means integration exists,
-not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Check it speaks** loads the model and speaks one sentence on the service device.
+not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free.
 
 Two packages are optional and not part of the core install: `misaki` (English phoneme rules for the lip-sync
 tracks of aligned takes; it comes with Kokoro) and `librosa` (the time-stretch in `fit.py`, which the exporter does

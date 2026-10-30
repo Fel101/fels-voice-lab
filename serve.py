@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs as parse_drama_query
 
-from common import LAB, OUT, free_ram_gb, pick_device, require_ram
+from common import LAB, OUT, free_ram_gb, pick_device, ram_report, require_ram
 
 import soundfile as sf
 
@@ -39,6 +39,7 @@ from runtime_folders import migrate_program_folders
 
 from worker_pool import EnginePool, WorkerError
 from engine_checks import EngineCheckStore
+from engine_install import EngineInstaller
 from cast_store import (CastStore, DIRECTION_ENGINES, MAX_UPLOAD_BYTES,
                         PRESET_VOICE_ENGINES, generation_identity_snapshot)
 from scene_store import SceneBatchRunner, SceneStore, SUPPORTED_LANGUAGES, csv_template, json_template
@@ -191,8 +192,9 @@ def unscreened_by_engine(engine_ids):
 
 
 def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
-                 request_log=None):
+                 request_log=None, engine_installer=None):
     log = request_log or NullRequestLog()
+    installer = engine_installer or EngineInstaller(engines)
     cast = cast_store or CastStore()
     library_root = Path(getattr(cast, "root", LAB))
     preferences = UiPreferences(library_root)
@@ -233,6 +235,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         @staticmethod
         def close_drama():
             if drama_box:drama_box[0].close()
+
+        @staticmethod
+        def close_installer():
+            installer.close()
         def log_message(self, fmt, *args):
             pass
 
@@ -807,7 +813,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             elif path == "/api/openapi.json":
                 self._json(200, api_spec.build_openapi())
             elif path == "/api/engines/status":
-                self._json(200, engines.engine_status())
+                self._json(200, {**engines.engine_status(), "install": installer.snapshot()})
             elif path.startswith("/out/"):  # files the Lab wrote to its out folder, such as a converted voice
                 name = path[5:]
                 target = (OUT / name).resolve()
@@ -1182,6 +1188,14 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 engine_check = re.fullmatch(r"/api/engines/([a-z0-9][a-z0-9.-]{0,80})/check", path)
                 if engine_check:
                     return self._json(200, {"check": engines.check(engine_check.group(1))})
+                engine_install = re.fullmatch(r"/api/engines/([a-z0-9][a-z0-9.-]{0,80})/install", path)
+                if engine_install:
+                    dry_run = req.get("dry_run", False)
+                    if not isinstance(dry_run, bool):
+                        raise ValueError("dry_run must be true or false.")
+                    if dry_run:
+                        return self._json(200, {"plan": installer.plan(engine_install.group(1))})
+                    return self._json(200, {"install": installer.start(engine_install.group(1))})
                 if path == "/api/performance":
                     return self._perform(req)
             except KeyError as exc:
@@ -1501,7 +1515,8 @@ def main():
                          conversion_source_roots=(state_root / "data" / "cast" / "media" / "takes",
                                                   state_root / "out" / "scenes"),
                          media_guard=cast.assert_media_usable,
-                         check_store=EngineCheckStore(state_root / "data" / "engines" / "checks.json"))
+                         check_store=EngineCheckStore(state_root / "data" / "engines" / "checks.json"),
+                         ram_needs=MIN_FREE_RAM_GB, ram_probe=ram_report)
     scenes = SceneStore(cast, engines.entries, root=state_root)
     evaluations = EvaluationStore(state_root / "data/evaluations/evaluations.sqlite3",
                                   lab_root=state_root)
@@ -1534,6 +1549,7 @@ def main():
         pass
     finally:
         batch_runner.close(timeout=0)
+        server.RequestHandlerClass.close_installer()
         engines.close()
         server.RequestHandlerClass.close_drama()
         batch_runner.close(timeout=10)

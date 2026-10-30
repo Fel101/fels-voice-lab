@@ -101,12 +101,20 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   own PyTorch keeps it (`--checkpoint-only` adds just the model files). Run again, it installs only what is missing. A studio
   page that was open during the install reads the new voices when you press Generate, so it needs no reload.
 - **Models & features** reports three states for each family: integrated, installed (its environment and pinned checkpoint
-  files are on disk) and usable (a check on this device passed). **Check it speaks** loads the family on the service device,
+  files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
   missing Kokoro names `setup-kokoro.bat`, as does the error of speaking before it is installed. Results are
-  kept per device. A stored check carries a fingerprint of the model pin and the packages installed in its environment, and
-  reads "check out of date" when either changes. A speed table shows the median real-time factor per family and device from
-  clips and checks this service generated.
+  kept per device. A stored test carries a fingerprint of the model pin and the packages installed in its environment, and
+  reads "test out of date" when either changes. A speed table shows the median real-time factor per family and device from
+  clips and tests this service generated.
+- **Install from the page.** A Kokoro card that is not installed has an **Install** button. It shows the installer's own plan
+  (the `--dry-run` of `tools/install_kokoro.py`, with the reasons it would refuse), and **Install now** runs the installer that
+  `setup-kokoro.bat` runs, with the end of its output on the card. While it runs nothing else loads a model or speaks, a page
+  that is reloaded picks the progress up again, and the whole output is kept in `out/install`. There is no Stop button:
+  closing the studio stops the install, and running it again continues where it stopped. The other cards say that the app
+  cannot install that model yet. (`POST /api/engines/{engine_id}/install`; `GET /api/engines/status` reports the install.)
+- **RAM on each card.** Every card says how much free RAM the Lab wants before it loads that model, and the section says how
+  much RAM this computer has. A card turns red when the whole computer has less than that or when less is free right now.
 - **Language screen.** It speaks each language an engine claims, has a speech recognizer write the words back, and records a
   word error rate for each engine and language (character error rate for Chinese and Japanese). The run covered 75 claimed
   cells from 216 generated clips on an AMD Radeon AI PRO R9700: 56 understood, 10 partial, 4 not understood, 2 inconclusive
@@ -168,8 +176,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1081 Python
-  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 162 Node
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1110 Python
+  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 175 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
@@ -178,9 +186,14 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 - The Kokoro installer was run from an empty folder (Python 3.12.10, Windows 11, CPU only). After `setup_core.py` it installed the
   89 packages and the checkpoint with its 41 voices in 296 seconds with pip's cache warm, and the speech check passed. A speech recognizer read
   the check clip back as the check sentence, one sentence in each of six languages came back intelligible, and the studio
-  started from that folder passed **Check it speaks** and spoke through `/api/speak` with an American voice, a British voice
+  started from that folder passed **Test** and spoke through `/api/speak` with an American voice, a British voice
   and a blend. A download stopped at 62 MB resumed from its partial file and matched its hash, a damaged voice file was
   fetched again, and a package installed at another version was refused.
+- The **Install** button on the Kokoro card was pressed in a studio started from a fresh copy of the repository after
+  `setup_core.py` (Windows 11, CPU only, pip's cache warm). It showed the installer's plan, ran it with the newest lines of its
+  output following along on the card, and finished in 277 seconds with the card reading *Installed, not tested on CPU*. A page
+  reloaded in the middle picked the install up again, and **Test** then loaded the model and spoke one sentence (2.7 s of
+  audio in 0.8 s).
 
 ### Known limits
 
@@ -191,6 +204,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   path near Windows' 259-character limit and a network that blocks PyPI or Hugging Face were not tried for real; the installer
   stops with a message in each case, and its tests cover them with stand-ins. The Japanese and Mandarin voices need Misaki
   language packages that it does not add.
+- **Install button and RAM figures.** Only the Kokoro card has an Install button, and it has no Stop button. Its progress is
+  the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show nothing new for minutes. The RAM on a
+  card is the Lab's own rule for loading a model, not a measurement of what the model uses.
 - **What the numbers mean.** The language screen is not a listening test. Take checks and loudness readings describe audio
   and nothing else, a voice match is a proxy whose bands come from one target voice, word-time boundary accuracy is
   unmeasured, and the lip-sync mouth shapes have not been checked against a face or by ear.

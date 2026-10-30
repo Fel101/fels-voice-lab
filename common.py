@@ -41,10 +41,11 @@ OUT.mkdir(exist_ok=True)
 from lines import REFERENCE_TEXT, TAG_RE, strip_tags  # noqa: E402,F401  (re-exported for the other scripts)
 
 
-def free_ram_gb():
-    """Free physical RAM in GB (Windows), without needing psutil."""
+def _ram_gb():
+    """(total, free) physical RAM in GB (Windows), without needing psutil."""
     if os.name != "nt":
-        return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2**30
+        page = os.sysconf("SC_PAGE_SIZE")
+        return os.sysconf("SC_PHYS_PAGES") * page / 2**30, os.sysconf("SC_AVPHYS_PAGES") * page / 2**30
     class MemStatus(ctypes.Structure):
         _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
                     ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
@@ -54,7 +55,18 @@ def free_ram_gb():
     stat = MemStatus()
     stat.dwLength = ctypes.sizeof(MemStatus)
     ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
-    return stat.ullAvailPhys / 2**30
+    return stat.ullTotalPhys / 2**30, stat.ullAvailPhys / 2**30
+
+
+def free_ram_gb():
+    """Free physical RAM in GB (Windows), without needing psutil."""
+    return _ram_gb()[1]
+
+
+def ram_report():
+    """This computer's total and free RAM in GB, for the Models page to set beside each model's free-RAM need."""
+    total, free = _ram_gb()
+    return {"total_gb": round(total, 1), "free_gb": round(free, 1)}
 
 
 def require_ram(min_gb, what):

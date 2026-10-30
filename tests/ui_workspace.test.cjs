@@ -764,7 +764,7 @@ test('models are summarised by state, a state the page has no words for keeps it
   const {context} = systemPanel();
   const counts = {usable: 2, not_checked: 1, check_outdated: 0, check_failed: 0, not_installed: 3, conversion_task: 1, brand_new: 2};
   assert.equal(context.modelsSummary({device: 'cuda', counts}),
-    '2 usable, 1 installed but not checked, 3 not installed, 1 conversion tools, 2 brand_new (device cuda).');
+    '2 usable, 1 installed but not tested, 3 not installed, 1 conversion tools, 2 brand_new (device cuda).');
   assert.equal(context.modelsSummary({device: 'cpu', counts: {usable: 0}}), 'No models are integrated (device cpu).');
 });
 
@@ -779,7 +779,7 @@ test('the report page shows the facts, flags what needs attention, and offers th
   assert.equal(nodes.systemDisk.textContent,
     'Library drive: 200.0 GB free of 500.0 GB. Program drive: 2.0 GB free of 100.0 GB. That is low; a backup and new takes need room.');
   assert.equal(nodes.systemDisk.className, 'meta take-checks flagged');
-  assert.equal(nodes.systemModels.textContent, '2 usable, 1 installed but not checked, 3 not installed, 1 conversion tools (device cuda).');
+  assert.equal(nodes.systemModels.textContent, '2 usable, 1 installed but not tested, 3 not installed, 1 conversion tools (device cuda).');
   assert.equal(nodes.systemDiagnostics.textContent, "Fel's Voice Lab 0.3.0 diagnostics");
   assert.equal(nodes.systemCopy.disabled, false);
   panel.context.renderSystem(systemReport({diagnostics: '', ffmpeg: {found: false, message: 'FFmpeg was not found on this PC.'}}));
