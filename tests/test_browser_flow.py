@@ -567,7 +567,10 @@ class BrowserFlowTests(unittest.TestCase):
                 page.show("scenes")
                 page.click("#sceneStarter")
                 page.click("#sceneSave")
-                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line').length === 1 && document.getElementById('sceneSelect').value")
+                # The picker fills one request before the saved scene is drawn, and that draw clears the undo history and the editor.
+                # The status line names the revision only after it, so wait for that before editing.
+                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line').length === 1 && document.getElementById('sceneSelect').value"
+                                " && document.getElementById('sceneStatus').textContent.includes('/ revision 1 /')")
                 # Scene editing: one change is one undo step; Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y and the buttons work;
                 # Alt+Down moves the focused line; Ctrl+S saves; the shortcuts stay off outside the Scenes workspace.
                 dialogue = '#sceneLineEditor textarea[data-scene-field="text"]'
