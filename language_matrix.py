@@ -82,7 +82,7 @@ UPSTREAM_LANGUAGES = {"voxcpm2": (
     "Hebrew", "Hindi", "Indonesian", "Italian", "Japanese", "Khmer", "Korean", "Lao", "Malay", "Norwegian",
     "Polish", "Portuguese", "Russian", "Spanish", "Swahili", "Swedish", "Tagalog", "Thai", "Turkish", "Vietnamese",
 )}
-ENGINE_ORDER = ("kokoro", "turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-voice-design",
+ENGINE_ORDER = ("kokoro", "phonon-31m-en", "turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-voice-design",
                 "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "qwen3-tts-1.7b-custom-voice",
                 "voxcpm2", "drama-3")
 CLIP_FIELDS = ("id", "engine", "column", "case_id", "repeat", "seed", "status", "reason", "device",
@@ -220,6 +220,10 @@ def request_for(clip, loaded, *, root=LAB):
     request = {"engine": engine, "text": clip["text"]}
     if engine == "kokoro":
         return {**request, "voice": clip["voice"], "language": clip["label"]}
+    if engine == "phonon-31m-en":
+        from phonon_support import default_voice, voice_names
+
+        return {**request, "voice": default_voice(voice_names(root)), "seed": clip["seed"]}
     if engine in {"turbo", "orig"}:
         return request
     if engine == "qwen3-tts-1.7b-custom-voice":

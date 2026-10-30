@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from kokoro_support import discover_kokoro_voices
+from phonon_support import PHONON_ENGINE_ID, VOICE_CATALOG, default_voice, voice_names
 
 LAB = Path(__file__).resolve().parent
 CHECK_TEXT = "This is a short check of the voice engine."
@@ -30,7 +31,9 @@ TOP_LEVEL_CACHE = {"voxcpm2"}
 EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src", ".venv-fqwen/Lib/site-packages")}
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place. installation() names it while files are missing.
-GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat"}
+GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat"}
+# Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
+REQUIRED_PACKAGES = {PHONON_ENGINE_ID: ("ptts",)}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
@@ -63,6 +66,13 @@ def _drama_missing(root):
     return [path for path in map(str, paths) if not Path(path).is_file()]
 
 
+def _has_package(root, environment, name):
+    """Whether the environment of this interpreter holds a package, judged from its dist-info folder."""
+    site = (root / environment).parent.parent / "Lib" / "site-packages"
+    prefix = name.lower().replace("-", "_") + "-"
+    return any(item.lower().startswith(prefix) for item in _dist_infos(site))
+
+
 def installation(entry, root=LAB):
     """Report whether an engine's Python environment and pinned checkpoint are on disk.
 
@@ -74,6 +84,9 @@ def installation(entry, root=LAB):
     engine = entry["id"]
     environment = entry["runtime"]["python"]
     missing = [] if (root / environment).is_file() else [environment]
+    if not missing:
+        missing.extend(f"{package} (Python package)" for package in REQUIRED_PACKAGES.get(engine, ())
+                       if not _has_package(root, environment, package))
     if engine == "drama-3":
         checkpoint = "out/drama3"
         missing.extend(_drama_missing(root))
@@ -91,6 +104,12 @@ def installation(entry, root=LAB):
             missing.append(checkpoint)
         elif not any(item.is_file() and item.suffix in WEIGHT_SUFFIXES for item in snapshot.iterdir()):
             missing.append(f"{checkpoint} (no weight file)")
+        voices = entry.get("backend", {}).get("voices_checkpoint")
+        if voices:
+            # A second pinned repository holds the preset voices the model speaks with; without its catalog nothing can be chosen.
+            folder = cache / f"models--{voices.replace('/', '--')}" / "snapshots" / entry["backend"]["voices_revision"]
+            if not (folder / VOICE_CATALOG).is_file():
+                missing.append(f"{_relative(folder, root)} ({VOICE_CATALOG})")
     for directory in EXTRA_DIRECTORIES.get(engine, ()):
         if not (root / directory).is_dir():
             missing.append(directory)
@@ -149,6 +168,8 @@ def smoke_request(engine, loaded=None, *, root=LAB):
     if engine == "kokoro":
         voices = discover_kokoro_voices()
         return {**base, "voice": "af_heart" if not voices or "af_heart" in voices else voices[0]}
+    if engine == PHONON_ENGINE_ID:
+        return {**base, "voice": default_voice(voice_names(root))}
     if engine in {"turbo", "orig"}:
         # Turbo clones the default reference and Original uses its built-in voice, as a default call does.
         return base

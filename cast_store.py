@@ -24,6 +24,7 @@ import ffmpeg_tools
 import loudness
 from db_snapshots import snapshot_before_migration
 from evaluation_diagnostics import TAKE_CHECKER, take_checks
+from phonon_support import PHONON_ENGINE_ID
 import reference_quality
 import speaker_similarity
 import take_edit
@@ -44,7 +45,7 @@ FFMPEG_AUDIO = {".m4a"}
 SUPPORTED_AUDIO = {".wav", ".flac", ".ogg", ".mp3"} | FFMPEG_AUDIO
 ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 REFERENCE_ENGINES = {"turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "voxcpm2", 'drama-3'}
-PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice"}
+PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice", PHONON_ENGINE_ID}
 TRANSCRIPT_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", 'drama-3'}
 DIRECTION_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base",
                      "qwen3-tts-1.7b-custom-voice", "voxcpm2", 'drama-3'}
@@ -571,12 +572,12 @@ class CastStore:
             raise ValueError("Preset voice engine_options must be an object.")
         required = ("checkpoint", "checkpoint_revision", "speaker", "language")
         if any(not isinstance(options.get(key), str) or not options[key].strip() for key in required):
-            raise ValueError("A CustomVoice preset needs its checkpoint, revision, speaker, and language.")
+            raise ValueError("A preset voice needs its checkpoint, revision, speaker, and language.")
         speakers = options.get("supported_speakers")
         languages = options.get("supported_languages")
         if (not isinstance(speakers, list) or options["speaker"] not in speakers or
                 not isinstance(languages, list) or options["language"] not in languages):
-            raise ValueError("Choose a speaker and language reported by the loaded CustomVoice checkpoint.")
+            raise ValueError("Choose a speaker and language reported by the model's installed checkpoint.")
         direction = options.get("default_direction", "")
         if not isinstance(direction, str) or len(direction) > 1000:
             raise ValueError("Preset delivery instruction must be text of 1000 characters or fewer.")
@@ -1074,9 +1075,14 @@ class CastStore:
             readings = _loudness_readings(audio_path)
             reference = identity.get("reference")
             if identity["kind"] == "preset_voice":
-                origin = (f"Preset speaker {identity['engine_options']['speaker']} from "
-                          f"{identity['engine_options']['checkpoint']} revision "
-                          f"{identity['engine_options']['checkpoint_revision']}.")
+                options = identity["engine_options"]
+                origin = (f"Preset speaker {options['speaker']} from "
+                          f"{options['checkpoint']} revision {options['checkpoint_revision']}.")
+                if options.get("voices_checkpoint"):
+                    # The model and the voice catalog are separate repositories; the voice comes from the catalog.
+                    origin = (f"Preset speaker {options['speaker']} from {options['voices_checkpoint']} revision "
+                              f"{options['voices_revision']}, spoken by {options['checkpoint']} revision "
+                              f"{options['checkpoint_revision']}.")
             elif identity["kind"] == "fixed_voice":
                 origin = "Native/fixed voice selected in the local checkpoint."
             else:

@@ -14,6 +14,15 @@ class OutputLicenseTests(unittest.TestCase):
         self.assertEqual(breeze["status"], "restricted")
         self.assertIn("Non-Commercial", breeze["weights_license"])
 
+    def test_phonon_receipts_say_the_weights_are_apache_and_the_voices_state_no_licence(self):
+        phonon = license_profile("phonon-31m-en", {}, {})
+        self.assertEqual(phonon["status"], "unknown")
+        self.assertIn("Apache-2.0", phonon["weights_license"])
+        self.assertIn("states no licence", phonon["weights_license"])
+        self.assertIn("Ask Gradium", phonon["output_use"])
+        self.assertIn("ptts", phonon["code_license"])
+        self.assertIn("Unknown", phonon["recorded_reference_allowed_use"])
+
 
 if __name__ == "__main__":
     unittest.main()

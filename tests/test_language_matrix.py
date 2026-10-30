@@ -8,6 +8,7 @@ import numpy as np
 import asr_worker
 import language_matrix as lm
 from evaluation_suites import get_suite
+from phonon_fixtures import Lab
 
 KOKORO_VOICES = ["af_heart", "af_bella", "bf_alice", "bf_emma", "ef_dora", "em_alex", "ff_siwis"]
 QWEN_LANGUAGES = {"en", "zh", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"}
@@ -123,6 +124,15 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(drama["language"], "Chinese")
         kokoro = lm.request_for(clips[("kokoro", "en")], loaded)
         self.assertEqual((kokoro["voice"], kokoro["language"]), ("af_heart", "American English"))
+
+    def test_phonon_is_screened_in_english_only_with_its_default_voice_and_the_clips_seed(self):
+        plan = lm.build_plan(suite=get_suite(lm.SUITE_ID), engines=["phonon-31m-en"], voices=KOKORO_VOICES)
+        self.assertEqual({clip["column"] for clip in plan}, {"en"})
+        self.assertEqual(len(plan), 3)
+        with tempfile.TemporaryDirectory() as folder:
+            request = lm.request_for(plan[0], {}, root=Lab(Path(folder)).root)
+        self.assertEqual((request["engine"], request["voice"], request["seed"]), ("phonon-31m-en", "Harper", plan[0]["seed"]))
+        self.assertNotIn("language", request)
 
 
 class FakePool:

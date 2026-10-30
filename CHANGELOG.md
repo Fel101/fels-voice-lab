@@ -90,9 +90,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Models
 
-- **Integrated families:** Kokoro, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS VoiceDesign/Base/CustomVoice,
-  VoxCPM2 and Fish Audio Drama 3. The catalog records each pin; a catalog entry means an integration exists, not that the
-  package, model or hardware is present.
+- **Integrated families:** Kokoro, Phonon 31M English, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS
+  VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. The catalog records each pin; a catalog entry means an
+  integration exists, not that the package, model or hardware is present.
 - **Kokoro install.** `setup-kokoro.bat`, or `tools/install_kokoro.py`, installs Kokoro for the CPU: 89 pinned packages with
   the CPU build of PyTorch, each file checked against a SHA-256 in `requirements/kokoro-cpu.txt`; the pinned checkpoint and 41
   voices from Hugging Face, resumable and checked against the SHA-256 in `catalog/kokoro_snapshot.json`; then a speech check that
@@ -100,6 +100,17 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   with the lab's own `.venv`, and refuses to replace a package that is installed at another version, so an environment with its
   own PyTorch keeps it (`--checkpoint-only` adds just the model files). Run again, it installs only what is missing. A studio
   page that was open during the install reads the new voices when you press Generate, so it needs no reload.
+- **Phonon.** Phonon 31M English (Gradium) speaks English in 37 preset voices, 12 American, 13 British and 12 characters, on the
+  CPU through the numpy-only `ptts` runtime, with no PyTorch. It takes a seed, a temperature and a pace shift (`duration_delta`,
+  -0.5 to 0.5), and cannot clone, design a voice or take a direction. Its voices are reusable Cast identities, so Perform lines,
+  scenes and batches speak them. `setup-phonon.bat`, or `tools/install_phonon.py`, installs the one package pinned in
+  `requirements/phonon.txt` and the pinned model and voice files from Hugging Face, each checked against a SHA-256
+  (`catalog/phonon_snapshot.json`), then runs a speech check without a network: about 82 MB to download and 90 MB on disk. It
+  follows the Kokoro installer's rules (it shows its plan and asks first, runs only with the lab's own `.venv`, refuses to
+  replace `ptts` at another version, and has `--checkpoint-only`), and the **Install** button on its card runs it. The weights
+  are Apache-2.0, but the repository that holds the 37 voices states no licence, so the installer's plan, the page and the docs
+  say to ask Gradium before you publish audio made with one. Installing `ptts` changes `.venv`, so the Models page marks the
+  stored tests of the other models there as out of date.
 - **Models & features** reports three states for each family: integrated, installed (its environment and pinned checkpoint
   files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
@@ -108,9 +119,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   kept per device. A stored test carries a fingerprint of the model pin and the packages installed in its environment, and
   reads "test out of date" when either changes. A speed table shows the median real-time factor per family and device from
   clips and tests this service generated.
-- **Install from the page.** A Kokoro card that is not installed has an **Install** button. It shows the installer's own plan
-  (the `--dry-run` of `tools/install_kokoro.py`, with the reasons it would refuse), and **Install now** runs the installer that
-  `setup-kokoro.bat` runs, with the end of its output on the card. While it runs nothing else loads a model or speaks, a page
+- **Install from the page.** A Kokoro or Phonon card that is not installed has an **Install** button. It shows the installer's
+  own plan (the `--dry-run` of `tools/install_kokoro.py` or `tools/install_phonon.py`, with the reasons it would refuse), and
+  **Install now** runs the installer that `setup-kokoro.bat` or `setup-phonon.bat` runs, with the end of its output on the card. While it runs nothing else loads a model or speaks, a page
   that is reloaded picks the progress up again, and the whole output is kept in `out/install`. There is no Stop button:
   closing the studio stops the install, and running it again continues where it stopped. The other cards say that the app
   cannot install that model yet. (`POST /api/engines/{engine_id}/install`; `GET /api/engines/status` reports the install.)
@@ -187,8 +198,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1114 Python
-  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 180 Node
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1230 Python
+  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
@@ -205,21 +216,35 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   output following along on the card, and finished in 277 seconds with the card reading *Installed, not tested on CPU*. A page
   reloaded in the middle picked the install up again, and **Test** then loaded the model and spoke one sentence (2.7 s of
   audio in 0.8 s).
+- Phonon was installed with the **Install** button of a studio started from a fresh copy of the repository that had only the core
+  packages (Windows 11, CPU only, pip's cache warm). The installer showed its plan and finished in 30 seconds, and **Test** then
+  passed (2.6 s of audio in 0.3 s). On the real model all 37 voices spoke through `/api/speak`, each as a different clip; a Cast
+  identity made a Perform take; and a two-line scene rendered as a batch and assembled a preview. An unknown voice, reference
+  audio, speed, a direction, a temperature or pace outside its range, another language and a fractional seed were each refused
+  with a `400` that says why. A pace shift of -0.5 and +0.5 changed one sentence's length by -22% and +19%. A seed repeats a clip
+  to within rounding and not byte for byte (differences near a millionth of full scale), and one thread instead of all of them
+  moved the end of a clip by one 80 ms frame.
 - The new Models & features layout, the first-run banner and the Dark and Forest themes were looked at in a browser at phone
   width. The Light theme was not changed.
 
 ### Known limits
 
 - **Platform.** Windows 10/11 only. Built and checked on one machine with an AMD Radeon AI PRO R9700; there are no NVIDIA,
-  Linux or macOS results. Only Kokoro and Drama 3 have installers, and VoxCPM2 needs pinned source and a ROCm overlay that
-  this repository does not install. Nothing here trains or fine-tunes a model.
+  Linux or macOS results. Only Kokoro, Phonon and Drama 3 have installers, and VoxCPM2 needs pinned source and a ROCm overlay
+  that this repository does not install. Nothing here trains or fine-tunes a model.
 - **Kokoro install.** It was run on one Windows 11 computer. A computer without the Microsoft Visual C++ runtime, a folder
   path near Windows' 259-character limit and a network that blocks PyPI or Hugging Face were not tried for real; the installer
   stops with a message in each case, and its tests cover them with stand-ins. The Japanese and Mandarin voices need Misaki
   language packages that it does not add.
-- **Install button and RAM figures.** Only the Kokoro card has an Install button, and it has no Stop button. Its progress is
-  the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show nothing new for minutes. The RAM on a
-  card is the Lab's own rule for loading a model, not a measurement of what the model uses.
+- **Phonon.** English only, preset voices only, and CPU only. The repository of its 37 voices states no licence, so what
+  audio made with them may be used for is unknown. A seed repeats a clip closely, not byte for byte, and not across
+  computers. It is not in the language screen (a trial read 44 clips back at a mean word error rate of 3.8%), nobody has
+  listened to it as a test, and it was run on one Windows 11 computer. A missing Visual C++ runtime, a folder path near the
+  259-character limit and a network that blocks PyPI or Hugging Face were not tried for real; the installer's tests, and the
+  Kokoro installer's for the download code the two share, cover them with stand-ins.
+- **Install button and RAM figures.** Only the Kokoro and Phonon cards have an Install button, and they have no Stop button.
+  Their progress is the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show nothing new for
+  minutes. The RAM on a card is the Lab's own rule for loading a model, not a measurement of what the model uses.
 - **What the numbers mean.** The language screen is not a listening test. Take checks and loudness readings describe audio
   and nothing else, a voice match is a proxy whose bands come from one target voice, word-time boundary accuracy is
   unmeasured, and the lip-sync mouth shapes have not been checked against a face or by ear.

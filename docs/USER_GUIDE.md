@@ -74,7 +74,12 @@ Kokoro speaker tensors, not uploaded WAVs; selecting multiple voices averages
 them equally. Kokoro cannot add a newly recorded voice by browsing to a WAV or
 perform reference cloning. Upload that recording in **Voice cloning** and choose
 a cloning-capable model instead. Qwen CustomVoice uses native preset identities.
-Design-capable engines accept descriptions; cloning models need a permitted
+Phonon speaks English in 37 fixed preset voices, grouped as American English, British
+English and Characters, with a seed, a temperature and a pace shift; it takes no direction
+and no reference, and its voices can be added to a character in **Cast library** as
+preset identities. The same seed gives nearly the same clip, not the same file.
+Gradium states no licence for those 37 voices, so ask them before you publish audio
+made with one. Design-capable engines accept descriptions; cloning models need a permitted
 reference and, where required, its exact transcript. Unsupported controls
 are withheld or rejected, not silently advertised as effective.
 
@@ -302,9 +307,10 @@ this computer has and how much is free right now. The Lab refuses to load a mode
 red when the whole computer has less RAM than the model needs, or when less is free at the moment: close other programs, and
 then press **Test**. The figure is the Lab's own rule for loading, not a measurement of what the model uses.
 
-A model that is not installed shows the files it is missing. The Kokoro card has an **Install** button: it shows what the
-installer will do and whether this computer can take it, and **Install now** runs it with the end of its output on the card
-(more in [setting up](SETUP.md#kokoro-on-the-cpu)). The other cards say that the app cannot install that model yet.
+A model that is not installed shows the files it is missing. The Kokoro and Phonon cards have an **Install** button: it shows
+what the installer will do and whether this computer can take it, and **Install now** runs it with the end of its output on the
+card (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu) and [Phonon](SETUP.md#phonon-on-the-cpu)). The other cards
+say that the app cannot install that model yet.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed

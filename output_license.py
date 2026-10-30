@@ -56,6 +56,15 @@ ENGINE_LICENSE_NOTES = {
         "status": "unknown",
         "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
     },
+    "phonon-31m-en": {
+        "code_license": "MIT OR Apache-2.0 ptts runtime, separately installed.",
+        "weights_license": "Apache-2.0 per the gradium/phonon-31m-en model card, which covers the weights, tokenizer and default voice "
+                           "of that repository. The 37 preset voices come from gradium/phonon-voices, which states no licence.",
+        "output_use": "Unknown: nothing states what audio made with the catalog voices may be used for. Ask Gradium before "
+                      "redistributing it, and keep the model card's note that listeners should be told when speech is synthetic.",
+        "status": "unknown",
+        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json and catalog/phonon_snapshot.json; the model card."
+    },
     "orig": {
         "code_license": "MIT Chatterbox runtime, separately installed.",
         "weights_license": "MIT upstream Chatterbox checkpoint.",

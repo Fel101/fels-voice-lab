@@ -1,9 +1,9 @@
 """Install an engine from the Models page: show the installer's plan, then run it and keep its progress.
 
-An engine with a guided installer (Kokoro: tools/install_kokoro.py, the script setup-kokoro.bat runs) can be installed from its
-card. The page first asks for the plan, which is the script's own --dry-run, so it shows what the script will really do and why
-it would refuse. Install now then starts the script with --yes as a child process under the engine's own Python and keeps the end
-of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so tests, loads and
+An engine with a guided installer (Kokoro: tools/install_kokoro.py, the script setup-kokoro.bat runs; Phonon:
+tools/install_phonon.py, the script setup-phonon.bat runs) can be installed from its card. The page first asks for the plan,
+which is the script's own --dry-run, so it shows what the script will really do and why it would refuse. Install now then
+starts the script with --yes as a child process under the engine's own Python and keeps the end of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so tests, loads and
 clips are refused instead of competing with it for memory and disk. Closing the service stops the install and its children; the
 script continues where it stopped when it is run again.
 """
@@ -19,10 +19,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import worker_pool
+from phonon_support import PHONON_ENGINE_ID
 
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py). tests/test_engine_install.py keeps
 # this in step with engine_checks.GUIDED_INSTALLERS and with the launchers themselves.
-INSTALLERS = {"kokoro": "tools/install_kokoro.py"}
+INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/install_phonon.py"}
 LOG_FOLDER = "out/install"
 LOGS_KEPT = 10          # per engine; the newest runs' full output stays on disk
 KEPT_LINES = 200        # lines of output held in memory

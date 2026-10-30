@@ -53,12 +53,13 @@ from ui_preferences import UiPreferences
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio, save_designed_reference
 from kokoro_support import (discover_kokoro_voices, kokoro_languages,
                             normalize_kokoro_voices, phonemize_kokoro)
+from phonon_support import PHONON_ENGINE_ID, discover_phonon_voices, identity_options as phonon_identity_options
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from performance_settings import DEFAULTS, effective_settings, performance_controls
 from language_matrix import unscreened_languages
 from urllib.parse import quote
 
-MIN_FREE_RAM_GB = {"kokoro": 8, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
+MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
                    'drama-3':26,
                    "qwen3-tts-1.7b-voice-design": 10, "qwen3-tts-1.7b-base": 10,
                    "qwen3-tts-0.6b-base": 10, "qwen3-tts-1.7b-custom-voice": 10,
@@ -429,6 +430,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             if not isinstance(direction, str) or len(direction) > 1000:
                 raise ValueError("Acting direction must be text of 1000 characters or fewer.")
             if direction.strip() and engine_id not in DIRECTION_ENGINES:
+                if engine_id == PHONON_ENGINE_ID:
+                    raise ValueError("Phonon has no text-direction control; its pace, seed and temperature are the settings.")
                 raise ValueError(f"{engine_id} has no verified text-direction control; use its native event tags in the line text.")
             settings = req.get("settings", {})
             if not isinstance(settings, dict):
@@ -493,6 +496,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     "cfg_value": settings.get("cfg_value", 2.0),
                     "inference_timesteps": settings.get("inference_timesteps", 10),
                 })
+            elif engine_id == PHONON_ENGINE_ID:
+                backend_request.update({"voice": identity["engine_options"]["speaker"], "language": language, **applied_settings})
             line_id = req.get("line_id")
             if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
                 raise ValueError("Line ID must contain 1–100 characters.")
@@ -529,6 +534,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             voice_options = identity.get("engine_options") or {}
             if engine_id == "breeze-tts-2":
                 generation_mode = backend_request["mode"]
+            elif engine_id == PHONON_ENGINE_ID:
+                generation_mode = "fixed_voice"
             elif engine_id in PRESET_VOICE_ENGINES:
                 generation_mode = "custom_voice"
             elif engine_id.startswith("qwen3-tts"):
@@ -606,6 +613,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             elif path == "/api/info":
                 self._json(200, {"device": engines.device, "loaded": engines.loaded,
                                  "voices": discover_kokoro_voices(), "kokoro_languages": kokoro_languages(),
+                                 "phonon_voices": discover_phonon_voices(),
                                  "free_ram_gb": round(free_ram_gb(), 1)})
             elif path == "/api/catalog":
                 self._json(200, engines.catalog)
@@ -1112,6 +1120,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     if engine_id == "kokoro":
                         options = {"voice": ",".join(normalize_kokoro_voices(
                             req.get("voice", "af_heart"), discover_kokoro_voices()))}
+                    elif engine_id == PHONON_ENGINE_ID:
+                        # Its voices are read from the installed catalog, so nothing has to be loaded first.
+                        options = phonon_identity_options(capabilities, req.get("speaker"), req.get("language"),
+                                                          performance_controls(engine_id, capabilities))
                     elif preset_voice:
                         loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
                         if not loaded_info:

@@ -29,6 +29,10 @@ function bodyForRequest() {
       voice_description:dramaMode==='design'?$('dramaDescription').value:'',
       reference_path:dramaMode==='clone'?$('dramaReference').value:null,reference_text:dramaMode==='clone'?$('dramaTranscript').value:''};
   }
+  if (engine === 'phonon-31m-en') {
+    return {engine:engine, text:$('text').value, voice:$('phononVoice').value, seed:Number($('phononSeed').value),
+      temperature:Number($('phononTemperature').value), duration_delta:Number($('phononPace').value)};
+  }
   if (engine === 'voxcpm2') {
     var voxMode = $('voxMode').value;
     body = {engine:engine, mode:voxMode, text:$('text').value, seed:Number($('voxSeed').value),
@@ -88,6 +92,16 @@ function generate() {
     $('go').disabled = true; $('reroll').disabled = true;
     $('status').textContent = 'Reading the installed Kokoro voices...';
     VoiceLabWorkflows.refreshKokoroVoices().catch(function () {}).then(function () {
+      $('go').disabled = false; $('reroll').disabled = false;
+      requestSpeech();
+    });
+    return;
+  }
+  if ($('engine').value === 'phonon-31m-en' && !phononVoices.length) {
+    // Same for Phonon: read the voices it installed, then speak (an empty list is refused with the install hint).
+    $('go').disabled = true; $('reroll').disabled = true;
+    $('status').textContent = 'Reading the installed Phonon voices...';
+    refreshPhononVoices().catch(function () {}).then(function () {
       $('go').disabled = false; $('reroll').disabled = false;
       requestSpeech();
     });

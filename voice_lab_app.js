@@ -3,7 +3,7 @@
 $('voxMode').addEventListener('change', refresh);
 ['speed','exag','cfg','cbMinP','cbTopK','cbTemperature','cbTopP','cbRepetition','cfgScale','maxTokens','temperature','topK','topP','repetitionPenalty','depthTemperature','depthTopK','depthTopP']
   .forEach(function (id) { $(id).addEventListener('input', updateValues); });
-['qwenMaxTokens','qwenTemperature','qwenTopK','qwenTopP','qwenRepetition']
+['qwenMaxTokens','qwenTemperature','qwenTopK','qwenTopP','qwenRepetition','phononTemperature','phononPace']
   .forEach(function (id) { $(id).addEventListener('input', updateValues); });
 ['voxCfg','voxSteps'].forEach(function (id) { $(id).addEventListener('input', function () {
   $('voxCfgV').textContent = Number($('voxCfg').value).toFixed(1);
@@ -29,6 +29,7 @@ fetch('/api/info').then(function(r){return r.json();}).then(function(i){
   var firstVoice=Array.from($('voice').options).find(function(item){return item.value==='af_heart';});
   if(firstVoice){firstVoice.selected=true;}
   fillFixedVoices();
+  fillPhononVoices(i.phonon_voices);
   $('kokoroLanguage').textContent=''; (i.kokoro_languages||[]).filter(function(item){return item.available;})
     .forEach(function(item){option($('kokoroLanguage'),item.name,item.name+' ('+item.code+')');});
   $('kokoroLanguage').value='American English';

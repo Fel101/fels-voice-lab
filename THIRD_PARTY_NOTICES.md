@@ -1,6 +1,6 @@
 # Third-party notices
 
-Reviewed 20 October 2026. The root MIT license covers the project's original code.
+Reviewed 20 October 2026, with Phonon added on 30 October 2026. The root MIT license covers the project's original code.
 It does not replace the licenses below or grant rights to model weights, voices,
 recordings, trademarks, scripts or generated outputs.
 
@@ -39,6 +39,10 @@ or Apache. phonemizer-fork and the espeak-ng library inside espeakng-loader are 
 num2words is LGPL, and certifi and tqdm are MPL-2.0. They are fetched from PyPI and GitHub
 on the user's computer, not copied into this repository.
 
+`tools/install_phonon.py` installs the one package pinned in `requirements/phonon.txt` into `.venv`: the `ptts` runtime
+(MIT OR Apache-2.0), a Rust extension that needs only NumPy. It is fetched from PyPI on the user's computer, not copied
+into this repository.
+
 FFmpeg is an optional external tool. Its obligations depend on its exact build
 and enabled components; do not bundle an arbitrary executable with this project.
 
@@ -47,6 +51,7 @@ and enabled components; do not bundle an arbitrary executable with this project.
 | Model family | Weight terms and release implications |
 |---|---|
 | Kokoro 82M | [Apache-2.0 model](https://huggingface.co/hexgrad/Kokoro-82M). Preserve model/voice notices when redistributing weights. |
+| Phonon 31M English | [Apache-2.0 model card](https://huggingface.co/gradium/phonon-31m-en) for the weights, tokenizer and default voice. The 37 preset voices come from [gradium/phonon-voices](https://huggingface.co/gradium/phonon-voices), which states **no** licence (no model card and no LICENSE file), so nothing establishes what audio made with them may be used for: ask Gradium before you publish it. The card asks that Phonon not be used to impersonate a real person or to deceive listeners about who is speaking, and that listeners be told when speech is synthetic where that matters to them. Gradium's larger 40M models are CC BY-NC 4.0 and are not integrated. |
 | Qwen3-TTS | [Apache-2.0 checkpoints](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base). faster-Qwen is a separately installed runtime. |
 | Chatterbox Original/Turbo/VC | [MIT upstream](https://github.com/resemble-ai/chatterbox). Keep the native Perth watermark behavior; no removal is implemented. |
 | VoxCPM2 | [Apache-2.0 checkpoint](https://huggingface.co/openbmb/VoxCPM2). Runtime source and audio frontend components remain separate installations. |
@@ -56,7 +61,8 @@ and enabled components; do not bundle an arbitrary executable with this project.
 Weights, native runtimes, recordings, training data and generated samples are
 not part of this repository. The Drama installer obtains the pinned
 third-party runtime, model and their notices separately after explicit invocation, and
-the Kokoro installer does the same for the pinned Kokoro checkpoint, its model card and its voices.
+the Kokoro installer does the same for the pinned Kokoro checkpoint, its model card and its voices, and the Phonon installer
+for the pinned Phonon model and the 37 preset voices with their catalog.
 The complete upstream license governs; this table is a practical inventory.
 Reference consent, copyright, privacy and publicity rights still need review for
 each voice and intended use. Converting a restricted voice through another model

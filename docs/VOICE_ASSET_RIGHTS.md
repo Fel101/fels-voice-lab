@@ -1,6 +1,6 @@
 # Voice presets, references and redistribution
 
-Reviewed 21 October 2026. This distinguishes the application's MIT source code
+Reviewed 21 October 2026, with Phonon added on 30 October 2026. This distinguishes the application's MIT source code
 from the model files and audio used with it. A voice appearing in a local picker
 does not mean it is cleared for a public download or a commercial project.
 
@@ -29,6 +29,16 @@ in the reference library and are used by a model that supports cloning.
 This repository contains no model weights and no voice audio. Keeping names and
 integration code in it is different from bundling a model pack or an audio
 demonstration.
+
+## Phonon's preset voices
+
+The 37 English preset voices come from `voices.jsonl` and its voice files in the pinned `gradium/phonon-voices` snapshot. Like
+Kokoro's, they are upstream presets, not recordings supplied by the application's author. The model repository,
+`gradium/phonon-31m-en`, states Apache-2.0 for its weights, tokenizer and default voice. **The voices repository states no
+licence at all: it has no model card and no LICENSE file.** Nothing in either repository says what audio made with those voices
+may be used for, so treat that as unknown: ask Gradium before you publish a recording that uses one, and do not redistribute the
+voice files with your project. The model card also asks that Phonon not be used to impersonate a real person, and that listeners
+be told when speech is synthetic where that matters to them.
 
 ## Where the picker finds audio
 

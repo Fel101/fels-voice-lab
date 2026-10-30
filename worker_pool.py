@@ -10,6 +10,7 @@ from pathlib import Path
 from worker_process import (WorkerCancelled, WorkerError, WorkerProcess, WorkerRequestError,
                             WorkerTimeout, WorkerUnavailable)
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
+from phonon_support import PHONON_ENGINE_ID, check_request as check_phonon_request
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
 from local_ownership import LocalOwnership
 import engine_checks
@@ -455,6 +456,8 @@ class EnginePool:
                 reference = req.get("reference_path") or LAB / "reference" / "af_heart.wav"
                 if req.get("reference_path") or Path(reference).is_file():
                     self._resolve_reference_path(key, reference)
+        elif key == PHONON_ENGINE_ID:
+            phonon_params = check_phonon_request(req)
         self._acquire_job()
         output_file = None
         try:
@@ -467,6 +470,8 @@ class EnginePool:
                 params["voice"] = str(req.get("voice", "af_heart"))
                 params["speed"] = req.get("speed", 1.0)
                 params["language"] = req.get("language", "English")
+            elif key == PHONON_ENGINE_ID:
+                params.update(phonon_params)
             elif key == 'drama-3':
                 params.update({name:value for name,value in req.items() if name not in ('engine','text','language')})
                 if params.get('mode')=='clone':

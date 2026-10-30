@@ -5,7 +5,8 @@ installer with every model. Python 3.12 x64 is the supported starting point.
 Models and their runtime packages must be installed separately. A fresh core
 installation opens the studio and its stores; it cannot synthesize speech until
 a compatible model runtime and checkpoint are available. `setup-kokoro.bat`
-installs one, [Kokoro](#kokoro-on-the-cpu), which speaks on an ordinary CPU.
+and `setup-phonon.bat` each install one, [Kokoro](#kokoro-on-the-cpu) and
+[Phonon](#phonon-on-the-cpu), and both speak on an ordinary CPU.
 
 ## Core and desktop
 
@@ -107,6 +108,65 @@ passed **Test**. If the speech check fails with a message about a missing DLL, i
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again.
 Other Windows setups have not been tried.
 
+## Phonon on the CPU
+
+Phonon 31M English is a very small speech model: its checkpoint is 65 MB, and it runs on an ordinary computer without a graphics card
+and without PyTorch. It speaks English in 37 preset voices (12 American, 13 British and 12 characters, among them a demon, an ogre and
+a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone a recording, design a voice or take a direction. After
+`setup.bat`, run
+
+```powershell
+setup-phonon.bat
+```
+
+or `.venv\Scripts\python.exe tools\install_phonon.py`. It prints its plan and asks before it changes anything. `--dry-run` shows the
+plan and runs the checks without changing anything, and `--yes` accepts the plan without asking. The **Install** button on the Phonon
+card of **Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
+
+It installs into this folder, in `.venv`, `hf-cache` and `out\phonon`:
+
+1. **One pinned Python package**, the `ptts` runtime, from [requirements/phonon.txt](../requirements/phonon.txt): a 7 MB wheel that
+   needs only NumPy, which `setup.bat` already installed, and about 18 MB on disk. pip checks the wheel against the SHA-256 in that
+   file. Adding a package to `.venv` makes the Models page treat the checks of the other models that run there as out of date, so
+   press **Test** on those again.
+2. **The Phonon files** at pinned revisions: the 65 MB model with its tokenizer, configuration and default voice from
+   `gradium/phonon-31m-en`, and the 37 English preset voices with their catalog from `gradium/phonon-voices` (10 MB). That is 75 MB to
+   download. Every file is checked against the SHA-256 in [catalog/phonon_snapshot.json](../catalog/phonon_snapshot.json). An
+   interrupted download resumes where it stopped, and a file that fails its check is deleted rather than kept.
+3. **A speech check.** A fresh process loads Phonon without using the network and speaks the sentence the Models page uses. The clip
+   stays in `out\phonon\install-check.wav` beside a small receipt of what was installed.
+
+Run it again to continue after an interruption or to repair a damaged file: it installs only what is missing. It stops before it
+changes anything when it is not run with this folder's own Python, when `ptts` is already installed at another version, when this
+folder's path is too long for Windows' 259-character limit (move the lab to a path such as `C:\voice-lab`, or switch on long paths in
+Windows), or when the disk is too full. If Phonon already works in an environment of your own, `--checkpoint-only` fetches the model
+files and leaves the package alone.
+
+The studio's picker groups the voices as American English, British English and Characters, and **Cast library** can add any of them
+as an identity. The larger Phonon models of the family (40M) are licensed CC BY-NC 4.0 and are not offered.
+
+Licences: the model's weights, tokenizer and default voice are Apache-2.0 (its model card says so), and the `ptts` runtime is MIT OR
+Apache-2.0. The 37 preset voices come from a separate Gradium repository that has no model card and no LICENSE file, so nothing says
+what audio made with them may be used for. Ask Gradium before you publish a recording that uses one. The model card also asks that
+Phonon not be used to impersonate a real person, and that listeners be told when speech is synthetic where that matters to them.
+
+What it does here, measured on one computer with only the CPU: it loads in under half a second, and a clip takes about a fifth of its
+own length to make (a real-time factor of 0.12 to 0.36 across the 37 voices). One worker holds about 150 MB when loaded and peaked at
+about 510 MB while speaking a line of 1,200 characters; the Lab asks for 2 GB of free RAM before it loads it. A pace shift of -0.5 made
+one 18-word sentence 22% shorter and +0.5 made it 19% longer.
+
+A seed gives nearly the same clip, not the same file: two clips from one seed differ by about a millionth of full scale, and running
+with one thread instead of all of them moved the end of a clip by one 80 ms frame. Do not expect an identical clip on another computer.
+
+To remove Phonon, run `.venv\Scripts\python.exe -m pip uninstall ptts`, then delete `hf-cache\hub\models--gradium--phonon-31m-en`,
+`hf-cache\hub\models--gradium--phonon-voices` and `out\phonon`.
+
+The recipe was checked on one Windows 11 computer with Python 3.12.10, using only the CPU, from a copy of the Lab that had only the
+core packages: **Install** on the Models page ran the installer in 30 seconds and the card read *Installed, not tested*; **Test**
+passed (2.6 s of audio in 0.3 s); and all 37 voices spoke, each a different clip. If the speech check fails with a message about a
+missing DLL, install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the
+installer again. Other Windows setups have not been tried.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
@@ -120,6 +180,7 @@ not use). The app, Cast and scene export run without them.
 | Family | Runtime path | Setup status |
 |---|---|---|
 | Kokoro | `.venv/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned CPU runtime and checkpoint ([above](#kokoro-on-the-cpu)). |
+| Phonon 31M English | `.venv/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
 | Chatterbox Original/Turbo/VC | `.venv/Scripts/python.exe` | Install matching engine packages and checkpoints after choosing CPU/CUDA/ROCm PyTorch. Existing runtime verified on Windows/AMD; universal installation has not been established. |
 | Breeze | `.venv-breeze/Scripts/python.exe` | Separate environment, BF16 standalone wrapper. Needs the pinned checkpoint and text/audio tokenizer files. Review its non-commercial model license first. |
 | faster-Qwen | `.venv-fqwen/Scripts/python.exe` | Separate environment; faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1, Transformers 5.15.1 were tested locally. Needs exact catalog snapshots. Stock qwen-tts is a different comparison runtime. |
@@ -204,4 +265,4 @@ Three things are outside the folder:
   its own folder.
 
 The desktop window runs in private mode and deletes its temporary browser data when it closes, so it leaves nothing behind. To
-remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu).
+remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu) or [Phonon on the CPU](#phonon-on-the-cpu).

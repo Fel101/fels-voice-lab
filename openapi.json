@@ -82,13 +82,13 @@
     "/api/info": {
       "get": {
         "operationId": "get_api_info",
-        "summary": "Name the device, the loaded engines, the Kokoro voices found and the free memory.",
+        "summary": "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
         "tags": [
           "Service"
         ],
         "responses": {
           "200": {
-            "description": "`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages` and `free_ram_gb`.",
+            "description": "`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` (the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and `description`) and `free_ram_gb`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -211,7 +211,7 @@
     "/api/engines/{engine_id}/install": {
       "post": {
         "operationId": "post_api_engines_engine_id_install",
-        "summary": "Install an engine that has a guided installer (Kokoro): read its plan, or run the installer.",
+        "summary": "Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.",
         "tags": [
           "Service"
         ],
@@ -330,7 +330,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,7 +526,7 @@
                   },
                   "voice": {
                     "type": "string",
-                    "description": "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."
+                    "description": "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."
                   },
                   "speed": {
                     "type": "number",
@@ -534,7 +534,7 @@
                   },
                   "language": {
                     "type": "string",
-                    "description": "Kokoro and Qwen: the language. Default `English`."
+                    "description": "Kokoro and Qwen: the language. Default `English`. Phonon speaks English only."
                   },
                   "voice_description": {
                     "type": "string",
@@ -559,6 +559,14 @@
                   "seed": {
                     "type": "integer",
                     "description": "Engines that take one: the random seed. Default 42."
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "Phonon: how much the delivery varies, 0 to 1. Default 0.3. The other engines that take a temperature list theirs under `capabilities` in `GET /api/catalog`."
+                  },
+                  "duration_delta": {
+                    "type": "number",
+                    "description": "Phonon: shift the pace, from -0.5 (faster) to 0.5 (slower). Default 0."
                   },
                   "save_voice_as": {
                     "type": "string",
@@ -655,7 +663,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1148,7 +1156,7 @@
                 "properties": {
                   "engine_id": {
                     "type": "string",
-                    "description": "A recording-cloning engine, `kokoro` or the Qwen CustomVoice engine that the service exposes."
+                    "description": "A recording-cloning engine, `kokoro`, `phonon-31m-en` or the Qwen CustomVoice engine that the service exposes."
                   },
                   "label": {
                     "type": "string",
@@ -1164,11 +1172,11 @@
                   },
                   "speaker": {
                     "type": "string",
-                    "description": "CustomVoice: a speaker the loaded checkpoint reports."
+                    "description": "CustomVoice: a speaker the loaded checkpoint reports. Phonon: a voice name from `phonon_voices` of `GET /api/info`."
                   },
                   "language": {
                     "type": "string",
-                    "description": "CustomVoice: a language the loaded checkpoint reports."
+                    "description": "CustomVoice: a language the loaded checkpoint reports. Phonon: `English`, the default."
                   },
                   "default_direction": {
                     "type": "string",

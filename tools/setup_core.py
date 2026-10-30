@@ -19,8 +19,8 @@ def main():
         venv.EnvBuilder(with_pip=True).create(ROOT / ".venv")
         subprocess.run([str(python), "-m", "pip", "install", "pip==26.2.2"], check=True)
         subprocess.run([str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements/core.txt")], check=True)
-    print("Core ready. Run setup-kokoro.bat to add Kokoro, the small speech model that runs on the CPU. "
-          "Other models: docs/SETUP.md.")
+    print("Core ready. Run setup-kokoro.bat to add Kokoro, the small speech model that runs on the CPU, or setup-phonon.bat "
+          "to add Phonon, a smaller English one with 37 preset voices. Other models: docs/SETUP.md.")
 
 
 if __name__ == "__main__":

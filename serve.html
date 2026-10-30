@@ -196,6 +196,10 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <label class="field">Default delivery instruction (optional)<textarea id="presetDirection" maxlength="1000" placeholder="A reusable acting starting point; each performance can override it."></textarea></label>
     <p class="meta" id="customVoiceIdentityStatus" role="status"></p>
   </div>
+  <div class="cast-grid" id="phononIdentityRow" hidden>
+    <label class="field compact">Phonon voice<select id="phononIdentityVoice"></select></label>
+    <p class="meta" id="phononIdentityInfo" role="status"></p>
+  </div>
   <label class="field">Voice-specific notes<textarea id="identityNotes" placeholder="Keep this voice's stable qualities separate from per-line acting"></textarea></label>
   <div class="cast-actions"><button type="button" id="createIdentity">Add voice candidate</button><label class="field compact">Character voice<select id="identitySelect"></select></label><span class="meta" id="identityState"></span><button type="button" id="approveFixedIdentity" hidden>Approve fixed voice</button></div>
   <div id="referenceEditor" hidden>
@@ -344,6 +348,18 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <button type="button" id="refreshKokoroVoices">Refresh installed speaker packs</button>
     <p class="meta">Kokoro presets are from hexgrad/Kokoro-82M under Apache 2.0. Model downloads and your local recordings are not part of this application. Use Generate to audition a preset or blend.</p>
     <pre id="kokoroPhonemes" class="meta"></pre></div>
+
+  <div id="phononPanel" hidden>
+    <h2>Phonon 31M English</h2>
+    <div class="row">
+      <label class="field compact">Voice<select id="phononVoice"></select></label>
+      <label class="field compact">Seed<input id="phononSeed" type="number" min="0" max="2147483647" value="42"></label>
+      <label class="field compact">Temperature <input id="phononTemperature" type="range" min="0" max="1" step="0.05" value="0.3"><span id="phononTemperatureV" class="meta">0.30</span></label>
+      <label class="field compact">Pace shift <input id="phononPace" type="range" min="-0.5" max="0.5" step="0.1" value="0"><span id="phononPaceV" class="meta">0.0</span></label>
+    </div>
+    <p class="meta" id="phononVoiceInfo" role="status"></p>
+    <p class="meta">Phonon runs on the CPU. A pace shift below zero speaks faster. The same seed gives nearly the same clip on this computer, not byte for byte. Gradium states no licence for the 37 voices, so ask them before you publish audio made with one.</p>
+  </div>
 
   <div id="breezePanel" hidden>
     <p class="meta">Breeze weights and self-hosted outputs use a research and non-commercial license. <a href="https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Read the model terms</a> before exporting or reusing a voice.</p>
@@ -523,7 +539,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <details id="modelsMoreBox" hidden><summary id="modelsMoreSummary">More models</summary><p class="meta">The app cannot install these yet. docs/SETUP.md (Model runtimes) says what each one needs.</p><div id="modelMore" class="model-grid"></div></details>
 <h3>Measured speed on this service</h3><p class="meta">Real-time factor is seconds to generate divided by seconds of audio, so below 1 is faster than real time. Rows come from the clips and checks this service ran on each device. Precision is not measured; this table records speed only.</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Device</th><th scope="col">Clips</th><th scope="col">Median real-time factor</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>
-<div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset speakers are reusable Cast identities and do not require a cloned reference. Qwen VoiceDesign creates references for a cloning identity.</p></div>
+<div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset speakers and Phonon voices are reusable Cast identities and do not require a cloned reference. Qwen VoiceDesign creates references for a cloning identity.</p></div>
 <h3>Available outside this interface</h3><p class="meta">Audio delivery packs (WAV, FLAC, OGG and captions) and dataset preparation currently use command-line tools. Training is not enabled. Chatterbox V3 and MOSS have isolated trial results but are not integrated here.</p>
 <details><summary>Remaining feature coverage</summary><p class="meta">Breeze INT8 and native streaming, VoxCPM streaming, broader model integrations, word alignment and visemes, and local transcription are still pending. Only the Qwen engines offer native streaming here. Kokoro Japanese and Mandarin require additional language frontends. Listening scores still need human audition; automated signal checks do not establish voice quality.</p></details></section>
 <section class="card" id="system"><h2>System &amp; backups</h2>

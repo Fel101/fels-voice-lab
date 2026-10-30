@@ -2,6 +2,7 @@
 var $ = function (id) { return document.getElementById(id); };
 var hints = {
   kokoro: 'Kokoro has fixed voices and speed control. It does not accept reference audio or perform vocal events.',
+  'phonon-31m-en': 'Phonon speaks English with one of 37 fixed preset voices, 12 of them characters. It does not accept reference audio, design a voice or take a direction.',
   turbo: 'Chatterbox Turbo clones a reference and supports tags such as [laugh], [chuckle] and [cough].',
   orig: 'Chatterbox supports reference cloning plus exaggeration and CFG controls. It ignores event tags.',
   'breeze-tts-2': 'Breeze supports voice design, reference cloning, text direction and parenthesized vocal events. Outputs are full WAV files.',
@@ -17,6 +18,7 @@ var descriptions = {
   low: 'A calm, low-pitched woman with a slow, unhurried delivery.',
   custom: ''
 };
+var phononVoices = [];
 var lastEngine = null;
 var activeStream = null;
 var lastPerformanceSamplingEngine = null;
@@ -48,6 +50,8 @@ function refresh() {
   $('dramaDescriptionWrap').hidden=$('dramaMode').value!=='design';
   $('dramaReferenceWrap').hidden=$('dramaMode').value!=='clone';
   var voxcpm = e === 'voxcpm2', voxMode = $('voxMode').value;
+  var phonon = e === 'phonon-31m-en';
+  $('phononPanel').hidden = !phonon;
   $('breezePanel').hidden = !breeze;
   $('qwenPanel').hidden = !qwenMode;
   $('voxPanel').hidden = !voxcpm;
@@ -55,7 +59,7 @@ function refresh() {
   $('kokoroTools').hidden = e !== 'kokoro'; $('speedWrap').hidden = e !== 'kokoro';
   $('chatterboxSampling').hidden = e !== 'orig' && e !== 'turbo';
   $('origOpts').hidden = e !== 'orig'; $('turboOpts').hidden = e !== 'turbo';
-  $('cloneWrap').hidden = e === 'kokoro' || breeze || !!qwenMode || voxcpm || drama;
+  $('cloneWrap').hidden = e === 'kokoro' || phonon || breeze || !!qwenMode || voxcpm || drama;
   $('chatterboxReferenceWrap').hidden = !$('clone').checked;
   $('designFields').hidden = !breeze || mode !== 'design';
   $('referenceFields').hidden = !breeze || mode === 'design';
@@ -76,6 +80,8 @@ function refresh() {
     else if (e === 'turbo') { $('cbTopP').value = '0.95'; }
     lastEngine = e;
     updateValues();
+    // A page that was open while Phonon was installed has no voices yet: read them when the model is chosen.
+    if (phonon && !phononVoices.length) { refreshPhononVoices().catch(function () {}); }
   }
   $('chatterboxReferenceWrap').hidden = !$('clone').checked;
   $('hint').textContent = hints[e] || '';
@@ -85,7 +91,8 @@ function updateValues() {
    ['temperature','temperatureV',2],['topK','topKV',0],['topP','topPV',2],['repetitionPenalty','repetitionPenaltyV',2],
    ['depthTemperature','depthTemperatureV',2],['depthTopK','depthTopKV',0],['depthTopP','depthTopPV',2],
    ['qwenMaxTokens','qwenMaxTokensV',0],['qwenTemperature','qwenTemperatureV',2],['qwenTopK','qwenTopKV',0],
-   ['qwenTopP','qwenTopPV',2],['qwenRepetition','qwenRepetitionV',2]].forEach(function (x) {
+   ['qwenTopP','qwenTopPV',2],['qwenRepetition','qwenRepetitionV',2],
+   ['phononTemperature','phononTemperatureV',2],['phononPace','phononPaceV',1]].forEach(function (x) {
     $(x[1]).textContent = Number($(x[0]).value).toFixed(x[2]);
   });
 }
@@ -125,6 +132,38 @@ function refreshLoadedQwenInfo() {
     var worker = (health.workers || []).find(function (row) { return row.engine === engine && row.model_loaded; });
     if (worker) { applyQwenCapabilities(worker.model_info, engine); }
   }).catch(function () {});
+}
+function phononVoiceLabel(voice) {
+  var detail = voice.character ? 'character' : [voice.gender, voice.age].filter(Boolean).join(', ').toLowerCase();
+  return voice.name + (detail ? ' (' + detail + ')' : '');
+}
+function showPhononVoiceInfo() {
+  [['phononVoice', 'phononVoiceInfo'], ['phononIdentityVoice', 'phononIdentityInfo']].forEach(function (pair) {
+    var voice = phononVoices.find(function (item) { return item.name === $(pair[0]).value; });
+    $(pair[1]).textContent = voice ? voice.group + ': ' + voice.description
+      : 'No Phonon voices are installed. Press Install on its card in Models & features.';
+  });
+}
+// Fill the studio picker and the Cast picker from /api/info's phonon_voices (dicts, grouped American, British, characters).
+function fillPhononVoices(voices) {
+  phononVoices = voices || [];
+  var names = phononVoices.map(function (voice) { return voice.name; });
+  ['phononVoice', 'phononIdentityVoice'].forEach(function (id) {
+    var select = $(id), before = select.value, groups = {};
+    select.textContent = '';
+    phononVoices.forEach(function (voice) {
+      if (!groups[voice.group]) {
+        groups[voice.group] = document.createElement('optgroup'); groups[voice.group].label = voice.group; select.appendChild(groups[voice.group]);
+      }
+      var item = document.createElement('option'); item.value = voice.name; item.textContent = phononVoiceLabel(voice); item.title = voice.description || '';
+      groups[voice.group].appendChild(item);
+    });
+    select.value = names.indexOf(before) >= 0 ? before : (names.indexOf('Harper') >= 0 ? 'Harper' : names[0] || '');
+  });
+  showPhononVoiceInfo();
+}
+function refreshPhononVoices() {
+  return fetchJson('/api/info').then(function (info) { fillPhononVoices(info.phonon_voices); return phononVoices.length; });
 }
 function openHistoryDb() {
   return new Promise(function (resolve, reject) {
@@ -188,7 +227,7 @@ function fillCatalog() {
     $('identityEngine').textContent = '';
     (result.engines || []).forEach(function (entry) {
       var caps = entry.capabilities || {}, clone = caps.voice_cloning || {}, selection = caps.voice_selection || {};
-      var preset = entry.id==='qwen3-tts-1.7b-custom-voice' && selection.status==='worker_verified';
+      var preset = (entry.id==='qwen3-tts-1.7b-custom-voice' || entry.id==='phonon-31m-en') && selection.status==='worker_verified';
       if (entry.integration && entry.integration.service_api &&
           ((clone.status === 'supported' || clone.status === 'worker_verified') || entry.id === 'kokoro' && selection.status === 'supported' || preset)) {
         option($('identityEngine'), entry.id, entry.name);

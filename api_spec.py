@@ -101,9 +101,10 @@ GROUPS = (
 )
 
 KOKORO_FIELDS = (
-    F("voice", "string", "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."),
+    F("voice", "string", "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one "
+                         "voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."),
     F("speed", "number", "Kokoro: speaking rate. Default 1.0."),
-    F("language", "string", "Kokoro and Qwen: the language. Default `English`."),
+    F("language", "string", "Kokoro and Qwen: the language. Default `English`. Phonon speaks English only."),
 )
 
 # What an edit of a take takes. The preview and the save take the same fields; the save adds an idempotency key.
@@ -130,18 +131,19 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
               "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
               "a take retires its edits, and purging it deletes them.")
 
-ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro), "
-                        "`error` begins by saying where to install it: Install on its Models & features card, or the launcher "
-                        "`setup-kokoro.bat` in the lab folder.")
+ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro or "
+                        "Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its "
+                        "launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
     R("GET", "/api/health", "Service", "Say whether the service is ready, and which version it is.",
       reply="`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry "
             "per loaded engine), `last_worker_error` and `last_unload`."),
-    R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro voices found and the free memory.",
-      reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages` and "
-            "`free_ram_gb`."),
+    R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
+      reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
+            "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "
+            "`description`) and `free_ram_gb`."),
     R("GET", "/api/catalog", "Service", "List every engine the Lab knows, with its pinned checkpoint, capabilities and license.",
       reply="The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose "
             "`integration.service_api` is true answer them."),
@@ -164,7 +166,7 @@ ROUTES = [
             "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
       errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The GPU worker is busy."))),
     R("POST", "/api/engines/{engine_id}/install", "Service",
-      "Install an engine that has a guided installer (Kokoro): read its plan, or run the installer.",
+      "Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.",
       body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
                                     "Nothing is changed. Default false, which starts the install."),),
       reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) "
@@ -210,6 +212,9 @@ ROUTES = [
             F("reference_text", "string", "Cloning: the exact transcript of that recording."),
             F("direction", "string", "Engines with a direction control: how to deliver the line, up to 1000 characters."),
             F("seed", "integer", "Engines that take one: the random seed. Default 42."),
+            F("temperature", "number", "Phonon: how much the delivery varies, 0 to 1. Default 0.3. The other engines that take "
+                                       "a temperature list theirs under `capabilities` in `GET /api/catalog`."),
+            F("duration_delta", "number", "Phonon: shift the pace, from -0.5 (faster) to 0.5 (slower). Default 0."),
             F("save_voice_as", "string", "Design mode only: keep the invented voice as a reusable reference under this "
                                          "name, letters, digits, `_` and `-`, up to two folders deep.")),
       reply="The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is "
@@ -305,13 +310,14 @@ ROUTES = [
             F("description", "string", "Up to 2000 characters. Leave out to keep it.")),
       reply="`character`."),
     R("POST", "/api/characters/{character_id}/identities", "Cast", "Add a voice to a character.", status=201,
-      body=(F("engine_id", "string", "A recording-cloning engine, `kokoro` or the Qwen CustomVoice engine that the service "
-                                     "exposes.", True),
+      body=(F("engine_id", "string", "A recording-cloning engine, `kokoro`, `phonon-31m-en` or the Qwen CustomVoice engine that "
+                                     "the service exposes.", True),
             F("label", "string", "1 to 80 characters.", True),
             F("notes", "string", "Up to 2000 characters."),
             F("voice", "string", "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."),
-            F("speaker", "string", "CustomVoice: a speaker the loaded checkpoint reports."),
-            F("language", "string", "CustomVoice: a language the loaded checkpoint reports."),
+            F("speaker", "string", "CustomVoice: a speaker the loaded checkpoint reports. Phonon: a voice name from "
+                                   "`phonon_voices` of `GET /api/info`."),
+            F("language", "string", "CustomVoice: a language the loaded checkpoint reports. Phonon: `English`, the default."),
             F("default_direction", "string", "CustomVoice: the delivery instruction to use when a line gives none.")),
       reply="`identity`. A new voice is a `candidate` until it is approved.",
       notes="A cloning voice has no recording yet: upload one with "

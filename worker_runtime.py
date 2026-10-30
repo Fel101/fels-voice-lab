@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from common import LAB, free_ram_gb, release_gpu, require_ram, strip_tags, to_numpy, torch_runtime
+from phonon_support import PHONON_ENGINE_ID
 from reference_paths import resolve_reference_path
 
 QWEN_ENGINE_IDS = {
@@ -15,11 +16,12 @@ QWEN_ENGINE_IDS = {
 }
 VOXCPM_ENGINE_ID = "voxcpm2"
 CHATTERBOX_VC_ENGINE_ID = "chatterbox-vc"
-ENGINE_IDS = {"kokoro", "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
+ENGINE_IDS = {"kokoro", PHONON_ENGINE_ID, "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
               CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS}
 REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
-MIN_FREE_RAM_GB = {"kokoro": 8, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
+# Phonon peaked at about 0.6 GB in use, so 2 GB free is a wide margin.
+MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
                    VOXCPM_ENGINE_ID: 10, CHATTERBOX_VC_ENGINE_ID: 10, 'drama-3':26,
                    **{key: 10 for key in QWEN_ENGINE_IDS}}
 
@@ -50,6 +52,10 @@ class EngineWorkerRuntime:
                 result["allocated_bytes"] = int(torch.cuda.memory_allocated())
                 result["reserved_bytes"] = int(torch.cuda.memory_reserved())
                 result["device_name"] = torch.cuda.get_device_name()
+        except ModuleNotFoundError as exc:
+            # Phonon runs without PyTorch, so this is how its worker normally reports memory.
+            result["memory_note"] = ("PyTorch is not installed here, so GPU memory is not tracked." if exc.name == "torch"
+                                     else f"{type(exc).__name__}: {exc}")
         except Exception as exc:
             result["memory_note"] = f"{type(exc).__name__}: {exc}"
         return result
@@ -150,7 +156,7 @@ class EngineWorkerRuntime:
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
                     "memory": self.last_memory,
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if self.engine_id != "kokoro" and not DEFAULT_REFERENCE.is_file():
+        if self.engine_id not in {"kokoro", PHONON_ENGINE_ID} and not DEFAULT_REFERENCE.is_file():
             # Keep the existing service's synthetic fallback behavior. This creates no user recording.
             from engines import ensure_reference
             ensure_reference()
@@ -164,7 +170,7 @@ class EngineWorkerRuntime:
         self.sample_rate = int(model.sr)
         print("Warming up the model ...", flush=True)
         try:
-            if self.engine_id == "kokoro":
+            if self.engine_id in {"kokoro", PHONON_ENGINE_ID}:
                 model.speak("Hello there.")
             elif self.engine_id == "orig":
                 model.prepare_reference(str(DEFAULT_REFERENCE), exaggeration=0.5)
@@ -176,16 +182,22 @@ class EngineWorkerRuntime:
             print(f"Warm-up failed: {type(exc).__name__}: {exc}", flush=True)
         self.loaded_at = time.time()
         self.last_memory = self._memory()
+        if self.engine_id == PHONON_ENGINE_ID:
+            checkpoint, revision = model.pins["model"]
+            self.model_info = {"backend": "ptts", "backend_version": model.version, "checkpoint": checkpoint,
+                               "checkpoint_revision": revision, "supported_speakers": list(model.voices),
+                               "supported_languages": ["English"]}
         return {
             "already_loaded": False,
             "engine_id": self.engine_id,
             "model_loaded": True,
-            "device": self.device,
+            "device": model.device if self.engine_id == PHONON_ENGINE_ID else self.device,
             "load_seconds": round(time.perf_counter() - started, 3),
             "sample_rate": self.sample_rate,
             "pid": os.getpid(),
             "parent_pid": os.getppid(),
             "memory": self.last_memory,
+            **(self.model_info if self.engine_id == PHONON_ENGINE_ID else {}),
         }
 
     def prepare_reference(self, params):
@@ -195,6 +207,8 @@ class EngineWorkerRuntime:
             return self.drama3.prepare_reference(params)
         if self.engine_id == "kokoro":
             raise ValueError("Kokoro uses fixed voice IDs and does not accept reference audio.")
+        if self.engine_id == PHONON_ENGINE_ID:
+            raise ValueError("Phonon uses its preset voices and does not accept reference audio.")
         path = Path(params.get("path", "")).expanduser().resolve()
         if self.engine_id == "breeze-tts-2":
             return self.breeze.prepare_reference(str(path))
@@ -233,6 +247,10 @@ class EngineWorkerRuntime:
         elif self.engine_id == VOXCPM_ENGINE_ID:
             voxcpm_params = {key: value for key, value in params.items() if key != "output_file"}
             wav, sr, info = self.voxcpm.generate(voxcpm_params)
+        elif self.engine_id == PHONON_ENGINE_ID:
+            wav, sr, info = self.engine.speak(strip_tags(text.strip()), voice=params.get("voice"),
+                                              seed=params.get("seed", 42), temperature=params.get("temperature", 0.3),
+                                              duration_delta=params.get("duration_delta", 0.0))
         elif self.engine_id == "kokoro":
             voice = str(params.get("voice", "af_heart"))
             speed = min(2.0, max(0.5, float(params.get("speed", 1.0))))

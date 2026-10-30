@@ -20,12 +20,17 @@ $('saveCharacter').addEventListener('click',function(){var c=activeCharacter();i
 $('characterSelect').addEventListener('change',function(){renderActiveCharacter();});
 $('identityEngine').addEventListener('change',updateIdentityEngineKind);
 $('loadCustomVoiceIdentity').addEventListener('click',loadCustomVoiceIdentityOptions);
+['phononVoice','phononIdentityVoice'].forEach(function(id){$(id).addEventListener('change',showPhononVoiceInfo);});
 $('createIdentity').addEventListener('click',function(){var c=activeCharacter();if(!c){apiFailure(new Error('Create or open a character first.'));return;}
   var engine=$('identityEngine').value,options={},body={engine_id:engine,label:$('identityLabel').value,engine_options:options,notes:$('identityNotes').value};
   if(engine==='kokoro'){options.voice=selectedValues($('fixedVoice')).join(',');}
   if(engine==='qwen3-tts-1.7b-custom-voice'){
     if(!$('presetSpeaker').value||!$('presetLanguage').value){apiFailure(new Error('Load CustomVoice, then choose its speaker and language.'));return;}
     body.speaker=$('presetSpeaker').value;body.language=$('presetLanguage').value;body.default_direction=$('presetDirection').value;
+  }
+  if(engine==='phonon-31m-en'){
+    if(!$('phononIdentityVoice').value){apiFailure(new Error('Install Phonon in Models & features, then choose its voice.'));return;}
+    body.speaker=$('phononIdentityVoice').value;body.language='English';
   }
   fetchJson('/api/characters/'+c.id+'/identities',body)
     .then(function(result){return refreshCast(c.id,result.identity.id);}).catch(apiFailure);});

@@ -144,6 +144,8 @@ function fillFixedVoices() {
 function updateIdentityEngineKind() {
   $('fixedVoiceRow').hidden=$('identityEngine').value!=='kokoro';
   $('customVoiceIdentityRow').hidden=$('identityEngine').value!=='qwen3-tts-1.7b-custom-voice';
+  $('phononIdentityRow').hidden=$('identityEngine').value!=='phonon-31m-en';
+  if($('identityEngine').value==='phonon-31m-en'&&!phononVoices.length)refreshPhononVoices().catch(function(){});
 }
 function applyCustomVoiceIdentityOptions(info) {
   var speakers=info.supported_speakers||[],languages=info.supported_languages||[];

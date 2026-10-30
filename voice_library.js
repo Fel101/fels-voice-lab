@@ -5,7 +5,7 @@
   function el(id){return document.getElementById(id);}
   function node(tag,text,className){var item=document.createElement(tag);if(text!==undefined)item.textContent=text;if(className)item.className=className;return item;}
   function engineName(id,fallback){
-    var names={'drama-3':'Fish Audio Drama 3','kokoro':'Kokoro 82M','orig':'Chatterbox Original','turbo':'Chatterbox Turbo',
+    var names={'drama-3':'Fish Audio Drama 3','kokoro':'Kokoro 82M','phonon-31m-en':'Phonon 31M English','orig':'Chatterbox Original','turbo':'Chatterbox Turbo',
       'qwen3-tts-1.7b-voice-design':'Qwen VoiceDesign 1.7B','qwen3-tts-1.7b-base':'Qwen Base 1.7B',
       'qwen3-tts-0.6b-base':'Qwen Base 0.6B','qwen3-tts-1.7b-custom-voice':'Qwen CustomVoice 1.7B','voxcpm2':'VoxCPM2','breeze-tts-2':'Breeze TTS 2'};
     return names[id]||fallback||id||'Source model not recorded';
@@ -47,6 +47,12 @@
         Array.from(el('voice').options).forEach(function(item){item.selected=voices.indexOf(item.value)>=0;});
         selectValue(el('kokoroLanguage'),audition.language||options.language);
         if(audition.settings&&audition.settings.speed!==undefined)el('speed').value=audition.settings.speed;
+      }else if(voice.identity_kind==='preset_voice'&&voice.engine_id==='phonon-31m-en'){
+        selectValue(el('phononVoice'),options.speaker);global.showPhononVoiceInfo();
+        ['seed:phononSeed','temperature:phononTemperature','duration_delta:phononPace'].forEach(function(pair){
+          var key=pair.split(':')[0],control=el(pair.split(':')[1]);
+          if(audition.settings&&audition.settings[key]!==undefined)control.value=audition.settings[key];
+        });
       }else if(voice.identity_kind==='preset_voice'){
         addChoice(el('qwenSpeaker'),options.speaker);addChoice(el('qwenLanguage'),options.language);
         el('qwenCustomDirection').value=options.default_direction||'';

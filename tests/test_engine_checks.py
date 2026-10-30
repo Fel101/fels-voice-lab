@@ -22,12 +22,14 @@ sys.path.insert(0, str(ROOT))
 
 import api_spec
 import engine_checks
+import phonon_support
 import reference_paths
 import serve
 import worker_pool
 from cast_store import CastStore
 from engine_checks import (EngineCheckStore, audible, check_record, engine_fingerprint, installation,
                            smoke_request, status_payload)
+from phonon_fixtures import Lab, record as voice_record
 from worker_pool import EnginePool, WorkerBusy, read_catalog
 from worker_process import WorkerRequestError, WorkerTimeout, WorkerUnavailable
 
@@ -177,7 +179,7 @@ class InstallationTests(TempTree):
                     self.assertNotIn("installer", installation(entry, self.root))
 
     def test_every_launcher_named_is_in_the_lab_folder_and_belongs_to_an_integrated_engine(self):
-        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro"})
+        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en"})
         for engine, launcher in engine_checks.GUIDED_INSTALLERS.items():
             with self.subTest(engine=engine):
                 self.assertIs(CATALOG[engine]["integration"].get("service_api"), True)
@@ -213,6 +215,43 @@ class InstallationTests(TempTree):
         self.write("breeze/models/breezetts2/example/Breeze-TTS-2-bf16.safetensors")
         self.assertTrue(installation(CATALOG["breeze-tts-2"], self.root)["installed"])
 
+    def put_phonon(self, *, package=True, model=True, voices=True):
+        backend = CATALOG["phonon-31m-en"]["backend"]
+        self.environment("phonon-31m-en")
+        if package:
+            self.write(".venv/Lib/site-packages/ptts-0.5.0.dist-info/METADATA")
+        if model:
+            self.write(f"{self.hf_snapshot('phonon-31m-en')}/model.q8.gguf")
+        if voices:
+            self.write(f"hf-cache/hub/models--{backend['voices_checkpoint'].replace('/', '--')}/snapshots/"
+                       f"{backend['voices_revision']}/voices.jsonl")
+
+    def test_phonon_is_installed_with_its_package_its_model_and_its_voice_catalog(self):
+        self.put_phonon()
+        result = installation(CATALOG["phonon-31m-en"], self.root)
+        self.assertTrue(result["installed"], result["missing"])
+        self.assertNotIn("installer", result)
+
+    def test_phonon_without_its_package_names_the_package_and_the_launcher(self):
+        self.put_phonon(package=False)
+        self.write(".venv/Lib/site-packages/pttsx-1.0.dist-info/METADATA")  # another package that starts the same way
+        result = installation(CATALOG["phonon-31m-en"], self.root)
+        self.assertEqual((result["installed"], result["missing"], result["installer"]),
+                         (False, ["ptts (Python package)"], "setup-phonon.bat"))
+
+    def test_phonon_without_its_model_weights_names_the_snapshot(self):
+        snapshot = self.hf_snapshot("phonon-31m-en")
+        self.put_phonon(model=False)
+        self.assertEqual(installation(CATALOG["phonon-31m-en"], self.root)["missing"], [snapshot])
+        self.write(f"{snapshot}/config.json")
+        self.assertEqual(installation(CATALOG["phonon-31m-en"], self.root)["missing"], [f"{snapshot} (no weight file)"])
+
+    def test_phonon_without_its_voice_catalog_names_the_snapshot_that_holds_it(self):
+        backend = CATALOG["phonon-31m-en"]["backend"]
+        self.put_phonon(voices=False)
+        folder = f"hf-cache/hub/models--{backend['voices_checkpoint'].replace('/', '--')}/snapshots/{backend['voices_revision']}"
+        self.assertEqual(installation(CATALOG["phonon-31m-en"], self.root)["missing"], [f"{folder} (voices.jsonl)"])
+
 
 class InstallPointerTests(unittest.TestCase):
     def test_a_missing_kokoro_is_told_the_launcher_to_run(self):
@@ -220,6 +259,12 @@ class InstallPointerTests(unittest.TestCase):
 
     def test_an_installed_kokoro_has_nothing_to_point_at(self):
         self.assertIsNone(engine_checks.install_pointer(CATALOG["kokoro"], installed_probe))
+
+    def test_a_missing_phonon_is_told_its_own_launcher(self):
+        self.assertEqual(engine_checks.install_pointer(CATALOG["phonon-31m-en"], missing_probe),
+                         "Phonon 31M English is not installed. Open Models & features and press Install on its card, or run "
+                         "setup-phonon.bat in the lab folder, then try again.")
+        self.assertIsNone(engine_checks.install_pointer(CATALOG["phonon-31m-en"], installed_probe))
 
     def test_an_engine_without_a_launcher_has_nothing_to_point_at_and_is_not_probed(self):
         asked = []
@@ -291,6 +336,21 @@ class FingerprintTests(TempTree):
     def test_a_missing_environment_still_gives_a_fingerprint(self):
         self.assertEqual(len(engine_fingerprint(CATALOG["kokoro"], self.root)), 16)
 
+    def test_installing_the_phonon_runtime_ages_the_stored_test_of_every_engine_in_that_environment(self):
+        site = self.site_packages()
+        before = {engine: engine_fingerprint(CATALOG[engine], self.root) for engine in ("kokoro", "phonon-31m-en")}
+        (site / "ptts-0.5.0.dist-info").mkdir()
+        for engine, old in before.items():
+            with self.subTest(engine=engine):
+                self.assertNotEqual(engine_fingerprint(CATALOG[engine], self.root), old)
+
+    def test_moving_the_phonon_voices_pin_counts(self):
+        self.site_packages()
+        entry = CATALOG["phonon-31m-en"]
+        before = engine_fingerprint(entry, self.root)
+        moved = dict(entry, backend=dict(entry["backend"], voices_revision="a-newer-voice-snapshot"))
+        self.assertNotEqual(engine_fingerprint(moved, self.root), before)
+
 
 class SmokeRequestTests(unittest.TestCase):
     def test_kokoro_prefers_af_heart_and_falls_back_to_a_cached_voice(self):
@@ -298,6 +358,16 @@ class SmokeRequestTests(unittest.TestCase):
             self.assertEqual(smoke_request("kokoro")["voice"], "af_heart")
         with mock.patch.object(engine_checks, "discover_kokoro_voices", return_value=["bf_alice"]):
             self.assertEqual(smoke_request("kokoro")["voice"], "bf_alice")
+
+    def test_phonon_uses_its_default_voice_or_the_first_installed_and_needs_some(self):
+        for records, voice in ((None, "Harper"), ([voice_record("Zoey")], "Zoey")):
+            with self.subTest(voice=voice), tempfile.TemporaryDirectory() as folder:
+                lab = Lab(Path(folder)) if records is None else Lab(Path(folder), records=records)
+                self.assertEqual(smoke_request("phonon-31m-en", root=lab.root),
+                                 {"engine": "phonon-31m-en", "text": engine_checks.CHECK_TEXT, "voice": voice})
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(ValueError, "setup-phonon.bat"):
+                smoke_request("phonon-31m-en", root=Lab(Path(folder), records=None, files=False).root)
 
     def test_custom_voice_uses_the_first_speaker_the_checkpoint_reports(self):
         request = smoke_request("qwen3-tts-1.7b-custom-voice", {"supported_speakers": ["Vivian", "Ryan"]})
@@ -514,6 +584,16 @@ class EngineCheckTests(TempTree):
                 record = self.pool(worker).check(engine)
                 self.assertEqual(record["status"], "passed", record.get("reason"))
                 self.assertEqual(len(worker.generated()), 1)
+
+    def test_phonon_is_checked_with_its_default_voice_on_the_cpu_through_its_own_validation(self):
+        Lab(self.root)
+        worker = FakeWorker()
+        with mock.patch.object(phonon_support, "LAB", self.root):
+            record = self.pool(worker).check("phonon-31m-en")
+        self.assertEqual(record["status"], "passed", record.get("reason"))
+        generated = worker.generated()
+        self.assertEqual(len(generated), 1)
+        self.assertEqual((generated[0]["voice"], generated[0]["seed"], generated[0]["duration_delta"]), ("Harper", 42, 0.0))
 
     def test_conversion_has_no_speech_check(self):
         worker = FakeWorker()

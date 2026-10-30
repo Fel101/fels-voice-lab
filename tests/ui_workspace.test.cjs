@@ -560,6 +560,98 @@ test('the Generate buttons come back when speaking does not start after the voic
   assert.equal(fixture.field('reroll').disabled, false);
 });
 
+test('Phonon sends its preset voice, seed, temperature and pace shift, and nothing it cannot take', () => {
+  const fields={},field=id=>fields[id]||(fields[id]={value:'',checked:false});
+  for(const [id,value] of Object.entries({engine:'phonon-31m-en',text:'Keep the gate closed.',phononVoice:'Zoey',phononSeed:'7',
+    phononTemperature:'0.5',phononPace:'-0.2',speed:'1.2',chatterboxReference:'ref.wav',dramaDirection:'quietly'}))field(id).value=value;
+  field('clone').checked=true;
+  const c=vm.createContext({$:field,selectedValues:()=>['af_heart'],qwenModeFor:()=>null});
+  vm.runInContext(sourceBetween('function bodyForRequest()', 'function makeHistory('),c);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.bodyForRequest())),
+    {engine:'phonon-31m-en',text:'Keep the gate closed.',voice:'Zoey',seed:7,temperature:0.5,duration_delta:-0.2});
+});
+
+test('Generate for Phonon reads the installed voices when the picker has none, then speaks; with voices it speaks at once', async () => {
+  const sent = [];
+  const fixture = generateFixture((url, request) => { sent.push(JSON.parse(request.body)); return spokenResponse(); },
+    {engine: 'phonon-31m-en', text: 'hello', voice: 'Harper'});
+  let reads = 0;
+  fixture.field('engine').value = 'phonon-31m-en';
+  fixture.c.phononVoices = [];
+  fixture.c.refreshPhononVoices = async () => { reads += 1; fixture.c.phononVoices = [{name: 'Harper'}]; return 1; };
+  fixture.c.generate();
+  assert.equal(fixture.field('status').textContent, 'Reading the installed Phonon voices...');
+  assert.equal(fixture.field('go').disabled, true);
+  assert.equal(fixture.field('reroll').disabled, true);
+  assert.deepEqual(sent, [], 'nothing is sent while the voices are read');
+  await settle();
+  assert.equal(reads, 1);
+  assert.deepEqual(sent.map(body => body.voice), ['Harper']);
+  assert.equal(fixture.field('go').disabled, false);
+  fixture.c.generate();
+  assert.equal(sent.length, 2, 'the request goes out at once');
+  await settle();
+  assert.equal(reads, 1, 'a full picker is not read again');
+});
+
+test('a Phonon voice list that cannot be read does not stop Generate from asking the service', async () => {
+  const sent = [];
+  const fixture = generateFixture((url, request) => { sent.push(JSON.parse(request.body)); return spokenResponse(); },
+    {engine: 'phonon-31m-en', text: 'hello', voice: ''});
+  fixture.field('engine').value = 'phonon-31m-en';
+  fixture.c.phononVoices = [];
+  fixture.c.refreshPhononVoices = () => Promise.reject(new Error('service stopped'));
+  fixture.c.generate(); await settle();
+  assert.equal(sent.length, 1);
+  assert.equal(fixture.field('go').disabled, false);
+  assert.equal(fixture.field('err').textContent, '');
+});
+
+test('the Phonon pickers group the installed voices, keep a choice that is still there and fall back to Harper', async () => {
+  const makeElement = () => {
+    const element = {children: [], value: '', title: '', label: '', appendChild(child) { this.children.push(child); return child; }};
+    let text = '';
+    Object.defineProperty(element, 'textContent', {get: () => text, set(value) { text = value; if (value === '') element.children = []; }});
+    return element;
+  };
+  const picks = {phononVoice: makeElement(), phononIdentityVoice: makeElement(), phononVoiceInfo: makeElement(), phononIdentityInfo: makeElement()};
+  const voices = [
+    {name: 'Delia', group: 'American English', gender: 'female', age: 'Middle-age', character: false, description: 'Warm.'},
+    {name: 'Harper', group: 'American English', gender: 'female', age: 'Adult', character: false, description: 'Modern and friendly.'},
+    {name: 'Alfie', group: 'British English', gender: 'male', age: 'Young Adult', character: false, description: 'Bright.'},
+    {name: 'Azgorath', group: 'Characters', gender: null, age: null, character: true, description: 'An ancient demon.'}];
+  const c = vm.createContext({$: id => picks[id], document: {createElement: makeElement}, phononVoices: [],
+    fetchJson: async url => { assert.equal(url, '/api/info'); return {phonon_voices: voices}; }});
+  vm.runInContext(sourceBetween('function phononVoiceLabel(', 'function openHistoryDb('), c);
+  assert.equal(await c.refreshPhononVoices(), 4);
+  const picker = picks.phononVoice;
+  assert.deepEqual(picker.children.map(group => [group.label, group.children.map(item => item.textContent)]), [
+    ['American English', ['Delia (female, middle-age)', 'Harper (female, adult)']],
+    ['British English', ['Alfie (male, young adult)']], ['Characters', ['Azgorath (character)']]]);
+  assert.equal(picker.value, 'Harper', 'the default voice');
+  assert.equal(picks.phononIdentityVoice.children.length, 3, 'the Cast picker is filled from the same list');
+  assert.equal(picks.phononVoiceInfo.textContent, 'American English: Modern and friendly.');
+  picker.value = 'Azgorath'; c.fillPhononVoices(voices);
+  assert.equal(picker.value, 'Azgorath', 'a choice that is still installed is kept');
+  assert.equal(picks.phononVoiceInfo.textContent, 'Characters: An ancient demon.');
+  picker.value = 'Gone'; c.fillPhononVoices(voices.slice(2));
+  assert.equal(picker.value, 'Alfie', 'without Harper the first voice is the default');
+  c.fillPhononVoices([]);
+  assert.equal(picker.value, '');
+  assert.equal(picker.children.length, 0);
+  assert.equal(picks.phononVoiceInfo.textContent, 'No Phonon voices are installed. Press Install on its card in Models & features.');
+  assert.equal(picks.phononIdentityInfo.textContent, picks.phononVoiceInfo.textContent);
+});
+
+test('the page has the Phonon panel, a Phonon Cast identity row and the wiring that uses them', () => {
+  for (const id of ['phononPanel', 'phononVoice', 'phononSeed', 'phononTemperature', 'phononPace', 'phononIdentityRow', 'phononIdentityVoice']) {
+    assert.ok(source.includes(`id="${id}"`), `${id} is on the page`);
+  }
+  assert.match(source, /body\.speaker=\$\('phononIdentityVoice'\)\.value;body\.language='English'/);
+  assert.match(source, /\$\('phononPanel'\)\.hidden = !phonon/);
+  assert.match(source, /\$\('phononIdentityRow'\)\.hidden/);
+});
+
 test('the page offers the stop controls, the variant count, and the version', () => {
   for (const id of ['stopWaiting', 'performStop', 'variantCount', 'appVersion']) {
     assert.ok(source.includes(`id="${id}"`), `${id} is on the page`);

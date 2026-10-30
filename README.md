@@ -94,11 +94,11 @@ package back and checks every hash, the captions, and each file's codec and leng
 
 ## Models
 
-Integrated families are Kokoro, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS
+Integrated families are Kokoro, Phonon 31M English, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS
 VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means the adapter and the
 interface exist. The **Models & features** page says whether a family is *installed* (its
 environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
-spoke one sentence), shows how much free RAM each family needs, and can install Kokoro for you.
+spoke one sentence), shows how much free RAM each family needs, and can install Kokoro or Phonon for you.
 Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
 
@@ -106,8 +106,9 @@ Drama studio and all Drama cloning use CPU after a local Vulkan device-loss inci
 short GPU design is an opt-in local configuration; do not enable GPU cloning. Previous-take editing,
 speaker stems and native word timing are not exposed by the pinned backend. Built with Fish Audio.
 
-Kokoro presets are licensed model speaker packs, not uploaded recordings. See
-[voice assets and redistribution](docs/VOICE_ASSET_RIGHTS.md) before publishing recordings,
+Kokoro presets are licensed model speaker packs, not uploaded recordings. Phonon's 37 preset voices
+come from a repository that states no licence, so ask Gradium before you publish audio made with one.
+See [voice assets and redistribution](docs/VOICE_ASSET_RIGHTS.md) before publishing recordings,
 generated voices or model files with your project.
 
 Voices belong to people. Clone only recordings you made yourself or whose speaker and rights holder
@@ -118,8 +119,9 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 
 1. Read [setup](docs/SETUP.md), install Python 3.12 (64-bit), and run `setup.bat`.
 2. Run `setup-kokoro.bat` to add Kokoro, a small model that speaks on an ordinary CPU (about 600 MB of
-   downloads; it shows its plan and asks first). The core alone opens the studio and manages its stores,
-   but it cannot synthesize without a model. [Setup](docs/SETUP.md) covers the other models.
+   downloads; it shows its plan and asks first). `setup-phonon.bat` adds Phonon the same way: smaller
+   still (about 80 MB), English only, with 37 preset voices. The core alone opens the studio and manages
+   its stores, but it cannot synthesize without a model. [Setup](docs/SETUP.md) covers the other models.
 3. Run `setup-desktop.bat` once. Use the **Fel's Voice Lab** desktop icon afterward. Its dedicated
    window runs without a console; closing it stops its backend.
 

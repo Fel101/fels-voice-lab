@@ -195,11 +195,11 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | Method | Path | What it does |
 |---|---|---|
 | GET | [`/api/health`](#get-api-health) | Say whether the service is ready, and which version it is. |
-| GET | [`/api/info`](#get-api-info) | Name the device, the loaded engines, the Kokoro voices found and the free memory. |
+| GET | [`/api/info`](#get-api-info) | Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory. |
 | GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
-| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
@@ -218,9 +218,9 @@ Say whether the service is ready, and which version it is.
 
 #### `GET /api/info`
 
-Name the device, the loaded engines, the Kokoro voices found and the free memory.
+Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.
 
-**Answer:** `200`, JSON. `device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages` and `free_ram_gb`.
+**Answer:** `200`, JSON. `device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` (the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and `description`) and `free_ram_gb`.
 
 <a id="get-api-catalog"></a>
 
@@ -259,7 +259,7 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 
 #### `POST /api/engines/{engine_id}/install`
 
-Install an engine that has a guided installer (Kokoro): read its plan, or run the installer.
+Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.
 
 | Path parameter | Meaning |
 |---|---|
@@ -292,7 +292,7 @@ Load an engine into memory ahead of its first use.
 | Also answers | When |
 |---|---|
 | `409` | The GPU worker is busy. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder. |
 
 <a id="post-api-unload"></a>
 
@@ -364,15 +364,17 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|---|
 | `text` (required) | string | What to say, 1 to 1200 characters. |
 | `engine` | string | An engine id from `GET /api/catalog` whose `integration.service_api` is true. Default `kokoro`. |
-| `voice` | string | Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. |
+| `voice` | string | Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`. |
 | `speed` | number | Kokoro: speaking rate. Default 1.0. |
-| `language` | string | Kokoro and Qwen: the language. Default `English`. |
+| `language` | string | Kokoro and Qwen: the language. Default `English`. Phonon speaks English only. |
 | `voice_description` | string | Qwen VoiceDesign, VoxCPM2 and Breeze design mode: the voice to invent, in words. |
 | `mode` | string | For engines with several modes: `design`, `clone`, `continuation`, `custom_voice` or, for Breeze, `direction`. A checkpoint accepts the modes it supports. |
 | `reference_path` | string | Cloning: a recording inside the Lab's reference storage. |
 | `reference_text` | string | Cloning: the exact transcript of that recording. |
 | `direction` | string | Engines with a direction control: how to deliver the line, up to 1000 characters. |
 | `seed` | integer | Engines that take one: the random seed. Default 42. |
+| `temperature` | number | Phonon: how much the delivery varies, 0 to 1. Default 0.3. The other engines that take a temperature list theirs under `capabilities` in `GET /api/catalog`. |
+| `duration_delta` | number | Phonon: shift the pace, from -0.5 (faster) to 0.5 (slower). Default 0. |
 | `save_voice_as` | string | Design mode only: keep the invented voice as a reusable reference under this name, letters, digits, `_` and `-`, up to two folders deep. |
 
 **Answer:** `200`, `audio/wav`. The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is finished; there is no streaming and no partial answer. Other engine-specific fields are listed under each engine's `capabilities` in `GET /api/catalog`.
@@ -392,7 +394,7 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|
 | `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro), `error` begins by saying where to install it: Install on its Models & features card, or the launcher `setup-kokoro.bat` in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder. |
 | `504` | The engine did not answer in time. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).
@@ -552,12 +554,12 @@ Add a voice to a character.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `engine_id` (required) | string | A recording-cloning engine, `kokoro` or the Qwen CustomVoice engine that the service exposes. |
+| `engine_id` (required) | string | A recording-cloning engine, `kokoro`, `phonon-31m-en` or the Qwen CustomVoice engine that the service exposes. |
 | `label` (required) | string | 1 to 80 characters. |
 | `notes` | string | Up to 2000 characters. |
 | `voice` | string | Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. |
-| `speaker` | string | CustomVoice: a speaker the loaded checkpoint reports. |
-| `language` | string | CustomVoice: a language the loaded checkpoint reports. |
+| `speaker` | string | CustomVoice: a speaker the loaded checkpoint reports. Phonon: a voice name from `phonon_voices` of `GET /api/info`. |
+| `language` | string | CustomVoice: a language the loaded checkpoint reports. Phonon: `English`, the default. |
 | `default_direction` | string | CustomVoice: the delivery instruction to use when a line gives none. |
 
 **Answer:** `201`, JSON. `identity`. A new voice is a `candidate` until it is approved.

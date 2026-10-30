@@ -1,4 +1,4 @@
-"""Thin wrappers so Kokoro and the two Chatterbox models look the same to the test scripts.
+"""Thin wrappers so Kokoro, Phonon and the two Chatterbox models look the same to the test scripts.
 
 Each engine's speak() returns (wav float32 numpy, sample_rate, info dict). info always has
 "total_s" (wall time to finish the clip) and, where the engine streams, "first_chunk_s"
@@ -86,6 +86,51 @@ class Kokoro:
             info["voice_blend"] = {"method": "equal_arithmetic_mean", "voices": voices,
                                    "weights": [round(1 / len(voices), 8)] * len(voices)}
         return wav, self.sr, info
+
+
+class Phonon:
+    """Phonon 31M English: 37 preset voices, no cloning, on the CPU through the ptts runtime (numpy only, no PyTorch).
+
+    The model and the voice catalog load from their pinned snapshots in hf-cache, so nothing reaches the network.
+    """
+    label = "Phonon"
+    sr = 24000
+
+    def __init__(self, device):
+        import ptts
+        from phonon_support import missing_files, pins, snapshot_dirs, voice_names
+
+        # ptts runs on the CPU only, whatever device the service chose for the models that can use a GPU.
+        self.device = "cpu"
+        missing = missing_files()
+        if missing:
+            raise RuntimeError(f"Phonon local files are incomplete: {', '.join(missing)} is missing from hf-cache/hub. "
+                               "Run setup-phonon.bat to put them back.")
+        model_dir, voices_dir = snapshot_dirs()
+        self.tts = ptts.TTS(model=str(model_dir), voice_catalog=str(voices_dir), lang="en", quant="q8", device="cpu")
+        self.sr = int(self.tts.sample_rate)
+        self.version = ptts.__version__
+        self.pins = pins()
+        self.voices = voice_names()
+        self._delta = None
+
+    def speak(self, text, voice=None, seed=42, temperature=0.3, duration_delta=0.0):
+        from phonon_support import LANGUAGE, PHONON_ENGINE_ID, resolve_voice
+
+        voice = resolve_voice(voice, self.voices)
+        if duration_delta != self._delta:
+            # No condition at all is the model's own pace; a shift moves it by a few tenths either way.
+            self.tts.set_conditions({"duration_delta": float(duration_delta)} if duration_delta else {})
+            self._delta = duration_delta
+        t0 = time.perf_counter()
+        wav = self.tts.synth(text, voice=voice, seed=int(seed), temperature=float(temperature))
+        total = time.perf_counter() - t0
+        (model, model_revision), (voices, voices_revision) = self.pins["model"], self.pins["voices"]
+        info = {"total_s": total, "device": self.device, "backend": "ptts", "backend_version": self.version,
+                "checkpoint": model, "checkpoint_revision": model_revision, "voices_checkpoint": voices,
+                "voices_revision": voices_revision, "engine_id": PHONON_ENGINE_ID, "language": LANGUAGE, "speaker": voice,
+                "seed": int(seed), "temperature": float(temperature), "duration_delta": float(duration_delta)}
+        return np.asarray(wav, dtype=np.float32).reshape(-1), self.sr, info
 
 
 class ChatterboxTurbo:
@@ -179,8 +224,8 @@ REFERENCE_WAV = REFERENCE_DIR / "af_heart.wav"
 
 
 def build_engine(key, device):
-    """The engine behind one of the worker keys: kokoro, turbo (Chatterbox Turbo) or orig (Chatterbox Original)."""
-    return {"kokoro": Kokoro, "turbo": ChatterboxTurbo, "orig": ChatterboxOriginal}[key](device)
+    """The engine behind one of the worker keys: kokoro, phonon-31m-en, turbo (Chatterbox Turbo) or orig (Chatterbox Original)."""
+    return {"kokoro": Kokoro, "phonon-31m-en": Phonon, "turbo": ChatterboxTurbo, "orig": ChatterboxOriginal}[key](device)
 
 
 def ensure_reference():

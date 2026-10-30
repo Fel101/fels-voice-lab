@@ -1,6 +1,6 @@
 # Model capabilities
 
-Current integration inventory, 21 October 2026. “Integrated” means the adapter and
+Current integration inventory, 30 October 2026. “Integrated” means the adapter and
 UI exist; it does not mean weights/packages are included in this repository.
 On the Models page, *installed* means the environment and pinned checkpoint files are on disk, and *usable* means a check on this device loaded the model and spoke one sentence, and neither the model pin nor the packages installed in its environment have changed since. The catalog never claims usability by itself.
 The catalog records pins and runtime paths. Listener approval is distinct from
@@ -15,6 +15,7 @@ names the hardware it was checked on; this project has no NVIDIA or Linux result
 | Model | Integrated capabilities | Limits |
 |---|---|---|
 | Kokoro 82M | Cached fixed voices, equal blends, speed, locale frontends and phoneme preview | No cloning/design/acting direction. Optional Japanese/Mandarin frontends may be absent. Screen: understood in American and British English, Spanish and French; Hindi, Italian and Brazilian Portuguese were not screened because the development snapshot lacked their voice packs, which `setup-kokoro.bat` fetches. Complete WAV output. |
+| Phonon 31M English | 37 fixed English preset voices (12 American, 13 British, 12 characters), seed, temperature and a pace shift; runs on the CPU through the numpy-only `ptts` runtime, no PyTorch; the voices are reusable Cast identities | English only. No cloning, design or direction: the open checkpoint has no speaker encoder. `setup-phonon.bat` installs it. The weights are Apache-2.0, but the repository of the 37 voices states no licence, so ask Gradium before you publish audio made with one. A seed repeats a clip closely, not byte for byte. Not in the language screen: a trial on 30 October 2026, which is not part of this repository, had a speech recognizer read back 44 clips in four voices at a mean word error rate of 3.8% (Kokoro 3.5% on the same sentences); there has been no listening test. Complete WAV output. |
 | Chatterbox Turbo | Reference cloning, native vocal-event tags, variant-specific sampling | No effective exaggeration/CFG acting controls. Reference must exceed five seconds. English, complete WAV; native Perth watermark retained. |
 | Chatterbox Original | Cloning, exaggeration, CFG weight and supported sampling | No arbitrary text direction or Turbo event controls; complete WAV and native watermark. |
 | Chatterbox VC | Separate source performance / target identity, provenance | Conversion rather than new scripted speech. Native watermark retained. |

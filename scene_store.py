@@ -42,6 +42,7 @@ SUPPORTED_LANGUAGES = {
     'drama-3':{*DRAMA_LANGUAGES.values(),'Auto'},
     "kokoro": {"English", "American English", "British English", "Spanish", "French", "Hindi",
                 "Italian", "Brazilian Portuguese"},
+    "phonon-31m-en": {"English"},
     "turbo": {"English"},
     "orig": {"English"},
     "breeze-tts-2": {"English"},  # Only English has been verified on the local service path.

@@ -2,10 +2,12 @@
 
 import math
 from chatterbox_support import normalize_chatterbox_sampling
+from phonon_support import DEFAULTS as PHONON_DEFAULTS, DURATION_DELTA_RANGE, PHONON_ENGINE_ID, SEED_RANGE, TEMPERATURE_RANGE
 
 DEFAULTS = {
     'drama-3': {'seed':42,'temperature':1.,'top_k':30,'top_p':.9,'max_seconds':47.6},
     "kokoro": {"speed": 1.0},
+    PHONON_ENGINE_ID: dict(PHONON_DEFAULTS),
     "turbo": normalize_chatterbox_sampling("turbo", {}),
     "orig": normalize_chatterbox_sampling("orig", {"exaggeration": 0.6, "cfg_weight": 0.4}),
     "breeze-tts-2": {"profile": "eager", "seed": 42, "cfg_scale": 1.0,
@@ -29,6 +31,8 @@ CONTROL_UI = {
                 'top_k':('Top-k',1,4097,1),'top_p':('Top-p',.05,1.,.01),
                 'max_seconds':('Maximum seconds per chunk',.5,95.1,.1)},
     "kokoro": {"speed": ("Speed", 0.5, 2.0, 0.05)},
+    PHONON_ENGINE_ID: {"seed": ("Seed", *SEED_RANGE, 1), "temperature": ("Temperature", *TEMPERATURE_RANGE, 0.05),
+                       "duration_delta": ("Pace shift (negative is faster)", *DURATION_DELTA_RANGE, 0.1)},
     "turbo": {"temperature": ("Temperature", 0.05, 2.0, 0.05),
               "top_k": ("Top-k", 1, 2048, 1), "top_p": ("Top-p", 0.05, 1.0, 0.01),
               "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05)},
