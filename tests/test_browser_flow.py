@@ -311,17 +311,29 @@ class DevToolsPage:
         notes = []
         try:
             for attempt, seconds in enumerate(patience, start=1):
-                started = self.call("Page.navigate", {"url": url})
+                started = self.call("Page.navigate", {"url": url}) if attempt == 1 else self.load_again(url)
                 try:
                     return self.wait_until("document.documentElement.classList.contains('workspace-ready')", timeout=seconds)
                 except AssertionError:
-                    notes.append(f"load {attempt}, after {seconds} s: Page.navigate answered {started}\n{self.look()}")
+                    notes.append(f"load {attempt}, after {seconds} s: the browser answered {started}\n{self.look()}")
             raise AssertionError(f"{url} was not ready after {len(patience)} loads\n" + "\n".join(notes))
         finally:
             try:
                 self.call("Network.disable")
             except (RuntimeError, OSError):
                 pass
+
+    def load_again(self, url):
+        """Ask for a page that did not get ready once more. One that came up at its address but broken (a script it asked for
+        was refused, say) is reloaded: navigating to the address it is already at is only a same-document navigation, answered
+        without a loader id, so the broken page would stay as it is. One that never came up is navigated to again."""
+        try:
+            at = str(self.evaluate("location.href") or "")
+        except (RuntimeError, OSError):
+            at = ""
+        if at.split("#")[0] == url.split("#")[0]:
+            return self.call("Page.reload", {"ignoreCache": True})
+        return self.call("Page.navigate", {"url": url})
 
     def show(self, section):
         self.evaluate(f"location.hash = {json.dumps('#' + section)}")
@@ -474,6 +486,38 @@ class ScenePreviewRouteTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, 404)
             finally:
                 server.close()
+
+
+class OpenRetryTests(unittest.TestCase):
+    """DevToolsPage.open asks once more for a page that did not get ready. The page here is a stand-in; no browser starts."""
+
+    URL = "http://127.0.0.1:50000/#cast"
+
+    def stand_in(self, address):
+        """A page that says it is at `address`, is not ready the first time it is waited on, and notes what it is asked."""
+        page = DevToolsPage.__new__(DevToolsPage)
+        page.failed, page.requests, page.asked = [], {}, []
+        waits = [AssertionError("not ready"), None]
+
+        def wait_until(expression, timeout=60):
+            outcome = waits.pop(0)
+            if outcome:
+                raise outcome
+
+        page.call = lambda method, params=None: page.asked.append(method) or {}
+        page.evaluate = lambda expression: address
+        page.wait_until, page.look = wait_until, lambda: "(what the browser showed)"
+        return page
+
+    def test_a_page_that_came_up_broken_is_reloaded_not_navigated_to_again(self):
+        page = self.stand_in(self.URL)
+        page.open(self.URL, patience=(1, 1))
+        self.assertEqual(page.asked, ["Network.enable", "Page.navigate", "Page.reload", "Network.disable"])
+
+    def test_a_page_that_never_came_up_is_navigated_to_again(self):
+        page = self.stand_in("about:blank")
+        page.open(self.URL, patience=(1, 1))
+        self.assertEqual(page.asked, ["Network.enable", "Page.navigate", "Page.navigate", "Network.disable"])
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")

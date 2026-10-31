@@ -202,7 +202,7 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1233 Python
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1235 Python
   tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
