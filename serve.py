@@ -349,11 +349,18 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 return self._json(409, {"error": str(exc)})
             return self._json(202, {"task": state})
 
-        def _discard_body(self, length):
+        def _declared_length(self):
+            """The body length the request declares, or 0 when it declares none or something unusable."""
+            try:
+                return max(int(self.headers.get("Content-Length") or "0"), 0)
+            except ValueError:
+                return 0
+
+        def _discard_body(self, length, limit=None):
             """Read through a body that is being refused. Closing the connection with it unread resets the connection, and a
-            client that is still sending then gets the reset and never reads the refusal. A body too big to read through, or
-            sent too slowly, is left unread."""
-            if length > MAX_DISCARD_BYTES:
+            client that is still sending then gets the reset and never reads the refusal. A body too big to read through
+            (`limit`, MAX_DISCARD_BYTES unless a smaller one is given), or sent too slowly, is left unread."""
+            if length > (MAX_DISCARD_BYTES if limit is None else limit):
                 return
             patience = self.connection.gettimeout()
             deadline = time.monotonic() + DISCARD_SECONDS
@@ -835,6 +842,9 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
         def do_POST(self):
             if not self._local_only():
+                # Another website's page sends its body too. A small one is read through so the refusal is not lost to the reset;
+                # anything bigger than a request may be is left unread rather than waited for.
+                self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
                 return self._json(403, {"error": "local requests only"})
             parsed = urlparse(self.path)
             path = parsed.path

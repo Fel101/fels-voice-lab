@@ -100,10 +100,11 @@ class SpeakContractTests(unittest.TestCase):
         self.assertEqual(status, 413)
         self.assertIn("error", json.loads(raw))
 
-    def post_and_read(self, declared, pieces):
-        """Send the headers of a POST that declares `declared` bytes, then each of `pieces` after a short pause, and read the
-        whole answer. Returns the answer and how many seconds it took."""
+    def post_and_read(self, declared, pieces, origin=None):
+        """Send the headers of a POST that declares `declared` bytes (made by the page at `origin`, when one is named), then each
+        of `pieces` after a short pause, and read the whole answer. Returns the answer and how many seconds it took."""
         head = (b"POST /api/speak HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
+                + (f"Origin: {origin}\r\n".encode() if origin else b"")
                 + f"Content-Length: {declared}\r\n\r\n".encode())
         began = time.monotonic()
         with socket.create_connection(("127.0.0.1", self.service.port), timeout=10) as sock:
@@ -139,6 +140,19 @@ class SpeakContractTests(unittest.TestCase):
             raw, seconds = self.post_and_read(200_000, [b"x" * 10])
         self.assertIn(b" 413 ", raw.split(b"\r\n")[0])
         self.assertLess(seconds, 5)
+
+    def test_the_403_reaches_a_page_from_another_website_that_sends_its_body_after_the_refusal(self):
+        # Same reset as for the 413: a refused body that is left unread can take the refusal from a client that is still sending.
+        body = json.dumps({"text": "Hello there."}).encode()
+        for _ in range(3):
+            raw, _seconds = self.post_and_read(len(body), [body], origin="http://evil.example")
+            self.assertIn(b" 403 ", raw.split(b"\r\n")[0])
+            self.assertEqual(json.loads(raw.partition(b"\r\n\r\n")[2]), {"error": "local requests only"})
+
+    def test_a_body_from_another_website_too_big_to_read_through_is_not_waited_for(self):
+        raw, seconds = self.post_and_read(serve.MAX_REQUEST_BYTES + 1, [], origin="http://evil.example")
+        self.assertIn(b" 403 ", raw.split(b"\r\n")[0])
+        self.assertLess(seconds, 3)
 
     def test_every_answer_carries_a_request_id_and_keeps_the_callers(self):
         _s, headers, _b = self.service.request("GET", "/api/health")
