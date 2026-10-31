@@ -308,6 +308,25 @@ class PerformContractTests(unittest.TestCase):
         self.assertEqual((take["text"], take["spoken_text"]), ("Nell speaks.", "Nel speaks."))
 
 
+class ListenQueueTests(unittest.TestCase):
+    def test_connections_waiting_for_a_busy_server_are_not_refused(self):
+        # A page asks for its ten scripts side by side. While the server is busy for a moment they wait in the listen queue, and
+        # when that is full Windows refuses the next connection after about two seconds: the browser shows ERR_CONNECTION_REFUSED
+        # for that script and the page comes up with a part missing. Nothing accepts here, so the queue alone has to hold them.
+        server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
+        clients = []
+        try:
+            for number in range(1, 21):
+                try:
+                    clients.append(socket.create_connection(server.server_address, timeout=1))
+                except OSError as error:
+                    self.fail(f"connection {number} of 20 was not taken while the server was busy: {error!r}")
+        finally:
+            for client in clients:
+                client.close()
+            server.server_close()
+
+
 class ServiceDescribesItselfTests(unittest.TestCase):
     def setUp(self):
         self.service = api_service.Service(self)

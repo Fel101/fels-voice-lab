@@ -180,6 +180,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 - **Housekeeping.** A worker that stops removes its temporary-audio folder. At start the service clears what past runs left
   in `out/` (stopped workers' folders, old desktop sessions, old logs) in the background, and never touches Cast, Scenes or
   exports. `tools/cleanup_runtime.py` lists what it would remove and `serve.py --no-cleanup` skips the sweep.
+- **Waiting connections.** The service keeps up to 128 connections waiting for it, not Python's 5. A page asks for its ten
+  scripts side by side, and Windows refuses the connection that finds the queue full, so a page opened while the service
+  was busy for a moment would come up without one of them.
 - **Core install.** The core install works without `librosa` and `misaki`; both are imported only where they are used.
 - **Version.** The one version number lives in `app_version.py`. The page footer, `/api/health`, the service log and
   `serve.py --version` all read it.
@@ -190,15 +193,16 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   pages and are internal and may change. Both are generated from one table (`api_spec.py`) by `tools/build_api_docs.py`, and
   a test fails when the table and `serve.py` disagree. `POST /api/speak` is a blocking call that answers one finished WAV;
   `POST /api/performance` speaks a line as a Cast voice, saves it as a take and can be repeated safely with an
-  `idempotency_key`. A running service answers `GET /api/openapi.json`. A request refused for its size is read through
-  first, so a client that is still sending gets its `413`.
+  `idempotency_key`. A running service answers `GET /api/openapi.json`. A request refused for its size, or a small one
+  refused as coming from another website's page, is read through first, so a client that is still sending gets its `413`
+  or `403`.
 - **Command line.** `tools/lab_cli.py` calls a running service from a terminal or a script: `health`, `speak`, `perform` and
   `cast`. It needs only the Python standard library. Its exit status is 0 when the call worked, 1 when the service refused it
   or failed, 2 for a mistake in the command line and 3 when nothing answered.
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1230 Python
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1233 Python
   tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a

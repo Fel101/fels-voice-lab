@@ -1461,6 +1461,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
 class LocalThreadingHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
+    # A page asks for its ten scripts side by side, and while the server is busy for a moment they wait in the listen queue.
+    # The default of 5 is too short for that: Windows refuses the connection that finds the queue full, so the browser shows
+    # ERR_CONNECTION_REFUSED for that script and the page comes up with a part missing.
+    request_queue_size = 128
 
 
 def preload(engines, keys):
