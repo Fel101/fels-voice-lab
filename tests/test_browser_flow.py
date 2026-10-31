@@ -628,9 +628,9 @@ class BrowserFlowTests(unittest.TestCase):
 
                 # Export: write the package, then verify it. (Without FFmpeg the page says so, and that is checked instead.)
                 page.evaluate("document.getElementById('sceneExport').open = true")
-                page.wait_until("document.getElementById('exportCreate') && !document.getElementById('exportCreate').disabled")
-                page.click("#exportCreate")
                 if FFMPEG_READY:
+                    page.wait_until("document.getElementById('exportCreate') && !document.getElementById('exportCreate').disabled")
+                    page.click("#exportCreate")
                     page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Package written to')", timeout=120)
                     # The status says "written" before the package list is refreshed, so wait for the list as a person would.
                     page.wait_until("document.getElementById('exportSelect').value !== ''")
@@ -642,8 +642,12 @@ class BrowserFlowTests(unittest.TestCase):
                     self.assertEqual(len(packages), 1)
                     self.assertTrue((packages[0] / "manifest.json").is_file())
                 else:
-                    # A computer without FFmpeg (a CI runner, say) is told so in the page, and nothing is written.
-                    page.wait_until("document.getElementById('exportError').textContent.startsWith('FFmpeg was not found')")
+                    # A computer without FFmpeg (a CI runner, say) is told so in the page, which switches the export buttons off,
+                    # so there is nothing to press and nothing is written. (A button pressed before the page knew would get the
+                    # server's refusal instead, so pressing one here would be a race.)
+                    page.wait_until("document.getElementById('exportFfmpeg').textContent.startsWith('FFmpeg was not found')")
+                    self.assertTrue(page.evaluate("['exportPreview', 'exportCreate', 'exportVerify']"
+                                                  ".every((id) => document.getElementById(id).disabled)"))
                     self.assertEqual(page.evaluate("document.getElementById('exportStatus').textContent"), "")
                     self.assertEqual(list((root / "out").glob("exports/*")), [])
 
