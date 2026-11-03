@@ -82,12 +82,19 @@
       "local_revision": "749d1c1a46eb10492095d68fbcf55691ccf137cd",
       "parameters": "350M",
       "backend": {"name": "chatterbox-tts", "package_version": "0.1.7", "transformers_version": "5.2.0", "variant": "turbo"},
-      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "runtime": {"environment": ".venv-chatterbox", "python": ".venv-chatterbox/Scripts/python.exe", "python_version": "3.12.10",
+                  "note": "Its own environment, shared with Chatterbox 500M and VC: tools/install_chatterbox.py installs requirements/chatterbox-cpu.txt there, with PyTorch 2.6 for the CPU, which cannot share .venv with Kokoro's PyTorch 2.12."},
       "precision": {"status": "runtime_default_not_measured", "value": null},
       "integration": {"status": "integrated", "service_api": true},
+      "license": {
+        "weights": "MIT: the model card of ResembleAI/chatterbox-turbo at the pinned revision.",
+        "runtime": "chatterbox-tts is MIT (Resemble AI); its S3Gen decoder files keep Apache-2.0 headers from CosyVoice.",
+        "watermark": "Every clip carries Resemble AI's Perth watermark, applied by chatterbox-tts."
+      },
       "capabilities": {
         "voice_design": {"status": "unsupported"},
-        "voice_cloning": {"status": "supported", "input": "reference_audio", "default_api_behavior": "clone_from_local_af_heart_reference"},
+        "voice_cloning": {"status": "supported", "input": "reference_audio", "default_api_behavior": "clone_from_local_af_heart_reference",
+                          "note": "Without reference/af_heart.wav a call that clones must name its reference; clone false speaks in the built-in voice of conds.pt."},
         "voice_direction": {"status": "unsupported"},
         "voice_selection": {"status": "supported", "kind": "reference_or_checkpoint_default"},
         "acting_controls": [{"id": "native_vocal_events", "status": "supported", "examples": ["[laugh]", "[chuckle]", "[cough]"]}],
@@ -104,7 +111,7 @@
       "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
       "parameters": "500M",
       "backend": {"name": "chatterbox-tts", "package_version": "0.1.7", "transformers_version": "5.2.0", "variant": "original"},
-      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "runtime": {"environment": ".venv-chatterbox", "python": ".venv-chatterbox/Scripts/python.exe", "python_version": "3.12.10"},
       "precision": {"status": "runtime_default_not_measured", "value": null},
       "integration": {"status": "integrated", "service_api": true},
       "capabilities": {
@@ -129,7 +136,7 @@
       "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
       "parameters": "S3Gen conversion path",
       "backend": {"name": "chatterbox-vc", "package_version": "0.1.7", "variant": "voice_conversion"},
-      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "runtime": {"environment": ".venv-chatterbox", "python": ".venv-chatterbox/Scripts/python.exe", "python_version": "3.12.10"},
       "precision": {"status": "runtime_default_not_measured", "value": null},
       "integration": {"status": "integrated", "service_api": true, "task_only": true},
       "capabilities": {

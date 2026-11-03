@@ -25,6 +25,8 @@ QWEN_MODES = {
     "qwen3-tts-1.7b-custom-voice": "custom_voice",
 }
 VOXCPM_MODES = {"design", "clone", "continuation"}
+TURBO_NEEDS_REFERENCE = ("Chatterbox Turbo clones a reference recording: give reference_path (a clip longer than 5 seconds), or "
+                         "set clone to false for its built-in voice. The default reference, reference/af_heart.wav, is not there.")
 
 
 def process_is_running(pid):
@@ -454,8 +456,10 @@ class EnginePool:
                 key, {name: req[name] for name in all_sampler_fields if name in req})
             if key == "turbo" and req.get("clone", True):
                 reference = req.get("reference_path") or LAB / "reference" / "af_heart.wav"
-                if req.get("reference_path") or Path(reference).is_file():
-                    self._resolve_reference_path(key, reference)
+                if not (req.get("reference_path") or Path(reference).is_file()):
+                    # The worker cannot make the default clip: it runs in .venv-chatterbox, which has no Kokoro.
+                    raise ValueError(TURBO_NEEDS_REFERENCE)
+                self._resolve_reference_path(key, reference)
         elif key == PHONON_ENGINE_ID:
             phonon_params = check_phonon_request(req)
         self._acquire_job()

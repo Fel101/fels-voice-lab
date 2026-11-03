@@ -59,7 +59,7 @@ from performance_settings import DEFAULTS, effective_settings, performance_contr
 from language_matrix import unscreened_languages
 from urllib.parse import quote
 
-MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
+MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 8, "orig": 10, "breeze-tts-2": 12,
                    'drama-3':26,
                    "qwen3-tts-1.7b-voice-design": 10, "qwen3-tts-1.7b-base": 10,
                    "qwen3-tts-0.6b-base": 10, "qwen3-tts-1.7b-custom-voice": 10,

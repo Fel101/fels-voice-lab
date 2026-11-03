@@ -131,9 +131,10 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
               "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
               "a take retires its edits, and purging it deletes them.")
 
-ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro or "
-                        "Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its "
-                        "launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.")
+ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro, "
+                        "Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & "
+                        "features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the "
+                        "lab folder.")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service

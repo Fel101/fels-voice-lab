@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
 import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +120,117 @@ class VoiceMatchRouteTests(ExportPanelBase):
                 return {"id": take_id, "reference_version_id": None}
 
         self.assertEqual(ss.voice_match(PresetCast(), "a" * 32)["available"], False)
+
+
+GOLDEN = json.loads((ROOT / "tests" / "fixtures" / "speaker_encoder_golden.json").read_text(encoding="utf-8"))
+
+
+def tone(seconds, rate, seed):
+    """Harmonics with a wobbling pitch, a slow swell and a little hiss: the recipe tests/fixtures/speaker_encoder_golden.json used."""
+    t = np.arange(int(seconds * rate)) / rate
+    voice = sum(np.sin(2 * np.pi * (110 + 37 * seed) * k * t * (1 + 0.03 * np.sin(2 * np.pi * 0.5 * t))) / k for k in range(1, 9))
+    envelope = 0.5 + 0.5 * np.sin(2 * np.pi * (2.3 + 0.4 * seed) * t) ** 2
+    hiss = np.sin(t * 7919.0 * (1 + seed)) * np.sin(t * 104729.0)
+    return (0.08 * voice * envelope + 0.01 * hiss).astype(np.float32)
+
+
+def with_silence(signal, rate):
+    quiet = np.zeros(int(0.6 * rate), dtype=np.float32)
+    return np.concatenate([quiet, 0.001 * signal[: rate // 2], signal, quiet])
+
+
+def synthetic_weights():
+    """Full-size LSTM and projection weights from a formula, so PyTorch's answer for them can be kept in the golden file."""
+    shapes = {"lstm.weight_ih_l0": (1024, 40), "lstm.weight_hh_l0": (1024, 256), "lstm.bias_ih_l0": (1024,), "lstm.bias_hh_l0": (1024,)}
+    for layer in (1, 2):
+        shapes.update({f"lstm.weight_ih_l{layer}": (1024, 256), f"lstm.weight_hh_l{layer}": (1024, 256),
+                       f"lstm.bias_ih_l{layer}": (1024,), f"lstm.bias_hh_l{layer}": (1024,)})
+    shapes.update({"proj.weight": (256, 256), "proj.bias": (256,)})
+    return {name: (0.08 * np.sin(np.arange(int(np.prod(shape)), dtype=np.float64) * 0.7311 + number)).astype(np.float32).reshape(shape)
+            for number, (name, shape) in enumerate(sorted(shapes.items()))}
+
+
+def synthetic_partials():
+    return (2.0 * np.abs(np.sin(np.arange(3 * 160 * 40, dtype=np.float64) * 0.013))).astype(np.float32).reshape(3, 160, 40)
+
+
+def write_safetensors(path, tensors):
+    """The smallest safetensors writer: an 8-byte header length, a JSON header, then the float32 data."""
+    header, offset, blobs = {}, 0, []
+    for name, value in tensors.items():
+        data = np.ascontiguousarray(value, dtype="<f4").tobytes()
+        header[name] = {"dtype": "F32", "shape": list(value.shape), "data_offsets": [offset, offset + len(data)]}
+        offset += len(data)
+        blobs.append(data)
+    encoded = json.dumps(header).encode("utf-8")
+    Path(path).write_bytes(len(encoded).to_bytes(8, "little") + encoded + b"".join(blobs))
+
+
+class NumpyEncoderTests(unittest.TestCase):
+    """The encoder runs with NumPy alone. These hold each step to what librosa 0.11.0 and Chatterbox 0.1.7 (with PyTorch) gave
+    for the same input, from tests/fixtures/speaker_encoder_golden.json, so they need neither those packages nor Turbo's weights."""
+
+    def test_the_mel_bank_is_librosas(self):
+        bank = ss.mel_bank()
+        self.assertEqual((bank.shape, bank.dtype), ((40, 201), np.float32))
+        np.testing.assert_allclose(bank.sum(axis=1), GOLDEN["mel_bank"]["row_sums"], rtol=1e-6)
+        np.testing.assert_allclose(bank.max(axis=1), GOLDEN["mel_bank"]["row_max"], rtol=1e-6)
+        self.assertEqual(bank.argmax(axis=1).tolist(), GOLDEN["mel_bank"]["row_peaks"])
+
+    def test_the_trim_cuts_where_librosa_cuts(self):
+        for seed in (1, 2):
+            signal = with_silence(tone(1.7, 16000, seed), 16000)
+            start, end = GOLDEN["trim"][str(seed)]
+            np.testing.assert_array_equal(ss.trim(signal), signal[start:end])
+        self.assertEqual(ss.trim(np.zeros(0, dtype=np.float32)).size, 0)
+
+    def test_the_mel_frames_are_chatterboxs(self):
+        mels = ss.mel_frames(tone(0.73, 16000, 3))
+        self.assertEqual(list(mels.shape), GOLDEN["mel_frames"]["shape"])
+        np.testing.assert_allclose(mels.sum(axis=1), GOLDEN["mel_frames"]["frame_sums"], rtol=1e-5)
+        np.testing.assert_allclose(mels.sum(axis=0), GOLDEN["mel_frames"]["band_sums"], rtol=1e-5)
+
+    def test_the_partials_are_the_windows_chatterbox_cuts(self):
+        for frames, (count, needed) in GOLDEN["partials"].items():
+            mels = np.arange(int(frames) * 40, dtype=np.float32).reshape(int(frames), 40)
+            parts = ss.partials(mels)
+            self.assertEqual(parts.shape, (count, 160, 40), frames)
+            padded = np.concatenate([mels, np.zeros((max(0, needed - len(mels)), 40), dtype=np.float32)])
+            np.testing.assert_array_equal(parts[-1], padded[(count - 1) * 77:(count - 1) * 77 + 160])
+
+    def test_the_lstm_gives_what_pytorch_gave_for_the_same_weights(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "ve.safetensors"
+            write_safetensors(path, synthetic_weights())
+            weights = ss.read_safetensors(path)
+        embeddings = ss.encode(synthetic_partials(), weights)
+        np.testing.assert_allclose(embeddings, GOLDEN["synthetic_lstm"], atol=2e-6)
+        np.testing.assert_allclose(np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-6)
+
+    def test_weights_in_another_number_format_are_refused_by_name(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "ve.safetensors"
+            header = json.dumps({"proj.bias": {"dtype": "F16", "shape": [2], "data_offsets": [0, 4]}}).encode()
+            path.write_bytes(len(header).to_bytes(8, "little") + header + b"\0" * 4)
+            with self.assertRaisesRegex(ValueError, "proj.bias is F16"):
+                ss.read_safetensors(path)
+
+    def test_the_encoder_needs_only_its_weights(self):
+        with mock.patch.object(ss, "ENCODER_WEIGHTS", ROOT / "no-such-folder" / "ve.safetensors"):
+            self.assertFalse(ss.encoder_available())
+        imports = [line.split()[1] for line in (ROOT / "speaker_similarity.py").read_text(encoding="utf-8").splitlines()
+                   if line.startswith(("import ", "from "))]
+        self.assertFalse({name.split(".")[0] for name in imports} & {"torch", "chatterbox", "librosa", "safetensors"}, imports)
+
+    @unittest.skipUnless(ENCODER_READY, "the Chatterbox speaker encoder weights are not present")
+    def test_with_turbos_weights_the_embeddings_are_the_ones_chatterbox_made(self):
+        import hashlib
+
+        if hashlib.sha256(ss.ENCODER_WEIGHTS.read_bytes()).hexdigest() != GOLDEN["real_weights_sha256"]:
+            self.skipTest("these are not the pinned weights the golden embeddings were made with")
+        for name, rate, seed in (("tone_24k", 24000, 4), ("tone_16k", 16000, 5)):
+            vector = ss.embedding_from_samples(with_silence(tone(6.2, rate, seed), rate), rate)
+            np.testing.assert_allclose(vector, GOLDEN["real"][name], atol=2e-6, err_msg=name)
 
 
 @unittest.skipUnless(ENCODER_READY, "the Chatterbox speaker encoder weights are not present")

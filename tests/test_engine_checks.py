@@ -179,7 +179,7 @@ class InstallationTests(TempTree):
                     self.assertNotIn("installer", installation(entry, self.root))
 
     def test_every_launcher_named_is_in_the_lab_folder_and_belongs_to_an_integrated_engine(self):
-        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en"})
+        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en", "turbo"})
         for engine, launcher in engine_checks.GUIDED_INSTALLERS.items():
             with self.subTest(engine=engine):
                 self.assertIs(CATALOG[engine]["integration"].get("service_api"), True)
@@ -472,8 +472,9 @@ class StatusPayloadTests(unittest.TestCase):
         rows, _ = self.rows("cpu", probe=lambda entry: installation(entry, empty_lab))
         self.assertEqual(rows["kokoro"]["state"], "not_installed")
         self.assertEqual(rows["kokoro"]["installation"]["installer"], "setup-kokoro.bat")
-        self.assertEqual(rows["turbo"]["state"], "not_installed")
-        self.assertNotIn("installer", rows["turbo"]["installation"])
+        self.assertEqual(rows["turbo"]["installation"]["installer"], "setup-chatterbox.bat")
+        self.assertEqual(rows["orig"]["state"], "not_installed")
+        self.assertNotIn("installer", rows["orig"]["installation"])
 
     def test_conversion_is_reported_as_a_task_not_a_speech_check(self):
         rows, _ = self.rows("cpu")
@@ -696,9 +697,9 @@ class FailedLoadTests(TempTree):
             asked.append(entry["id"])
             return missing_probe(entry)
 
-        error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: turbo.log")
+        error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: orig.log")
         with self.assertRaises(WorkerRequestError) as raised:
-            self.failing_pool(error, probe=probe).load("turbo")
+            self.failing_pool(error, probe=probe).load("orig")
         self.assertIs(raised.exception, error)
         self.assertEqual(asked, [])
 

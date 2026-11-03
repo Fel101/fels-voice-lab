@@ -139,13 +139,23 @@ class ChatterboxTurbo:
 
     The voice is prepared once and reused; passing audio_prompt_path to generate() would redo the
     voice analysis on every clip, which is not what a running service would do.
+
+    It loads the files of the pinned snapshot directly (from_local), so no Hub lookup or download can happen, and it does not
+    need the ten-step decoder that from_pretrained would also want.
     """
     label = "Chatterbox Turbo"
 
     def __init__(self, device):
         from chatterbox.tts_turbo import ChatterboxTurboTTS
+        from chatterbox_support import TURBO_FILES, turbo_snapshot_dir
+
         self.device = device
-        self.model = ChatterboxTurboTTS.from_pretrained(device=device)
+        snapshot = turbo_snapshot_dir()
+        missing = [name for name in TURBO_FILES if not (snapshot / name).is_file()]
+        if missing:
+            raise RuntimeError(f"Chatterbox Turbo local files are incomplete: {', '.join(missing)} is missing from {snapshot}. "
+                               "Run setup-chatterbox.bat to put them back.")
+        self.model = ChatterboxTurboTTS.from_local(snapshot, device)
         self.sr = self.model.sr
         self._builtin = self.model.conds      # None when the download ships no default voice
         self._ref = None
@@ -231,7 +241,8 @@ def build_engine(key, device):
 def ensure_reference():
     """A ~14 s clip of Kokoro's af_heart, used as the reference voice for the Chatterbox clones.
 
-    Synthetic fixture with no human source recording. Model terms and applicable identity rights still apply.
+    Synthetic fixture with no human source recording. Model terms and applicable identity rights still apply. It needs Kokoro in
+    the same environment, so the Chatterbox worker, which runs in .venv-chatterbox, calls it only when Kokoro is there.
     """
     if REFERENCE_WAV.exists():
         return
