@@ -211,7 +211,7 @@
     "/api/engines/{engine_id}/install": {
       "post": {
         "operationId": "post_api_engines_engine_id_install",
-        "summary": "Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.",
+        "summary": "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.",
         "tags": [
           "Service"
         ],

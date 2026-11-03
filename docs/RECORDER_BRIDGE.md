@@ -102,5 +102,5 @@ sidecar has no hash for the master, so the report records the master's SHA-256 a
 ## Tests
 
 `tests\test_recorder_import.py` and `tests\test_recorder_identity.py` use generated audio only. The identity tests need the
-Chatterbox encoder weights; the ones that clean a clip also need FFmpeg (found as `denoise_ref.find_ffmpeg()` does). They skip
+Chatterbox Turbo encoder weights (`setup-chatterbox.bat` fetches them); the ones that clean a clip also need FFmpeg (found as `denoise_ref.find_ffmpeg()` does). They skip
 what is missing and say so.

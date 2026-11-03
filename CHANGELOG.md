@@ -23,9 +23,10 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   and never blocks a save ([docs/REFERENCE_SCREEN.md](docs/REFERENCE_SCREEN.md)).
 - **Helpers around a reference.** Optional transcript drafts from a local speech recognizer; a person checks the text before
   saving it. Gated cleaning (`denoise_ref.py`): a cleaned clip that moves further from a same-speaker reference than the raw
-  clip did gets a fail verdict, and strict mode refuses to write it. A voice match on takes uses the local speaker encoder;
-  it is a cosine proxy, not an identity verdict. Its two bands, 0.847 and 0.796, were measured on 128 clips of one target
-  voice and ship in `catalog/speaker_similarity.json`, so nothing has to be measured first.
+  clip did gets a fail verdict, and strict mode refuses to write it. A voice match on takes uses Chatterbox Turbo's speaker
+  encoder, which the Lab runs with NumPy, so it needs only the `ve.safetensors` that `setup-chatterbox.bat` fetches and no
+  PyTorch in `.venv`; it is a cosine proxy, not an identity verdict. Its two bands, 0.847 and 0.796, were measured on 128
+  clips of one target voice and ship in `catalog/speaker_similarity.json`, so nothing has to be measured first.
 - **Retire and purge.** Retiring a voice, recording or take blocks new use of it and of everything made from it, without
   deleting audio. Perform, Scenes, Compare, voice conversion, the Drama studio, pickers and exports refuse retired items,
   which still play for review. Restoring lifts an item's own retirement and never re-approves a voice. Purging deletes a
@@ -111,6 +112,24 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   are Apache-2.0, but the repository that holds the 37 voices states no licence, so the installer's plan, the page and the docs
   say to ask Gradium before you publish audio made with one. Installing `ptts` changes `.venv`, so the Models page marks the
   stored tests of the other models there as out of date.
+- **Chatterbox Turbo install.** `setup-chatterbox.bat`, or `tools/install_chatterbox.py`, installs Chatterbox Turbo 350M, the
+  model that clones a voice from a recording of more than five seconds, for the CPU. It makes an environment of its own,
+  `.venv-chatterbox`, from the lab's Python 3.12, because Chatterbox needs PyTorch 2.6 and Kokoro's installer puts PyTorch 2.12
+  in `.venv`. There it installs 73 packages pinned by SHA-256 in `requirements/chatterbox-cpu.txt` (without the Gradio demos and
+  the multilingual text packages Turbo never imports), fetches the ten files of the pinned Turbo snapshot that Turbo loads
+  (resumable, each checked against `catalog/chatterbox_turbo_snapshot.json`), and checks without a network that Turbo speaks in
+  its built-in voice and clones that recording: about 3.4 GB to download and 5 GB on disk. It follows the Kokoro installer's
+  rules (it shows its plan and asks first, runs only with the lab's own `.venv`, refuses to replace a package at another
+  version, and has `--checkpoint-only` for a `.venv-chatterbox` you built yourself, with a GPU PyTorch say), and the
+  **Install** button on the Turbo card runs it. The code and the weights are MIT, and every clip carries Resemble AI's Perth
+  watermark. Turbo needs 8 GB of free RAM to load: on one 8-core CPU it peaked at 6.1 GB while loading and held 5.0 GB after a
+  line of 1,200 characters.
+- **Chatterbox's environment.** Chatterbox Turbo, Original and VC now run in `.venv-chatterbox`, not `.venv`. Turbo loads the
+  files of its pinned snapshot directly, so it never asks the Hugging Face Hub, and without `reference/af_heart.wav` its worker
+  warms up and its Models page test speak in the built-in voice instead of reaching for Kokoro, which that environment does not
+  have. A call that clones without a `reference_path` while that clip is missing is refused at once, with what to do. A
+  Chatterbox set up by hand in `.venv` is not found any more: run the installer, or build `.venv-chatterbox` with your own
+  packages and use `--checkpoint-only`.
 - **Models & features** reports three states for each family: integrated, installed (its environment and pinned checkpoint
   files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
@@ -119,9 +138,11 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   kept per device. A stored test carries a fingerprint of the model pin and the packages installed in its environment, and
   reads "test out of date" when either changes. A speed table shows the median real-time factor per family and device from
   clips and tests this service generated.
-- **Install from the page.** A Kokoro or Phonon card that is not installed has an **Install** button. It shows the installer's
-  own plan (the `--dry-run` of `tools/install_kokoro.py` or `tools/install_phonon.py`, with the reasons it would refuse), and
-  **Install now** runs the installer that `setup-kokoro.bat` or `setup-phonon.bat` runs, with the end of its output on the card. While it runs nothing else loads a model or speaks, a page
+- **Install from the page.** A Kokoro, Phonon or Chatterbox Turbo card that is not installed has an **Install** button. It shows
+  the installer's own plan (the `--dry-run` of `tools/install_kokoro.py`, `tools/install_phonon.py` or
+  `tools/install_chatterbox.py`, with the reasons it would refuse), and **Install now** runs the installer that
+  `setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat` runs, with the lab's own Python and the end of its output
+  on the card. While it runs nothing else loads a model or speaks, a page
   that is reloaded picks the progress up again, and the whole output is kept in `out/install`. There is no Stop button:
   closing the studio stops the install, and running it again continues where it stopped. The other cards say that the app
   cannot install that model yet. (`POST /api/engines/{engine_id}/install`; `GET /api/engines/status` reports the install.)
@@ -202,8 +223,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1235 Python
-  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1308 Python
+  tests (17 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
   tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
@@ -228,14 +249,22 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   with a `400` that says why. A pace shift of -0.5 and +0.5 changed one sentence's length by -22% and +19%. A seed repeats a clip
   to within rounding and not byte for byte (differences near a millionth of full scale), and one thread instead of all of them
   moved the end of a clip by one 80 ms frame.
+- Chatterbox Turbo was installed from fresh clones of the repository after `setup.bat` (Windows 11, CPU only, pip's cache
+  warm). `setup-chatterbox.bat` made `.venv-chatterbox` and installed the 73 packages; stopped during the download and run
+  again, it kept them, resumed the half-fetched file and finished in 252 seconds, and its speech check spoke in the built-in
+  voice and cloned it. The studio started from that folder passed **Test** (2.4 s of audio in 6.6 s); the calls the Voice
+  cloning page makes saved a voice from an 11.5-second recording and spoke a test line in it, which the voice match scored
+  0.92 against that recording and 0.78 against the built-in voice. The worker peaked at 6.1 GB. In a second fresh clone,
+  **Install** on the Turbo card ran the installer in 308 seconds with the model files already in `hf-cache`, and **Test**
+  passed. The NumPy speaker encoder gave the same embeddings as Chatterbox's own to within 2e-7 on speech clips.
 - The new Models & features layout, the first-run banner and the Dark and Forest themes were looked at in a browser at phone
   width. The Light theme was not changed.
 
 ### Known limits
 
 - **Platform.** Windows 10/11 only. Built and checked on one machine with an AMD Radeon AI PRO R9700; there are no NVIDIA,
-  Linux or macOS results. Only Kokoro, Phonon and Drama 3 have installers, and VoxCPM2 needs pinned source and a ROCm overlay
-  that this repository does not install. Nothing here trains or fine-tunes a model.
+  Linux or macOS results. Only Kokoro, Phonon, Chatterbox Turbo and Drama 3 have installers, and VoxCPM2 needs pinned source
+  and a ROCm overlay that this repository does not install. Nothing here trains or fine-tunes a model.
 - **Kokoro install.** It was run on one Windows 11 computer. A computer without the Microsoft Visual C++ runtime, a folder
   path near Windows' 259-character limit and a network that blocks PyPI or Hugging Face were not tried for real; the installer
   stops with a message in each case, and its tests cover them with stand-ins. The Japanese and Mandarin voices need Misaki
@@ -246,9 +275,17 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   listened to it as a test, and it was run on one Windows 11 computer. A missing Visual C++ runtime, a folder path near the
   259-character limit and a network that blocks PyPI or Hugging Face were not tried for real; the installer's tests, and the
   Kokoro installer's for the download code the two share, cover them with stand-ins.
-- **Install button and RAM figures.** Only the Kokoro and Phonon cards have an Install button, and they have no Stop button.
-  Their progress is the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show nothing new for
-  minutes. The RAM on a card is the Lab's own rule for loading a model, not a measurement of what the model uses.
+- **Chatterbox Turbo.** The installer sets it up for the CPU only, where it is slow: two and a half to three times as long as
+  the speech it makes on one 8-core CPU. A GPU build of PyTorch is yours to install in `.venv-chatterbox`, and that has not
+  been tried with this installer. It speaks English, and given 1,200 characters it stopped after 30 to 36 seconds of audio,
+  so keep lines to a few sentences. Chatterbox Original and VC share its environment, but no installer fetches their
+  checkpoint. The installer was run on one Windows 11 computer; a missing Visual C++ runtime, a folder path near the
+  259-character limit and a network that blocks PyPI or Hugging Face were not tried for real, and its tests cover them with
+  stand-ins.
+- **Install button and RAM figures.** Only the Kokoro, Phonon and Chatterbox Turbo cards have an Install button, and they have
+  no Stop button. Their progress is the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show
+  nothing new for minutes. The RAM on a card is the Lab's own rule for loading a model, not a measurement of what the model
+  uses.
 - **What the numbers mean.** The language screen is not a listening test. Take checks and loudness readings describe audio
   and nothing else, a voice match is a proxy whose bands come from one target voice, word-time boundary accuracy is
   unmeasured, and the lip-sync mouth shapes have not been checked against a face or by ear.

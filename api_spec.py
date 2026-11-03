@@ -167,7 +167,8 @@ ROUTES = [
             "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
       errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The GPU worker is busy."))),
     R("POST", "/api/engines/{engine_id}/install", "Service",
-      "Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.",
+      "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the "
+      "installer.",
       body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
                                     "Nothing is changed. Default false, which starts the install."),),
       reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) "

@@ -199,7 +199,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
-| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
@@ -259,7 +259,7 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 
 #### `POST /api/engines/{engine_id}/install`
 
-Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.
+Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.
 
 | Path parameter | Meaning |
 |---|---|

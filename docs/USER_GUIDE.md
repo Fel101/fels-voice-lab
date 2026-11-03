@@ -20,6 +20,9 @@ navigation wraps above the workspace and sample cards stack.
 ## Clone your own voice
 
 1. Open **Voice cloning**, name the voice/character and choose a cloning model.
+   Chatterbox Turbo is the cloning model the Lab can install from its own page:
+   press **Install** on its card in **Models & features**, or run
+   `setup-chatterbox.bat` ([setup](SETUP.md#chatterbox-turbo-on-the-cpu)).
 2. Choose **Upload your voice — browse files**, **Record microphone**, or a saved
    reference. Uploaded WAV, FLAC, OGG, MP3 and M4A files stay on this PC. The
    file you upload is kept untouched as the source, and the reference is made from
@@ -51,7 +54,8 @@ Microphone recording needs the browser's permission and an available input devic
 Choose **Stop recording** when finished; recording stops automatically at about
 59 seconds. If microphone capture is unavailable, upload a recording instead.
 If generation fails after saving, the saved reference remains available for retry.
-Fish cloning runs on CPU and its first test can take several minutes.
+Fish cloning runs on CPU and its first test can take several minutes. Chatterbox Turbo on a
+CPU takes 10 to 30 seconds to load and then two to three times as long as the line it speaks.
 
 A reference conditions the speaker's identity and can also carry accent, delivery
 and recording characteristics into the result. It is not a trained replacement
@@ -235,7 +239,8 @@ a person still checks their exactness before saving.
 
 ## Other voice tools
 
-**Check voice match** is a local speaker-encoder cosine proxy. Its two bands
+**Check voice match** is a local speaker-encoder cosine proxy, from the speaker encoder
+that comes with Chatterbox Turbo (installing Turbo installs it). Its two bands
 (likely the same voice from 0.847, likely a different one below 0.796) were measured
 on one target voice, not all speakers or languages; the statistics of the clips they
 were measured from are in [catalog/speaker_similarity.json](../catalog/speaker_similarity.json).
@@ -307,10 +312,10 @@ this computer has and how much is free right now. The Lab refuses to load a mode
 red when the whole computer has less RAM than the model needs, or when less is free at the moment: close other programs, and
 then press **Test**. The figure is the Lab's own rule for loading, not a measurement of what the model uses.
 
-A model that is not installed shows the files it is missing. The Kokoro and Phonon cards have an **Install** button: it shows
-what the installer will do and whether this computer can take it, and **Install now** runs it with the end of its output on the
-card (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu) and [Phonon](SETUP.md#phonon-on-the-cpu)). The other cards
-say that the app cannot install that model yet.
+A model that is not installed shows the files it is missing. The Kokoro, Phonon and Chatterbox Turbo cards have an **Install**
+button: it shows what the installer will do and whether this computer can take it, and **Install now** runs it with the end of
+its output on the card (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu), [Phonon](SETUP.md#phonon-on-the-cpu) and
+[Chatterbox Turbo](SETUP.md#chatterbox-turbo-on-the-cpu)). The other cards say that the app cannot install that model yet.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed
