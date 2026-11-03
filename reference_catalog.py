@@ -451,12 +451,17 @@ def resolve_reference_audio(value, lab, cast):
     requested = Path(value)
     if not requested.is_absolute():
         raise ValueError("Reference audio must use an absolute local path.")
+    roots = _roots(lab, cast)
+    # Check the name before the disk is touched: resolving a path such as \\server\share\x.wav would have Windows contact
+    # that server first.
+    if not any(_unlinked_below(root, requested) for root, _, _ in roots):
+        raise ValueError("Reference audio must belong to this Lab's reference folder, saved voices, or processed Cast references.")
     try:
         resolved = requested.resolve(strict=True)
     except (OSError, RuntimeError, ValueError) as exc:
         raise ValueError("Reference audio was not found.") from exc
     metadata = None
-    for root, source, _ in _roots(lab, cast):
+    for root, source, _ in roots:
         if root not in resolved.parents or not _unlinked_below(root, requested):
             continue
         if source == "cast_reference":

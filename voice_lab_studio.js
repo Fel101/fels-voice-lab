@@ -285,8 +285,8 @@ function ramText(row,ram){
 }
 var engineRows={};
 function markEngineOptions(){
-  ['engine','identityEngine'].forEach(function(id){
-    Array.prototype.forEach.call($(id).options||[],function(option){
+  ['engine','identityEngine','cloneEngine'].forEach(function(id){
+    Array.prototype.forEach.call(($(id)||{}).options||[],function(option){
       var row=engineRows[option.value],view=modelCards[option.value];
       if(row&&view&&row.integrated){option.textContent=view.name+(row.state==='not_installed'?' (not installed)':'');}
     });
@@ -380,6 +380,7 @@ function renderEngineStatus(status){
   $('modelsRam').textContent=status.ram?'This computer has '+status.ram.total_gb+' GB of RAM, '+status.ram.free_gb+' GB free right now.':'';
   engineRows={};(status.engines||[]).forEach(function(row){engineRows[row.id]=row;});
   placeCards(status);markEngineOptions();showEngineHint();renderFirstRun(status);
+  if(typeof VoiceLabWorkflows!=='undefined'){VoiceLabWorkflows.refreshCloneEngine();}
   renderSpeedRows(status);
   watchInstall(installRunning);
 }

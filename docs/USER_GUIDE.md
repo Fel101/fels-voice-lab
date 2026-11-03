@@ -305,7 +305,9 @@ test on the GPU does not mark the CPU as usable.
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
 red when the whole computer has less RAM than the model needs, or when less is free at the moment: close other programs, and
-then press **Test**. The figure is the Lab's own rule for loading, not a measurement of what the model uses.
+then press **Test**. The figure is the Lab's own rule for loading. For Kokoro and Phonon it comes from a measured peak with
+room to spare; for the others it is not a measurement of what the model uses. `runtime.local.json` can change it for one
+computer ([hardware and state settings](SETUP.md#hardware-and-state-settings)).
 
 A model that is not installed shows the files it is missing. The Kokoro and Phonon cards have an **Install** button: it shows
 what the installer will do and whether this computer can take it, and **Install now** runs it with the end of its output on the

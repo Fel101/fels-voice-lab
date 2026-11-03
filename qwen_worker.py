@@ -11,6 +11,7 @@ import time
 from collections import OrderedDict
 
 from common import LAB, require_ram
+from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
 REFERENCE_SUFFIXES = {".wav", ".flac", ".ogg"}
@@ -103,7 +104,7 @@ class QwenWorker:
             return self._load_info(already_loaded=True)
         if self.device != "cuda":
             raise RuntimeError("The pinned faster-Qwen checkpoint is verified only on the configured AMD GPU path.")
-        require_ram(10, self.engine_id)
+        require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
 
         # Import the established compatibility shim before importing/loading the
         # faster implementation; it fixes the Transformers 5.x codec RoPE config.

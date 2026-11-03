@@ -5,6 +5,8 @@
   var recording = null, recordingTimer = null, recordingRevision = 0, busy = false, initialized = false;
   var showReferenceVersions = false;
   var cloneEngines = ['drama-3','qwen3-tts-1.7b-base','qwen3-tts-0.6b-base','voxcpm2','turbo','orig','breeze-tts-2'];
+  // The cloning model this page last chose by itself. Any other value in the picker was chosen by the person, and stays.
+  var cloneEngineDefault = null;
   var transcriptFields = {reference:'referenceText',qwenReference:'qwenReferenceText',
     voxPromptReference:'voxPromptText',dramaReference:'dramaTranscript'};
   var referenceSelectors = ['reference','qwenReference','voxReference','voxPromptReference','dramaReference','chatterboxReference'];
@@ -113,6 +115,15 @@
     fillReferenceSelector(selector,previous,'Choose a saved recording, or upload above');
     fillCloneEngines();
   }
+  // The first cloning model in the picker that this computer has installed, as the Models page last read it, or the first
+  // model in the picker when none is (or the page has not read it yet).
+  function preferredCloneEngine(select) {
+    var status = global.engineRows || {}, offered = Array.from(select.options).map(function (item) { return item.value; });
+    var installed = offered.find(function (id) {
+      return status[id] && status[id].installation && status[id].installation.installed;
+    });
+    return installed || offered[0] || '';
+  }
   function fillCloneEngines() {
     var select = el('cloneEngine'), before = select.value;
     var entries = global.catalog && global.catalog.engines || [];
@@ -121,19 +132,32 @@
       var entry = entries.find(function (item) { return item.id === id; });
       if (entry && entry.integration && entry.integration.service_api) global.option(select, id, entry.name);
     });
-    if (cloneEngines.indexOf(before) >= 0) select.value = before;
+    var offered = Array.from(select.options).some(function (item) { return item.value === before; });
+    if (before && before !== cloneEngineDefault && offered) select.value = before;
+    else select.value = cloneEngineDefault = preferredCloneEngine(select);
+    if (typeof global.markEngineOptions === 'function') global.markEngineOptions();
+    syncCloneEngine();
+  }
+  // The Models page calls this when it has read which models are installed: a picker nobody has changed moves to an installed
+  // cloning model, and the note under it says whether the chosen one is installed.
+  function refreshCloneEngine() {
+    var select = el('cloneEngine');
+    if (!initialized) return;
+    if (select.options.length && select.value === cloneEngineDefault) select.value = cloneEngineDefault = preferredCloneEngine(select);
     syncCloneEngine();
   }
   function syncCloneEngine() {
-    var engine = el('cloneEngine').value;
+    var engine = el('cloneEngine').value, status = (global.engineRows || {})[engine];
     el('cloneDirectionWrap').hidden = engine === 'orig' || engine === 'turbo';
-    el('cloneModelHelp').textContent = engine === 'drama-3' ?
+    var missing = status && status.state === 'not_installed' ?
+      'Not installed on this computer yet; Models & features says what it needs. ' : '';
+    el('cloneModelHelp').textContent = missing + (engine === 'drama-3' ?
       'Fish Audio: exact transcript required. Runs on CPU; a cold test can take several minutes. Fish license conditions apply.' :
       engine === 'breeze-tts-2' ? 'Breeze: exact transcript required. Model and self-hosted outputs are non-commercial.' :
       engine.indexOf('qwen') === 0 ? 'Qwen Base: use the exact transcript. Delivery instructions are experimental.' :
       engine === 'voxcpm2' ? 'VoxCPM2: a transcript is optional for identity cloning. Delivery instructions are experimental.' :
       engine === 'turbo' ? 'Chatterbox Turbo: the reference must be longer than 5 seconds. Put supported event tags in your new dialogue.' :
-      'Chatterbox Original: the recording supplies the speaker identity. Put only spoken dialogue in the test text.';
+      'Chatterbox Original: the recording supplies the speaker identity. Put only spoken dialogue in the test text.');
   }
   function replaceSource(file) {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
@@ -159,7 +183,7 @@
   function openFromClip(blob, body) {
     replaceSource(new File([blob], body.engine + '-studio.wav', {type:'audio/wav'}));
     var engine = body.engine === 'qwen3-tts-1.7b-voice-design' ? 'qwen3-tts-1.7b-base' : body.engine;
-    openUpload(cloneEngines.indexOf(engine) >= 0 ? engine : 'drama-3');
+    openUpload(cloneEngines.indexOf(engine) >= 0 ? engine : preferredCloneEngine(el('cloneEngine')));
     el('cloneName').value = body.save_voice_as || '';
     el('cloneTranscript').value = body.text || '';
     var parent = body._reference_provenance;
@@ -342,6 +366,6 @@
     global.addEventListener('hashchange',function(){if(location.hash!=='#cloning'){recordingRevision++;if(recording)stopRecording();}});
     render(global.referenceRows || []);
   }
-  global.VoiceLabWorkflows = {render:render,openUpload:openUpload,openFromClip:openFromClip,freezeRequest:freezeRequest,sourceDetails:sourceDetails,label:label,kokoroLabel:kokoroLabel,refreshKokoroVoices:refreshKokoroVoices,metadataHeader:metadataHeader,visibleReferenceRows:visibleReferenceRows};
+  global.VoiceLabWorkflows = {render:render,openUpload:openUpload,openFromClip:openFromClip,freezeRequest:freezeRequest,sourceDetails:sourceDetails,label:label,kokoroLabel:kokoroLabel,refreshKokoroVoices:refreshKokoroVoices,metadataHeader:metadataHeader,visibleReferenceRows:visibleReferenceRows,refreshCloneEngine:refreshCloneEngine};
   document.addEventListener('DOMContentLoaded', init);
 })(window);

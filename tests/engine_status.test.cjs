@@ -480,10 +480,12 @@ test('the model pickers mark what is not installed, and the studio picker says w
     {value: 'future', textContent: 'Future (not integrated yet)'}];
   fields.engine = Object.assign(element('engine'), {options: options(), value: 'breeze'});
   fields.identityEngine = Object.assign(element('identityEngine'), {options: options().slice(0, 2), value: 'kokoro'});
+  fields.cloneEngine = Object.assign(element('cloneEngine'), {options: options().slice(1, 2), value: 'breeze'});
   c.renderEngineStatus(snapshot([kokoroReady, manual('breeze', 'Breeze TTS 2 BF16')]));
   const labels = select => select.options.map(option => option.textContent);
   assert.deepEqual(labels(fields.engine), ['Kokoro 82M', 'Breeze TTS 2 BF16 (not installed)', 'Future (not integrated yet)']);
   assert.deepEqual(labels(fields.identityEngine), ['Kokoro 82M', 'Breeze TTS 2 BF16 (not installed)']);
+  assert.deepEqual(labels(fields.cloneEngine), ['Breeze TTS 2 BF16 (not installed)']);
   assert.equal(fields.engineHint.hidden, false);
   assert.equal(fields.engineHint.textContent,
     'This model is not installed, so Generate cannot use it yet. See what it needs in Models & features');

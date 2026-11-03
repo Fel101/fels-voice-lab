@@ -11,18 +11,27 @@ and `setup-phonon.bat` each install one, [Kokoro](#kokoro-on-the-cpu) and
 ## Core and desktop
 
 Clone the repository, or download it from GitHub as a ZIP and extract it, into a
-writable folder. Install Python 3.12 from
-[python.org](https://www.python.org/downloads/windows/), including its launcher.
+writable folder that OneDrive does not sync, such as `C:\voice-lab`. Windows often syncs the
+Desktop and Documents folders to OneDrive, which would upload the gigabytes of packages and
+models the Lab installs and can lock its databases while it syncs them; `setup.bat` warns
+when the folder is inside OneDrive.
+
+Install Python 3.12 (64-bit) with its launcher. The newer Python that python.org offers
+first does not work with the Lab yet: 3.12.10 is the last 3.12 release with a Windows
+installer ([python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)),
+and `setup.bat` gives that link when `py -3.12` cannot start.
 Run `setup.bat`, then `setup-desktop.bat`. The second command installs pywebview
 in `.venv-desktop`, creates **Fel's Voice Lab** on your Desktop, and uses the installed
 [Microsoft WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 If WebView2 is missing, install it from Microsoft and retry; the app does not
 silently change your browser or download a runtime.
 
-An existing `.venv` is checked and preserved rather than repaired or upgraded
-automatically. If its import check fails, inspect the error and restore its
-requirements in a separate environment. Never replace working AMD/model pins
-by running a generic `pip install --upgrade`.
+If `setup.bat` is interrupted while it installs the core packages, run it again: it
+finishes the job. An existing `.venv` that it did not leave unfinished is checked and
+preserved rather than repaired or upgraded automatically. If its import check fails,
+inspect the error and restore its requirements in a separate environment, or, when
+nothing else has been installed into it, delete `.venv` and run `setup.bat` again. Never
+replace working AMD/model pins by running a generic `pip install --upgrade`.
 
 The shortcut starts a dedicated window and hidden backend on a free loopback
 port. Closing that window cancels its work and stops its backend/children.
@@ -35,7 +44,7 @@ The shortcut is named **Fel's Voice Lab**. Rerunning desktop setup renames the
 old **Voice Lab** shortcut only when it belongs to this installation. Project
 folder names and existing voice libraries stay at their current paths.
 
-Choose Light, Dark or System in the header. Appearance is saved under
+Choose Light, Dark, Forest or System in the header. Appearance is saved under
 `data/ui/preferences.json` inside the selected `--state-root` (the project folder
 by default), rather than being tied to a browser port. This local file is not part of
 the repository. Separate state roots keep separate theme preferences.
@@ -95,6 +104,10 @@ already works in an environment of your own, `--checkpoint-only` fetches the mod
 English, Spanish, French, Hindi, Italian and Brazilian Portuguese), `english` (28), `all` (54), or voice IDs such as `bm_george`.
 The 13 Japanese and Mandarin Chinese voices also need Misaki language packages that the installer does not add. More voices can
 be added later with the same command.
+
+What it needs here, measured on one computer with only the CPU: one Kokoro worker holds about 1.2 GB once loaded and peaked at
+about 1.8 GB while speaking a line of about 1,000 characters (58 seconds of audio, made in 17 seconds). The Lab asks for 3 GB of
+free RAM before it loads Kokoro; [`runtime.local.json`](#hardware-and-state-settings) can change that for one computer.
 
 Licences: the Kokoro weights are Apache-2.0. Most of the packages are MIT, BSD or Apache. phonemizer-fork and the espeak-ng
 library inside espeakng-loader are GPL-3.0, num2words is LGPL, and certifi and tqdm are MPL-2.0. They are installed on your
@@ -171,7 +184,7 @@ installer again. Other Windows setups have not been tried.
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
 interpreter paths used by the adapters. A catalog entry means integration exists,
-not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free.
+not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). A model without a guided installer that is missing files says so when it is asked to speak, and points here.
 
 Two packages are optional and not part of the core install: `misaki` (English phoneme rules for the lip-sync
 tracks of aligned takes; it comes with Kokoro) and `librosa` (the time-stretch in `fit.py`, which the exporter does
@@ -211,6 +224,11 @@ occurs during ordinary generation. Keep the installer receipt with the model.
 `disable_cudnn` and `drama_design_device`; copy/edit the provided example for your own hardware only. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
 Environment `HIP_VISIBLE_DEVICES` takes precedence. The public default does not
 hide GPU 0. `--device cpu` avoids GPU selection.
+
+`min_free_ram_gb` changes how much free RAM the Lab wants before it loads an engine, on this computer only, for example
+`{"min_free_ram_gb": {"kokoro": 2}}`; 0 turns the check off for that engine. The defaults, in `ram_needs.py`, are the numbers
+the Models page shows. A lower number lets a model start on a computer that is short of memory, and Windows may then slow down
+or the worker may stop. A name the Lab does not know, or a number below 0, stops the service with a message that says so.
 
 `desktop.local.json` optionally contains `{"state_root":"relative/or/absolute/folder"}`.
 Its default is this project directory. A different state root changes the Cast,

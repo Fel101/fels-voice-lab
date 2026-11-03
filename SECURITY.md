@@ -1,7 +1,10 @@
 # Security
 
 Fel's Voice Lab is a single-user local application. The HTTP server binds to
-`127.0.0.1`; foreign Host/Origin requests are rejected. It has no account system,
+`127.0.0.1`; foreign Host/Origin requests are rejected, and so is any request another
+website's page makes (its `Sec-Fetch-Site`), except opening the Lab's pages in a tab.
+Its pages may not be shown inside another site's frame. A path in a request is checked
+against the Lab's folders before Windows opens it. It has no account system,
 TLS termination, public-service authentication or multi-user isolation. Do not
 expose it through a public bind address, reverse proxy or tunnel.
 

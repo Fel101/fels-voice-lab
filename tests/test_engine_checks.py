@@ -266,18 +266,15 @@ class InstallPointerTests(unittest.TestCase):
                          "setup-phonon.bat in the lab folder, then try again.")
         self.assertIsNone(engine_checks.install_pointer(CATALOG["phonon-31m-en"], installed_probe))
 
-    def test_an_engine_without_a_launcher_has_nothing_to_point_at_and_is_not_probed(self):
-        asked = []
-
-        def probe(entry):
-            asked.append(entry["id"])
-            return missing_probe(entry)
-
+    def test_an_engine_without_a_launcher_is_pointed_at_the_setup_guide(self):
         for engine, entry in CATALOG.items():
             if engine not in engine_checks.GUIDED_INSTALLERS:
                 with self.subTest(engine=engine):
-                    self.assertIsNone(engine_checks.install_pointer(entry, probe))
-        self.assertEqual(asked, [])
+                    pointer = engine_checks.install_pointer(entry, missing_probe)
+                    self.assertTrue(pointer.startswith(f"{entry.get('name', engine)} is not installed, and the Lab cannot "
+                                                       "install it for you yet."), pointer)
+                    self.assertIn("Model runtimes section of docs/SETUP.md", pointer)
+                    self.assertIsNone(engine_checks.install_pointer(entry, installed_probe))
 
     def test_an_entry_without_a_name_is_called_by_its_id(self):
         nameless = {key: value for key, value in CATALOG["kokoro"].items() if key != "name"}
@@ -650,7 +647,7 @@ class EngineCheckTests(TempTree):
 
 
 class FailedLoadTests(TempTree):
-    """A worker that cannot load an engine that is not installed gets the launcher's name in front of its error."""
+    """A worker that cannot load an engine that is not installed gets, in front of its error, how to install it."""
 
     WORKER_ERROR = "Worker load failed: ModuleNotFoundError: No module named 'kokoro'. Log: kokoro.log"
 
@@ -689,18 +686,15 @@ class FailedLoadTests(TempTree):
         self.assertIs(raised.exception, error)
         self.assertEqual(str(raised.exception), self.WORKER_ERROR)
 
-    def test_an_engine_without_a_launcher_keeps_its_error_and_is_not_probed(self):
-        asked = []
-
-        def probe(entry):
-            asked.append(entry["id"])
-            return missing_probe(entry)
-
+    def test_an_engine_without_a_launcher_leads_with_the_setup_guide_until_it_is_installed(self):
         error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: turbo.log")
         with self.assertRaises(WorkerRequestError) as raised:
-            self.failing_pool(error, probe=probe).load("turbo")
+            self.failing_pool(error).load("turbo")
+        self.assertEqual(str(raised.exception), f"{engine_checks.install_pointer(CATALOG['turbo'], missing_probe)} {error}")
+        self.assertTrue(str(raised.exception).startswith(f"{CATALOG['turbo']['name']} is not installed, and the Lab cannot"))
+        with self.assertRaises(WorkerRequestError) as raised:
+            self.failing_pool(error, probe=installed_probe).load("turbo")
         self.assertIs(raised.exception, error)
-        self.assertEqual(asked, [])
 
     def test_a_missing_environment_gets_the_pointer_before_any_worker_starts(self):
         error = WorkerUnavailable("Configured Python environment is missing for kokoro: .venv/Scripts/python.exe")

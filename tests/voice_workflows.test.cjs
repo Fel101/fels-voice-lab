@@ -200,3 +200,30 @@ test('the refresh button reads the voices again and says so, and a failure shows
   await h.node('refreshKokoroVoices').trigger('click');
   assert.equal(h.node('err').textContent,'service stopped');
 });
+
+test('the cloning picker starts on a model this computer has installed, and keeps a model the person chose',()=>{
+  const h=harness(),picker=h.node('cloneEngine');
+  assert.equal(picker.value,'drama-3','before the Models page has been read, the first model');
+  h.ctx.engineRows={turbo:{state:'not_checked',installation:{installed:true}},'drama-3':{state:'not_installed',installation:{installed:false}}};
+  h.ctx.VoiceLabWorkflows.refreshCloneEngine();
+  assert.equal(picker.value,'turbo');
+  picker.value='orig';picker.trigger('change');
+  h.ctx.VoiceLabWorkflows.render([]);h.ctx.VoiceLabWorkflows.refreshCloneEngine();
+  assert.equal(picker.value,'orig','a model the person chose stays chosen when the list is filled again');
+});
+
+test('the cloning picker says when the chosen model is not installed',()=>{
+  const h=harness(),help=h.node('cloneModelHelp');
+  h.ctx.engineRows={'drama-3':{state:'not_installed',installation:{installed:false}}};
+  h.ctx.VoiceLabWorkflows.refreshCloneEngine();
+  assert.match(help.textContent,/^Not installed on this computer yet; Models & features says what it needs\. Fish Audio:/);
+  h.ctx.engineRows={'drama-3':{state:'not_checked',installation:{installed:true}}};
+  h.ctx.VoiceLabWorkflows.refreshCloneEngine();
+  assert.match(help.textContent,/^Fish Audio:/);
+});
+
+test('a studio clip from a model that cannot clone goes to an installed cloning model',()=>{
+  const h=harness();h.ctx.engineRows={voxcpm2:{state:'usable',installation:{installed:true}}};
+  h.ctx.VoiceLabWorkflows.openFromClip(new Blob(['voice']),{engine:'kokoro',text:'Verify this speech.'});
+  assert.equal(h.node('cloneEngine').value,'voxcpm2');
+});

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — 2026-10-28
+## 0.1.0 — unreleased
 
 The first public release, for Windows 10/11 and Python 3.12. It runs from source, and model runtimes are installed
 separately ([setup](docs/SETUP.md)). What was and was not checked for each model is in
@@ -115,7 +115,7 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
   missing Kokoro points to Install on its card and to `setup-kokoro.bat`, as does the error of speaking before it is
-  installed. Results are
+  installed. A model without a guided installer that is missing files says so, and points to the setup guide. Results are
   kept per device. A stored test carries a fingerprint of the model pin and the packages installed in its environment, and
   reads "test out of date" when either changes. A speed table shows the median real-time factor per family and device from
   clips and tests this service generated.
@@ -127,9 +127,12 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   cannot install that model yet. (`POST /api/engines/{engine_id}/install`; `GET /api/engines/status` reports the install.)
 - **RAM on each card.** Every card says how much free RAM the Lab wants before it loads that model, and the section says how
   much RAM this computer has. A card turns red when the whole computer has less than that or when less is free right now.
+  Kokoro asks for 3 GB: one worker held 1.2 GB once loaded and peaked at 1.8 GB on a line of about 1,000 characters. The
+  numbers live in one table, `ram_needs.py`, and `min_free_ram_gb` in `runtime.local.json` changes them for one computer.
 - **First run.** A studio with no model installed says so at the top of Model studio and links to Models & features. The
   model pickers in Model studio and Voice cloning mark each model that is not installed, and Model studio says what to do
-  about the one you picked. On Models & features the models the app cannot install yet are folded under "More models", with a
+  about the one you picked. Voice cloning starts on a cloning model this computer has installed, keeps one you chose, and
+  says when the chosen one is not installed. On Models & features the models the app cannot install yet are folded under "More models", with a
   count, and the glossary sits under "What these words mean".
 - **Themes.** **Dark** is now neutral grey. The earlier dark green theme is still there as **Forest**, and System follows
   Windows to Light or the neutral Dark. Compare uses the same choice. Its primary button had white text on the light accent in
@@ -183,7 +186,17 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 - **Waiting connections.** The service keeps up to 128 connections waiting for it, not Python's 5. A page asks for its ten
   scripts side by side, and Windows refuses the connection that finds the queue full, so a page opened while the service
   was busy for a moment would come up without one of them.
+- **Local only, from a browser too.** Another website's page may open the Lab's pages in a tab and nothing more: any other
+  request it makes is refused by its `Sec-Fetch-Site`, including the plain GETs, such as an `<audio>`, that carry no `Origin`.
+  A path in a request is checked against the Lab's folders before Windows opens it, so `/api/reference-audio` and `/out/`
+  never reach for a network share. Every answer says that another site may not frame it (`X-Frame-Options`,
+  `frame-ancestors`) or read it as another type (`nosniff`).
+- **Every request is answered.** An error a route does not handle comes back as a `500` that names it, and a Drama job that
+  does not exist as a `404`, instead of a closed connection that a page can only report as "Failed to fetch".
 - **Core install.** The core install works without `librosa` and `misaki`; both are imported only where they are used.
+  `setup.bat` checks that Python 3.12 starts, and gives the link to the 3.12.10 installer when it does not. A setup that was
+  interrupted is finished by running it again; an existing `.venv` that cannot load the core says what to do instead of
+  showing a traceback, and is still never changed. Setting up inside a folder OneDrive syncs gets a warning first.
 - **Version.** The one version number lives in `app_version.py`. The page footer, `/api/health`, the service log and
   `serve.py --version` all read it.
 
@@ -202,9 +215,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 
 ### Checked
 
-- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1235 Python
-  tests (16 skipped, for model packages and files, FFmpeg encoders and link privileges that environment lacks), 185 Node
-  tests and `tools/check_repo.py`.
+- In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`, 1250 Python
+  tests (the skipped ones need model packages and files, FFmpeg encoders or link privileges that environment lacks), 188
+  Node tests and `tools/check_repo.py`.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
   It also takes the screenshots in the README.
@@ -248,7 +261,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   Kokoro installer's for the download code the two share, cover them with stand-ins.
 - **Install button and RAM figures.** Only the Kokoro and Phonon cards have an Install button, and they have no Stop button.
   Their progress is the installer's own output, so a quiet step, such as pip unpacking PyTorch, can show nothing new for
-  minutes. The RAM on a card is the Lab's own rule for loading a model, not a measurement of what the model uses.
+  minutes. The RAM on a card is the Lab's own rule for loading a model. Only Kokoro's and Phonon's come from a measured peak;
+  the others are not a measurement of what the model uses.
 - **What the numbers mean.** The language screen is not a listening test. Take checks and loudness readings describe audio
   and nothing else, a voice match is a proxy whose bands come from one target voice, word-time boundary accuracy is
   unmeasured, and the lip-sync mouth shapes have not been checked against a face or by ear.

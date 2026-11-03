@@ -1,4 +1,4 @@
-"""Type-and-listen test page for Kokoro and Chatterbox.
+"""Fel's Voice Lab's local service: the studio pages, the stores behind them and the HTTP API (docs/API.md).
 
     .venv\\Scripts\\python serve.py          then open http://127.0.0.1:8765
 
@@ -10,6 +10,7 @@ The /api/speak endpoint keeps a simple request and WAV response shape for extern
 import argparse
 import base64
 from datetime import datetime
+import functools
 import hashlib
 import io
 import json
@@ -25,6 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs as parse_drama_query
 
 from common import LAB, OUT, free_ram_gb, pick_device, ram_report, require_ram
+from ram_needs import MIN_FREE_RAM_GB
 
 import soundfile as sf
 
@@ -59,12 +61,9 @@ from performance_settings import DEFAULTS, effective_settings, performance_contr
 from language_matrix import unscreened_languages
 from urllib.parse import quote
 
-MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
-                   'drama-3':26,
-                   "qwen3-tts-1.7b-voice-design": 10, "qwen3-tts-1.7b-base": 10,
-                   "qwen3-tts-0.6b-base": 10, "qwen3-tts-1.7b-custom-voice": 10,
-                   "voxcpm2": 10, "chatterbox-vc": 10}
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
+# The Lab's pages. Another website may open them in a tab, and may make no other request (Handler._local_only).
+PAGE_PATHS = ("/", "/index.html", "/compare", "/compare.html")
 MAX_REQUEST_BYTES = 64 * 1024
 MAX_SCENE_REQUEST_BYTES = 2 * 1024 * 1024
 # A body that is refused for its size is still read through, up to this size and this long, before the refusal goes out
@@ -192,6 +191,23 @@ def unscreened_by_engine(engine_ids):
     return {key: labels for key, labels in marks.items() if labels}
 
 
+def answer_unexpected_errors(method):
+    """Give a request whose route raised something it does not handle a 500 that names the error. Without one the connection
+    just closes, and the page can only say "Failed to fetch". An answer that had already started is left as it is; either
+    way handle_one_request writes the failure to the service log."""
+    @functools.wraps(method)
+    def answer(self):
+        try:
+            return method(self)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            raise
+        except Exception as exc:
+            if self._status:
+                raise
+            return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+    return answer
+
+
 def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
                  request_log=None, engine_installer=None):
     log = request_log or NullRequestLog()
@@ -287,14 +303,32 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
         def end_headers(self):
             self.send_header("X-Request-Id", self._rid())
+            # Another website may not show the Lab inside a frame of its own, where it could trick a click, and no answer is
+            # read as a type other than the one it is sent as.
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+            self.send_header("X-Content-Type-Options", "nosniff")
             super().end_headers()
 
         def _local_only(self):
             """Refuse DNS-rebinding (a foreign Host header) and requests made by another website's page
-            (a foreign Origin header). Callers that are not browsers, such as scripts, send no Origin."""
+            (a foreign Origin header). Callers that are not browsers, such as scripts, send no Origin.
+
+            A browser leaves Origin off a plain GET, such as an <audio> or <img> on another website, but every request it
+            sends says where it came from in Sec-Fetch-Site: "same-origin" from the Lab's own pages, "none" when the person
+            typed the address or opened a bookmark. From anywhere else ("cross-site", or "same-site" for a page on another
+            localhost port) the only request allowed is opening one of the Lab's pages in a tab."""
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
             if host not in LOCAL_HOSTS:
                 return False
+            site = self.headers.get("Sec-Fetch-Site")
+            if site is not None and site not in ("same-origin", "none"):
+                try:
+                    page = urlparse(self.path).path in PAGE_PATHS
+                except ValueError:
+                    return False
+                return (page and self.command == "GET" and self.headers.get("Sec-Fetch-Mode") == "navigate"
+                        and self.headers.get("Sec-Fetch-Dest") == "document")
             origin = self.headers.get("Origin")
             if origin:
                 try:
@@ -583,6 +617,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                        "X-Generation-Mode": generation_mode}
             return self._send(200, audio_body, "audio/wav", headers)
 
+        @answer_unexpected_errors
         def do_GET(self):
             if not self._local_only():
                 return self._json(403, {"error": "local requests only"})
@@ -830,8 +865,12 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             elif path == "/api/engines/status":
                 self._json(200, {**engines.engine_status(), "install": installer.snapshot()})
             elif path.startswith("/out/"):  # files the Lab wrote to its out folder, such as a converted voice
-                name = path[5:]
-                target = (OUT / name).resolve()
+                parts = path[5:].split("/")
+                # Plain names only. An empty or ".." part, a drive or a backslash could name something outside out/, and
+                # //server/share/x.wav would have Windows contact that server before the check below could refuse it.
+                if any(part in ("", ".", "..") or "\\" in part or ":" in part for part in parts):
+                    return self._json(404, {"error": "not found"})
+                target = OUT.joinpath(*parts).resolve()
                 ctype = {".wav": "audio/wav", ".json": "application/json"}.get(target.suffix)
                 if ctype and OUT.resolve() in target.parents and target.is_file():
                     self._send(200, target.read_bytes(), ctype)
@@ -840,6 +879,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             else:
                 self._json(404, {"error": "not found"})
 
+        @answer_unexpected_errors
         def do_POST(self):
             if not self._local_only():
                 # Another website's page sends its body too. A small one is read through so the refusal is not lost to the reset;
@@ -962,6 +1002,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 return self._json(413, {"error": str(exc)})
             except ValueError as exc:
                 return self._json(400, {"error": str(exc)})
+            except KeyError as exc:  # such as a Drama job that does not exist
+                return self._json(404, {"error": str(exc)})
+            except WorkerError as exc:
+                return self._json(exc.status_code, {"error": str(exc)})
 
             try:
                 if path == "/api/convert":

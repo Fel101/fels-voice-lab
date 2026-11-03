@@ -8,6 +8,7 @@ import numpy as np
 
 from common import LAB, free_ram_gb, release_gpu, require_ram, strip_tags, to_numpy, torch_runtime
 from phonon_support import PHONON_ENGINE_ID
+from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
 QWEN_ENGINE_IDS = {
@@ -20,10 +21,6 @@ ENGINE_IDS = {"kokoro", PHONON_ENGINE_ID, "turbo", "orig", "breeze-tts-2", VOXCP
               CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS}
 REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
-# Phonon peaked at about 0.6 GB in use, so 2 GB free is a wide margin.
-MIN_FREE_RAM_GB = {"kokoro": 8, PHONON_ENGINE_ID: 2, "turbo": 10, "orig": 10, "breeze-tts-2": 12,
-                   VOXCPM_ENGINE_ID: 10, CHATTERBOX_VC_ENGINE_ID: 10, 'drama-3':26,
-                   **{key: 10 for key in QWEN_ENGINE_IDS}}
 
 
 class EngineWorkerRuntime:
@@ -82,7 +79,7 @@ class EngineWorkerRuntime:
             return {"already_loaded": True, **self.health()}
         if self.engine_id == 'drama-3':
             from drama3_worker import Drama3Worker
-            require_ram(26, 'drama-3')
+            require_ram(MIN_FREE_RAM_GB['drama-3'], 'drama-3')
             self.drama3 = Drama3Worker('cpu' if params.get('cpu_only') else self.device)
             result = self.drama3.load()
             self.engine = self.drama3

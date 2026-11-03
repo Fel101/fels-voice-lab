@@ -117,7 +117,9 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 
 ## Start here
 
-1. Read [setup](docs/SETUP.md), install Python 3.12 (64-bit), and run `setup.bat`.
+1. Read [setup](docs/SETUP.md), install [Python 3.12](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)
+   (64-bit; the newer Python on python.org's front page does not work yet), put the Lab in a folder OneDrive does not sync,
+   such as `C:\voice-lab`, and run `setup.bat`.
 2. Run `setup-kokoro.bat` to add Kokoro, a small model that speaks on an ordinary CPU (about 600 MB of
    downloads; it shows its plan and asks first). `setup-phonon.bat` adds Phonon the same way: smaller
    still (about 80 MB), English only, with 37 preset voices. The core alone opens the studio and manages

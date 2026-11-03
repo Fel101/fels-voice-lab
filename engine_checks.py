@@ -120,16 +120,20 @@ def installation(entry, root=LAB):
 
 
 def install_pointer(entry, probe):
-    """Say where to install an engine that has a guided installer and is missing files; otherwise None.
+    """Say how to install an engine that is missing files: an engine with a guided installer is pointed at its Install button
+    and launcher, any other at the setup guide. None when its files are in place.
 
-    `probe` is installation() or a stand-in for it, and is called only for an engine with a launcher. EnginePool leads the
-    error of a failed load with this sentence, since that error is the first thing someone who has not installed the engine
-    sees. A retry is enough afterwards: the studio's Generate reads the installed voices again when its list is empty.
+    `probe` is installation() or a stand-in for it. EnginePool leads the error of a failed load with this sentence, since that
+    error is the first thing someone who has not installed the engine sees. A retry is enough afterwards: the studio's Generate
+    reads the installed voices again when its list is empty.
     """
-    launcher = GUIDED_INSTALLERS.get(entry["id"])
-    if launcher is None or probe(entry)["installed"]:
+    if probe(entry)["installed"]:
         return None
     name = entry.get("name", entry["id"])
+    launcher = GUIDED_INSTALLERS.get(entry["id"])
+    if launcher is None:
+        return (f"{name} is not installed, and the Lab cannot install it for you yet. Models & features lists the files it "
+                "needs, and the Model runtimes section of docs/SETUP.md says how to set it up.")
     return (f"{name} is not installed. Open Models & features and press Install on its card, or run {launcher} in the lab "
             "folder, then try again.")
 

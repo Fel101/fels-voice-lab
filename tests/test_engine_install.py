@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 import common
 import engine_checks
 import engine_install
+import ram_needs
 import reference_paths
 import serve
 import worker_pool
@@ -384,12 +385,28 @@ class CatalogTests(unittest.TestCase):
                 launcher = (ROOT / engine_checks.GUIDED_INSTALLERS[key]).read_text("utf-8")
                 self.assertIn(script.replace("/", "\\"), launcher)
 
-    def test_every_engine_the_service_offers_has_a_free_ram_need_and_the_two_tables_agree(self):
+    def test_every_engine_the_service_offers_has_a_free_ram_need_in_the_one_table(self):
         offered = {entry["id"] for entry in worker_pool.read_catalog()["engines"]
                    if entry.get("integration", {}).get("service_api") is True}
-        self.assertEqual(set(serve.MIN_FREE_RAM_GB), offered)
-        self.assertEqual(serve.MIN_FREE_RAM_GB, worker_runtime.MIN_FREE_RAM_GB)
-        self.assertTrue(all(isinstance(need, int) and need > 0 for need in serve.MIN_FREE_RAM_GB.values()))
+        self.assertEqual(set(ram_needs.DEFAULT_MIN_FREE_RAM_GB), offered)
+        self.assertIs(serve.MIN_FREE_RAM_GB, ram_needs.MIN_FREE_RAM_GB)
+        self.assertIs(worker_runtime.MIN_FREE_RAM_GB, ram_needs.MIN_FREE_RAM_GB)
+        self.assertTrue(all(isinstance(need, int) and need > 0 for need in ram_needs.DEFAULT_MIN_FREE_RAM_GB.values()))
+
+    def test_runtime_local_json_can_change_a_free_ram_need_for_one_computer(self):
+        defaults = {"kokoro": 3, "turbo": 10}
+        self.assertEqual(ram_needs.with_overrides(defaults, None), defaults)
+        self.assertEqual(ram_needs.with_overrides(defaults, {"kokoro": 1.5}), {"kokoro": 1.5, "turbo": 10})
+        self.assertEqual(ram_needs.with_overrides(defaults, {"turbo": 0}), {"kokoro": 3, "turbo": 0})
+        self.assertEqual(defaults, {"kokoro": 3, "turbo": 10})
+
+    def test_a_free_ram_override_that_cannot_be_used_is_refused_with_its_name(self):
+        defaults = {"kokoro": 3}
+        for overrides, words in (([1], "must map engines to GB"), ({"kokoro-2": 1}, "'kokoro-2', which is not one"),
+                                 ({"kokoro": -1}, "kokoro must be a number"), ({"kokoro": "2"}, "kokoro must be a number"),
+                                 ({"kokoro": True}, "kokoro must be a number"), ({"kokoro": float("nan")}, "kokoro must be")):
+            with self.subTest(overrides=overrides), self.assertRaisesRegex(ValueError, words):
+                ram_needs.with_overrides(defaults, overrides)
 
     def test_this_computers_ram_is_reported_in_gigabytes(self):
         report = common.ram_report()

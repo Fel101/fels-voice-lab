@@ -11,6 +11,7 @@ import time
 import numpy as np
 
 from common import LAB, require_ram
+from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
 SOURCE = LAB / "out" / "voxcpm2" / "source" / "src"
@@ -89,7 +90,7 @@ class VoxCPMWorker:
         if self.device != "cuda":
             raise RuntimeError("VoxCPM2 runs only on a GPU, and this service is using the CPU. "
                                "Start it without --device cpu, or use another engine.")
-        require_ram(10, "VoxCPM2")
+        require_ram(MIN_FREE_RAM_GB["voxcpm2"], "VoxCPM2")
         if not SOURCE.is_dir() or not MODEL.is_dir() or not BASE_SITE.is_dir():
             raise RuntimeError("Pinned VoxCPM2 source, snapshot, or shared ROCm runtime is missing; see docs/SETUP.md.")
 

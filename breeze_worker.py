@@ -15,6 +15,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from common import LAB, require_ram
+from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
 ENGINE_ID = "breeze-tts-2"
@@ -71,7 +72,7 @@ class BreezeWorker:
                 raise ValueError(f"Breeze worker is loaded with profile {self.profile!r}; reload it for {profile!r}.")
             return {"already_loaded": True, "profile": self.profile, "sample_rate": 24000}
 
-        require_ram(12, "Breeze TTS 2")
+        require_ram(MIN_FREE_RAM_GB["breeze-tts-2"], "Breeze TTS 2")
         os.environ["BREEZE_DECODE"] = profile
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"

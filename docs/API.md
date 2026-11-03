@@ -14,7 +14,8 @@ service answers `GET /api/openapi.json` with it.
 its own copy on a free port that it does not announce, so for scripts start `serve.py` yourself and use its address.
 
 **Local only.** The service listens on 127.0.0.1. A request whose `Host` is not `127.0.0.1` or `localhost`, or that a web page
-from another site made (it carries a foreign `Origin`), gets `403`. A script sends no `Origin` and is fine. There is no
+from another site made (it carries a foreign `Origin`, or a `Sec-Fetch-Site` other than `same-origin` or `none`), gets `403`;
+another site may only open the Lab's pages in a tab. A script sends neither header and is fine. There is no
 sign-in and no key: anything on this computer can call the service, so do not forward or proxy its port.
 
 **JSON.** Send a JSON object with `Content-Type: application/json`. A body may be up to 64 KiB; scene calls take 2 MiB and
