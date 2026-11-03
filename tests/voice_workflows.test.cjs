@@ -227,3 +227,12 @@ test('a studio clip from a model that cannot clone goes to an installed cloning 
   h.ctx.VoiceLabWorkflows.openFromClip(new Blob(['voice']),{engine:'kokoro',text:'Verify this speech.'});
   assert.equal(h.node('cloneEngine').value,'voxcpm2');
 });
+
+test('with no cloning model installed the picker starts on one the Lab can install, and says to press Install',()=>{
+  const h=harness(),picker=h.node('cloneEngine');
+  h.ctx.engineRows={'drama-3':{state:'not_installed',installation:{installed:false}},
+    turbo:{state:'not_installed',installation:{installed:false,installer:'setup-chatterbox.bat'}}};
+  h.ctx.VoiceLabWorkflows.refreshCloneEngine();
+  assert.equal(picker.value,'turbo');
+  assert.match(h.node('cloneModelHelp').textContent,/^Not installed on this computer yet; press Install on its card in Models & features\. Chatterbox Turbo:/);
+});

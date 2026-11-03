@@ -200,7 +200,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
-| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
@@ -260,7 +260,7 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 
 #### `POST /api/engines/{engine_id}/install`
 
-Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.
+Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.
 
 | Path parameter | Meaning |
 |---|---|
@@ -293,7 +293,7 @@ Load an engine into memory ahead of its first use.
 | Also answers | When |
 |---|---|
 | `409` | The GPU worker is busy. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder. |
 
 <a id="post-api-unload"></a>
 
@@ -395,7 +395,7 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|
 | `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder. |
 | `504` | The engine did not answer in time. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).

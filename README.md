@@ -98,7 +98,7 @@ Integrated families are Kokoro, Phonon 31M English, Chatterbox Original/Turbo/VC
 VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means the adapter and the
 interface exist. The **Models & features** page says whether a family is *installed* (its
 environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
-spoke one sentence), shows how much free RAM each family needs, and can install Kokoro or Phonon for you.
+spoke one sentence), shows how much free RAM each family needs, and can install Kokoro, Phonon or Chatterbox Turbo for you.
 Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
 
@@ -122,8 +122,11 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
    such as `C:\voice-lab`, and run `setup.bat`.
 2. Run `setup-kokoro.bat` to add Kokoro, a small model that speaks on an ordinary CPU (about 600 MB of
    downloads; it shows its plan and asks first). `setup-phonon.bat` adds Phonon the same way: smaller
-   still (about 80 MB), English only, with 37 preset voices. The core alone opens the studio and manages
-   its stores, but it cannot synthesize without a model. [Setup](docs/SETUP.md) covers the other models.
+   still (about 80 MB), English only, with 37 preset voices. To clone a voice, run `setup-chatterbox.bat`: it adds
+   Chatterbox Turbo, which speaks in the voice of any recording longer than five seconds, in an environment of
+   its own (about 3.4 GB of downloads and 5 GB on disk; it also shows its plan and asks first). The core alone
+   opens the studio and manages its stores, but it cannot synthesize without a model. [Setup](docs/SETUP.md)
+   covers the other models.
 3. Run `setup-desktop.bat` once. Use the **Fel's Voice Lab** desktop icon afterward. Its dedicated
    window runs without a console; closing it stops its backend.
 

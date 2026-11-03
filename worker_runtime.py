@@ -2,6 +2,7 @@
 
 import os
 import time
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
@@ -153,8 +154,10 @@ class EngineWorkerRuntime:
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
                     "memory": self.last_memory,
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if self.engine_id not in {"kokoro", PHONON_ENGINE_ID} and not DEFAULT_REFERENCE.is_file():
-            # Keep the existing service's synthetic fallback behavior. This creates no user recording.
+        if (self.engine_id not in {"kokoro", PHONON_ENGINE_ID} and not DEFAULT_REFERENCE.is_file()
+                and find_spec("kokoro") is not None):
+            # Keep the existing service's synthetic fallback behavior. This creates no user recording. Chatterbox runs in
+            # .venv-chatterbox, which has no Kokoro, so there it warms up with its built-in voice instead.
             from engines import ensure_reference
             ensure_reference()
         require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
@@ -167,7 +170,7 @@ class EngineWorkerRuntime:
         self.sample_rate = int(model.sr)
         print("Warming up the model ...", flush=True)
         try:
-            if self.engine_id in {"kokoro", PHONON_ENGINE_ID}:
+            if self.engine_id in {"kokoro", PHONON_ENGINE_ID} or not DEFAULT_REFERENCE.is_file():
                 model.speak("Hello there.")
             elif self.engine_id == "orig":
                 model.prepare_reference(str(DEFAULT_REFERENCE), exaggeration=0.5)

@@ -42,9 +42,16 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
         self.pool.close()
         self.temp.cleanup()
 
+    def entry(self, engine):
+        """The catalog entry, run by the core Python when the engine's own environment (such as .venv-chatterbox) is not here."""
+        entry = dict(self.pool.entries[engine])
+        if not (ROOT / entry['runtime']['python']).is_file():
+            entry['runtime'] = {**entry['runtime'], 'python': sys.executable}
+        return entry
+
     def test_launch_environment_overrides_inherited_roots(self):
         with patch.dict(os.environ, {REFERENCE_ROOTS_ENV:'["inherited"]', CONVERSION_SOURCE_ROOTS_ENV:'["inherited"]'}):
-            worker = self.pool._new_worker("orig", self.pool.entries["orig"])
+            worker = self.pool._new_worker("orig", self.entry("orig"))
         self.assertEqual(json.loads(worker.env[REFERENCE_ROOTS_ENV]), [str(self.refs.resolve())])
         self.assertEqual(json.loads(worker.env[CONVERSION_SOURCE_ROOTS_ENV]), [str(self.takes.resolve())])
         self.assertEqual(worker.env["HF_HUB_OFFLINE"], "1")
@@ -128,7 +135,7 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
             serve._conversion_audio_path(str(self.outside), "Source", cast=cast)
         self.assertIn(str(self.reference), {row['path'] for row in serve._conversion_asset_rows(cast, target=True)})
         self.assertIn(str(self.source), {row['path'] for row in serve._conversion_asset_rows(cast)})
-        worker = self.pool._new_worker("chatterbox-vc", self.pool.entries["chatterbox-vc"])
+        worker = self.pool._new_worker("chatterbox-vc", self.entry("chatterbox-vc"))
         script = """from chatterbox_vc_worker import _resolve_audio
 import sys
 assert str(_resolve_audio(sys.argv[1], 'Target voice reference')) == sys.argv[1]

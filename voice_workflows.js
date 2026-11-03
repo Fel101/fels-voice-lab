@@ -115,14 +115,15 @@
     fillReferenceSelector(selector,previous,'Choose a saved recording, or upload above');
     fillCloneEngines();
   }
-  // The first cloning model in the picker that this computer has installed, as the Models page last read it, or the first
-  // model in the picker when none is (or the page has not read it yet).
+  // The first cloning model in the picker that this computer has installed, as the Models page last read it; when none is,
+  // the first one the Lab can install for you; and the first in the picker before the page has read anything.
   function preferredCloneEngine(select) {
     var status = global.engineRows || {}, offered = Array.from(select.options).map(function (item) { return item.value; });
-    var installed = offered.find(function (id) {
-      return status[id] && status[id].installation && status[id].installation.installed;
-    });
-    return installed || offered[0] || '';
+    function first(test) {
+      return offered.find(function (id) { return status[id] && test(status[id].installation || {}); });
+    }
+    return first(function (setup) { return setup.installed; }) || first(function (setup) { return !!setup.installer; }) ||
+      offered[0] || '';
   }
   function fillCloneEngines() {
     var select = el('cloneEngine'), before = select.value;
@@ -149,8 +150,9 @@
   function syncCloneEngine() {
     var engine = el('cloneEngine').value, status = (global.engineRows || {})[engine];
     el('cloneDirectionWrap').hidden = engine === 'orig' || engine === 'turbo';
-    var missing = status && status.state === 'not_installed' ?
-      'Not installed on this computer yet; Models & features says what it needs. ' : '';
+    var missing = !status || status.state !== 'not_installed' ? '' : (status.installation || {}).installer ?
+      'Not installed on this computer yet; press Install on its card in Models & features. ' :
+      'Not installed on this computer yet; Models & features says what it needs. ';
     el('cloneModelHelp').textContent = missing + (engine === 'drama-3' ?
       'Fish Audio: exact transcript required. Runs on CPU; a cold test can take several minutes. Fish license conditions apply.' :
       engine === 'breeze-tts-2' ? 'Breeze: exact transcript required. Model and self-hosted outputs are non-commercial.' :

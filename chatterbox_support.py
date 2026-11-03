@@ -1,6 +1,23 @@
-"""Validated, checkpoint-specific controls for the installed Chatterbox TTS APIs."""
+"""Validated, checkpoint-specific controls for the installed Chatterbox TTS APIs, and where Turbo's pinned files are."""
 
+import json
 import math
+from pathlib import Path
+
+LAB = Path(__file__).resolve().parent
+TURBO_ENGINE_ID = "turbo"
+# What ChatterboxTurboTTS.from_local reads from the snapshot. catalog/chatterbox_turbo_snapshot.json lists the same files with
+# their checksums (plus the model card) for tools/install_chatterbox.py, and tests/test_install_chatterbox.py keeps them in step.
+TURBO_FILES = ("added_tokens.json", "conds.pt", "merges.txt", "s3gen_meanflow.safetensors", "special_tokens_map.json",
+               "t3_turbo_v1.safetensors", "tokenizer_config.json", "ve.safetensors", "vocab.json")
+
+
+def turbo_snapshot_dir(root=LAB):
+    """The pinned hf-cache snapshot of Chatterbox Turbo, at the revision catalog/engines.json names. Reads only the catalog."""
+    catalog = json.loads((Path(root) / "catalog" / "engines.json").read_text(encoding="utf-8"))
+    entry = next(item for item in catalog["engines"] if item["id"] == TURBO_ENGINE_ID)
+    return (Path(root) / "hf-cache" / "hub" / f"models--{entry['checkpoint'].replace('/', '--')}" / "snapshots"
+            / entry["local_revision"])
 
 
 CHATTERBOX_SAMPLING_FIELDS = {

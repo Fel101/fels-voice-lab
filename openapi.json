@@ -211,7 +211,7 @@
     "/api/engines/{engine_id}/install": {
       "post": {
         "operationId": "post_api_engines_engine_id_install",
-        "summary": "Install an engine that has a guided installer (Kokoro or Phonon): read its plan, or run the installer.",
+        "summary": "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.",
         "tags": [
           "Service"
         ],
@@ -330,7 +330,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {
@@ -663,7 +663,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro or Phonon), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat` or `setup-phonon.bat`) in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder.",
             "content": {
               "application/json": {
                 "schema": {

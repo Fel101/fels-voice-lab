@@ -4,9 +4,10 @@ This is an early Windows release that runs from source, not a bundled
 installer with every model. Python 3.12 x64 is the supported starting point.
 Models and their runtime packages must be installed separately. A fresh core
 installation opens the studio and its stores; it cannot synthesize speech until
-a compatible model runtime and checkpoint are available. `setup-kokoro.bat`
-and `setup-phonon.bat` each install one, [Kokoro](#kokoro-on-the-cpu) and
-[Phonon](#phonon-on-the-cpu), and both speak on an ordinary CPU.
+a compatible model runtime and checkpoint are available. `setup-kokoro.bat`,
+`setup-phonon.bat` and `setup-chatterbox.bat` each install one, [Kokoro](#kokoro-on-the-cpu),
+[Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu), and all three
+speak on an ordinary CPU. Chatterbox Turbo is the one that clones a voice from a recording.
 
 ## Core and desktop
 
@@ -180,6 +181,90 @@ passed (2.6 s of audio in 0.3 s); and all 37 voices spoke, each a different clip
 missing DLL, install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the
 installer again. Other Windows setups have not been tried.
 
+## Chatterbox Turbo on the CPU
+
+Chatterbox Turbo 350M, from Resemble AI, clones a voice: give it a recording of more than five seconds and it speaks new English
+lines in that voice. It also performs tags such as `[laugh]`, `[chuckle]` and `[cough]` written into the text. It runs on an
+ordinary computer without a graphics card, though more slowly than it speaks (see below). After `setup.bat`, run
+
+```powershell
+setup-chatterbox.bat
+```
+
+or `.venv\Scripts\python.exe tools\install_chatterbox.py`. It prints its plan and asks before it changes anything. `--dry-run` shows
+the plan and runs the checks without changing anything, and `--yes` accepts the plan without asking. The **Install** button on the
+Chatterbox Turbo card of **Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
+
+Chatterbox gets a Python environment of its own, `.venv-chatterbox`: it needs PyTorch 2.6, and Kokoro's installer puts PyTorch 2.12
+in `.venv`, so the two cannot share one. The installer makes it from the same Python 3.12 that `setup.bat` used, and installs into
+this folder, in `.venv-chatterbox`, `hf-cache` and `out\chatterbox`:
+
+1. **73 pinned Python packages** from [requirements/chatterbox-cpu.txt](../requirements/chatterbox-cpu.txt), among them PyTorch 2.6
+   for the CPU, Transformers, librosa and `chatterbox-tts` 0.1.7 itself: 400 MB to download and 2.0 GB installed. pip checks every
+   file against the SHA-256 in that list. They are the versions pip resolved for `chatterbox-tts` 0.1.7 with the core's NumPy and
+   SoundFile, less what Turbo never imports: the Gradio demo apps, the Japanese and Chinese text packages of Chatterbox's
+   multilingual model, and a developer tool. setuptools stays at 81.0.0, because Chatterbox's watermarker imports `pkg_resources`,
+   which later releases dropped. pip also keeps its downloads in its usual cache in your user profile.
+2. **The Turbo checkpoint** at the pinned revision (749d1c1) of `ResembleAI/chatterbox-turbo` on Hugging Face: the 1.9 GB language
+   model, the 1.1 GB speech decoder, the speaker encoder, the built-in voice, the tokenizer and the model card, 3.0 GB in all. The
+   repository's ten-step decoder, another 1.1 GB that Turbo does not use, is left out. Every file is checked against the SHA-256 in
+   [catalog/chatterbox_turbo_snapshot.json](../catalog/chatterbox_turbo_snapshot.json). An interrupted download resumes where it
+   stopped, and a file that fails its check is deleted rather than kept.
+3. **A speech check that clones.** A fresh process in `.venv-chatterbox` loads Turbo without using the network, speaks a paragraph
+   in its built-in voice, clones that recording, and speaks the Models page's check sentence in the cloned voice. Both clips stay
+   in `out\chatterbox` (`install-reference.wav` and `install-check.wav`) beside a small receipt of what was installed, which also
+   records how the voice match scored the clone against its reference.
+
+Run it again to continue after an interruption or to repair a damaged file: it installs only what is missing. It stops before it
+changes anything when it is not run with this folder's own Python, when a package it pins is already in `.venv-chatterbox` at
+another version, when this folder's path is too long for Windows' 259-character limit (move the lab to a path such as
+`C:\voice-lab`, or switch on long paths in Windows), or when the disk is too full: a first install needs about 6 GB free. To run
+Chatterbox on a graphics card, make `.venv-chatterbox` yourself with a GPU build of PyTorch and `chatterbox-tts`, then run the
+installer with `--checkpoint-only`: it fetches the model files and leaves your packages alone. Only the CPU recipe has been tried.
+
+To clone a voice, open **Voice cloning**, choose Chatterbox Turbo, record or choose a recording longer than five seconds, write
+down its words, where it came from and what it may be used for, and press **Save voice and generate test**. **Test** on the Models
+page speaks in the built-in voice, unless `reference\af_heart.wav` exists (the clip Kokoro makes), which it then clones. A call to
+`/api/speak` that clones must name its `reference_path` unless that clip exists; with `clone` set to false it uses the built-in
+voice.
+
+Chatterbox Original (500M) and Voice Conversion run in the same `.venv-chatterbox`, so after this install they need only their own
+checkpoint, `ResembleAI/chatterbox` at revision 5bb1f6e in `hf-cache\hub`, which no installer fetches yet.
+
+Licences: the Chatterbox code (`chatterbox-tts`) and the Turbo weights are MIT (Resemble AI; the model card says so), and a few
+of its decoder files keep Apache-2.0 headers from CosyVoice. Every clip Chatterbox makes carries Resemble AI's Perth watermark, a
+mark you cannot hear that detection tools can find; the Lab does not remove it. Most of the packages are MIT, BSD or Apache. soxr
+and the libsndfile library inside SoundFile are LGPL-2.1, and certifi and tqdm are MPL-2.0. They are installed on your computer at
+your request and are not part of this repository. The model card asks that it not be used to do harm; read
+[responsible use](RESPONSIBLE_USE.md) before you clone anyone's voice.
+
+What it does here, measured on one computer with only the CPU (an 8-core AMD Ryzen 7 PRO 8845HS): it loads in 10 to 30 seconds
+(the first load after installing is the slow one, and the Models page's load includes a short warm-up line), prepares a voice
+from a recording in one to three seconds, and takes two and a half to three times as long as the speech it makes (a real-time
+factor of 2.5 to 3). One worker holds 3.3 GB when loaded, peaked at 6.1 GB while it loaded (the weights are read whole
+before they are copied into the model), and held 5.0 GB after speaking a line of 1,200 characters; the Lab asks for 8 GB of free
+RAM before it loads it ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). Keep lines to a few
+sentences: given 1,200 characters, it stopped after 30 to 36 seconds of audio, and the
+take's checks flag audio much shorter than its text.
+
+To remove Chatterbox, delete `.venv-chatterbox`, `hf-cache\hub\models--ResembleAI--chatterbox-turbo` and `out\chatterbox`. The voice
+match then says it is not installed.
+
+If you set Chatterbox up in `.venv` by hand before this installer existed, the Lab now looks for it in `.venv-chatterbox`. Run the
+installer, which keeps the checkpoint files already in `hf-cache` and fetches only what is missing, or build `.venv-chatterbox`
+yourself with the packages you had (a GPU build of PyTorch, say) and run it with `--checkpoint-only`.
+
+The recipe was checked on one Windows 11 computer with Python 3.12.10, using only the CPU, from fresh clones of the repository
+after `setup.bat`. `setup-chatterbox.bat` made `.venv-chatterbox` and installed the 73 packages (pip's cache was warm), and was
+stopped part way through the download. Run again, it kept the packages, resumed the half-fetched file where it stopped, and
+finished in 252 seconds; its speech check spoke in the built-in voice and cloned it. In the studio started from that folder,
+**Test** passed (2.4 s of audio in 6.6 s), and the calls the Voice cloning page makes saved a voice from an 11.5-second recording
+and spoke a test line in it: the voice match scored that take 0.92 against the recording and 0.78 against Turbo's built-in
+voice. In a second fresh clone, **Install** on the Turbo card ran the installer in 308 seconds with the model files already in
+`hf-cache`, and **Test** then passed. If the speech check fails with a message about a missing DLL, install the
+[Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again. Other
+Windows setups have not been tried.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
@@ -194,7 +279,7 @@ not use). The app, Cast and scene export run without them.
 |---|---|---|
 | Kokoro | `.venv/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned CPU runtime and checkpoint ([above](#kokoro-on-the-cpu)). |
 | Phonon 31M English | `.venv/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
-| Chatterbox Original/Turbo/VC | `.venv/Scripts/python.exe` | Install matching engine packages and checkpoints after choosing CPU/CUDA/ROCm PyTorch. Existing runtime verified on Windows/AMD; universal installation has not been established. |
+| Chatterbox Original/Turbo/VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned CPU runtime and Turbo's checkpoint ([above](#chatterbox-turbo-on-the-cpu)). Original and VC use the same environment and need the `ResembleAI/chatterbox` checkpoint, which no installer fetches yet. A GPU build of PyTorch is yours to install there. |
 | Breeze | `.venv-breeze/Scripts/python.exe` | Separate environment, BF16 standalone wrapper. Needs the pinned checkpoint and text/audio tokenizer files. Review its non-commercial model license first. |
 | faster-Qwen | `.venv-fqwen/Scripts/python.exe` | Separate environment; faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1, Transformers 5.15.1 were tested locally. Needs exact catalog snapshots. Stock qwen-tts is a different comparison runtime. |
 | VoxCPM2 | Dedicated catalog environment and pinned source/ROCm overlay | Needs a GPU with at least 8 GB of memory (it peaked at 5.6 GB). Tested only on one AMD Radeon AI PRO R9700 with ROCm. It reads pinned source under `out/voxcpm2/source/src` and the Qwen environment's packages, so it is not a portable automatic installation. |
@@ -246,9 +331,10 @@ references still import, and the export panel and the import errors say what is 
 use an isolated `.venv-asr` environment built from `requirements/asr-faster-whisper.txt` and a local copy of the Systran faster-whisper-tiny snapshot (revision d90ca5fe) in `hf-cache/faster-whisper-tiny-d90ca5fe`; `align_takes.py` uses the same pair for word times ([alignment notes](ALIGNMENT.md)).
 The UI reports unavailable if they are absent. Speaker matching (the voice match on
 takes, the second-voice warning in the reference screen, and the identity checks on
-cleaned and imported clips) needs the Chatterbox Turbo speaker encoder: the `chatterbox`
-package in `.venv` and `ve.safetensors` from the pinned Chatterbox Turbo snapshot in
-`hf-cache` (the checkpoint the Turbo engine uses). The two bands that label a score
+cleaned and imported clips) needs only Chatterbox Turbo's speaker encoder, `ve.safetensors`
+in the pinned Turbo snapshot in `hf-cache`, which `setup-chatterbox.bat` fetches. The Lab runs
+that encoder itself with NumPy, so neither PyTorch nor Chatterbox has to be in `.venv`; its
+tests hold it to embeddings that Chatterbox made. The two bands that label a score
 ship in [catalog/speaker_similarity.json](../catalog/speaker_similarity.json), so
 nothing needs measuring first. The encoder is not required to start; without it those
 checks say they did not run.
@@ -283,4 +369,5 @@ Three things are outside the folder:
   its own folder.
 
 The desktop window runs in private mode and deletes its temporary browser data when it closes, so it leaves nothing behind. To
-remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu) or [Phonon on the CPU](#phonon-on-the-cpu).
+remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu), [Phonon on the CPU](#phonon-on-the-cpu) or
+[Chatterbox Turbo on the CPU](#chatterbox-turbo-on-the-cpu).

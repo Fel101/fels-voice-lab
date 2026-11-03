@@ -179,7 +179,7 @@ class InstallationTests(TempTree):
                     self.assertNotIn("installer", installation(entry, self.root))
 
     def test_every_launcher_named_is_in_the_lab_folder_and_belongs_to_an_integrated_engine(self):
-        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en"})
+        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en", "turbo"})
         for engine, launcher in engine_checks.GUIDED_INSTALLERS.items():
             with self.subTest(engine=engine):
                 self.assertIs(CATALOG[engine]["integration"].get("service_api"), True)
@@ -469,8 +469,9 @@ class StatusPayloadTests(unittest.TestCase):
         rows, _ = self.rows("cpu", probe=lambda entry: installation(entry, empty_lab))
         self.assertEqual(rows["kokoro"]["state"], "not_installed")
         self.assertEqual(rows["kokoro"]["installation"]["installer"], "setup-kokoro.bat")
-        self.assertEqual(rows["turbo"]["state"], "not_installed")
-        self.assertNotIn("installer", rows["turbo"]["installation"])
+        self.assertEqual(rows["turbo"]["installation"]["installer"], "setup-chatterbox.bat")
+        self.assertEqual(rows["orig"]["state"], "not_installed")
+        self.assertNotIn("installer", rows["orig"]["installation"])
 
     def test_conversion_is_reported_as_a_task_not_a_speech_check(self):
         rows, _ = self.rows("cpu")
@@ -687,13 +688,13 @@ class FailedLoadTests(TempTree):
         self.assertEqual(str(raised.exception), self.WORKER_ERROR)
 
     def test_an_engine_without_a_launcher_leads_with_the_setup_guide_until_it_is_installed(self):
-        error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: turbo.log")
+        error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: orig.log")
         with self.assertRaises(WorkerRequestError) as raised:
-            self.failing_pool(error).load("turbo")
-        self.assertEqual(str(raised.exception), f"{engine_checks.install_pointer(CATALOG['turbo'], missing_probe)} {error}")
-        self.assertTrue(str(raised.exception).startswith(f"{CATALOG['turbo']['name']} is not installed, and the Lab cannot"))
+            self.failing_pool(error).load("orig")
+        self.assertEqual(str(raised.exception), f"{engine_checks.install_pointer(CATALOG['orig'], missing_probe)} {error}")
+        self.assertTrue(str(raised.exception).startswith(f"{CATALOG['orig']['name']} is not installed, and the Lab cannot"))
         with self.assertRaises(WorkerRequestError) as raised:
-            self.failing_pool(error, probe=installed_probe).load("turbo")
+            self.failing_pool(error, probe=installed_probe).load("orig")
         self.assertIs(raised.exception, error)
 
     def test_a_missing_environment_gets_the_pointer_before_any_worker_starts(self):

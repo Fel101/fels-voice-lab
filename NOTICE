@@ -4,6 +4,9 @@ Copyright 2026 Pete Hudson
 Includes Apache-2.0 adaptations of ComfyUI-Breeze-TTS-2 by saganaki22,
 BreezeBlue Breeze TTS, Qwen3-TTS by The Qwen team / Alibaba Group,
 and configuration/model components credited to Sesame and The HuggingFace Inc.
+Includes a NumPy port of the speaker encoder of Chatterbox by Resemble AI (MIT),
+adapted from Real-Time-Voice-Cloning by Corentin Jemine (MIT), with steps that
+follow librosa (ISC).
 See THIRD_PARTY_NOTICES.md and licenses/ for scope and full license texts.
 
 Modified files retain their original attribution and document local changes.

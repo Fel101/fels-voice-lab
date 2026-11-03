@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from chatterbox_support import TURBO_ENGINE_ID, TURBO_FILES
 from kokoro_support import discover_kokoro_voices
 from phonon_support import PHONON_ENGINE_ID, VOICE_CATALOG, default_voice, voice_names
 
@@ -31,9 +32,12 @@ TOP_LEVEL_CACHE = {"voxcpm2"}
 EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src", ".venv-fqwen/Lib/site-packages")}
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place. installation() names it while files are missing.
-GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat"}
+GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
-REQUIRED_PACKAGES = {PHONON_ENGINE_ID: ("ptts",)}
+# The three Chatterbox engines share .venv-chatterbox, which the Turbo installer makes before it installs anything into it.
+REQUIRED_PACKAGES = {PHONON_ENGINE_ID: ("ptts",), **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, "orig", "chatterbox-vc")}}
+# Files an engine's snapshot must hold, beyond having a weight file: Turbo cannot load with any of these missing.
+REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
@@ -104,6 +108,8 @@ def installation(entry, root=LAB):
             missing.append(checkpoint)
         elif not any(item.is_file() and item.suffix in WEIGHT_SUFFIXES for item in snapshot.iterdir()):
             missing.append(f"{checkpoint} (no weight file)")
+        else:
+            missing.extend(f"{checkpoint}/{name}" for name in REQUIRED_FILES.get(engine, ()) if not (snapshot / name).is_file())
         voices = entry.get("backend", {}).get("voices_checkpoint")
         if voices:
             # A second pinned repository holds the preset voices the model speaks with; without its catalog nothing can be chosen.
@@ -174,7 +180,11 @@ def smoke_request(engine, loaded=None, *, root=LAB):
         return {**base, "voice": "af_heart" if not voices or "af_heart" in voices else voices[0]}
     if engine == PHONON_ENGINE_ID:
         return {**base, "voice": default_voice(voice_names(root))}
-    if engine in {"turbo", "orig"}:
+    if engine == TURBO_ENGINE_ID and not (Path(root) / "reference" / "af_heart.wav").is_file():
+        # Turbo clones the default reference when there is one (Kokoro makes it). Its own environment cannot make it, so
+        # without it the check speaks in the built-in voice: the installer's speech check is the one that clones.
+        return {**base, "clone": False}
+    if engine in {TURBO_ENGINE_ID, "orig"}:
         # Turbo clones the default reference and Original uses its built-in voice, as a default call does.
         return base
     if engine in DESIGN_ENGINES:
