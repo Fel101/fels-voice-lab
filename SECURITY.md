@@ -20,14 +20,19 @@ you or your library. `update.bat` takes files only from github.com over HTTPS, r
 not match its tag, and keeps a copy of everything it replaces. Releases are not signed, so an update trusts this GitHub
 repository just as the first download did.
 
-Do not put credentials or personal recordings in a public issue. Report security
-problems through GitHub's private vulnerability reporting feature after the
-maintainer enables it. If that feature is unavailable, open an issue requesting
-a private contact without including exploit details or personal data.
-
 `tools/check_repo.py` is a heuristic check of the files Git would publish, not a
 guarantee that every possible secret, dependency vulnerability or rights issue is
 absent. It finds private keys and provider tokens, personal Windows home paths,
 recordings, model files, databases and logs, and Markdown links to pages that are
 missing. It looks for personal names or other words only if you list them in a
 file and pass it with `--deny-file`.
+
+## Reporting a security problem
+
+Report it privately, not in a public issue: use
+[GitHub's form for reporting a vulnerability](https://github.com/Fel101/fels-voice-lab/security/advisories/new)
+(or **Report a vulnerability** on the repository's **Security** tab). You need to be
+signed in to GitHub. Only the maintainer sees the report, and you can discuss it there
+until a fix is out. If you cannot use the form, open an issue asking for a private
+contact, with no exploit details or personal data in it. Never put credentials or
+personal recordings in a public issue.
