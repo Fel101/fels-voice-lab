@@ -64,6 +64,8 @@ appearance before the page paints.
 | What does a performance's setting accept? | [performance_settings.py](../performance_settings.py) |
 | What label does a clip carry inside its file? | [synthetic_label.py](../synthetic_label.py) |
 | What does the copied report say? | [system_report.py](../system_report.py) and [hardware.py](../hardware.py) |
+| Which NVIDIA build runs on this card? | `card_problems` in each installer, from [hardware.py](../hardware.py)'s `nvidia_cards`; `worker_runtime.usable_device` at run time |
+| Is there a newer release, and how does a folder get it? | [updates.py](../updates.py) (the check) and [tools/update.py](../tools/update.py) (`update.bat`) |
 
 ## Adding
 

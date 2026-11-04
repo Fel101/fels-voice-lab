@@ -185,7 +185,7 @@ class StoresAndHandlerTests(unittest.TestCase):
             with urllib.request.urlopen(request, timeout=10) as response:
                 self.assertEqual(response.status, 200)
             self.assertEqual(json.loads((root / "data" / "ui" / "preferences.json").read_text(encoding="utf-8")),
-                             {"theme": "dark"})
+                             {"theme": "dark", "check_updates": False})
 
 
 class ShutdownTests(unittest.TestCase):

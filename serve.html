@@ -54,6 +54,8 @@ main { max-width:1440px; padding:0 28px 60px; display:grid; grid-template-column
 .theme-status { flex-basis:100%; max-width:36ch; color:var(--err); font-size:.8rem; }
 .theme-status:empty { display:none; }
 .local-badge,.eyebrow { font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.update-badge { font-size:.8rem; font-weight:650; color:var(--accent); background:var(--soft); padding:5px 10px; border-radius:999px; text-decoration:none; }
+.update-badge:hover { text-decoration:underline; }
 .workspace-nav { display:flex; flex-direction:column; gap:5px; align-self:start; position:sticky; top:20px; margin:28px 0; }
 .workspace-nav a { padding:11px 14px; border-radius:9px; color:var(--muted); text-decoration:none; font-weight:550; }
 .workspace-nav a:hover { background:var(--soft); color:var(--fg); }
@@ -120,7 +122,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:700px){main{display:block;padding:0 16px 40px}.app-header{padding:22px 0 18px}.local-badge{display:none}.workspace-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px;margin:16px 0}.workspace-nav .eyebrow{display:none}.workspace-nav a{padding:8px 10px;font-size:.85rem}.workspace-nav .nav-secondary{margin:0;padding-top:8px;border:0}.workspace{margin:18px 0;padding:20px}.workspace h2{font-size:1.35rem}.field.compact{flex:1 1 140px}.scene-line{padding:14px}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script src="/theme.js" defer></script></head><body><main>
-<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
+<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a></nav>
 
 <section class="card" id="cloning">
@@ -550,6 +552,11 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <details><summary>Show the report</summary><p class="meta">This is exactly what is copied. It holds no scripts, transcripts, names of characters or voices, or recordings, and your home folder reads as ~.</p><pre id="systemDiagnostics" class="meta"></pre></details>
 <h3>This installation</h3>
 <dl class="facts" id="systemFacts"></dl>
+<h3>Updates</h3>
+<p class="meta" id="updateStatus" role="status">This is version __APP_VERSION__.</p>
+<div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>
+<label class="meta"><input id="updateAuto" type="checkbox"> Check when the Lab opens, at most once a day</label>
+<p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. To update, close the Lab and run <code>update.bat</code> in its folder: it shows what will change and asks first, keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> puts the previous version back.</p>
 <h3>FFmpeg</h3>
 <p class="meta" id="systemFfmpeg" role="status"></p>
 <div class="cast-actions"><button type="button" id="systemFfmpegCheck">Check FFmpeg again</button></div>

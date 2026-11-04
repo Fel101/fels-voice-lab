@@ -305,6 +305,26 @@ class PlanTests(unittest.TestCase):
                      "up to the GeForce RTX 40 series", "not on RTX 50 series cards", "hardware report on GitHub"):
             self.assertIn(part, text)
 
+    def test_the_cuda_12_6_build_is_refused_on_an_rtx_50_card_before_anything_is_downloaded(self):
+        rtx_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)}
+        problems = ic.nvidia_problems(present=True, cards=[rtx_5070])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("Chatterbox Turbo's NVIDIA build (PyTorch 2.6 with CUDA 12.6) has no code for the NVIDIA GeForce RTX 5070 "
+                      "Laptop GPU (compute capability 12.0); it runs on cards up to the GeForce RTX 40 series. Leave out --nvidia",
+                      problems[0])
+        for fine in ({"name": "NVIDIA GeForce RTX 4090", "capability": (8, 9), "driver": (560, 94)},
+                     {"name": "NVIDIA GeForce GTX 1080", "capability": (6, 1), "driver": (472, 12)},
+                     {"name": "NVIDIA GeForce RTX 5070", "capability": None, "driver": (581, 80)}):
+            with self.subTest(card=fine["name"]):
+                self.assertEqual(ic.nvidia_problems(present=True, cards=[fine]), [])
+        self.assertIn("no NVIDIA driver", ic.nvidia_problems(present=False)[0])
+
+    def test_a_failed_check_on_the_card_names_the_cards_the_cuda_12_6_build_runs_on(self):
+        hint = base.check_failure_hint("RuntimeError: CUDA error: no kernel image is available", nvidia=True,
+                                       cuda_needs=ic.CUDA_NEEDS)
+        self.assertIn("up to the GeForce RTX 40 series with a recent driver, and not on RTX 50 series cards", hint)
+        self.assertNotIn("13.0", hint)
+
     def test_the_plan_says_which_licence_covers_what_and_that_every_clip_is_watermarked(self):
         text = self.plan()
         for part in ("Turbo weights are MIT", "Perth watermark", "does not remove it", "soxr", "LGPL-2.1", "certifi and tqdm (MPL-2.0)",

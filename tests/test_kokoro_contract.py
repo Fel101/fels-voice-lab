@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 import tempfile
 from pathlib import Path
@@ -61,6 +62,20 @@ class KokoroM7ContractTests(unittest.TestCase):
                 self.assertEqual((rows["j"]["available"], rows["j"]["missing_module"]), (True, None))
                 self.assertEqual(resolve_kokoro_language("Japanese", []), "j")
         self.assertTrue(rows["a"]["available"])
+
+    def test_a_package_installed_a_moment_after_a_look_is_still_found(self):
+        # The finder Python keeps for a folder looks again only when the folder's modified time changes, and two changes in
+        # quick succession can share one: putting the time back makes that happen every time.
+        with tempfile.TemporaryDirectory() as temp:
+            site = Path(temp) / "Lib" / "site-packages"
+            site.mkdir(parents=True)
+            with patch.object(kokoro_support, "KOKORO_SITE_PACKAGES", site):
+                self.assertFalse(kokoro_support._module_available("pyopenjtalk"))
+                before = site.stat()
+                (site / "pyopenjtalk").mkdir()
+                (site / "pyopenjtalk" / "__init__.py").write_text("raise ImportError('never imported')\n", encoding="utf-8")
+                os.utime(site, ns=(before.st_atime_ns, before.st_mtime_ns))
+                self.assertTrue(kokoro_support._module_available("pyopenjtalk"))
 
     def test_the_kokoro_environment_folder_is_the_one_the_catalog_runs_kokoro_from(self):
         catalog = json.loads((Path(kokoro_support.LAB) / "catalog" / "engines.json").read_text(encoding="utf-8"))

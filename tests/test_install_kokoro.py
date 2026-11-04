@@ -431,12 +431,30 @@ class EnvironmentTests(unittest.TestCase):
             self.assertEqual(ik.checkpoint_only_problems(folder, {"kokoro": "0.9.4"}), [])
 
     def test_the_nvidia_build_needs_an_nvidia_driver(self):
-        self.assertEqual(ik.nvidia_problems(present=True), [])
+        self.assertEqual(ik.nvidia_problems(present=True, cards=[]), [])
         problem = ik.nvidia_problems(present=False)[0]
         self.assertIn("no NVIDIA driver", problem)
         self.assertIn("leave out --nvidia", problem)
         with mock.patch.dict("os.environ", {"SystemRoot": str(ROOT / "no-such-windows")}):
             self.assertFalse(ik.nvidia_driver_present())
+
+    def test_the_cuda_13_build_runs_on_rtx_20_cards_and_newer_with_driver_580_or_later(self):
+        def card(name, capability, driver=(581, 80)):
+            return {"name": name, "capability": capability, "driver": driver}
+
+        for fine in (card("NVIDIA GeForce RTX 5070 Laptop GPU", (12, 0)), card("NVIDIA GeForce RTX 2060", (7, 5)),
+                     card("NVIDIA GeForce RTX 4090", None, None)):
+            with self.subTest(card=fine["name"]):
+                self.assertEqual(ik.nvidia_problems(present=True, cards=[fine]), [])
+        old_card = ik.nvidia_problems(present=True, cards=[card("NVIDIA GeForce GTX 1080", (6, 1))])
+        self.assertEqual(len(old_card), 1)
+        self.assertIn("Kokoro's NVIDIA build (PyTorch with CUDA 13.0) has no code for the NVIDIA GeForce GTX 1080 (compute "
+                      "capability 6.1); it runs on GeForce GTX 16 and RTX 20 series cards and newer. Leave out --nvidia", old_card[0])
+        old_driver = ik.nvidia_problems(present=True, cards=[card("NVIDIA GeForce RTX 5070 Laptop GPU", (12, 0), (572, 83))])
+        self.assertEqual(len(old_driver), 1)
+        self.assertIn("needs NVIDIA driver 580 or later, and this computer has 572.83. Update the driver", old_driver[0])
+        # Without nvidia-smi the generation is unknown and only the driver Windows lists is checked.
+        self.assertEqual(ik.card_problems([card("NVIDIA GeForce GTX 1080", None, (581, 80))]), [])
 
     def test_a_gpu_list_may_only_swap_packages_the_cpu_list_pins(self):
         cpu = [{"name": "torch", "key": "torch", "version": "2.12.0", "sha256": HASH}]

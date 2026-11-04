@@ -2,7 +2,8 @@
 
 from pathlib import Path
 import re
-from importlib.machinery import PathFinder
+from importlib.machinery import (BYTECODE_SUFFIXES, EXTENSION_SUFFIXES, SOURCE_SUFFIXES, ExtensionFileLoader, FileFinder,
+                                 SourceFileLoader, SourcelessFileLoader)
 from importlib.util import find_spec
 
 from common import LAB
@@ -75,10 +76,16 @@ def normalize_kokoro_voices(value, available=None) -> list[str]:
     return sorted(voices)
 
 
+_LOADERS = ((ExtensionFileLoader, EXTENSION_SUFFIXES), (SourceFileLoader, SOURCE_SUFFIXES),
+            (SourcelessFileLoader, BYTECODE_SUFFIXES))
+
+
 def _module_available(name):
     """Whether Kokoro can import a module: in this Python (inside Kokoro's worker), or in Kokoro's own environment (from the
-    service, whose .venv does not hold Kokoro). Nothing is imported."""
-    return find_spec(name) is not None or PathFinder.find_spec(name, [str(KOKORO_SITE_PACKAGES)]) is not None
+    service, whose .venv does not hold Kokoro). Nothing is imported. Kokoro's folder is read afresh each time: the finder
+    Python keeps for a folder notices a new package only when the folder's modified time changes, which can lag behind a
+    package installed a moment ago."""
+    return find_spec(name) is not None or FileFinder(str(KOKORO_SITE_PACKAGES), *_LOADERS).find_spec(name) is not None
 
 
 def resolve_kokoro_language(language, voices) -> str:

@@ -150,11 +150,15 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   (GeForce GTX 16 and RTX 20 series or newer, RTX 50 included, with a driver of version 580 or later), and
   `setup-chatterbox.bat --nvidia` the CUDA 12.6 builds of PyTorch 2.6 and torchaudio (up to the RTX 40 series), each pinned by
   SHA-256 in `requirements/kokoro-nvidia.txt` and `requirements/chatterbox-nvidia.txt` and checked by a speech check on the
-  card. Both refuse a computer with no NVIDIA driver, and `setup.bat` offers them when it finds one. The service asks its
-  workers for the card when an NVIDIA driver is installed (or `"device"` in `runtime.local.json`, or `--device cuda`, says so),
-  and a worker whose PyTorch is a CPU build runs on the CPU instead of failing; its card on Models & features says it ran on
-  the CPU. A hardware report template for GitHub asks for the Lab's copied report, which now names the processor, the
-  graphics cards, total RAM and how fast each model's test ran on which device.
+  card. Before anything is downloaded, each reads the card and the driver with NVIDIA's `nvidia-smi` and refuses a build that
+  cannot run there: no NVIDIA driver, a card older than the GTX 16 series or a driver older than 580 for Kokoro, an RTX 50
+  series card for Chatterbox. `setup.bat` offers them when it finds a driver, asks once, and gives each model the build that
+  runs on the card: on an RTX 50 card, Kokoro's NVIDIA build and Chatterbox's CPU build. The service asks its workers for the
+  card when an NVIDIA driver is installed (or `"device"` in `runtime.local.json`, or `--device cuda`, says so), and a worker
+  whose PyTorch cannot use the card runs on the CPU instead of failing: a CPU build, or a CUDA build with no code for the card,
+  which PyTorch itself reports as available. Its card on Models & features says it ran on the CPU. A hardware report template
+  for GitHub asks for the Lab's copied report, which now names the processor, the graphics cards, total RAM and how fast each
+  model's test ran on which device.
 - **Models & features** reports three states for each family: integrated, installed (its environment and pinned checkpoint
   files are on disk) and usable (a test on this device passed). **Test** loads the family on the service device,
   speaks one short sentence and reports the time it took; missing files are reported without loading anything, and a
@@ -208,6 +212,15 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   after another; a model already installed is left alone, and running it again after an interruption continues. Typed after
   it, `--models`, `--yes`, `--nvidia` and `--no-desktop` answer the questions (`tools/first_setup.py`). `setup-kokoro.bat`,
   `setup-phonon.bat`, `setup-chatterbox.bat` and `setup-desktop.bat` stay for doing one part later.
+- **Updates.** **Check for updates** on System & backups asks GitHub for the newest release and says whether it is newer, with
+  a link to its notes; the request carries nothing about the person or the library. It asks by itself only when **Check when the
+  Lab opens** is ticked, at most once a day, and then shows a newer version in the page header too. `update.bat` updates the
+  folder with the Lab closed: it shows the plan and asks first (`--check`, `--dry-run`, `--yes`). A ZIP install gets the
+  release's files from GitHub, keeps a copy of every file it replaces or removes, puts them back if a write fails, and never
+  touches the library, the models, the `.venv` environments, `runtime.local.json` or `out\`. A Git checkout moves to the
+  release's tag as a fast-forward. `update.bat --undo` goes back to the version before. The new version then updates the core
+  and desktop packages when their lists changed, and names any installed model whose pinned packages or files changed
+  (`updates.py`, `tools/update.py`; [Updating the Lab](docs/SETUP.md#updating-the-lab)).
 - **Desktop.** `setup-desktop.bat` creates a **Fel's Voice Lab** shortcut that opens a dedicated window over a hidden backend
   on a free loopback port. Closing the window cancels its work and stops the backend and its children, and never closes a
   service that was started separately. The Light, Dark, Forest and System themes are saved with the library.
@@ -269,8 +282,8 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
 ### Checked
 
 - In a clean checkout, with an environment built from `requirements/core.txt`, CI's steps pass: `ruff check .`,
-  `ruff format --check .`, 1384 Python tests (the skipped ones need model packages and files, FFmpeg encoders or link
-  privileges that environment lacks), 190 Node tests and `tools/check_repo.py`. A full test run no longer leaves a desktop
+  `ruff format --check .`, 1432 Python tests (the skipped ones need model packages and files, FFmpeg encoders or link
+  privileges that environment lacks), 195 Node tests and `tools/check_repo.py`. A full test run no longer leaves a desktop
   session or a service log in the real `out/` folder, nor sweeps it: the desktop test keeps both in a temporary folder and
   skips the startup sweep. The worker tests still pass audio through `out/workers`, the one place a worker may write, and
   remove what they put there.
@@ -283,6 +296,14 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   `--models all` it printed Chatterbox's real plan and asked before installing anything.
 - The label survives in every export format: real WAV, FLAC, Ogg, MP3 and AAC files written by FFmpeg 8.1.1 carry it, and
   ffprobe reads it back. The demo in the README was spoken by this build through `/api/speak`.
+- Updates, in a copy of this build made like a ZIP install: **Check for updates** and `update.bat --check` asked GitHub's real
+  API and said that no release is published yet (the repository was still private then). `update.bat` refused to run while
+  that copy's service was running and named its process, and it passes the updater's exit code on (0, 1, 2 and 130 were
+  tried). The page's header showed a newer release, from a stand-in answer, at phone width. Updating from a
+  ZIP and from a Git checkout, `--undo`, and putting files back after a write fails ran only in tests, against stand-in
+  GitHub answers and downloads and Git repositories the tests made.
+- The NVIDIA card checks (which build runs on which card, the driver version, and the worker falling back to the CPU) ran
+  only against stand-ins for `nvidia-smi` and PyTorch: no NVIDIA card was available.
 - The browser flow test drives the page in headless Microsoft Edge against stand-in engines: it clones a voice, performs a
   line, edits a take, edits and renders a scene, exports and verifies a package, and makes, checks and restores a backup.
   It also takes the screenshots in the README.
@@ -324,6 +345,10 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   are pinned and checked by hash but have not been run on an NVIDIA card, and there are no Linux or macOS results. Only Kokoro,
   Phonon, Chatterbox Turbo and Drama 3 have installers, and VoxCPM2 needs pinned source and a ROCm overlay that this repository
   does not install. Nothing here trains or fine-tunes a model.
+- **Updates.** There is no published release yet, so `update.bat` has only run against stand-ins: GitHub's answers and
+  downloads, and Git repositories made by its tests. The first real update will be the one from this version. It trusts
+  GitHub and this repository as the first download did: it takes files only from github.com over HTTPS and checks that a
+  release's `app_version.py` matches its tag, but releases are not signed.
 - **The synthetic label** is a tag in the file's metadata, which an editor or a converter can drop. Takes, packages and
   clips made before it existed carry none, and a package exported before it is verified without one.
 - **Kokoro install.** It was run on one Windows 11 computer. A computer without the Microsoft Visual C++ runtime, a folder

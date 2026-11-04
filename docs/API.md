@@ -1735,14 +1735,16 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_app.js` | A page script. |
 | GET | `/voice_lab_drama.js` | A page script. |
 | GET | `/out/*` | A file from the program's `out` folder, such as a finished voice conversion and its manifest. |
-| GET | `/api/preferences` | Read the saved appearance choice. |
-| POST | `/api/preferences` | Save the appearance choice. |
+| GET | `/api/preferences` | Read the saved page preferences: the theme, and whether the page checks for updates when it opens. |
+| POST | `/api/preferences` | Save one page preference or both; the other keeps its saved value. |
 | GET | `/api/reference-audio` | Play a recording from the reference screen by path. |
 | GET | `/api/references` | List the recordings the reference screen offers. |
 | GET | `/api/voice-library` | List the saved voices the voice picker offers. |
 | GET | `/api/conversion/sources` | List the performances the conversion picker offers. |
 | GET | `/api/conversion/targets` | List the voices the conversion picker offers. |
 | POST | `/api/system/use-library` | Point the desktop app at a restored library the next time it starts. |
+| GET | `/api/updates` | Say which version this is and what the last check for a newer release found, without asking GitHub. |
+| POST | `/api/updates/check` | Ask GitHub which release is the newest and whether it is newer than this version. |
 | GET | `/api/drama3/*` | Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its `audio`, `metadata` and `package`. |
 | GET | `/api/drama3/info` | The Drama runtime's capabilities, sources and jobs. |
 | GET | `/api/drama3/jobs/{job_id}` | A Drama job, from an offset into its log. |

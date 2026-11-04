@@ -126,13 +126,13 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 ## Start here
 
 1. Install [Python 3.12](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) (64-bit; the newer Python on
-   python.org's front page does not work yet), put the Lab in a folder OneDrive does not sync, such as `C:\voice-lab`, and
-   run `setup.bat`.
+   python.org's front page does not work yet). Download the newest release's ZIP from the Releases page, or clone the
+   repository, into a folder OneDrive does not sync, such as `C:\voice-lab`, and run `setup.bat`.
 2. It sets up the core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
    in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which
    also speaks in the voice of any recording longer than five seconds (about 4 GB to download and 7 GB on disk, for a computer
    with 16 GB of RAM or more). It shows every model's plan and asks once. On a computer with an NVIDIA driver it offers the
-   GPU builds too.
+   GPU builds too, each where it runs on the card.
 3. Use the **Fel's Voice Lab** desktop icon. Its dedicated window runs without a console; closing it stops its backend.
 
 To add a model later, press **Install** on its card in **Models & features**, or run `setup-kokoro.bat`, `setup-phonon.bat`
@@ -142,7 +142,9 @@ runs on an 8, 16 or 32 GB computer and what to do when something stops.
 
 FFmpeg is not bundled. Install it (`winget install Gyan.FFmpeg`) for scene export, MP3 and AAC
 output, and M4A references. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
-the header's **Theme** menu; the choice is saved locally. To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
+the header's **Theme** menu; the choice is saved locally. **Check for updates** on **System & backups** says when a newer
+release is out, and `update.bat` installs it with the Lab closed, keeping your library and models
+([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
 
 Browser mode, without the desktop window:
 
@@ -158,8 +160,8 @@ Read [desktop and state behavior](docs/SETUP.md).
 
 | Guide | Purpose |
 |---|---|
-| [Setup](docs/SETUP.md) | Environments, hardware, desktop launch, known installation limits and removing the Lab |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | What runs on which computer, setup and RAM problems, graphics cards, FFmpeg, reporting a problem |
+| [Setup](docs/SETUP.md) | Environments, hardware, desktop launch, known installation limits, updating and removing the Lab |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | What runs on which computer, setup and RAM problems, graphics cards, updates, FFmpeg, reporting a problem |
 | [User guide](docs/USER_GUIDE.md) | Design through delivery, stopping and backups |
 | [Architecture](docs/ARCHITECTURE.md) | For contributors: the processes and environments, a request's path, where things are decided |
 | [Capabilities](MODEL_CAPABILITIES.md) | Integrated features versus trials and blocked models |
@@ -175,7 +177,7 @@ Read [desktop and state behavior](docs/SETUP.md).
 
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
-node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs
+node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs
 .venv\Scripts\python.exe tools/check_repo.py
 ```
 

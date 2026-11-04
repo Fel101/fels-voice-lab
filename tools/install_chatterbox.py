@@ -59,6 +59,13 @@ NVIDIA_EXTRA_DOWNLOAD_MB = 2300
 NVIDIA_EXTRA_DISK_MB = 4000
 LONGEST_PACKAGE_PATH = 135
 SPACE_MARGIN_MB = 500
+# PyTorch 2.6's CUDA 12.6 build has code for cards up to compute capability 9.0: up to the GeForce RTX 40 series. RTX 50 series
+# cards (12.0) need a newer PyTorch than the 2.6 that Chatterbox asks for, so its NVIDIA build is refused on them.
+NVIDIA_BUILD = "Chatterbox Turbo's NVIDIA build (PyTorch 2.6 with CUDA 12.6)"
+NVIDIA_CARDS = "cards up to the GeForce RTX 40 series"
+NVIDIA_NEWEST_MAJOR = 9
+CUDA_NEEDS = ("The CUDA 12.6 build runs on NVIDIA cards up to the GeForce RTX 40 series with a recent driver, and not on RTX 50 "
+              "series cards")
 CHECK_TIMEOUT = 1800
 
 SPEECH_CHECK = """
@@ -122,6 +129,18 @@ def pinned_packages(root, *, nvidia=False):
     """The packages to install: requirements/chatterbox-cpu.txt, with the CUDA builds of torch and torchaudio for --nvidia."""
     packages = base.read_lock(Path(root) / LOCK)
     return base.swap_packages(packages, base.read_lock(Path(root) / NVIDIA_LOCK)) if nvidia else packages
+
+
+def card_problems(cards):
+    """Why Chatterbox's NVIDIA build would not run on these NVIDIA cards: an RTX 50 series card, which PyTorch 2.6 has no code
+    for. tools/first_setup.py asks this too, and gives Chatterbox its CPU build on such a card."""
+    return base.nvidia_card_problems(cards, build=NVIDIA_BUILD, cards_text=NVIDIA_CARDS, newest_major=NVIDIA_NEWEST_MAJOR)
+
+
+def nvidia_problems(*, present=None, cards=None):
+    """Why --nvidia cannot work on this computer, checked before anything is downloaded: no NVIDIA driver, or a card the CUDA
+    12.6 build has no code for."""
+    return base.nvidia_problems(present=present, cards=cards, check=card_problems)
 
 
 def size_gb(size):
@@ -212,7 +231,8 @@ def run_speech_check(root, *, device="cpu", runner=subprocess.run):
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Chatterbox Turbo did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:]) + base.check_failure_hint(output, nvidia=device == "cuda"))
+                           + "\n".join(output.strip().splitlines()[-12:])
+                           + base.check_failure_hint(output, nvidia=device == "cuda", cuda_needs=CUDA_NEEDS))
     if result["problem"]:
         raise InstallError(f"Chatterbox Turbo loaded but a check clip was not speech: {result['problem']}.")
     return {**result, "reference": reference, "wav": wav}
@@ -261,7 +281,7 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
         + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if nvidia:
-        problems += base.nvidia_problems()
+        problems += nvidia_problems()
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root, installed)
     elif todo:

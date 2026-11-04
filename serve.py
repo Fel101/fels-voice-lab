@@ -35,6 +35,7 @@ import housekeeping
 import library_backup
 import synthetic_label
 import system_report
+import updates
 from app_version import APP_NAME, VERSION
 from housekeeping import run_startup_sweep
 from request_log import NullRequestLog, RequestLog, new_request_id
@@ -208,12 +209,14 @@ def answer_unexpected_errors(method):
 
 
 def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
-                 request_log=None, engine_installer=None):
+                 request_log=None, engine_installer=None, update_checks=None):
     log = request_log or NullRequestLog()
     installer = engine_installer or EngineInstaller(engines)
     cast = cast_store or CastStore()
     library_root = Path(getattr(cast, "root", LAB))
     preferences = UiPreferences(library_root)
+    # Check for updates answers about this program folder, so its last answer lives in out\update beside update.bat's files.
+    checks = update_checks or updates.UpdateChecks(OUT / "update")
     scenes = scene_store or SceneStore(cast, engines.entries)
     batches = batch_runner or SceneBatchRunner(scenes, f"http://127.0.0.1:{port}")
     # Scenes and Comparisons default to the Cast store's own library, so a handler built on a temporary Cast store cannot reach
@@ -745,6 +748,17 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     @router.post("/api/system/use-library")
     def use_library(self, parsed, req):
         self._json(200, library_backup.use_library(APP_ROOT, library_backup.restore_target(library_root, req.get("folder"))))
+
+    @router.get("/api/updates")
+    def update_state(self, parsed, req):
+        self._json(200, checks.state(preferences.get()["check_updates"]))
+
+    @router.post("/api/updates/check")
+    def update_check(self, parsed, req):
+        try:
+            self._json(200, checks.check_now())
+        except updates.UpdateError as exc:
+            self._json(502, {"error": str(exc)})
 
     # ------------------------------------------------------------------------------------------------ service and models
 

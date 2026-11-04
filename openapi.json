@@ -4695,6 +4695,7 @@
     "GET /api/preferences",
     "GET /api/reference-audio",
     "GET /api/references",
+    "GET /api/updates",
     "GET /api/voice-library",
     "GET /compare",
     "GET /compare.html",
@@ -4716,6 +4717,7 @@
     "POST /api/drama3/jobs",
     "POST /api/drama3/jobs/{job_id}/cancel",
     "POST /api/preferences",
-    "POST /api/system/use-library"
+    "POST /api/system/use-library",
+    "POST /api/updates/check"
   ]
 }

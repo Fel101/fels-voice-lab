@@ -14,6 +14,12 @@ logs can contain personal information. They are kept in `data/`, `out/` and
 Back up private stores as described in [the guide](docs/USER_GUIDE.md).
 Local filesystem access is trusted; same-user malware is outside this boundary.
 
+**Check for updates** and `update.bat` contact GitHub only when you start them, or once a day if you tick **Check when the
+Lab opens**. The check asks `api.github.com` for the newest release; the request names the Lab's version and nothing about
+you or your library. `update.bat` takes files only from github.com over HTTPS, refuses a release whose `app_version.py` does
+not match its tag, and keeps a copy of everything it replaces. Releases are not signed, so an update trusts this GitHub
+repository just as the first download did.
+
 Do not put credentials or personal recordings in a public issue. Report security
 problems through GitHub's private vulnerability reporting feature after the
 maintainer enables it. If that feature is unavailable, open an issue requesting

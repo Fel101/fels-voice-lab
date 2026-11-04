@@ -36,6 +36,12 @@ MODELS = {
     "chatterbox": {"engine": "turbo", "script": "tools/install_chatterbox.py", "nvidia": True},
 }
 CHOICES = {"recommended": ("kokoro", "phonon"), "all": ("kokoro", "phonon", "chatterbox"), "none": ()}
+# For the models with an NVIDIA build: the name setup gives them, and their environment and launcher, for switching one to the
+# graphics card later.
+GPU_MODELS = {
+    "kokoro": ("Kokoro", ".venv-kokoro", "setup-kokoro.bat"),
+    "chatterbox": ("Chatterbox Turbo", ".venv-chatterbox", "setup-chatterbox.bat"),
+}
 # Below this much RAM in all, Chatterbox Turbo is unlikely ever to find the free memory it asks for.
 CLONING_TOTAL_RAM_GB = 15
 DRY_RUN_DONE = "Checks passed."
@@ -148,6 +154,32 @@ def ask_yes(question, *, ask=input):
         return False
 
 
+def card_problems(name, cards):
+    """Why a model's NVIDIA build would not run on these NVIDIA cards, from its own installer's check; [] when it would."""
+    from tools import install_chatterbox as ic, install_kokoro as ik
+
+    return {"kokoro": ik, "chatterbox": ic}[name].card_problems(cards)
+
+
+def gpu_choice(gpu_models, cards):
+    """(models whose NVIDIA build runs on these cards, {model: the paragraph that says why another gets its CPU build})."""
+    able, refused = [], {}
+    for name in gpu_models:
+        problems = card_problems(name, cards)
+        if not problems:
+            able.append(name)
+            continue
+        label, environment, launcher = GPU_MODELS[name]
+        text = " ".join(problems) + f" So setup installs {label}'s CPU build, which runs on the processor."
+        if any("needs NVIDIA driver" in problem for problem in problems):
+            text += (
+                f" To move it to the graphics card later, update the driver from nvidia.com or the NVIDIA app, delete the "
+                f"{environment} folder and run {launcher} --nvidia."
+            )
+        refused[name] = text
+    return able, refused
+
+
 def installer_command(name, *options, python=sys.executable, nvidia=False):
     command = [str(python), str(ROOT / MODELS[name]["script"]), *options]
     if nvidia and MODELS[name]["nvidia"]:
@@ -211,6 +243,7 @@ def run(
     probe=engine_checks.installation,
     ram=common.ram_report,
     nvidia_present=hardware.nvidia_driver_present,
+    cards=hardware.nvidia_cards,
     desktop=set_up_desktop,
 ):
     interactive = sys.stdin.isatty() if interactive is None else interactive
@@ -229,19 +262,34 @@ def run(
     for name in already:
         say(f"{name} is already installed; setup leaves it as it is.")
     todo = [name for name in chosen if name not in already]
-    nvidia = args.nvidia
     gpu_models = [name for name in todo if MODELS[name]["nvidia"]]
-    if gpu_models and not nvidia and args.models is None and interactive and nvidia_present():
-        paragraph(
-            "This computer has an NVIDIA graphics driver. Kokoro and Chatterbox can run on the graphics card with a GPU "
-            "build of PyTorch instead of the CPU one: a larger download (about 2 GB each), and the Lab has not been "
-            "tried on an NVIDIA card yet, so a report of how it went is welcome."
-        )
-        nvidia = ask_yes("Install the NVIDIA builds? Type yes for them, or press Enter for the CPU builds: ", ask=ask)
+    offer = bool(gpu_models) and not args.nvidia and args.models is None and interactive and nvidia_present()
+    gpu = []
+    if gpu_models and (args.nvidia or offer):
+        # Each model's installer says whether its NVIDIA build runs on this card: Chatterbox's has no code for an RTX 50
+        # series card, and Kokoro's needs a 2025 driver. Those models get their CPU builds and the rest can use the card.
+        able, refused = gpu_choice(gpu_models, cards())
+        if offer and able:
+            names = " and ".join(GPU_MODELS[name][0] for name in able)
+            paragraph(
+                f"This computer has an NVIDIA graphics driver. {names} can run on the graphics card with an NVIDIA build of "
+                f"PyTorch instead of the CPU one: a larger download (about 2 GB{' each' if len(able) > 1 else ''}), and the "
+                "Lab has not been tried on an NVIDIA card yet, so a report of how it went is welcome."
+            )
+        for text in refused.values():
+            paragraph(text)
+        if args.nvidia:
+            gpu = able
+        elif (
+            offer
+            and able
+            and ask_yes("Install the NVIDIA builds? Type yes for them, or press Enter for the CPU builds: ", ask=ask)
+        ):
+            gpu = able
     if todo:
         say("")
         for name in todo:
-            show_plan(name, nvidia=nvidia, runner=runner)
+            show_plan(name, nvidia=name in gpu, runner=runner)
         if not args.yes:
             if not interactive:
                 raise SetupStopped(
@@ -254,7 +302,7 @@ def run(
                 say("No model was installed. Install them later from Models & features, or run setup.bat again.")
                 todo = []
         for name in todo:
-            run_installer(name, nvidia=nvidia, runner=runner)
+            run_installer(name, nvidia=name in gpu, runner=runner)
     say("Setup is done.")
     if desktop_ready:
         say("Start the Lab with the Fel's Voice Lab icon on your Desktop.")
@@ -277,7 +325,8 @@ def build_parser():
     parser.add_argument(
         "--nvidia",
         action="store_true",
-        help="install the NVIDIA (CUDA) build of PyTorch for Kokoro and Chatterbox; untested by the Lab",
+        help="install the NVIDIA (CUDA) build of PyTorch for Kokoro and Chatterbox, each where it runs on this card; untested "
+        "by the Lab",
     )
     parser.add_argument("--no-desktop", action="store_true", help="skip the desktop window and its shortcut")
     return parser

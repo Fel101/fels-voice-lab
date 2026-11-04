@@ -55,7 +55,7 @@ class FirstSetupTests(unittest.TestCase):
             raise EOFError
         return self.answers.pop(0)
 
-    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0):
+    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0, cards=()):
         args = fs.build_parser().parse_args(list(argv))
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -67,6 +67,7 @@ class FirstSetupTests(unittest.TestCase):
                 probe=self.probe,
                 ram=lambda: {"total_gb": total_ram, "free_gb": total_ram / 2},
                 nvidia_present=lambda: nvidia,
+                cards=lambda: list(cards),
                 desktop=self.desktop,
             )
         return status, " ".join(out.getvalue().split())
@@ -188,6 +189,37 @@ class FirstSetupTests(unittest.TestCase):
         self.installers.commands.clear()
         self.run_setup("--models", "kokoro", "--yes", "--nvidia")
         self.assertEqual([command for command in self.installers.commands if "--nvidia" in command][0][0], "install_kokoro.py")
+
+    RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)}
+
+    def test_on_an_rtx_50_card_kokoro_is_offered_the_card_and_chatterbox_gets_its_cpu_build(self):
+        self.answers = ["2", "yes", "yes"]
+        status, out = self.run_setup(nvidia=True, cards=[self.RTX_5070])
+        self.assertEqual(status, 0)
+        self.assertIn("Kokoro can run on the graphics card", out)
+        self.assertIn("(about 2 GB)", out)
+        self.assertIn("has no code for the NVIDIA GeForce RTX 5070 Laptop GPU (compute capability 12.0)", out)
+        self.assertIn("So setup installs Chatterbox Turbo's CPU build, which runs on the processor.", out)
+        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_kokoro.py"])
+        self.assertEqual(self.installers.runs("--yes"), ["install_kokoro.py", "install_phonon.py", "install_chatterbox.py"])
+
+    def test_the_nvidia_option_gives_each_model_the_build_that_runs_on_this_card(self):
+        self.run_setup("--models", "all", "--yes", "--nvidia", cards=[self.RTX_5070])
+        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_kokoro.py"])
+        self.assertEqual(self.questions, [])
+
+    def test_a_driver_too_old_for_any_nvidia_build_asks_nothing_and_says_how_to_switch_later(self):
+        old_driver = {**self.RTX_5070, "driver": (572, 83)}
+        self.answers = ["2", "yes"]
+        status, out = self.run_setup(nvidia=True, cards=[old_driver])
+        self.assertEqual(status, 0)
+        self.assertNotIn("Install the NVIDIA builds?", " ".join(self.questions))
+        self.assertIn(
+            "needs NVIDIA driver 580 or later, and this computer has 572.83. So setup installs Kokoro's CPU build", out
+        )
+        self.assertIn("delete the .venv-kokoro folder and run setup-kokoro.bat --nvidia", out)
+        self.assertIn("So setup installs Chatterbox Turbo's CPU build", out)
+        self.assertEqual(self.installers.runs("--nvidia"), [])
 
     def test_a_desktop_window_that_cannot_be_set_up_does_not_stop_the_models(self):
         self.desktop_ok = False

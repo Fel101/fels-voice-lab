@@ -8,7 +8,7 @@ py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements/core.txt -r requirements/lint.txt
 .venv\Scripts\ruff.exe check .
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
-node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs
+node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs
 .venv\Scripts\python.exe tools/check_repo.py
 ```
 
@@ -50,3 +50,21 @@ worker ownership and export correctness. Never add personal audio as a fixture.
 
 Contributions should be yours to license under the project's MIT terms; preserve
 third-party licenses for borrowed code and document its source and modifications.
+
+## Making a release
+
+Check for updates and `update.bat` compare `VERSION` in `app_version.py` with the newest release on GitHub, so a release is a
+version number, a tag and a GitHub release that agree:
+
+1. Set `VERSION` in `app_version.py`, and give the version its heading and date in `CHANGELOG.md`.
+2. Commit, then tag that commit `v` and the version (`git tag v0.2.0`) and push the commit and the tag.
+3. On GitHub, publish a release from the tag, with the changelog's section as its notes. GitHub packs the source ZIP that
+   `update.bat` downloads.
+
+`update.bat` refuses a release whose `app_version.py` names another version than its tag. It compares the new release with
+the previous one's ZIP to tell a file the project removed from one a user changed, so do not move or delete a published tag.
+Each release must open the previous one's library: a database change needs its migration step (see the Cast database above).
+A release that changes a model's pinned list in `requirements/` or its file list in `catalog/` makes `update.bat` tell people
+to reinstall that model; one that changes `requirements/core.txt` or `requirements/desktop.txt` makes it update that
+environment itself. `update.py --finish` and the record in `out/update/last.json` are how one version hands over to the next,
+so keep both working as they are.

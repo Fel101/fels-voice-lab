@@ -14,8 +14,9 @@ the service's `.venv`, so no installer can change the packages another model or 
 
 ## Core and desktop
 
-Clone the repository, or download it from GitHub as a ZIP and extract it, into a
-writable folder that OneDrive does not sync, such as `C:\voice-lab`. Windows often syncs the
+Download the newest release's ZIP from the repository's Releases page on GitHub and extract it, or clone the repository, into a
+writable folder that OneDrive does not sync, such as `C:\voice-lab`. Either way, `update.bat` brings it up to date later
+([Updating the Lab](#updating-the-lab)). Windows often syncs the
 Desktop and Documents folders to OneDrive, which would upload the gigabytes of packages and
 models the Lab installs and can lock its databases while it syncs them; `setup.bat` warns
 when the folder is inside OneDrive.
@@ -311,8 +312,11 @@ setup-kokoro.bat --nvidia
 setup-chatterbox.bat --nvidia
 ```
 
-`setup.bat` offers the same when it finds an NVIDIA driver. Each refuses to start on a computer without one
-(`System32\nvcuda.dll`), and each runs its speech check on the card.
+`setup.bat` offers the same when it finds an NVIDIA driver. Before anything is downloaded, each installer asks NVIDIA's own
+`nvidia-smi` which card and driver this computer has, and refuses a build that cannot run there: without a driver
+(`System32\nvcuda.dll`), on a card older or newer than the build has code for, or, for Kokoro, with a driver older than 580.
+Each then runs its speech check on the card. `setup.bat` asks once for both models and gives each the build that runs on the
+card: on an RTX 50 series card, Kokoro gets its NVIDIA build and Chatterbox Turbo its CPU build, and setup says so.
 
 | Model | PyTorch build | Cards | Download, beyond the CPU install |
 |---|---|---|---|
@@ -322,10 +326,12 @@ setup-chatterbox.bat --nvidia
 The CUDA builds carry NVIDIA's CUDA libraries inside them, under NVIDIA's own licence terms; like the other packages they are
 installed on your computer at your request and are not part of this repository.
 
-When the service finds an NVIDIA driver it asks its workers for the card (`cuda`). A model whose own PyTorch is the CPU build
-(installed without `--nvidia`) runs on the CPU anyway, and its card on Models & features says it ran on the CPU. To switch a
-model between the two, delete its environment folder (`.venv-kokoro` or `.venv-chatterbox`) and run its installer again with or
-without `--nvidia`; the model files in `hf-cache` stay. `"device": "cpu"` in `runtime.local.json` keeps every model on the CPU.
+When the service finds an NVIDIA driver it asks its workers for the card (`cuda`). A model whose own PyTorch cannot use the card
+runs on the CPU anyway, and its card on Models & features says it ran on the CPU: the CPU build (installed without `--nvidia`),
+or a CUDA build with no code for this card, such as PyTorch 2.6 on an RTX 50 series card, which reports the card as available
+and then could not run anything on it. To switch a model between the two, delete its environment folder (`.venv-kokoro` or
+`.venv-chatterbox`) and run its installer again with or without `--nvidia`; the model files in `hf-cache` stay.
+`"device": "cpu"` in `runtime.local.json` keeps every model on the CPU.
 
 ## Model runtimes
 
@@ -406,6 +412,34 @@ checks say they did not run.
 
 The app's default local-only boundary and optional-model limits are described
 in [SECURITY.md](../SECURITY.md) and [model capabilities](../MODEL_CAPABILITIES.md).
+
+## Updating the Lab
+
+**System & backups** has a **Check for updates** button. It asks GitHub which release of the Lab is the newest and says whether
+it is newer than yours, with a link to what changed. It sends nothing about you or your library; GitHub sees only that this
+computer asked. The Lab never asks by itself unless you tick **Check when the Lab opens**, and then at most once a day, with a
+note in the page header when a newer version is out.
+
+To update, close the Lab and run `update.bat` in its folder:
+
+```powershell
+update.bat            # shows what will change, asks, then updates
+update.bat --check    # only says whether there is a newer release
+update.bat --dry-run  # shows the plan and changes nothing
+update.bat --undo     # puts back the version the last update replaced
+```
+
+It refuses while the Lab, `serve.bat` or an installer is running from the folder. In a folder that came from a ZIP it downloads
+the new release and the one you have from GitHub, replaces the files the Lab ships, removes the ones the new version dropped and
+leaves every other file alone: your library, the models, the `.venv` environments, `runtime.local.json` and `out\` are never
+touched. It copies every file it replaces or removes to `out\update\<from>-to-<to>` first, which is what `--undo` puts back,
+and if a file cannot be written it puts back what it had already changed. A shipped file you had changed yourself is replaced
+too, and your copy stays in that folder. In a folder made with `git clone` it moves the checkout to the release's tag as a
+fast-forward, and refuses if you have changed tracked files or made commits of your own.
+
+Then the new version finishes the job: it updates the core packages in `.venv` (and the desktop window's) when their lists
+changed, and names any installed model whose pinned packages or model files changed. For those, delete the model's environment
+folder and run its installer again; the model files already in `hf-cache` are kept.
 
 ## Removing the Lab
 

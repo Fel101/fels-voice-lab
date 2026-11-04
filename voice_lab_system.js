@@ -188,6 +188,39 @@ function useRestoredLibrary(){
     $('backupStatus').textContent='Next start: the desktop app opens '+result.state_root+'. Close and reopen Fel’s Voice Lab to switch. To go back, set state_root in '+result.settings_file+(result.previous?' to '+result.previous:' to "."')+' (or delete that line).';
   }).catch(function(e){$('systemError').textContent=e.message;});
 }
+// Updates: the service asks GitHub only when Check for updates is pressed, or once a day when the page opens if that is on.
+// A newer release shows here and in the header; the update itself is update.bat's job, with the Lab closed.
+function updateMessage(result){
+  if(result.error)return 'The last check failed: '+result.error;
+  return result.message+(result.checked_at?' Checked '+whenText(result.checked_at)+'.':'');
+}
+function renderUpdate(result){
+  var newer=!!(result.newer&&result.release&&!result.error),link=$('updateRelease'),badge=$('updateBadge');
+  systemNote('updateStatus',updateMessage(result),!!result.error);
+  link.hidden=!newer;badge.hidden=!newer;
+  if(newer){link.href=result.release.url;link.textContent='What’s new in '+result.latest;badge.textContent='Version '+result.latest+' is available';}
+  return result;
+}
+function checkForUpdates(quiet){
+  $('updateCheck').disabled=true;
+  if(!quiet)systemNote('updateStatus','Asking GitHub…',false);
+  return fetchJson('/api/updates/check',{}).then(renderUpdate).catch(function(e){
+    if(!quiet)systemNote('updateStatus','Could not check for updates: '+e.message,true);
+  }).then(function(){$('updateCheck').disabled=false;});
+}
+function refreshUpdates(){
+  return fetchJson('/api/updates').then(function(state){
+    $('updateAuto').checked=!!state.check_on_open;
+    if(state.last)renderUpdate(state.last);
+    if(state.due)return checkForUpdates(true);
+  }).catch(function(e){systemNote('updateStatus','Could not read the update status: '+e.message,true);});
+}
+function saveUpdateChoice(){
+  var box=$('updateAuto'),on=box.checked;
+  return fetchJson('/api/preferences',{check_updates:on}).then(function(){if(on)return checkForUpdates(false);}).catch(function(e){
+    box.checked=!on;systemNote('updateStatus','That choice could not be saved: '+e.message,true);
+  });
+}
 function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups()]);}
 $('systemRefresh').addEventListener('click',function(){refreshSystemPage();});
 $('systemCopy').addEventListener('click',function(){copyDiagnostics();});
@@ -198,3 +231,6 @@ $('backupCreate').addEventListener('click',startBackup);
 $('restoreGo').addEventListener('click',startRestore);
 $('restoreCancel').addEventListener('click',function(){$('restoreBox').hidden=true;});
 $('restoreUse').addEventListener('click',useRestoredLibrary);
+$('updateCheck').addEventListener('click',function(){checkForUpdates(false);});
+$('updateAuto').addEventListener('change',saveUpdateChoice);
+refreshUpdates();

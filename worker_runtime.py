@@ -26,19 +26,54 @@ REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
 
 
+def runs_on(capability, arch_list):
+    """Whether PyTorch built for these architectures (its get_arch_list(), such as ["sm_80", "sm_86", "sm_90", "compute_90"])
+    has code for a card of this compute capability: code built for the same generation and no newer, or PTX of the same or
+    an older one, which the driver compiles for the card."""
+    major, minor = capability
+    for arch in arch_list:
+        kind, _, digits = str(arch).partition("_")
+        if not digits.isdigit() or len(digits) < 2:
+            continue
+        built = (int(digits[:-1]), int(digits[-1]))
+        if (kind == "sm" and built[0] == major and built[1] <= minor) or (kind == "compute" and built <= (major, minor)):
+            return True
+    return False
+
+
+def missing_cuda_code(torch):
+    """Why this CUDA build of PyTorch cannot run on the graphics card, or None when it can or cannot tell (a ROCm build for an
+    AMD card answers to "cuda" too, and is left to PyTorch). PyTorch 2.6, for one, reports an RTX 50 series card as available
+    and then has no code to run on it."""
+    version = getattr(torch, "version", None)
+    if version is None or getattr(version, "hip", None) or not getattr(version, "cuda", None):
+        return None
+    try:
+        capability = tuple(torch.cuda.get_device_capability(0))
+        arch_list = list(torch.cuda.get_arch_list())
+        name = torch.cuda.get_device_name(0)
+    except Exception as exc:  # noqa: BLE001 - any failure to read the card means it cannot be used
+        return f"this environment's PyTorch ({torch.__version__}) could not read the graphics card ({type(exc).__name__}: {exc})"
+    if not arch_list or runs_on(capability, arch_list):
+        return None
+    return (f"this environment's PyTorch ({torch.__version__}) has no code for the {name} (compute capability "
+            f"{capability[0]}.{capability[1]})")
+
+
 def usable_device(engine_id, device):
     """(device, note): the device this worker can really use. Asked for the graphics card, an engine whose PyTorch cannot use
-    one, such as the CPU build the installers put in unless told --nvidia, runs on the CPU instead of failing to load, and the
-    note says why. Any other request is kept as it is."""
+    one runs on the CPU instead of failing to load, and the note says why: the CPU build the installers put in unless told
+    --nvidia, or a CUDA build with no code for this card. Any other request is kept as it is."""
     if device != "cuda" or engine_id not in TORCH_ENGINE_IDS:
         return device, None
     try:
         torch = torch_runtime()
     except ModuleNotFoundError:
         return "cpu", "PyTorch is not installed in this environment"
-    if torch.cuda.is_available():
-        return "cuda", None
-    return "cpu", f"this environment's PyTorch ({torch.__version__}) cannot use a graphics card"
+    if not torch.cuda.is_available():
+        return "cpu", f"this environment's PyTorch ({torch.__version__}) cannot use a graphics card"
+    missing = missing_cuda_code(torch)
+    return ("cpu", missing) if missing else ("cuda", None)
 
 
 class EngineWorkerRuntime:

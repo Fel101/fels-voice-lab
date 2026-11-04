@@ -396,6 +396,11 @@ exactly what will be copied. The text holds no scripts, transcripts, names of ch
 home folder reads as `~`. Read it before you share it: a path can still carry a folder name you chose. The
 [hardware report](https://github.com/Fel101/fels-voice-lab/issues/new?template=hardware_report.yml) on GitHub asks for it.
 
+**Updates** says which version this is. **Check for updates** asks GitHub for the newest release and, when it is newer, links
+to what changed in it; the request carries nothing about you or your library. Tick **Check when the Lab opens** to have the page
+ask by itself, at most once a day; a newer version then also shows in the page header. Updating is `update.bat`'s job, with the
+Lab closed: [Updating the Lab](SETUP.md#updating-the-lab) says what it does and how `update.bat --undo` goes back.
+
 **Measure folders** adds the size of each library folder (and whether a backup holds it) and of the backups, voice
 conversions, logs, worker scratch folders and desktop sessions. It waits for the button because it walks those folders,
 and it never walks the Drama model folder. **Clean up old scratch folders and logs** runs the sweep described below and

@@ -45,10 +45,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 try:
-    from hardware import nvidia_driver_present
+    from hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
 except ImportError:  # run as a script, which puts tools\ first on the path and not the lab folder
     sys.path.append(str(ROOT))
-    from hardware import nvidia_driver_present
+    from hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
 
 LOCK = "requirements/kokoro-cpu.txt"
 NVIDIA_LOCK = "requirements/kokoro-nvidia.txt"
@@ -76,6 +76,13 @@ NVIDIA_EXTRA_DISK_MB = 4000
 LONGEST_PACKAGE_PATH = 130
 SPACE_MARGIN_MB = 500
 MAX_PATH = 260
+# The CUDA 13.0 build of PyTorch has code for cards of compute capability 7.5 and newer (GeForce GTX 16 and RTX 20 series and
+# later, RTX 50 included), and CUDA 13.0 runs with NVIDIA driver 580 or later.
+NVIDIA_BUILD = "Kokoro's NVIDIA build (PyTorch with CUDA 13.0)"
+NVIDIA_CARDS = "GeForce GTX 16 and RTX 20 series cards and newer"
+NVIDIA_LOWEST_CAPABILITY = (7, 5)
+NVIDIA_DRIVER = (580, 0)
+CUDA_NEEDS = "CUDA 13.0 needs an NVIDIA driver of version 580 or later and a GTX 16 or RTX 20 series card or newer"
 
 SPEECH_CHECK = """
 import json, sys, time
@@ -317,11 +324,47 @@ def env_long_path_problems(root, environment, longest_package_path, extra_length
             "Windows."]
 
 
-def nvidia_problems(*, present=None):
-    if present if present is not None else nvidia_driver_present():
-        return []
-    return ["--nvidia asks for the CUDA build of PyTorch, and this computer has no NVIDIA driver (System32\\nvcuda.dll is "
-            "missing). Install the driver from nvidia.com first, or leave out --nvidia for the CPU build."]
+NO_NVIDIA_DRIVER = ("--nvidia asks for the CUDA build of PyTorch, and this computer has no NVIDIA driver (System32\\nvcuda.dll "
+                    "is missing). Install the driver from nvidia.com first, or leave out --nvidia for the CPU build.")
+
+
+def nvidia_card_problems(cards, *, build, cards_text, lowest=None, newest_major=None, driver=None):
+    """Why an NVIDIA build of PyTorch would not run on these cards, as sentences that name the card: a card of a generation the
+    build has no code for (older than `lowest`, or of a newer generation than `newest_major`), or a driver older than its CUDA
+    needs. An empty list when it would run, and when nvidia-smi could not say."""
+    problems = []
+    for card in cards:
+        capability = card.get("capability")
+        if capability and ((lowest and capability < lowest) or (newest_major is not None and capability[0] > newest_major)):
+            problems.append(f"{build} has no code for the {card['name']} (compute capability {capability_text(capability)}); "
+                            f"it runs on {cards_text}.")
+    drivers = [card["driver"] for card in cards if card.get("driver")]
+    if driver and drivers and min(drivers) < driver:
+        problems.append(f"{build} needs NVIDIA driver {driver[0]} or later, and this computer has {driver_text(min(drivers))}.")
+    return problems
+
+
+def card_problems(cards):
+    """Why Kokoro's NVIDIA build would not run on these NVIDIA cards. tools/first_setup.py asks this too, and gives a model whose
+    NVIDIA build cannot run here its CPU build instead."""
+    return nvidia_card_problems(cards, build=NVIDIA_BUILD, cards_text=NVIDIA_CARDS, lowest=NVIDIA_LOWEST_CAPABILITY,
+                                driver=NVIDIA_DRIVER)
+
+
+def nvidia_advice(problem):
+    """A problem card_problems found, with what to do about it for someone who typed --nvidia."""
+    if "needs NVIDIA driver" in problem:
+        return (problem + " Update the driver from nvidia.com or the NVIDIA app and run the installer again, or leave out "
+                "--nvidia for the CPU build.")
+    return problem + " Leave out --nvidia for the CPU build."
+
+
+def nvidia_problems(*, present=None, cards=None, check=card_problems):
+    """Why --nvidia cannot work on this computer, checked before anything is downloaded: there is no NVIDIA driver, or the card
+    or the driver is one the build cannot run on (nvidia-smi says which)."""
+    if not (present if present is not None else nvidia_driver_present()):
+        return [NO_NVIDIA_DRIVER]
+    return [nvidia_advice(problem) for problem in check(nvidia_cards() if cards is None else cards)]
 
 
 def swap_packages(packages, replacements):
@@ -587,15 +630,16 @@ def last_json_line(text):
     return None
 
 
-def check_failure_hint(output, *, nvidia=False):
-    """A sentence for the most likely cause of a speech check that failed, from what it printed."""
+def check_failure_hint(output, *, nvidia=False, cuda_needs=CUDA_NEEDS):
+    """A sentence for the most likely cause of a speech check that failed, from what it printed. cuda_needs says which cards and
+    which driver the model's NVIDIA build runs on."""
     if "DLL" in output or "WinError 126" in output:
         return ("\nA missing DLL usually means the Microsoft Visual C++ Redistributable is not installed. Install the x64 "
                 "version from https://aka.ms/vs/17/release/vc_redist.x64.exe and run the installer again.")
     if nvidia and ("CUDA" in output or "cuda" in output):
-        return ("\nPyTorch could not use the graphics card. CUDA 13.0 needs an NVIDIA driver of version 580 or later and a GTX 16 "
-                "or RTX 20 series card or newer: update the driver from nvidia.com and run the installer again. To use the CPU "
-                "instead, delete the folder of the model's environment and run the installer without --nvidia.")
+        return (f"\nPyTorch could not use the graphics card. {cuda_needs}: update the driver from nvidia.com and run the "
+                "installer again. To use the CPU instead, delete the folder of the model's environment and run the installer "
+                "without --nvidia.")
     return ""
 
 

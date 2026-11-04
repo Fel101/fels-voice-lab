@@ -646,9 +646,13 @@ ROUTES = [
           ("/out/*", "A file from the program's `out` folder, such as a finished voice conversion and its manifest.", "file"))],
 
     # ---------------------------------------------------------------- Page helpers (internal)
-    R("GET", "/api/preferences", "Page helpers", "Read the saved appearance choice.", internal=True),
-    R("POST", "/api/preferences", "Page helpers", "Save the appearance choice.", internal=True,
-      body=(F("theme", "string", "`system`, `light`, `dark` or `forest`."),)),
+    R("GET", "/api/preferences", "Page helpers", "Read the saved page preferences: the theme, and whether the page checks for "
+                                                 "updates when it opens.", internal=True,
+      reply="`theme` and `check_updates`."),
+    R("POST", "/api/preferences", "Page helpers", "Save one page preference or both; the other keeps its saved value.",
+      internal=True,
+      body=(F("theme", "string", "`system`, `light`, `dark` or `forest`."),
+            F("check_updates", "boolean", "Ask GitHub for a newer release once a day when the page opens."))),
     R("GET", "/api/reference-audio", "Page helpers", "Play a recording from the reference screen by path.", internal=True,
       reply_kind="audio"),
     R("GET", "/api/references", "Page helpers", "List the recordings the reference screen offers.", internal=True),
@@ -658,6 +662,16 @@ ROUTES = [
     R("POST", "/api/system/use-library", "Page helpers", "Point the desktop app at a restored library the next time it "
                                                          "starts.",
       internal=True, body=(F("folder", "string", "A restored folder's name.", True),)),
+    R("GET", "/api/updates", "Page helpers", "Say which version this is and what the last check for a newer release found, "
+                                             "without asking GitHub.", internal=True,
+      reply="`current`, `releases` (the releases page on GitHub), `check_on_open`, `due` (true when the page should check "
+            "now: the once-a-day check is on and the last check is a day old, or an hour old if it failed) and `last` (the last "
+            "check, as `POST /api/updates/check` answered it, or null)."),
+    R("POST", "/api/updates/check", "Page helpers", "Ask GitHub which release is the newest and whether it is newer than this "
+                                                    "version.", internal=True, body_kind="none",
+      reply="`current`, `latest` (null while no release is published), `newer`, `message`, `checked_at` and `release` (its "
+            "`tag`, `name`, `url`, `published_at` and `notes`).",
+      errors=((502, "GitHub could not be reached, or refused to answer."),)),
 
     # ---------------------------------------------------------------- Drama (internal)
     R("GET", "/api/drama3/*", "Drama", "Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its "

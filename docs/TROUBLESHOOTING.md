@@ -38,6 +38,10 @@ the Lab does not support yet. Install
 [python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe), the last 3.12 release with a
 Windows installer, and run `setup.bat` again. Setup keeps what is already done.
 
+**Windows asks before it runs `setup.bat`.** Files extracted from a ZIP downloaded from the internet carry a mark that makes
+Windows ask before running them. Choose to run it, or, before you extract the ZIP, right-click it, choose **Properties**, tick
+**Unblock** and press **OK**.
+
 **The folder's path is too long.** PyTorch and the model caches have deep folders, and Windows stops at 259 characters unless
 long paths are switched on. Move the Lab to a short path such as `C:\voice-lab`. Or switch long paths on: in PowerShell run
 as administrator, `New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem -Name LongPathsEnabled -Value 1
@@ -87,7 +91,12 @@ card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome
 - Kokoro's build is CUDA 13.0: a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an NVIDIA driver of version
   580 or later.
 - Chatterbox's is CUDA 12.6, the newest that the PyTorch 2.6 it needs comes in: cards up to the RTX 40 series. It does not run
-  on RTX 50 cards.
+  on RTX 50 cards, so on one `setup.bat` gives Chatterbox its CPU build and Kokoro its NVIDIA build, and
+  `setup-chatterbox.bat --nvidia` refuses before it downloads anything.
+- **"needs NVIDIA driver 580 or later".** Kokoro's CUDA 13.0 build needs a 2025 driver. Update it from nvidia.com or the
+  NVIDIA app, then run `setup-kokoro.bat --nvidia` (delete `.venv-kokoro` first if Kokoro is already installed on the CPU).
+  The installers read the card and the driver with NVIDIA's `nvidia-smi`; when it cannot say, they go by the driver version
+  Windows lists.
 - To switch a model between its CPU and GPU builds, delete its folder (`.venv-kokoro` or `.venv-chatterbox`) and run its
   installer with or without `--nvidia`. The model files stay.
 - The service uses the card when it finds an NVIDIA driver. A model whose own PyTorch is the CPU build still runs, on the CPU,
@@ -107,6 +116,25 @@ which the usual full build has. Without FFmpeg, WAV, FLAC, Ogg and MP3 reference
 **What a file says about itself.** Every clip the Lab makes is labelled inside the file as AI-generated speech made with the
 Lab, in its comment tag; an export's package checks the label is still there when it is verified. Your own reference recordings
 are never labelled. A tag is easy to strip, so it is a label, not a watermark.
+
+## Updating
+
+**`update.bat` says the Lab is running.** It names each program it found running from the Lab's folder. Close the Lab's window,
+stop `serve.bat` (Ctrl+C in its window) and let any installer finish, then run it again.
+
+**"Files git tracks were changed here", or "has commits that the release does not".** A folder made with `git clone` is only
+moved forward to a release, never merged. Commit or stash your changes and run `update.bat` again, or update it with git yourself.
+
+**Something is wrong after an update.** `update.bat --undo` puts the previous version back: from the copies it kept in
+`out\update\<from>-to-<to>`, or with `git reset --keep` in a Git checkout. An update and an undo never change your library, the
+models or `runtime.local.json`.
+
+**"pinned packages changed".** A release can pin newer packages for a model, and the update names the models it affects. Delete
+that model's environment folder and run its installer again; the model files are kept, so only the packages download again.
+
+**Check for updates says GitHub could not be reached.** The check asks `api.github.com` and needs the internet; a firewall or a
+proxy can stop it. Nothing else in the Lab needs GitHub once it is installed. "No release of the Lab has been published" is an
+answer, not an error: there is nothing to update to yet.
 
 ## Reporting a problem
 
