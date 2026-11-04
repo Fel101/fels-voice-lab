@@ -4,6 +4,7 @@ Every install here runs a stand-in script in a private folder. Nothing is downlo
 """
 
 import json
+import re
 import os
 import sys
 import tempfile
@@ -392,6 +393,25 @@ class CatalogTests(unittest.TestCase):
         self.assertIs(serve.MIN_FREE_RAM_GB, ram_needs.MIN_FREE_RAM_GB)
         self.assertIs(worker_runtime.MIN_FREE_RAM_GB, ram_needs.MIN_FREE_RAM_GB)
         self.assertTrue(all(isinstance(need, int) and need > 0 for need in ram_needs.DEFAULT_MIN_FREE_RAM_GB.values()))
+
+    def test_the_hardware_table_in_troubleshooting_gives_each_model_the_ram_the_one_table_does(self):
+        rows = {}
+        for line in (ROOT / "docs" / "TROUBLESHOOTING.md").read_text("utf-8").splitlines():
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            need = re.match(r"(\d+) GB", cells[1]) if line.startswith("|") and len(cells) == 7 else None
+            if need:
+                rows[cells[0]] = int(need.group(1))
+        names = {entry["id"]: entry["name"] for entry in worker_pool.read_catalog()["engines"]}
+        expected = {"Phonon 31M English": ["phonon-31m-en"], "Kokoro 82M": ["kokoro"],
+                    "Chatterbox Turbo 350M (cloning)": ["turbo"], "Chatterbox 500M and Voice Conversion": ["orig", "chatterbox-vc"],
+                    "Qwen3-TTS (four checkpoints)": [key for key in names if key.startswith("qwen3-tts")],
+                    "VoxCPM2 2B": ["voxcpm2"], "Breeze TTS 2": ["breeze-tts-2"], "Drama 3 (35B, Q4)": ["drama-3"]}
+        self.assertEqual(set(rows), set(expected))
+        self.assertEqual(sorted(key for keys in expected.values() for key in keys), sorted(ram_needs.DEFAULT_MIN_FREE_RAM_GB))
+        for row, keys in expected.items():
+            for key in keys:
+                with self.subTest(row=row, engine=key):
+                    self.assertEqual(rows[row], ram_needs.DEFAULT_MIN_FREE_RAM_GB[key])
 
     def test_runtime_local_json_can_change_a_free_ram_need_for_one_computer(self):
         defaults = {"kokoro": 3, "turbo": 10}

@@ -1,8 +1,13 @@
 @echo off
+rem First setup: the Lab's core, its desktop window, then the speech models you choose. Run it again to finish a setup that
+rem was interrupted. Typed after it, --models recommended --yes installs Kokoro and Phonon without asking; --help lists the rest.
 setlocal
 cd /d "%~dp0"
 py -3.12 -c "import sys; print('Python', sys.version.split()[0])" || goto no_python
 py -3.12 tools\setup_core.py
+if errorlevel 1 goto done
+".venv\Scripts\python.exe" tools\first_setup.py %*
+:done
 set result=%errorlevel%
 pause
 exit /b %result%

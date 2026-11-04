@@ -1,20 +1,23 @@
-"""Install Chatterbox Turbo 350M on the CPU: its own .venv-chatterbox with pinned packages, the pinned checkpoint into hf-cache,
-then a speech check that clones a voice.
+"""Install Chatterbox Turbo 350M: its own .venv-chatterbox with pinned packages, the pinned checkpoint into hf-cache, then a
+speech check that clones a voice.
 
     .venv\\Scripts\\python.exe tools\\install_chatterbox.py
     .venv\\Scripts\\python.exe tools\\install_chatterbox.py --dry-run
     .venv\\Scripts\\python.exe tools\\install_chatterbox.py --yes
+    .venv\\Scripts\\python.exe tools\\install_chatterbox.py --nvidia
     .venv\\Scripts\\python.exe tools\\install_chatterbox.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
 the lab's own Python, which setup.bat creates; setup-chatterbox.bat does that for you. Chatterbox gets an environment of its own,
-.venv-chatterbox, made from the same Python 3.12 as .venv: its PyTorch 2.6 and the PyTorch 2.12 that Kokoro's installer puts in
-.venv cannot share one. pip installs requirements/chatterbox-cpu.txt there with every file's SHA-256 checked, and the script
-refuses to replace a package that is already installed at another version, so an environment with its own PyTorch keeps it.
-The checkpoint files in catalog/chatterbox_turbo_snapshot.json come from Hugging Face at the pinned revision, resume after an
-interruption, and are kept only when their SHA-256 matches. Running it again installs only what is missing. --checkpoint-only
-fetches the model files and leaves the packages alone, for a .venv-chatterbox you made yourself (with a GPU build of PyTorch,
-say). The download, hash and pip helpers are the ones install_kokoro.py uses, so a fix there reaches this installer too.
+.venv-chatterbox, made from the same Python 3.12 as .venv, as every model does: its PyTorch 2.6 and the PyTorch 2.12 of Kokoro's
+.venv-kokoro could not share one. pip installs requirements/chatterbox-cpu.txt there with every file's SHA-256 checked, and the
+script refuses to replace a package that is already installed at another version, so an environment with its own PyTorch keeps
+it. --nvidia takes the CUDA builds of PyTorch and torchaudio in requirements/chatterbox-nvidia.txt instead of the CPU ones; the
+Lab has not been tried on an NVIDIA card yet. The checkpoint files in catalog/chatterbox_turbo_snapshot.json come from Hugging
+Face at the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again
+installs only what is missing. --checkpoint-only fetches the model files and leaves the packages alone, for a .venv-chatterbox
+you made yourself. The environment, download, hash and pip helpers are the ones install_kokoro.py uses, so a fix there reaches
+this installer too.
 """
 
 import argparse
@@ -37,25 +40,26 @@ except ImportError:  # run as a script, which puts tools\ first on the path and 
 InstallError = base.InstallError
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = "requirements/chatterbox-cpu.txt"
+NVIDIA_LOCK = "requirements/chatterbox-nvidia.txt"
 MANIFEST = "catalog/chatterbox_turbo_snapshot.json"
 ENVIRONMENT = ".venv-chatterbox"
 PYTHON = ENVIRONMENT + "/Scripts/python.exe"
 OUTPUT = "out/chatterbox"
 REFERENCE_WAV = "install-reference.wav"
 CHECK_WAV = "install-check.wav"
+NVIDIA_REQUIREMENTS = "requirements-nvidia.txt"
 RECEIPT = "installation.json"
 # Measured on a clean install of the lock: 400 MB of wheels, 1984 MB installed, and 130 characters for the longest path below
-# site-packages. Windows stops at 259 characters unless long paths are switched on.
+# site-packages. Windows stops at 259 characters unless long paths are switched on. The CUDA builds of PyTorch and torchaudio
+# are 2.5 GB of wheels, about 2.3 GB more than the CPU ones, and take about 4 GB more once installed (an estimate: they have
+# not been installed on an NVIDIA computer yet).
 PACKAGES_DOWNLOAD_MB = 400
 PACKAGES_DISK_MB = 2000
+NVIDIA_EXTRA_DOWNLOAD_MB = 2300
+NVIDIA_EXTRA_DISK_MB = 4000
 LONGEST_PACKAGE_PATH = 135
 SPACE_MARGIN_MB = 500
 CHECK_TIMEOUT = 1800
-
-VERSIONS = """
-import importlib.metadata, json
-print(json.dumps({dist.metadata["Name"]: dist.version for dist in importlib.metadata.distributions() if dist.metadata["Name"]}))
-"""
 
 SPEECH_CHECK = """
 import json, sys, time
@@ -67,7 +71,7 @@ from common import REFERENCE_TEXT
 from engines import ChatterboxTurbo
 
 started = time.perf_counter()
-engine = ChatterboxTurbo("cpu")
+engine = ChatterboxTurbo(sys.argv[4])
 loaded = time.perf_counter() - started
 reference, rate, built_in = engine.speak(REFERENCE_TEXT)
 soundfile.write(sys.argv[2], reference, rate)
@@ -80,98 +84,56 @@ soundfile.write(sys.argv[3], wav, rate)
 problem = engine_checks.audible(reference, rate) or engine_checks.audible(wav, rate)
 print(json.dumps({"problem": problem, "load_seconds": loaded, "reference_seconds": reference.size / rate,
                   "reference_total_seconds": built_in["total_s"], "prepare_seconds": prepared, "total_seconds": info["total_s"],
-                  "audio_seconds": wav.size / rate, "torch": torch.__version__}))
+                  "audio_seconds": wav.size / rate, "torch": torch.__version__, "device": sys.argv[4]}))
 """
 
 
 def environment_python(root):
-    return Path(root) / PYTHON
+    return base.env_python(root, ENVIRONMENT)
 
 
 def environment_versions(root, *, runner=subprocess.run):
     """The packages installed in .venv-chatterbox by canonical name, read by its own Python; {} when it has none yet."""
-    python = environment_python(root)
-    if not python.is_file():
-        return {}
-    done = runner([str(python), "-I", "-c", VERSIONS], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                  timeout=120)
-    found = base.last_json_line(done.stdout or "")
-    if done.returncode or not isinstance(found, dict):
-        raise InstallError(f"{ENVIRONMENT} is here but its Python does not run:\n"
-                           + "\n".join(((done.stdout or "") + (done.stderr or "")).strip().splitlines()[-8:])
-                           + f"\nDelete the {ENVIRONMENT} folder and run the installer again: it makes a new one.")
-    return {base.canonical(name): version for name, version in found.items()}
+    return base.env_versions(root, ENVIRONMENT, runner=runner)
 
 
-def interpreter_problems(root, *, system=None, machine=None, version=None, prefix=None, bits=None, base_python=None):
+def interpreter_problems(root, **facts):
     """Why this Python is not the one to run the installer with, as sentences (an empty list when it is)."""
-    system, machine = system or sys.platform, (machine or platform.machine()).lower()
-    version, prefix = version or sys.version_info, prefix or sys.prefix
-    bits = bits or (64 if sys.maxsize > 2**32 else 32)
-    base_python = Path(base_python or getattr(sys, "_base_executable", sys.executable))
-    problems = []
-    if system != "win32" or machine not in {"amd64", "x86_64"} or bits != 64:
-        problems.append("This installer is for 64-bit Windows with 64-bit Python: the pinned packages are Windows x64 builds.")
-    if tuple(version[:2]) != (3, 12):
-        problems.append(f"This is Python {version[0]}.{version[1]}; the pinned packages are built for Python 3.12.")
-    if Path(prefix).resolve() != (Path(root) / ".venv").resolve():
-        problems.append("Run it with this folder's own Python, so that nothing else is changed: "
-                        ".venv\\Scripts\\python.exe tools\\install_chatterbox.py (setup.bat creates that environment).")
-    elif not base_python.is_file():
-        problems.append(f"The Python 3.12 that .venv was made from is gone ({base_python}), and {ENVIRONMENT} is made from it. "
-                        "Install Python 3.12 again from python.org, then run setup.bat and this installer.")
-    return problems
+    return base.own_env_problems(root, ENVIRONMENT, "tools\\install_chatterbox.py", **facts)
 
 
 def package_problems(different, *, has_pip=True):
     """Why pip should not be run in .venv-chatterbox: it has no pip, or packages are installed there at other versions."""
-    problems = []
-    if not has_pip:
-        problems.append(f"{ENVIRONMENT} has no pip. Delete the {ENVIRONMENT} folder and run the installer again: it makes a new "
-                        "one with pip.")
-    if different:
-        shown = ", ".join(f"{item['name']} {have} (the list pins {item['version']})" for item, have in different[:5])
-        more = f" and {len(different) - 5} more" if len(different) > 5 else ""
-        problems.append(f"{ENVIRONMENT} already has other versions of packages the Chatterbox list pins: {shown}{more}. "
-                        "The installer does not replace installed packages. If Chatterbox already runs there (with your own "
-                        f"PyTorch, say), add the model files with --checkpoint-only; otherwise delete the {ENVIRONMENT} folder "
-                        "and run the installer again.")
-    return problems
+    return base.env_package_problems(ENVIRONMENT, "Chatterbox", different, has_pip=has_pip)
 
 
 def checkpoint_only_problems(root, installed):
     """--checkpoint-only keeps the packages it finds, so there must be an environment that has Chatterbox in it."""
-    if not environment_python(root).is_file():
-        return [f"--checkpoint-only adds the model files to a {ENVIRONMENT} that already runs Chatterbox, and there is no "
-                f"{ENVIRONMENT} here. Run the installer without it to make one."]
-    if "chatterbox-tts" not in installed:
-        return [f"--checkpoint-only keeps the packages in {ENVIRONMENT} as they are, and chatterbox-tts is not among them. "
-                "Install it there yourself, or delete the folder and run the installer without --checkpoint-only."]
-    return []
+    return base.env_checkpoint_only_problems(root, ENVIRONMENT, "Chatterbox", "chatterbox-tts", installed)
 
 
 def long_path_problems(root, manifest, *, long_paths=None):
     """Windows stops at 259 characters unless long paths are on; torch and transformers have deep folders."""
-    site = len(str((Path(root) / ENVIRONMENT / "Lib" / "site-packages").resolve())) + 1 + LONGEST_PACKAGE_PATH
-    snapshot = max(len(str(base.snapshot_dir(root, manifest).resolve())) + 1 + len(item["path"]) for item in manifest["files"])
-    longest = max(site, snapshot)
-    if longest < base.MAX_PATH or (base.long_paths_enabled() if long_paths is None else long_paths):
-        return []
-    return [f"This folder's path is too long for Windows: the packages need paths of up to {longest} characters and Windows "
-            f"stops at {base.MAX_PATH - 1}. Move the lab to a shorter path such as C:\\voice-lab, or switch on long paths in "
-            "Windows."]
+    snapshot = [len(str(base.snapshot_dir(root, manifest).resolve())) + 1 + len(item["path"]) for item in manifest["files"]]
+    return base.env_long_path_problems(root, ENVIRONMENT, LONGEST_PACKAGE_PATH, snapshot, long_paths=long_paths)
+
+
+def pinned_packages(root, *, nvidia=False):
+    """The packages to install: requirements/chatterbox-cpu.txt, with the CUDA builds of torch and torchaudio for --nvidia."""
+    packages = base.read_lock(Path(root) / LOCK)
+    return base.swap_packages(packages, base.read_lock(Path(root) / NVIDIA_LOCK)) if nvidia else packages
 
 
 def size_gb(size):
     return f"{size / 1e9:.1f} GB"
 
 
-def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoint_only):
+def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoint_only, nvidia=False):
     """What the installer is about to do, written for the person who ran it."""
     files = {item["path"]: item for item in manifest["files"]}
 
     def step(number, text):
-        return textwrap.fill(f"{number}. {text}", width=110, initial_indent="  ", subsequent_indent="     ")
+        return textwrap.fill(f"{number}. {text}", width=110, break_on_hyphens=False, initial_indent="  ", subsequent_indent="     ")
 
     if checkpoint_only:
         first = f"Python packages: the ones in {ENVIRONMENT} are left alone (--checkpoint-only)."
@@ -179,12 +141,15 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
         first = f"Python packages: all {len(packages)} are already installed in {ENVIRONMENT}."
     else:
         made = (f"{ENVIRONMENT} is already here." if environment_exists else
-                f"First a Python environment of its own, {ENVIRONMENT}, made from the same Python 3.12 as .venv: Chatterbox's "
-                "PyTorch 2.6 cannot share .venv with the PyTorch 2.12 that Kokoro's installer puts there.")
-        first = (f"{made} Python packages: {todo} of {len(packages)} to install there, among them PyTorch 2.6 for the CPU, "
-                 f"Transformers and librosa. About {PACKAGES_DOWNLOAD_MB} MB to download and "
-                 f"{PACKAGES_DISK_MB / 1000:.1f} GB on disk. pip checks every file against a SHA-256 written in "
-                 "requirements/chatterbox-cpu.txt.")
+                f"First a Python environment of its own, {ENVIRONMENT}, made from the same Python 3.12 as .venv, as every model "
+                "has: Chatterbox's PyTorch 2.6 could not share one with the PyTorch 2.12 that Kokoro uses.")
+        build = ("the CUDA 12.6 builds of PyTorch 2.6 and torchaudio for NVIDIA graphics cards (not yet tried on one)" if nvidia
+                 else "PyTorch 2.6 for the CPU")
+        download = PACKAGES_DOWNLOAD_MB + (NVIDIA_EXTRA_DOWNLOAD_MB if nvidia else 0)
+        disk = PACKAGES_DISK_MB + (NVIDIA_EXTRA_DISK_MB if nvidia else 0)
+        first = (f"{made} Python packages: {todo} of {len(packages)} to install there, among them {build}, Transformers and "
+                 f"librosa. About {base.mb_text(download)} to download and {base.mb_text(disk)} on disk. pip checks every file "
+                 f"against a SHA-256 written in {LOCK + ' and ' + NVIDIA_LOCK if nvidia else LOCK}.")
     second = (f"Chatterbox Turbo 350M, revision {manifest['revision'][:7]}, from huggingface.co/{manifest['repo']}: the "
               f"{size_gb(files['t3_turbo_v1.safetensors']['size'])} language model, the "
               f"{size_gb(files['s3gen_meanflow.safetensors']['size'])} speech decoder, the speaker encoder, the built-in voice, "
@@ -192,9 +157,15 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
               + (f"{size_gb(sum(item['size'] for item in pending))} to download" if pending else "Everything is already in place")
               + f". Every file is checked against a SHA-256 written in {MANIFEST}.")
     third = ("A speech check: loads the model without using the network, speaks a paragraph in its built-in voice, then clones "
-             "that recording and speaks one sentence in the cloned voice, which you can play afterwards. On a CPU this takes a "
-             "few minutes.")
-    notes = [f"Licences: the Chatterbox code (chatterbox-tts) and the Turbo weights are {manifest['license']}. Every clip Chatterbox "
+             "that recording and speaks one sentence in the cloned voice, which you can play afterwards. "
+             + ("It runs on the graphics card." if nvidia else "On a CPU this takes a few minutes."))
+    notes = []
+    if nvidia:
+        notes.append("The CUDA 12.6 builds run on NVIDIA cards up to the GeForce RTX 40 series with a recent driver, and not on RTX "
+                     "50 series cards, which need a newer CUDA than the PyTorch 2.6 that Chatterbox asks for has. They carry NVIDIA's "
+                     "CUDA libraries inside them, under NVIDIA's own licence terms. Nobody has tried the Lab on an NVIDIA card yet: "
+                     "if it works, or does not, a hardware report on GitHub helps the next person.")
+    notes += [f"Licences: the Chatterbox code (chatterbox-tts) and the Turbo weights are {manifest['license']}. Every clip Chatterbox "
              "makes carries Resemble AI's Perth watermark, a mark you cannot hear that detection tools can find; the Lab does not "
              "remove it. The Python packages keep their own licences, nearly all MIT, BSD or Apache. The exceptions are soxr and "
              "the libsndfile library inside soundfile (LGPL-2.1), and certifi and tqdm (MPL-2.0). They are installed on this "
@@ -204,54 +175,44 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
     intro = textwrap.fill("This adds Chatterbox Turbo, a model that clones a voice from a recording of more than five seconds and "
                           "runs on an ordinary computer. Everything is installed into this folder (.venv-chatterbox, hf-cache and "
                           "out\\chatterbox) and nothing system-wide; pip keeps its usual download cache in your user profile.",
-                          width=110)
-    return "\n\n".join(["Fel's Voice Lab: Chatterbox Turbo 350M on the CPU", intro,
-                        "\n".join([step(1, first), step(2, second), step(3, third)]),
-                        *(textwrap.fill(note, width=110) for note in notes)]) + "\n"
+                          width=110, break_on_hyphens=False)
+    title = ("Fel's Voice Lab: Chatterbox Turbo 350M on an NVIDIA graphics card" if nvidia
+             else "Fel's Voice Lab: Chatterbox Turbo 350M on the CPU")
+    return "\n\n".join([title, intro, "\n".join([step(1, first), step(2, second), step(3, third)]),
+                        *(textwrap.fill(note, width=110, break_on_hyphens=False) for note in notes)]) + "\n"
 
 
 def make_environment(root, *, runner=subprocess.run):
     """Make .venv-chatterbox from the Python that .venv was made from; venv puts pip in it from Python's own copy."""
-    target = Path(root) / ENVIRONMENT
-    python = getattr(sys, "_base_executable", sys.executable)
-    # .venv's launcher leaves these behind, and the base Python would then take itself for .venv's.
-    env = {key: value for key, value in os.environ.items() if key.upper() not in {"__PYVENV_LAUNCHER__", "VIRTUAL_ENV"}}
-    code = runner([python, "-m", "venv", str(target)], cwd=root, env={**env, "PYTHONUTF8": "1"}).returncode
-    if code or not environment_python(root).is_file():
-        raise InstallError(f"Python could not make {ENVIRONMENT} (exit code {code}). Read its message above, delete the "
-                           f"{ENVIRONMENT} folder if it is there, and run the installer again.")
+    base.make_env(root, ENVIRONMENT, runner=runner)
 
 
-def install_packages(root, *, runner=subprocess.run):
-    command = [str(environment_python(root)), "-m", "pip", "install", "--no-input", "--disable-pip-version-check",
-               "--only-binary=:all:", "--no-deps", "--require-hashes", "-r", str(Path(root) / LOCK)]
-    code = runner(command, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
-    if code:
-        raise InstallError(f"pip stopped with exit code {code}. Read its message above, fix the cause, and run the installer "
-                           "again: it continues where it stopped.")
+def install_packages(root, *, nvidia=False, runner=subprocess.run):
+    """Install the pinned packages into .venv-chatterbox. For --nvidia, pip gets the CPU list with the CUDA builds swapped in,
+    written beside the receipt."""
+    requirements = Path(root) / LOCK
+    if nvidia:
+        requirements = base.write_swapped_lock(root, LOCK, NVIDIA_LOCK, Path(root) / OUTPUT / NVIDIA_REQUIREMENTS)
+    base.pip_install(root, ENVIRONMENT, requirements, runner=runner)
 
 
-def run_speech_check(root, *, runner=subprocess.run):
-    """In .venv-chatterbox, offline: load Turbo, speak a paragraph in its built-in voice, clone it, and speak the Models page's
-    check sentence in the cloned voice."""
+def run_speech_check(root, *, device="cpu", runner=subprocess.run):
+    """In .venv-chatterbox, offline: load Turbo on the device, speak a paragraph in its built-in voice, clone it, and speak the
+    Models page's check sentence in the cloned voice."""
     folder = Path(root) / OUTPUT
     folder.mkdir(parents=True, exist_ok=True)
     reference, wav = folder / REFERENCE_WAV, folder / CHECK_WAV
     env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "PYTHONUTF8": "1"}
     try:
-        done = runner([str(environment_python(root)), "-c", SPEECH_CHECK, str(root), str(reference), str(wav)], cwd=root, env=env,
-                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=CHECK_TIMEOUT)
+        done = runner([str(environment_python(root)), "-c", SPEECH_CHECK, str(root), str(reference), str(wav), device], cwd=root,
+                      env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=CHECK_TIMEOUT)
     except subprocess.TimeoutExpired as exc:
         raise InstallError(f"The speech check took more than {CHECK_TIMEOUT // 60} minutes, so it was stopped.") from exc
     result = base.last_json_line(done.stdout or "")
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
-        hint = ""
-        if "DLL" in output or "WinError 126" in output:
-            hint = ("\nA missing DLL usually means the Microsoft Visual C++ Redistributable is not installed. Install the x64 "
-                    "version from https://aka.ms/vs/17/release/vc_redist.x64.exe and run the installer again.")
         raise InstallError("The packages and model files are in place, but Chatterbox Turbo did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:]) + hint)
+                           + "\n".join(output.strip().splitlines()[-12:]) + base.check_failure_hint(output, nvidia=device == "cuda"))
     if result["problem"]:
         raise InstallError(f"Chatterbox Turbo loaded but a check clip was not speech: {result['problem']}.")
     return {**result, "reference": reference, "wav": wav}
@@ -273,7 +234,7 @@ def voice_match(check):
 def write_receipt(root, manifest, packages, check, match):
     receipt = {"schema": 1, "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                "python": platform.python_version(), "environment": ENVIRONMENT, "torch": check.get("torch"),
-               "packages_pinned": len(packages), "lock_sha256": hashlib.sha256((Path(root) / LOCK).read_bytes()).hexdigest(),
+               "device": check.get("device", "cpu"), "packages_pinned": len(packages), "lock_sha256": hashlib.sha256((Path(root) / LOCK).read_bytes()).hexdigest(),
                "repo": manifest["repo"], "revision": manifest["revision"], "license": manifest["license"],
                "files": [item["path"] for item in manifest["files"]],
                "checkpoint_bytes": sum(item["size"] for item in manifest["files"]),
@@ -287,26 +248,31 @@ def write_receipt(root, manifest, packages, check, match):
 
 def run(args, *, say=base.say_now, ask=input, interactive=None):
     root = ROOT
+    nvidia = getattr(args, "nvidia", False)
     manifest = base.load_manifest(root / MANIFEST)
-    packages = base.read_lock(root / LOCK)
+    packages = pinned_packages(root, nvidia=nvidia)
     exists = environment_python(root).is_file()
     installed = environment_versions(root) if exists else {}
     missing, different = base.package_state(packages, installed)
     pending = base.pending_files(root, manifest, manifest["files"])
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
-    need = ((PACKAGES_DOWNLOAD_MB + PACKAGES_DISK_MB) * 10**6 if todo else 0) + sum(item["size"] for item in pending) \
+    extra = (NVIDIA_EXTRA_DOWNLOAD_MB + NVIDIA_EXTRA_DISK_MB) if nvidia else 0
+    need = ((PACKAGES_DOWNLOAD_MB + PACKAGES_DISK_MB + extra) * 10**6 if todo else 0) + sum(item["size"] for item in pending) \
         + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
+    if nvidia:
+        problems += base.nvidia_problems()
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root, installed)
     elif todo:
         problems += package_problems(different, has_pip=not exists or "pip" in installed)
     problems += long_path_problems(root, manifest)
     problems += base.space_problems(root, need)
-    say(plan_text(manifest, packages, todo, pending, environment_exists=exists, checkpoint_only=args.checkpoint_only))
+    say(plan_text(manifest, packages, todo, pending, environment_exists=exists, checkpoint_only=args.checkpoint_only,
+                  nvidia=nvidia))
     if problems:
         raise InstallError("This computer cannot take the plan yet:\n" + "\n".join(
-            textwrap.fill(problem, width=110, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
+            textwrap.fill(problem, width=110, break_on_hyphens=False, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
     if args.dry_run:
         say("Checks passed. This was a dry run, so nothing was changed.")
         return 0
@@ -319,14 +285,15 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
             say(f"Making {ENVIRONMENT}:")
             make_environment(root)
         say(f"Installing the Python packages into {ENVIRONMENT} (pip prints its own progress):")
-        install_packages(root)
+        install_packages(root, nvidia=nvidia)
         still, _ = base.package_state(packages, environment_versions(root))
         if still:
             raise InstallError(f"pip finished but {len(still)} packages are still missing, for example {still[0]['name']}.")
     say("Fetching the Chatterbox Turbo model files:")
     base.download_checkpoint(root, manifest, manifest["files"], say=say)
-    say("Checking that Chatterbox Turbo speaks and clones a voice (on a CPU this takes a few minutes):")
-    check = run_speech_check(root)
+    say("Checking that Chatterbox Turbo speaks and clones a voice"
+        + (" on the graphics card:" if nvidia else " (on a CPU this takes a few minutes):"))
+    check = run_speech_check(root, device="cuda" if nvidia else "cpu")
     match = voice_match(check)
     receipt = write_receipt(root, manifest, packages, check, match)
     say("")
@@ -346,6 +313,9 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--yes", action="store_true", help="accept the plan without asking")
     parser.add_argument("--dry-run", action="store_true", help="show the plan and run the checks; change nothing")
+    parser.add_argument("--nvidia", action="store_true",
+                        help="install the CUDA builds of PyTorch and torchaudio for an NVIDIA graphics card instead of the CPU "
+                             "builds (untested)")
     parser.add_argument("--checkpoint-only", action="store_true",
                         help=f"fetch the model files only and leave the packages in {ENVIRONMENT} alone")
     return parser

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import re
+from importlib.machinery import PathFinder
 from importlib.util import find_spec
 
 from common import LAB
@@ -9,6 +10,8 @@ from common import LAB
 
 KOKORO_REPO = "hexgrad/Kokoro-82M"
 KOKORO_REPO_CACHE = LAB / "hf-cache" / "hub" / "models--hexgrad--Kokoro-82M"
+# Kokoro's packages live in its own environment (tools/install_kokoro.py makes it), not in the service's .venv.
+KOKORO_SITE_PACKAGES = LAB / ".venv-kokoro" / "Lib" / "site-packages"
 KOKORO_LANGUAGES = {
     "a": {"name": "American English", "aliases": ("en-us", "english (us)", "american english")},
     "b": {"name": "British English", "aliases": ("en-gb", "english (uk)", "british english")},
@@ -68,9 +71,14 @@ def normalize_kokoro_voices(value, available=None) -> list[str]:
     missing = [voice for voice in voices if voice not in available]
     if missing:
         raise ValueError("Kokoro voice pack(s) are not cached locally: " + ", ".join(missing) +
-                         ". Cache only the requested voices with: "
-                         ".venv\\Scripts\\python.exe tools\\kokoro_cache_voices.py --download " + " ".join(missing))
+                         ". Add them with: setup-kokoro.bat --voices " + " ".join(missing))
     return sorted(voices)
+
+
+def _module_available(name):
+    """Whether Kokoro can import a module: in this Python (inside Kokoro's worker), or in Kokoro's own environment (from the
+    service, whose .venv does not hold Kokoro). Nothing is imported."""
+    return find_spec(name) is not None or PathFinder.find_spec(name, [str(KOKORO_SITE_PACKAGES)]) is not None
 
 
 def resolve_kokoro_language(language, voices) -> str:
@@ -88,7 +96,7 @@ def resolve_kokoro_language(language, voices) -> str:
     if key in {"english", "en"} and voices and all(voice.startswith("b") for voice in voices):
         return "b"
     missing = _OPTIONAL_FRONTEND_MODULES.get(code)
-    if missing and find_spec(missing) is None:
+    if missing and not _module_available(missing):
         raise ValueError(f"Kokoro {KOKORO_LANGUAGES[code]['name']} frontend is unavailable: "
                          f"Python module {missing!r} is missing. Install the matching Misaki language extra "
                          "in an isolated environment, then try again.")
@@ -99,7 +107,7 @@ def kokoro_languages() -> list[dict]:
     result = []
     for code, item in KOKORO_LANGUAGES.items():
         missing = _OPTIONAL_FRONTEND_MODULES.get(code)
-        available = not missing or find_spec(missing) is not None
+        available = not missing or _module_available(missing)
         result.append({"code": code, "name": item["name"], "aliases": list(item["aliases"]),
                        "available": available,
                        "missing_module": None if available else missing})

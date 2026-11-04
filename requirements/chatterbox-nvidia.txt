@@ -1,0 +1,8 @@
+# Chatterbox on an NVIDIA graphics card: `tools/install_chatterbox.py --nvidia` installs requirements/chatterbox-cpu.txt with
+# these two in place of the CPU builds. They are the CUDA 12.6 builds of the same PyTorch 2.6.0 and torchaudio 2.6.0, from
+# PyTorch's own index, pinned by their SHA-256 (2.5 GB). The Windows CUDA wheels carry their CUDA libraries inside them.
+# chatterbox-tts 0.1.7 asks for PyTorch 2.6, whose newest CUDA build is 12.6: it runs on cards up to the GeForce RTX 40 series
+# with a recent NVIDIA driver, and not on RTX 50 series cards, which need CUDA 12.8 or later. The Lab has not been tried on an
+# NVIDIA card yet.
+torch @ https://download.pytorch.org/whl/cu126/torch-2.6.0%2Bcu126-cp312-cp312-win_amd64.whl --hash=sha256:b10c39c83e5d1afd639b5c9f5683b351e97e41390a93f59c59187004a9949924
+torchaudio @ https://download.pytorch.org/whl/cu126/torchaudio-2.6.0%2Bcu126-cp312-cp312-win_amd64.whl --hash=sha256:144b286d2f6195ba8d75ed1a568bddd718d032d54d1bf94940d47730c6321a0b

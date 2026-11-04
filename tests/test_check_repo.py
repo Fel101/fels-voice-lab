@@ -1,5 +1,6 @@
 """The repository check, run on synthetic folders: no personal media, real secrets or real names are used."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -58,6 +59,26 @@ class FolderChecks(FolderTestCase):
                 path.unlink()
         self.write(".env.example", "KEY=\n")
         self.assertEqual(self.findings(), [])
+
+    def test_a_synthetic_demo_is_allowed_only_in_docs_demo_and_only_while_its_manifest_vouches_for_it(self):
+        clip = b"ID3 a stand-in for an MP3"
+        manifest = {"file": "demo.mp3", "sha256": hashlib.sha256(clip).hexdigest(), "synthetic": "preset voices only",
+                    "label": "AI-generated speech: a synthetic voice made by Kokoro 82M with the Lab."}
+        self.write("docs/demo/demo.mp3", clip)
+        self.write("docs/demo/demo.json", json.dumps(manifest))
+        self.assertEqual(self.findings(), [])
+        for change in ({"sha256": "0" * 64}, {"synthetic": ""}, {"label": "Recorded at home."}, {"file": "other.mp3"}):
+            with self.subTest(change=change):
+                self.write("docs/demo/demo.json", json.dumps({**manifest, **change}))
+                self.assertEqual(self.rules_for("docs/demo/demo.mp3"), {"private_or_binary_file"})
+        self.write("docs/demo/demo.json", json.dumps(manifest))
+        self.write("docs/demo/demo.mp3", clip + b" changed")
+        self.assertEqual(self.rules_for("docs/demo/demo.mp3"), {"private_or_binary_file"}, "a changed file no longer matches")
+        for elsewhere in ("docs/demo.mp3", "docs/demo/demo.wav", "assets/demo/demo.mp3"):
+            with self.subTest(elsewhere=elsewhere):
+                self.write(elsewhere, clip)
+                self.assertIn("private_or_binary_file", self.rules_for(elsewhere))
+                (self.root / elsewhere).unlink()
 
     def test_a_file_in_a_private_runtime_folder_is_found_whatever_it_is(self):
         for folder in ("data", "out", "reference", "hf-cache", "dist", ".venv-breeze"):

@@ -22,6 +22,7 @@ import pyloudnorm as pyln
 import soundfile as sf
 from scipy.signal import resample_poly
 
+import synthetic_label
 from cast_store import CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
 from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
@@ -983,7 +984,7 @@ class SceneStore:
         scene_out = self.output_root / scene_id
         scene_out.mkdir(parents=True, exist_ok=True)
         wav_path = scene_out / f"scene-r{scene['revision']}-{uuid.uuid4().hex[:8]}.wav"
-        sf.write(wav_path, audio, output_rate, subtype="PCM_16")
+        synthetic_label.write_wav(wav_path, audio, output_rate)
         file_hash = hashlib.sha256(wav_path.read_bytes()).hexdigest()
         mastered_path = scene_out / f"scene-mastered-r{scene['revision']}-{uuid.uuid4().hex[:8]}.wav"
         peak_ceiling = 10 ** (-1.0 / 20.0)
@@ -998,7 +999,7 @@ class SceneStore:
                 loudness_gain = 10 ** ((-18.0 - input_lufs) / 20.0)
         applied_gain = min(loudness_gain, 10 ** (12.0 / 20.0), peak_gain)
         mastered_audio = np.clip(audio * applied_gain, -peak_ceiling, peak_ceiling).astype(np.float32)
-        sf.write(mastered_path, mastered_audio, output_rate, subtype="PCM_16")
+        synthetic_label.write_wav(mastered_path, mastered_audio, output_rate)
         mastered_hash = hashlib.sha256(mastered_path.read_bytes()).hexdigest()
         output_lufs = None
         if input_lufs is not None and len(mastered_audio) / output_rate >= 0.4:

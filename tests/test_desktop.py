@@ -20,7 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 class DesktopTests(unittest.TestCase):
     def test_owned_backend_is_ready_isolated_and_stops_on_close(self):
         with tempfile.TemporaryDirectory() as temp:
-            backend = DesktopBackend(root=ROOT, state_root=temp, python=sys.executable, device="cpu")
+            # The session folder and the service log go in the temporary folder, and the service skips its sweep of out/, so
+            # the run leaves the real out/ folder as it found it.
+            backend = DesktopBackend(root=ROOT, state_root=temp, python=sys.executable, device="cpu",
+                                     sessions=Path(temp, "desktop"),
+                                     service_args=("--no-cleanup", "--log-dir", Path(temp, "logs")))
             try:
                 url = backend.start(timeout=45)
                 ready = json.loads((backend.session / "ready.json").read_text("utf-8"))

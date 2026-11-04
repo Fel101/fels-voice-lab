@@ -135,15 +135,32 @@ class InstallationTests(TempTree):
         base = "hf-cache" if engine == "voxcpm2" else "hf-cache/hub"
         return f"{base}/models--{entry['checkpoint'].replace('/', '--')}/snapshots/{entry['local_revision']}"
 
-    def environment(self, engine):
-        self.write(CATALOG[engine]["runtime"]["python"])
+    def environment(self, engine, *packages):
+        """The engine's own environment: its Python, and a dist-info folder for each package named."""
+        python = CATALOG[engine]["runtime"]["python"]
+        self.write(python)
+        site = Path(python).parent.parent / "Lib" / "site-packages"
+        for package in packages:
+            self.write(f"{site.as_posix()}/{package}.dist-info/METADATA")
 
-    def test_installed_needs_the_environment_and_a_weight_file(self):
+    def test_installed_needs_the_environment_its_package_and_a_weight_file(self):
         self.environment("kokoro")
         self.write(f"{self.hf_snapshot('kokoro')}/kokoro-v1_0.pth")
         result = installation(CATALOG["kokoro"], self.root)
+        self.assertEqual((result["installed"], result["missing"]), (False, ["kokoro (Python package)"]))
+        self.environment("kokoro", "kokoro-0.9.4")
+        result = installation(CATALOG["kokoro"], self.root)
         self.assertTrue(result["installed"])
         self.assertEqual(result["missing"], [])
+
+    def test_kokoro_and_phonon_each_run_in_an_environment_of_their_own(self):
+        self.assertEqual(CATALOG["kokoro"]["runtime"]["python"], ".venv-kokoro/Scripts/python.exe")
+        self.assertEqual(CATALOG["phonon-31m-en"]["runtime"]["python"], ".venv-phonon/Scripts/python.exe")
+        # A Kokoro left in the service's .venv by an earlier version does not count: the Lab looks in .venv-kokoro.
+        self.write(".venv/Scripts/python.exe")
+        self.write(".venv/Lib/site-packages/kokoro-0.9.4.dist-info/METADATA")
+        self.write(f"{self.hf_snapshot('kokoro')}/kokoro-v1_0.pth")
+        self.assertIn(".venv-kokoro/Scripts/python.exe", installation(CATALOG["kokoro"], self.root)["missing"])
 
     def test_missing_environment_and_snapshot_are_named(self):
         result = installation(CATALOG["kokoro"], self.root)
@@ -167,7 +184,7 @@ class InstallationTests(TempTree):
         self.assertEqual(result["installer"], "setup-kokoro.bat")
 
     def test_an_installed_engine_names_no_launcher(self):
-        self.environment("kokoro")
+        self.environment("kokoro", "kokoro-0.9.4")
         self.write(f"{self.hf_snapshot('kokoro')}/kokoro-v1_0.pth")
         self.assertNotIn("installer", installation(CATALOG["kokoro"], self.root))
 
@@ -219,7 +236,7 @@ class InstallationTests(TempTree):
         backend = CATALOG["phonon-31m-en"]["backend"]
         self.environment("phonon-31m-en")
         if package:
-            self.write(".venv/Lib/site-packages/ptts-0.5.0.dist-info/METADATA")
+            self.write(".venv-phonon/Lib/site-packages/ptts-0.5.0.dist-info/METADATA")
         if model:
             self.write(f"{self.hf_snapshot('phonon-31m-en')}/model.q8.gguf")
         if voices:
@@ -234,7 +251,7 @@ class InstallationTests(TempTree):
 
     def test_phonon_without_its_package_names_the_package_and_the_launcher(self):
         self.put_phonon(package=False)
-        self.write(".venv/Lib/site-packages/pttsx-1.0.dist-info/METADATA")  # another package that starts the same way
+        self.write(".venv-phonon/Lib/site-packages/pttsx-1.0.dist-info/METADATA")  # another package that starts the same way
         result = installation(CATALOG["phonon-31m-en"], self.root)
         self.assertEqual((result["installed"], result["missing"], result["installer"]),
                          (False, ["ptts (Python package)"], "setup-phonon.bat"))
@@ -289,7 +306,7 @@ class InstallPointerTests(unittest.TestCase):
 
 
 class FingerprintTests(TempTree):
-    def site_packages(self, environment=".venv"):
+    def site_packages(self, environment=".venv-kokoro"):
         site = self.root / environment / "Lib" / "site-packages"
         site.mkdir(parents=True, exist_ok=True)
         return site
@@ -333,16 +350,19 @@ class FingerprintTests(TempTree):
     def test_a_missing_environment_still_gives_a_fingerprint(self):
         self.assertEqual(len(engine_fingerprint(CATALOG["kokoro"], self.root)), 16)
 
-    def test_installing_the_phonon_runtime_ages_the_stored_test_of_every_engine_in_that_environment(self):
-        site = self.site_packages()
-        before = {engine: engine_fingerprint(CATALOG[engine], self.root) for engine in ("kokoro", "phonon-31m-en")}
+    def test_installing_phonon_leaves_the_stored_tests_of_the_other_engines_as_they_are(self):
+        # Each model has its own environment, so a package added to Phonon's ages Phonon's test and nobody else's.
+        site = self.site_packages(".venv-phonon")
+        self.site_packages(".venv")
+        before = {engine: engine_fingerprint(CATALOG[engine], self.root) for engine in ("kokoro", "phonon-31m-en", "drama-3")}
         (site / "ptts-0.5.0.dist-info").mkdir()
-        for engine, old in before.items():
+        self.assertNotEqual(engine_fingerprint(CATALOG["phonon-31m-en"], self.root), before["phonon-31m-en"])
+        for engine in ("kokoro", "drama-3"):
             with self.subTest(engine=engine):
-                self.assertNotEqual(engine_fingerprint(CATALOG[engine], self.root), old)
+                self.assertEqual(engine_fingerprint(CATALOG[engine], self.root), before[engine])
 
     def test_moving_the_phonon_voices_pin_counts(self):
-        self.site_packages()
+        self.site_packages(".venv-phonon")
         entry = CATALOG["phonon-31m-en"]
         before = engine_fingerprint(entry, self.root)
         moved = dict(entry, backend=dict(entry["backend"], voices_revision="a-newer-voice-snapshot"))
@@ -553,7 +573,7 @@ class EngineCheckTests(TempTree):
     def test_a_check_is_bound_to_the_engine_it_ran_against_and_expires_when_a_package_changes(self):
         store = EngineCheckStore(self.root / "checks.json")
         pool = self.pool(FakeWorker(), store=store)
-        site = self.root / ".venv" / "Lib" / "site-packages"
+        site = self.root / ".venv-kokoro" / "Lib" / "site-packages"
         (site / "torch-2.12.0.dist-info").mkdir(parents=True)
 
         def kokoro_row():
@@ -823,6 +843,7 @@ class EngineStatusHttpTests(TempTree):
         self.worker.load_error = WorkerRequestError(FailedLoadTests.WORKER_ERROR)
         entry = CATALOG["kokoro"]
         self.write(entry["runtime"]["python"])
+        self.write(".venv-kokoro/Lib/site-packages/kokoro-0.9.4.dist-info/METADATA")
         self.write(f"hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/{entry['local_revision']}/kokoro-v1_0.pth")
         self.engines.install_probe = lambda entry: installation(entry, self.root)
         status, answer = self.call("POST", "/api/speak", {"engine": "kokoro", "text": "Hello there."})

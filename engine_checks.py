@@ -34,8 +34,10 @@ DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place. installation() names it while files are missing.
 GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
-# The three Chatterbox engines share .venv-chatterbox, which the Turbo installer makes before it installs anything into it.
-REQUIRED_PACKAGES = {PHONON_ENGINE_ID: ("ptts",), **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, "orig", "chatterbox-vc")}}
+# Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), and the three Chatterbox engines share
+# .venv-chatterbox; each installer makes its environment before it installs anything into it.
+REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
+                     **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, "orig", "chatterbox-vc")}}
 # Files an engine's snapshot must hold, beyond having a weight file: Turbo cannot load with any of these missing.
 REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"

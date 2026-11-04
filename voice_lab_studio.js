@@ -249,8 +249,10 @@ var engineStateNames={not_integrated:'Not integrated',not_installed:'Not install
 function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':String(device||'');}
 function engineStateText(row,device,job){
   if(job&&job.state==='running'){return 'Installing…';}
-  if(row.state==='usable'){return 'Speaks now on '+deviceLabel(device);}
-  if(row.state==='check_failed'){return 'Test failed on '+deviceLabel(device);}
+  // A model whose own PyTorch cannot use the graphics card runs on the CPU: say so rather than the service's device.
+  var ran=row.check&&row.check.ran_on==='cpu'?'cpu':device;
+  if(row.state==='usable'){return 'Speaks now on '+deviceLabel(ran);}
+  if(row.state==='check_failed'){return 'Test failed on '+deviceLabel(ran);}
   if(row.state==='not_checked'){return 'Installed, not tested on '+deviceLabel(device);}
   if(row.state==='check_outdated'){return 'Installed, test out of date on '+deviceLabel(device);}
   return engineStateNames[row.state]||row.state;
@@ -271,7 +273,9 @@ function engineDetailText(row,device,job){
   if(!check){return 'Press Test to load the model and speak one short sentence on this device.';}
   if(row.state==='check_outdated'){return 'The last test ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before tests recorded that. Press Test again to confirm it still speaks.';}
   if(check.status==='passed'){
-    return 'Tested '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+(check.ran_on&&check.ran_on!==device?', on '+check.ran_on:'')+'.';
+    var where='';
+    if(check.ran_on&&check.ran_on!==device){where=check.ran_on==='cpu'&&device==='cuda'?', on the CPU: this model\'s PyTorch cannot use the graphics card':', on '+check.ran_on;}
+    return 'Tested '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+where+'.';
   }
   return 'Failed '+utcStamp(check.checked_at)+': '+check.reason;
 }

@@ -1,4 +1,5 @@
-"""Install Phonon 31M English on the CPU: the ptts runtime into .venv, the pinned model and voices into hf-cache, then a speech check.
+"""Install Phonon 31M English on the CPU: its own .venv-phonon with the ptts runtime, the pinned model and voices into hf-cache,
+then a speech check.
 
     .venv\\Scripts\\python.exe tools\\install_phonon.py
     .venv\\Scripts\\python.exe tools\\install_phonon.py --dry-run
@@ -6,17 +7,18 @@
     .venv\\Scripts\\python.exe tools\\install_phonon.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-phonon.bat does that for you. pip installs requirements/phonon.txt with the
-wheel's SHA-256 checked, and the script refuses to replace a package that is already installed at another version. The files in
-catalog/phonon_snapshot.json (the model, and the 37 English preset voices with their catalog) come from Hugging Face at the
-pinned revisions, resume after an interruption, and are kept only when their SHA-256 matches. Running it again installs only what
-is missing. --checkpoint-only fetches the model files and leaves the Python package alone, for an environment that already has
-ptts. The download, hash and pip helpers are the ones install_kokoro.py uses, so a fix there reaches this installer too.
+the lab's own Python, which setup.bat creates; setup-phonon.bat does that for you. Phonon gets an environment of its own,
+.venv-phonon, made from the same Python 3.12 as .venv, so installing it changes no other model's packages. pip installs
+requirements/phonon.txt there with every wheel's SHA-256 checked, and the script refuses to replace a package that is already
+installed at another version. The files in catalog/phonon_snapshot.json (the model, and the 37 English preset voices with their
+catalog) come from Hugging Face at the pinned revisions, resume after an interruption, and are kept only when their SHA-256
+matches. Running it again installs only what is missing. --checkpoint-only fetches the model files and leaves the packages
+alone, for a .venv-phonon you made yourself. The environment, download, hash and pip helpers are the ones install_kokoro.py
+uses, so a fix there reaches this installer too.
 """
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 import platform
@@ -36,12 +38,16 @@ InstallError = base.InstallError
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = "requirements/phonon.txt"
 MANIFEST = "catalog/phonon_snapshot.json"
+ENVIRONMENT = ".venv-phonon"
+RUNTIME = "ptts"
 OUTPUT = "out/phonon"
 CHECK_WAV = "install-check.wav"
 RECEIPT = "installation.json"
-# Measured: the wheel is 6.8 MB and the installed package 17.9 MB.
-PACKAGE_DOWNLOAD_MB = 7
-PACKAGE_DISK_MB = 18
+# Measured on a clean install of the lock into a new .venv-phonon: 60 MB of wheels (the ptts wheel is 6.8 MB of it), 240 MB
+# installed (pip and the venv included), and 95 characters for the longest path below site-packages.
+PACKAGES_DOWNLOAD_MB = 60
+PACKAGES_DISK_MB = 240
+LONGEST_PACKAGE_PATH = 100
 SPACE_MARGIN_MB = 200
 
 SPEECH_CHECK = """
@@ -58,7 +64,7 @@ request = engine_checks.smoke_request("phonon-31m-en")
 wav, rate, info = engine.speak(request["text"], voice=request["voice"])
 soundfile.write(sys.argv[2], wav, rate)
 print(json.dumps({"voice": request["voice"], "problem": engine_checks.audible(wav, rate), "load_seconds": loaded,
-                  "total_seconds": info["total_s"], "audio_seconds": wav.size / rate}))
+                  "total_seconds": info["total_s"], "audio_seconds": wav.size / rate, "ptts": engine.version}))
 """
 
 
@@ -82,66 +88,63 @@ def pending_files(root, manifest):
     return [(repo, item) for repo in manifest["repos"] for item in base.pending_files(root, repo, repo["files"])]
 
 
-def interpreter_problems(root, *, system=None, machine=None, version=None, prefix=None, bits=None):
-    """Why this Python is not the one to install into, as sentences (an empty list when it is)."""
-    system, machine = system or sys.platform, (machine or platform.machine()).lower()
-    version, prefix = version or sys.version_info, prefix or sys.prefix
-    bits = bits or (64 if sys.maxsize > 2**32 else 32)
-    problems = []
-    if system != "win32" or machine not in {"amd64", "x86_64"} or bits != 64:
-        problems.append("This installer is for 64-bit Windows with 64-bit Python: the pinned runtime is a Windows x64 wheel.")
-    if tuple(version[:2]) != (3, 12):
-        problems.append(f"This is Python {version[0]}.{version[1]}; the lab runs on Python 3.12.")
-    if Path(prefix).resolve() != (Path(root) / ".venv").resolve():
-        problems.append("Run it with this folder's own Python, so that nothing else is changed: "
-                        ".venv\\Scripts\\python.exe tools\\install_phonon.py (setup.bat creates that environment).")
-    return problems
+def runtime_package(packages):
+    """The ptts line of the pinned list."""
+    return next(item for item in packages if item["key"] == RUNTIME)
 
 
-def package_problems(different, installed, *, has_pip=None):
-    """Why pip should not be run here: it is missing, numpy (which ptts needs and the lab always has) is not there, or the
-    runtime is installed at another version."""
-    problems = []
-    if not (importlib.util.find_spec("pip") is not None if has_pip is None else has_pip):
-        problems.append("pip is not installed in this environment. setup.bat creates .venv with pip.")
-    if "numpy" not in installed:
-        problems.append("numpy is not installed here, and the runtime needs it. Run setup.bat first: it installs the lab's core packages.")
-    if different:
-        shown = ", ".join(f"{item['name']} {have} (the list pins {item['version']})" for item, have in different)
-        problems.append(f"This environment already has another version of the runtime: {shown}. The installer does not replace "
-                        "installed packages. If Phonon already runs here, add the model files with --checkpoint-only; otherwise "
-                        "use a fresh copy of the lab.")
-    return problems
+def environment_python(root):
+    return base.env_python(root, ENVIRONMENT)
+
+
+def environment_versions(root, *, runner=subprocess.run):
+    """The packages installed in .venv-phonon by canonical name; {} when it has none yet."""
+    return base.env_versions(root, ENVIRONMENT, runner=runner)
+
+
+def interpreter_problems(root, **facts):
+    """Why this Python is not the one to run the installer with, as sentences (an empty list when it is)."""
+    return base.own_env_problems(root, ENVIRONMENT, "tools\\install_phonon.py", **facts)
+
+
+def package_problems(different, *, has_pip=True):
+    """Why pip should not be run in .venv-phonon: it has no pip, or packages are installed there at other versions."""
+    return base.env_package_problems(ENVIRONMENT, "Phonon", different, has_pip=has_pip)
+
+
+def checkpoint_only_problems(root, installed):
+    return base.env_checkpoint_only_problems(root, ENVIRONMENT, "Phonon", RUNTIME, installed)
 
 
 def long_path_problems(root, manifest, *, long_paths=None):
     """Windows stops at 259 characters unless long paths are on; the voice files sit in a deep cache folder."""
-    longest = max(len(str(base.snapshot_dir(root, repo).resolve())) + 1 + len(item["path"])
-                  for repo in manifest["repos"] for item in repo["files"])
-    if longest < base.MAX_PATH or (base.long_paths_enabled() if long_paths is None else long_paths):
-        return []
-    return [f"This folder's path is too long for Windows: the model files need paths of up to {longest} characters and "
-            f"Windows stops at {base.MAX_PATH - 1}. Move the lab to a shorter path such as C:\\voice-lab, or switch on long paths "
-            "in Windows."]
+    files = [len(str(base.snapshot_dir(root, repo).resolve())) + 1 + len(item["path"])
+             for repo in manifest["repos"] for item in repo["files"]]
+    return base.env_long_path_problems(root, ENVIRONMENT, LONGEST_PACKAGE_PATH, files, long_paths=long_paths)
 
 
-def plan_text(manifest, packages, todo, pending, *, checkpoint_only):
+def plan_text(manifest, packages, todo, pending, *, checkpoint_only, environment_exists=False):
     """What the installer is about to do, written for the person who ran it."""
     model, voices = manifest["repos"][0], manifest["repos"][1]
     weights = max(model["files"], key=lambda item: item["size"])
     voice_files = [item for item in voices["files"] if item["path"].startswith("voices/")]
+    runtime = runtime_package(packages)
 
     def step(number, text):
-        return textwrap.fill(f"{number}. {text}", width=110, initial_indent="  ", subsequent_indent="     ")
+        return textwrap.fill(f"{number}. {text}", width=110, break_on_hyphens=False, initial_indent="  ", subsequent_indent="     ")
 
     if checkpoint_only:
-        first = "Python package: left alone (--checkpoint-only)."
+        first = f"Python packages: the ones in {ENVIRONMENT} are left alone (--checkpoint-only)."
     elif not todo:
-        first = f"Python package: {packages[0]['name']} {packages[0]['version']} is already installed."
+        first = f"Python packages: all {len(packages)} are already installed in {ENVIRONMENT}, {runtime['name']} {runtime['version']} among them."
     else:
-        first = (f"Python package: the runtime, {packages[0]['name']} {packages[0]['version']}, a {PACKAGE_DOWNLOAD_MB} MB wheel that "
-                 f"needs only numpy, which is installed. About {PACKAGE_DISK_MB} MB on disk. pip checks the wheel against a "
-                 "SHA-256 written in requirements/phonon.txt.")
+        made = (f"{ENVIRONMENT} is already here." if environment_exists else
+                f"First a Python environment of its own, {ENVIRONMENT}, made from the same Python 3.12 as .venv, so that "
+                "installing Phonon changes no other model's packages.")
+        first = (f"{made} Python packages: {todo} of {len(packages)} to install there: the runtime, {runtime['name']} "
+                 f"{runtime['version']}, a 7 MB wheel that needs only NumPy, and the Lab's own NumPy, SciPy and SoundFile. About "
+                 f"{PACKAGES_DOWNLOAD_MB} MB to download and {PACKAGES_DISK_MB} MB on disk; there is no PyTorch. pip checks every "
+                 f"wheel against a SHA-256 written in {LOCK}.")
     second = (f"Phonon 31M English, revision {model['revision'][:7]}, from huggingface.co/{model['repo']}: the "
               f"{base.size_text(weights['size'])} model with its tokenizer, configuration and default voice, and "
               f"{len(voice_files)} English preset voices with their catalog, revision {voices['revision'][:7]}, from "
@@ -153,43 +156,38 @@ def plan_text(manifest, packages, todo, pending, *, checkpoint_only):
     notes = [f"Licences: the model's weights, tokenizer and default voice are {model['license']} (its model card). The "
              f"{len(voice_files)} preset voices come from a separate repository that states no licence: it has no model card and no "
              "LICENSE file, so nothing says what audio made with them may be used for. Ask Gradium before you publish a recording "
-             "that uses one. The runtime is MIT OR Apache-2.0.",
-             "Installing the runtime adds a package to .venv, so the Models page will ask you to test the other models there again."]
+             "that uses one. The runtime is MIT OR Apache-2.0."]
     intro = textwrap.fill("This adds a very small speech model that runs on an ordinary computer, so the studio can speak in "
-                          f"{len(voice_files)} preset voices. Everything is installed into this folder (.venv, hf-cache and out\\phonon) "
-                          "and nothing system-wide; pip keeps its usual download cache in your user profile.", width=110)
+                          f"{len(voice_files)} preset voices. Everything is installed into this folder ({ENVIRONMENT}, hf-cache "
+                          "and out\\phonon) and nothing system-wide; pip keeps its usual download cache in your user profile.",
+                          width=110, break_on_hyphens=False)
     return "\n\n".join(["Fel's Voice Lab: Phonon 31M English on the CPU", intro, "\n".join([step(1, first), step(2, second), step(3, third)]),
-                        *(textwrap.fill(note, width=110) for note in notes)]) + "\n"
+                        *(textwrap.fill(note, width=110, break_on_hyphens=False) for note in notes)]) + "\n"
+
+
+def make_environment(root, *, runner=subprocess.run):
+    base.make_env(root, ENVIRONMENT, runner=runner)
 
 
 def install_packages(root, *, runner=subprocess.run):
-    command = [sys.executable, "-m", "pip", "install", "--no-input", "--disable-pip-version-check", "--only-binary=:all:",
-               "--no-deps", "--require-hashes", "-r", str(Path(root) / LOCK)]
-    code = runner(command, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
-    if code:
-        raise InstallError(f"pip stopped with exit code {code}. Read its message above, fix the cause, and run the installer "
-                           "again: it continues where it stopped.")
+    base.pip_install(root, ENVIRONMENT, Path(root) / LOCK, runner=runner)
 
 
 def run_speech_check(root, *, runner=subprocess.run):
-    """Load Phonon in a fresh process, offline, and have it speak the Models page's check sentence."""
+    """In .venv-phonon, offline: load Phonon and have it speak the Models page's check sentence."""
     wav = Path(root) / OUTPUT / CHECK_WAV
     wav.parent.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "PYTHONUTF8": "1"}
     try:
-        done = runner([sys.executable, "-c", SPEECH_CHECK, str(root), str(wav)], cwd=root, env=env, capture_output=True,
-                      text=True, encoding="utf-8", errors="replace", timeout=300)
+        done = runner([str(environment_python(root)), "-c", SPEECH_CHECK, str(root), str(wav)], cwd=root, env=env,
+                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     except subprocess.TimeoutExpired as exc:
         raise InstallError("Loading Phonon took more than 5 minutes, so the speech check was stopped.") from exc
     result = base.last_json_line(done.stdout or "")
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
-        hint = ""
-        if "DLL" in output or "WinError 126" in output:
-            hint = ("\nA missing DLL usually means the Microsoft Visual C++ Redistributable is not installed. Install the x64 "
-                    "version from https://aka.ms/vs/17/release/vc_redist.x64.exe and run the installer again.")
-        raise InstallError("The package and model files are in place, but Phonon did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:]) + hint)
+        raise InstallError("The packages and model files are in place, but Phonon did not load or speak:\n"
+                           + "\n".join(output.strip().splitlines()[-12:]) + base.check_failure_hint(output))
     if result["problem"]:
         raise InstallError(f"Phonon loaded but the check clip was not speech: {result['problem']}.")
     return {**result, "wav": wav}
@@ -198,8 +196,8 @@ def run_speech_check(root, *, runner=subprocess.run):
 def write_receipt(root, manifest, packages, check):
     files = [f"{repo['repo']}/{item['path']}" for repo in manifest["repos"] for item in repo["files"]]
     receipt = {"schema": 1, "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "python": platform.python_version(), "ptts": base.installed_versions().get("ptts"),
-               "lock_sha256": hashlib.sha256((Path(root) / LOCK).read_bytes()).hexdigest(),
+               "python": platform.python_version(), "environment": ENVIRONMENT, "ptts": check.get("ptts"),
+               "packages_pinned": len(packages), "lock_sha256": hashlib.sha256((Path(root) / LOCK).read_bytes()).hexdigest(),
                "repos": [{"repo": repo["repo"], "revision": repo["revision"], "license": repo["license"]}
                          for repo in manifest["repos"]],
                "files": files, "checkpoint_bytes": sum(item["size"] for repo in manifest["repos"] for item in repo["files"]),
@@ -213,21 +211,24 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     root = ROOT
     manifest = load_manifest(root / MANIFEST)
     packages = base.read_lock(root / LOCK)
-    installed = base.installed_versions()
+    exists = environment_python(root).is_file()
+    installed = environment_versions(root) if exists else {}
     missing, different = base.package_state(packages, installed)
     pending = pending_files(root, manifest)
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
-    need = ((PACKAGE_DOWNLOAD_MB + PACKAGE_DISK_MB) * 10**6 if todo else 0) \
+    need = ((PACKAGES_DOWNLOAD_MB + PACKAGES_DISK_MB) * 10**6 if todo else 0) \
         + sum(item["size"] for _repo, item in pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
-    if todo:
-        problems += package_problems(different, installed)
+    if args.checkpoint_only:
+        problems += checkpoint_only_problems(root, installed)
+    elif todo:
+        problems += package_problems(different, has_pip=not exists or "pip" in installed)
     problems += long_path_problems(root, manifest)
     problems += base.space_problems(root, need)
-    say(plan_text(manifest, packages, todo, pending, checkpoint_only=args.checkpoint_only))
+    say(plan_text(manifest, packages, todo, pending, checkpoint_only=args.checkpoint_only, environment_exists=exists))
     if problems:
         raise InstallError("This computer cannot take the plan yet:\n" + "\n".join(
-            textwrap.fill(problem, width=110, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
+            textwrap.fill(problem, width=110, break_on_hyphens=False, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
     if args.dry_run:
         say("Checks passed. This was a dry run, so nothing was changed.")
         return 0
@@ -236,11 +237,14 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
         return 1
     started = time.monotonic()
     if todo:
-        say("Installing the Python package (pip prints its own progress):")
+        if not exists:
+            say(f"Making {ENVIRONMENT}:")
+            make_environment(root)
+        say(f"Installing the Python packages into {ENVIRONMENT} (pip prints its own progress):")
         install_packages(root)
-        still, _ = base.package_state(packages, base.installed_versions())
+        still, _ = base.package_state(packages, environment_versions(root))
         if still:
-            raise InstallError(f"pip finished but {still[0]['name']} is still missing.")
+            raise InstallError(f"pip finished but {len(still)} packages are still missing, for example {still[0]['name']}.")
     say("Fetching the Phonon model and voice files:")
     for repo in manifest["repos"]:
         base.download_checkpoint(root, repo, repo["files"], say=say)
@@ -261,7 +265,7 @@ def build_parser():
     parser.add_argument("--yes", action="store_true", help="accept the plan without asking")
     parser.add_argument("--dry-run", action="store_true", help="show the plan and run the checks; change nothing")
     parser.add_argument("--checkpoint-only", action="store_true",
-                        help="fetch the model files only and leave the Python package alone")
+                        help=f"fetch the model files only and leave the packages in {ENVIRONMENT} alone")
     return parser
 
 

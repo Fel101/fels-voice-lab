@@ -27,6 +27,7 @@ from evaluation_diagnostics import TAKE_CHECKER, take_checks
 from phonon_support import PHONON_ENGINE_ID
 import reference_quality
 import speaker_similarity
+import synthetic_label
 import take_edit
 
 
@@ -1060,9 +1061,8 @@ class CastStore:
         audio = np.asarray(wav, dtype=np.float32).reshape(-1)
         if not audio.size or not np.isfinite(audio).all() or not int(sample_rate):
             raise ValueError("Generated performance audio is empty or invalid.")
-        audio_buf = io.BytesIO()
-        sf.write(audio_buf, audio, int(sample_rate), format="WAV", subtype="PCM_16")
-        audio_bytes = audio_buf.getvalue()
+        # Every take is labelled inside the file as AI-generated speech (synthetic_label.py).
+        audio_bytes = synthetic_label.wav_bytes(audio, int(sample_rate), engine_id=identity["engine_id"])
         audio_hash = hashlib.sha256(audio_bytes).hexdigest()
         take_id = new_id()
         take_dir = self.data_root / "media" / "takes" / take_id
@@ -1175,9 +1175,7 @@ class CastStore:
         """(WAV bytes, the report of what the edit did, the sample rate) for an edit of the parent's audio."""
         _take, samples, rate = self.take_samples(parent["id"])
         edited, report = take_edit.apply_edit(samples, rate, edit)
-        buffer = io.BytesIO()
-        sf.write(buffer, edited, rate, format="WAV", subtype="PCM_16")
-        return buffer.getvalue(), report, rate
+        return synthetic_label.wav_bytes(edited, rate, engine_id=parent.get("engine_id")), report, rate
 
     def preview_edit(self, take_id, request):
         """The audio an edit would make, as WAV bytes, and the report of what it did. Nothing is saved."""

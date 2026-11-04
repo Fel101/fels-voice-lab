@@ -20,8 +20,25 @@ VOXCPM_ENGINE_ID = "voxcpm2"
 CHATTERBOX_VC_ENGINE_ID = "chatterbox-vc"
 ENGINE_IDS = {"kokoro", PHONON_ENGINE_ID, "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
               CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS}
+# The engines that run on PyTorch. Phonon (ptts) runs on the CPU and Drama (speech.cpp) chooses its own device.
+TORCH_ENGINE_IDS = ENGINE_IDS - {PHONON_ENGINE_ID, "drama-3"}
 REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
+
+
+def usable_device(engine_id, device):
+    """(device, note): the device this worker can really use. Asked for the graphics card, an engine whose PyTorch cannot use
+    one, such as the CPU build the installers put in unless told --nvidia, runs on the CPU instead of failing to load, and the
+    note says why. Any other request is kept as it is."""
+    if device != "cuda" or engine_id not in TORCH_ENGINE_IDS:
+        return device, None
+    try:
+        torch = torch_runtime()
+    except ModuleNotFoundError:
+        return "cpu", "PyTorch is not installed in this environment"
+    if torch.cuda.is_available():
+        return "cuda", None
+    return "cpu", f"this environment's PyTorch ({torch.__version__}) cannot use a graphics card"
 
 
 class EngineWorkerRuntime:
@@ -29,7 +46,10 @@ class EngineWorkerRuntime:
         if engine_id not in ENGINE_IDS:
             raise ValueError(f"Engine {engine_id!r} is not enabled for the worker service.")
         self.engine_id = engine_id
-        self.device = device
+        self.device, self.device_note = usable_device(engine_id, device)
+        if self.device_note:
+            print(f"The service asked for the graphics card, but {self.device_note}, so {engine_id} runs on the CPU.",
+                  flush=True)
         self.engine = None
         self.breeze = None
         self.qwen = None
@@ -68,6 +88,7 @@ class EngineWorkerRuntime:
             "profile": self.profile,
             "model_info": self.model_info,
             "device": self.device,
+            **({"device_note": self.device_note} if self.device_note else {}),
             "free_ram_gb": round(free_ram_gb(), 2),
             "memory": memory,
         }
@@ -156,8 +177,8 @@ class EngineWorkerRuntime:
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
         if (self.engine_id not in {"kokoro", PHONON_ENGINE_ID} and not DEFAULT_REFERENCE.is_file()
                 and find_spec("kokoro") is not None):
-            # Keep the existing service's synthetic fallback behavior. This creates no user recording. Chatterbox runs in
-            # .venv-chatterbox, which has no Kokoro, so there it warms up with its built-in voice instead.
+            # An environment you built yourself may hold Kokoro beside another engine; the guided ones never do (Kokoro has
+            # .venv-kokoro to itself), so there the Kokoro worker makes the clip and this engine warms up with its own voice.
             from engines import ensure_reference
             ensure_reference()
         require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
@@ -168,6 +189,8 @@ class EngineWorkerRuntime:
         model = build_engine(self.engine_id, self.device)
         self.engine = model
         self.sample_rate = int(model.sr)
+        if self.engine_id == "kokoro" and not DEFAULT_REFERENCE.is_file():
+            self._make_default_reference(model)
         print("Warming up the model ...", flush=True)
         try:
             if self.engine_id in {"kokoro", PHONON_ENGINE_ID} or not DEFAULT_REFERENCE.is_file():
@@ -199,6 +222,26 @@ class EngineWorkerRuntime:
             "memory": self.last_memory,
             **(self.model_info if self.engine_id == PHONON_ENGINE_ID else {}),
         }
+
+    @staticmethod
+    def _make_default_reference(model):
+        """Speak reference/af_heart.wav, the synthetic clip the cloning models' checks clone, with the Kokoro model just loaded.
+        A failure is printed and the load goes on: the clip is a convenience, and Kokoro itself does not need it."""
+        from engines import ensure_reference
+        from kokoro_support import discover_kokoro_voices
+        if "af_heart" not in discover_kokoro_voices():
+            return
+        try:
+            ensure_reference(model)
+        except Exception as exc:
+            print(f"The default reference clip was not made: {type(exc).__name__}: {exc}", flush=True)
+
+    def phonemize(self, params):
+        """The phonemes Kokoro would speak for a text, from its installed language rules. Needs no loaded model."""
+        if self.engine_id != "kokoro":
+            raise ValueError("Only Kokoro shows its phonemes.")
+        from kokoro_support import phonemize_kokoro
+        return phonemize_kokoro(params.get("text", ""), params.get("language", "English"))
 
     def prepare_reference(self, params):
         if self.engine is None:
@@ -287,6 +330,9 @@ class EngineWorkerRuntime:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         np.save(output_file, audio, allow_pickle=False)
         self.last_memory = self._memory()
+        if isinstance(info, dict) and "device" not in info:
+            # The clip's device, which the speed table and the Models page record; it may be the CPU after a fallback.
+            info = {**info, "device": self.device}
         return {
             "audio_file": str(output_file),
             "sample_rate": int(sr),
@@ -352,6 +398,8 @@ class EngineWorkerRuntime:
             return self.load(params), False
         if method == "prepare_reference":
             return self.prepare_reference(params), False
+        if method == "phonemize":
+            return self.phonemize(params), False
         if method == "generate":
             return self.generate(params), False
         if method == "generate_stream":

@@ -49,13 +49,27 @@ def disk(path):
 
 
 def engines_summary(payload):
-    """How many models are in each state, and one row per integrated model, from engines.engine_status()."""
-    rows = [{"id": row["id"], "name": row["name"], "state": row["state"]} for row in payload.get("engines", [])
-            if row["state"] != "not_integrated"]
+    """How many models are in each state, one row per integrated model with where its last test ran and how fast, and the
+    speed table, from engines.engine_status()."""
+    rows = []
+    for row in payload.get("engines", []):
+        if row["state"] == "not_integrated":
+            continue
+        check = row.get("check") or {}
+        rows.append({"id": row["id"], "name": row["name"], "state": row["state"],
+                     **{key: check[key] for key in ("ran_on", "real_time_factor") if check.get(key) is not None}})
     counts = {state: 0 for state in ENGINE_STATES}
     for row in rows:
         counts[row["state"]] = counts.get(row["state"], 0) + 1  # a state added later still shows, under its own name
-    return {"device": payload.get("device"), "counts": counts, "rows": rows}
+    speed = [{key: row[key] for key in ("engine", "device", "clips", "median_real_time_factor")}
+             for row in payload.get("speed", []) if row.get("median_real_time_factor") is not None]
+    return {"device": payload.get("device"), "counts": counts, "rows": rows, "speed": speed}
+
+
+def hardware_facts():
+    """The processor and graphics cards, as Windows names them (hardware.py): what a hardware report needs."""
+    import hardware
+    return {"processor": hardware.processor_name(), "graphics_cards": hardware.graphics_cards()}
 
 
 def log_info(path):
@@ -69,15 +83,19 @@ def log_info(path):
     return {"file": str(path), "folder": str(path.parent), "bytes": size}
 
 
-def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, log_path, free_ram):
-    """The report as a dict the page renders. Paths are real here; diagnostics_text() redacts them."""
+def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, log_path, free_ram, total_ram=None,
+          hardware=None):
+    """The report as a dict the page renders. Paths are real here; diagnostics_text() redacts them. `hardware` is
+    hardware_facts() or a stand-in for it."""
     root = Path(state_root)
     backups = library_backup.list_backups(root / library_backup.BACKUP_FOLDER)
+    facts = hardware_facts() if hardware is None else hardware
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "app": {"name": app, "version": version},
         "system": {"python": platform.python_version(), "platform": platform.platform(), "device": device,
-                   "free_ram_gb": round(free_ram, 1)},
+                   "free_ram_gb": round(free_ram, 1), "total_ram_gb": None if total_ram is None else round(total_ram, 1),
+                   "processor": facts.get("processor"), "graphics_cards": facts.get("graphics_cards") or []},
         "library": {"path": str(root), "schemas": library_backup.schema_versions(root),
                     "counts": library_backup.library_counts(root)},
         "ffmpeg": ffmpeg,
@@ -113,10 +131,18 @@ def diagnostics_text(report):
         drives.append(f"{label} {_gb(row['free_bytes'])} free of {_gb(row['total_bytes'])}" if row else f"{label} unreadable")
     engines = report["engines"]
     states = ", ".join(f"{count} {STATE_WORDS.get(state, state)}" for state, count in engines["counts"].items() if count)
+    total = f" of {system['total_ram_gb']} GB" if system.get("total_ram_gb") else ""
     lines = [
         f"{app['name']} {app['version']} diagnostics, {report['generated_at']}",
         f"System: Python {system['python']}, {system['platform']}, device {system['device']}, "
-        f"{system['free_ram_gb']} GB RAM free",
+        f"{system['free_ram_gb']} GB RAM free{total}",
+    ]
+    if system.get("processor"):
+        lines.append(f"Processor: {system['processor']}")
+    if "graphics_cards" in system:
+        cards = [card["name"] + (f" (driver {card['driver']})" if card.get("driver") else "") for card in system["graphics_cards"]]
+        lines.append("Graphics: " + ("; ".join(cards) if cards else "none found"))
+    lines += [
         f"Library: {library['path']}",
         f"  schemas: {schemas}",
         "  contents: " + ", ".join(f"{counts[key]} {one if counts[key] == 1 else many}"
@@ -125,7 +151,16 @@ def diagnostics_text(report):
         "Disk: " + "; ".join(drives),
         f"Models (device {engines['device']}): {states or 'none integrated'}",
     ]
-    lines += [f"  {row['id']}: {STATE_WORDS.get(row['state'], row['state'])}" for row in engines["rows"]]
+    for row in engines["rows"]:
+        tested = ""
+        if row.get("ran_on"):
+            speed = f", {row['real_time_factor']:.2f} s per second of audio" if row.get("real_time_factor") is not None else ""
+            tested = f" (tested on {row['ran_on']}{speed})"
+        lines.append(f"  {row['id']}: {STATE_WORDS.get(row['state'], row['state'])}{tested}")
+    if engines.get("speed"):
+        lines.append("Speed of recent clips: " + "; ".join(
+            f"{row['engine']} on {row['device']}, {row['median_real_time_factor']:.2f} s per second of audio over "
+            f"{row['clips']} clip{'' if row['clips'] == 1 else 's'}" for row in engines["speed"]))
     log = report.get("log")
     lines.append(f"Service log: {log['file']} ({log['bytes']} bytes)" if log and log.get("file") else "Service log: none")
     backups = report["backups"]

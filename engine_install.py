@@ -4,7 +4,7 @@ An engine with a guided installer (Kokoro: tools/install_kokoro.py, the script s
 tools/install_phonon.py, the script setup-phonon.bat runs; Chatterbox Turbo: tools/install_chatterbox.py, the script
 setup-chatterbox.bat runs) can be installed from its card. The page first asks for the plan, which is the script's own
 --dry-run, so it shows what the script will really do and why it would refuse. Install now then starts the script with --yes as
-a child process under the lab's own Python, as its launcher does (the Chatterbox installer makes .venv-chatterbox itself), and
+a child process under the lab's own Python, as its launcher does (each installer makes its model's own environment), and
 keeps the end of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so
 tests, loads and clips are refused instead of competing with it for memory and disk. Closing the service stops the install and
 its children; the script continues where it stopped when it is run again.

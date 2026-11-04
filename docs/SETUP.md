@@ -2,12 +2,15 @@
 
 This is an early Windows release that runs from source, not a bundled
 installer with every model. Python 3.12 x64 is the supported starting point.
-Models and their runtime packages must be installed separately. A fresh core
-installation opens the studio and its stores; it cannot synthesize speech until
-a compatible model runtime and checkpoint are available. `setup-kokoro.bat`,
-`setup-phonon.bat` and `setup-chatterbox.bat` each install one, [Kokoro](#kokoro-on-the-cpu),
-[Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu), and all three
-speak on an ordinary CPU. Chatterbox Turbo is the one that clones a voice from a recording.
+`setup.bat` sets up the core, the desktop window and the speech models you choose, in one go. Three models have guided
+installers, [Kokoro](#kokoro-on-the-cpu), [Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu),
+and all three speak on an ordinary CPU; Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher
+of its own too (`setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat`) for adding it later. A core installation
+without a model opens the studio and its stores, but cannot speak until one is installed.
+
+Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and so on), apart from
+the service's `.venv`, so no installer can change the packages another model or the service depends on.
+[Troubleshooting](TROUBLESHOOTING.md) has a table of what runs on an 8, 16 or 32 GB computer.
 
 ## Core and desktop
 
@@ -21,18 +24,27 @@ Install Python 3.12 (64-bit) with its launcher. The newer Python that python.org
 first does not work with the Lab yet: 3.12.10 is the last 3.12 release with a Windows
 installer ([python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)),
 and `setup.bat` gives that link when `py -3.12` cannot start.
-Run `setup.bat`, then `setup-desktop.bat`. The second command installs pywebview
-in `.venv-desktop`, creates **Fel's Voice Lab** on your Desktop, and uses the installed
-[Microsoft WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
-If WebView2 is missing, install it from Microsoft and retry; the app does not
-silently change your browser or download a runtime.
 
-If `setup.bat` is interrupted while it installs the core packages, run it again: it
-finishes the job. An existing `.venv` that it did not leave unfinished is checked and
-preserved rather than repaired or upgraded automatically. If its import check fails,
-inspect the error and restore its requirements in a separate environment, or, when
-nothing else has been installed into it, delete `.venv` and run `setup.bat` again. Never
-replace working AMD/model pins by running a generic `pip install --upgrade`.
+Run `setup.bat`. It does three things, in order:
+
+1. **The core**, `.venv`: the service's own packages from [requirements/core.txt](../requirements/core.txt).
+2. **The desktop window**, `.venv-desktop`: pywebview, and the **Fel's Voice Lab** shortcut on your Desktop. It uses the installed
+   [Microsoft WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/). If WebView2 is missing, the window cannot
+   open: install it from Microsoft and start the Lab again. The app does not silently change your browser or download a runtime.
+   `setup-desktop.bat` does this step on its own.
+3. **The speech models you choose.** It asks: Kokoro and Phonon (recommended: about 0.8 GB to download and 2 GB on disk), those
+   and Chatterbox Turbo (about 4 GB to download and 7 GB on disk; Turbo wants a computer with 16 GB of RAM or more), or none for
+   now. It prints the plan of every model it is about to install, the installers' own `--dry-run`, asks once, and then runs
+   them one after another. On a computer with an NVIDIA driver it also offers the [GPU builds](#nvidia-graphics-cards).
+
+Typed after `setup.bat`, `--models recommended` (or `all`, `none`, or names such as `kokoro chatterbox`) chooses without the
+question, `--yes` accepts the plans, `--nvidia` takes the GPU builds and `--no-desktop` skips the window; `--help` lists them. A
+model that is already installed is left as it is.
+
+If `setup.bat` is interrupted, run it again: it finishes the job. An existing `.venv` that it did not leave unfinished is checked
+and preserved rather than repaired or upgraded automatically. If its import check fails, inspect the error and restore its
+requirements in a separate environment, or, when nothing else has been installed into it, delete `.venv` and run `setup.bat`
+again. Never replace working AMD/model pins by running a generic `pip install --upgrade`.
 
 The shortcut starts a dedicated window and hidden backend on a free loopback
 port. Closing that window cancels its work and stops its backend/children.
@@ -63,14 +75,16 @@ terminal controls the service lifetime; closing a browser tab does not stop it.
 
 ## Kokoro on the CPU
 
-Kokoro is the quickest way to hear the studio speak: a small model that runs on an ordinary computer. After `setup.bat`, run
+Kokoro is the quickest way to hear the studio speak: a small model that runs on an ordinary computer. `setup.bat` offers it; to add
+it later, run
 
 ```powershell
 setup-kokoro.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_kokoro.py`. It prints its plan and asks before it changes anything.
-`--dry-run` shows the plan and runs the checks without changing anything, and `--yes` accepts the plan without asking.
+`--dry-run` shows the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--nvidia`
+takes the [GPU build](#nvidia-graphics-cards) of PyTorch.
 
 The studio can run the same installer for you. Until it has run, the Kokoro card on the **Models & features** page reads
 *Not installed*, lists the files that are missing and has an **Install** button. **Install** shows the installer's own plan,
@@ -83,23 +97,29 @@ its model picker marks the models that are not installed. Speaking before the in
 saying Kokoro is not installed and where to install it; once it has run, **Generate** reads the new voices by itself, so a studio
 page that was already open needs no reload.
 
-It installs into this folder, in `.venv`, `hf-cache` and `out\kokoro`:
+Kokoro gets a Python environment of its own, `.venv-kokoro`, made from the same Python 3.12 that `setup.bat` used. It installs
+into this folder, in `.venv-kokoro`, `hf-cache` and `out\kokoro`:
 
-1. **89 pinned Python packages** from [requirements/kokoro-cpu.txt](../requirements/kokoro-cpu.txt), among them the CPU build of
-   PyTorch, Transformers and spaCy: 222 MB to download and about 1 GB installed. pip checks every file against the SHA-256 in that
-   list. The versions are the ones Kokoro was checked with on the development machine, except PyTorch, whose CPU build comes from
-   PyPI where the development machine uses a ROCm build. pip also keeps its downloads in its usual cache in your user profile.
+1. **96 pinned Python packages** from [requirements/kokoro-cpu.txt](../requirements/kokoro-cpu.txt), among them the CPU build of
+   PyTorch, Transformers and spaCy, and the core's own NumPy, SciPy and SoundFile at the same versions: 275 MB to download and
+   about 1.3 GB installed. pip checks every file against the SHA-256 in that list. The versions are the ones Kokoro was checked
+   with on the development machine, except PyTorch, whose CPU build comes from PyPI where the development machine uses a ROCm
+   build. pip also keeps its downloads in its usual cache in your user profile.
 2. **The Kokoro checkpoint** at the pinned revision of `hexgrad/Kokoro-82M` on Hugging Face, with its model card and 41 voices
    (about 350 MB). Every file is checked against the SHA-256 in [catalog/kokoro_snapshot.json](../catalog/kokoro_snapshot.json).
    An interrupted download resumes where it stopped, and a file that fails its check is deleted rather than kept.
-3. **A speech check.** A fresh process loads Kokoro without using the network and speaks the sentence the Models page uses. The
-   clip stays in `out\kokoro\install-check.wav` beside a small receipt of what was installed.
+3. **A speech check.** A fresh process in `.venv-kokoro` loads Kokoro without using the network and speaks the sentence the
+   Models page uses. The clip stays in `out\kokoro\install-check.wav` beside a small receipt of what was installed. The same
+   process makes `reference\af_heart.wav`, the synthetic clip the cloning models' tests clone, when it is not there yet.
 
 Run it again to continue after an interruption or to repair a damaged file: it installs only what is missing. It stops before it
-changes anything when it is not run with this folder's own Python, when a package it pins is already installed at another version
-(an environment that has its own PyTorch keeps it), when this folder's path is too long for Windows' 259-character limit
-(move the lab to a path such as `C:\voice-lab`, or switch on long paths in Windows), or when the disk is too full. If Kokoro
-already works in an environment of your own, `--checkpoint-only` fetches the model files and leaves the packages alone.
+changes anything when it is not run with this folder's own Python, when a package it pins is already in `.venv-kokoro` at another
+version, when this folder's path is too long for Windows' 259-character limit (move the lab to a path such as `C:\voice-lab`, or
+switch on long paths in Windows), or when the disk is too full. If you made `.venv-kokoro` yourself (with a GPU build of PyTorch
+of your own, say), `--checkpoint-only` fetches the model files and leaves its packages alone.
+
+The phoneme preview on the studio page and the lip-sync tracks of aligned takes use Kokoro's English rules (misaki), which live
+in `.venv-kokoro`; the Lab asks Kokoro's environment for them, so they work once Kokoro is installed.
 
 `--voices` chooses the voices: `supported` (the default: the 41 voices that work with these packages, in American and British
 English, Spanish, French, Hindi, Italian and Brazilian Portuguese), `english` (28), `all` (54), or voice IDs such as `bm_george`.
@@ -114,11 +134,19 @@ Licences: the Kokoro weights are Apache-2.0. Most of the packages are MIT, BSD o
 library inside espeakng-loader are GPL-3.0, num2words is LGPL, and certifi and tqdm are MPL-2.0. They are installed on your
 computer at your request and are not part of this repository.
 
-To remove Kokoro, delete `.venv` (`setup.bat` makes it again), `hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
+To remove Kokoro, delete `.venv-kokoro`, `hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
+
+If an earlier version of the Lab installed Kokoro into `.venv`, the Lab now looks for it in `.venv-kokoro`, and Models & features
+says it is not installed until you run `setup-kokoro.bat` again: it keeps the model files already in `hf-cache` and fetches only
+the packages. Kokoro's packages left in `.venv` (about 1 GB) do nothing there any more; to clear them, delete `.venv` and run
+`setup.bat`, which makes it again with the core packages only.
 
 The recipe was checked from an empty folder on one Windows 11 computer with Python 3.12.10, using only the CPU: the packages and
 checkpoint installed, a speech recognizer read the check clip back as the check sentence, and the studio started from that folder
-passed **Test**. If the speech check fails with a message about a missing DLL, install the
+passed **Test**. With its own `.venv-kokoro`, it was checked again from a fresh copy that had only the core: the installer made
+the environment and installed the 96 packages in 309 seconds (pip's cache was warm), the speech check spoke 2.7 s of audio in
+0.8 s after a 12 s load and made the default reference clip, and the studio passed **Test** (a real-time factor of 0.28) and
+showed phonemes through Kokoro's worker. If the speech check fails with a message about a missing DLL, install the
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again.
 Other Windows setups have not been tried.
 
@@ -126,8 +154,8 @@ Other Windows setups have not been tried.
 
 Phonon 31M English is a very small speech model: its checkpoint is 65 MB, and it runs on an ordinary computer without a graphics card
 and without PyTorch. It speaks English in 37 preset voices (12 American, 13 British and 12 characters, among them a demon, an ogre and
-a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone a recording, design a voice or take a direction. After
-`setup.bat`, run
+a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone a recording, design a voice or take a direction.
+`setup.bat` offers it; to add it later, run
 
 ```powershell
 setup-phonon.bat
@@ -137,24 +165,25 @@ or `.venv\Scripts\python.exe tools\install_phonon.py`. It prints its plan and as
 plan and runs the checks without changing anything, and `--yes` accepts the plan without asking. The **Install** button on the Phonon
 card of **Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
 
-It installs into this folder, in `.venv`, `hf-cache` and `out\phonon`:
+Phonon gets a Python environment of its own, `.venv-phonon`, made from the same Python 3.12 that `setup.bat` used, so installing it
+changes no other model's packages and leaves their tests as they were. It installs into this folder, in `.venv-phonon`, `hf-cache`
+and `out\phonon`:
 
-1. **One pinned Python package**, the `ptts` runtime, from [requirements/phonon.txt](../requirements/phonon.txt): a 7 MB wheel that
-   needs only NumPy, which `setup.bat` already installed, and about 18 MB on disk. pip checks the wheel against the SHA-256 in that
-   file. Adding a package to `.venv` makes the Models page treat the checks of the other models that run there as out of date, so
-   press **Test** on those again.
+1. **8 pinned Python packages** from [requirements/phonon.txt](../requirements/phonon.txt): the `ptts` runtime, a 7 MB wheel that
+   needs only NumPy, and the core's own NumPy, SciPy and SoundFile at the same versions. There is no PyTorch. That is 60 MB to
+   download and 240 MB on disk, and pip checks every wheel against the SHA-256 in that file.
 2. **The Phonon files** at pinned revisions: the 65 MB model with its tokenizer, configuration and default voice from
    `gradium/phonon-31m-en`, and the 37 English preset voices with their catalog from `gradium/phonon-voices` (10 MB). That is 75 MB to
    download. Every file is checked against the SHA-256 in [catalog/phonon_snapshot.json](../catalog/phonon_snapshot.json). An
    interrupted download resumes where it stopped, and a file that fails its check is deleted rather than kept.
-3. **A speech check.** A fresh process loads Phonon without using the network and speaks the sentence the Models page uses. The clip
-   stays in `out\phonon\install-check.wav` beside a small receipt of what was installed.
+3. **A speech check.** A fresh process in `.venv-phonon` loads Phonon without using the network and speaks the sentence the Models
+   page uses. The clip stays in `out\phonon\install-check.wav` beside a small receipt of what was installed.
 
 Run it again to continue after an interruption or to repair a damaged file: it installs only what is missing. It stops before it
-changes anything when it is not run with this folder's own Python, when `ptts` is already installed at another version, when this
-folder's path is too long for Windows' 259-character limit (move the lab to a path such as `C:\voice-lab`, or switch on long paths in
-Windows), or when the disk is too full. If Phonon already works in an environment of your own, `--checkpoint-only` fetches the model
-files and leaves the package alone.
+changes anything when it is not run with this folder's own Python, when a package it pins is already in `.venv-phonon` at another
+version, when this folder's path is too long for Windows' 259-character limit (move the lab to a path such as `C:\voice-lab`, or
+switch on long paths in Windows), or when the disk is too full. If you made `.venv-phonon` yourself, `--checkpoint-only` fetches
+the model files and leaves its packages alone.
 
 The studio's picker groups the voices as American English, British English and Characters, and **Cast library** can add any of them
 as an identity. The larger Phonon models of the family (40M) are licensed CC BY-NC 4.0 and are not offered.
@@ -172,12 +201,14 @@ one 18-word sentence 22% shorter and +0.5 made it 19% longer.
 A seed gives nearly the same clip, not the same file: two clips from one seed differ by about a millionth of full scale, and running
 with one thread instead of all of them moved the end of a clip by one 80 ms frame. Do not expect an identical clip on another computer.
 
-To remove Phonon, run `.venv\Scripts\python.exe -m pip uninstall ptts`, then delete `hf-cache\hub\models--gradium--phonon-31m-en`,
-`hf-cache\hub\models--gradium--phonon-voices` and `out\phonon`.
+To remove Phonon, delete `.venv-phonon`, `hf-cache\hub\models--gradium--phonon-31m-en`, `hf-cache\hub\models--gradium--phonon-voices`
+and `out\phonon`. If an earlier version installed `ptts` into `.venv`, run `setup-phonon.bat` again, which makes `.venv-phonon`
+and keeps the model files; `ptts` left in `.venv` does nothing there.
 
 The recipe was checked on one Windows 11 computer with Python 3.12.10, using only the CPU, from a copy of the Lab that had only the
 core packages: **Install** on the Models page ran the installer in 30 seconds and the card read *Installed, not tested*; **Test**
-passed (2.6 s of audio in 0.3 s); and all 37 voices spoke, each a different clip. If the speech check fails with a message about a
+passed (2.6 s of audio in 0.3 s); and all 37 voices spoke, each a different clip. With its own `.venv-phonon`, the installer ran
+again from a fresh copy in 67 seconds and the studio started from it passed **Test** (a real-time factor of 0.17). If the speech check fails with a message about a
 missing DLL, install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the
 installer again. Other Windows setups have not been tried.
 
@@ -185,19 +216,21 @@ installer again. Other Windows setups have not been tried.
 
 Chatterbox Turbo 350M, from Resemble AI, clones a voice: give it a recording of more than five seconds and it speaks new English
 lines in that voice. It also performs tags such as `[laugh]`, `[chuckle]` and `[cough]` written into the text. It runs on an
-ordinary computer without a graphics card, though more slowly than it speaks (see below). After `setup.bat`, run
+ordinary computer without a graphics card, though more slowly than it speaks (see below). `setup.bat` offers it; to add it later,
+run
 
 ```powershell
 setup-chatterbox.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_chatterbox.py`. It prints its plan and asks before it changes anything. `--dry-run` shows
-the plan and runs the checks without changing anything, and `--yes` accepts the plan without asking. The **Install** button on the
-Chatterbox Turbo card of **Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
+the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--nvidia` takes the
+[GPU builds](#nvidia-graphics-cards) of PyTorch and torchaudio. The **Install** button on the Chatterbox Turbo card of
+**Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
 
-Chatterbox gets a Python environment of its own, `.venv-chatterbox`: it needs PyTorch 2.6, and Kokoro's installer puts PyTorch 2.12
-in `.venv`, so the two cannot share one. The installer makes it from the same Python 3.12 that `setup.bat` used, and installs into
-this folder, in `.venv-chatterbox`, `hf-cache` and `out\chatterbox`:
+Chatterbox gets a Python environment of its own, `.venv-chatterbox`, as every model does: it needs PyTorch 2.6, and Kokoro's
+`.venv-kokoro` has PyTorch 2.12, so the two could not share one. The installer makes it from the same Python 3.12 that `setup.bat`
+used, and installs into this folder, in `.venv-chatterbox`, `hf-cache` and `out\chatterbox`:
 
 1. **73 pinned Python packages** from [requirements/chatterbox-cpu.txt](../requirements/chatterbox-cpu.txt), among them PyTorch 2.6
    for the CPU, Transformers, librosa and `chatterbox-tts` 0.1.7 itself: 400 MB to download and 2.0 GB installed. pip checks every
@@ -219,12 +252,14 @@ Run it again to continue after an interruption or to repair a damaged file: it i
 changes anything when it is not run with this folder's own Python, when a package it pins is already in `.venv-chatterbox` at
 another version, when this folder's path is too long for Windows' 259-character limit (move the lab to a path such as
 `C:\voice-lab`, or switch on long paths in Windows), or when the disk is too full: a first install needs about 6 GB free. To run
-Chatterbox on a graphics card, make `.venv-chatterbox` yourself with a GPU build of PyTorch and `chatterbox-tts`, then run the
-installer with `--checkpoint-only`: it fetches the model files and leaves your packages alone. Only the CPU recipe has been tried.
+Chatterbox on an NVIDIA card, use `--nvidia` (see [NVIDIA graphics cards](#nvidia-graphics-cards)); for any other GPU build, make
+`.venv-chatterbox` yourself with PyTorch and `chatterbox-tts`, then run the installer with `--checkpoint-only`: it fetches the
+model files and leaves your packages alone. Only the CPU recipe has been tried.
 
 To clone a voice, open **Voice cloning**, choose Chatterbox Turbo, record or choose a recording longer than five seconds, write
 down its words, where it came from and what it may be used for, and press **Save voice and generate test**. **Test** on the Models
-page speaks in the built-in voice, unless `reference\af_heart.wav` exists (the clip Kokoro makes), which it then clones. A call to
+page speaks in the built-in voice, unless `reference\af_heart.wav` exists (the synthetic clip Kokoro's installer and Kokoro's first
+load make), which it then clones. A call to
 `/api/speak` that clones must name its `reference_path` unless that clip exists; with `clone` set to false it uses the built-in
 voice.
 
@@ -265,6 +300,33 @@ voice. In a second fresh clone, **Install** on the Turbo card ran the installer 
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again. Other
 Windows setups have not been tried.
 
+## NVIDIA graphics cards
+
+Kokoro and Chatterbox Turbo can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU one. **Nobody
+has tried this on an NVIDIA card yet**: the builds are pinned by their SHA-256 and the installers check them, but whether they
+load and speak on your card is what a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) would tell the next person.
+
+```powershell
+setup-kokoro.bat --nvidia
+setup-chatterbox.bat --nvidia
+```
+
+`setup.bat` offers the same when it finds an NVIDIA driver. Each refuses to start on a computer without one
+(`System32\nvcuda.dll`), and each runs its speech check on the card.
+
+| Model | PyTorch build | Cards | Download, beyond the CPU install |
+|---|---|---|---|
+| Kokoro | 2.12.0, CUDA 13.0 ([requirements/kokoro-nvidia.txt](../requirements/kokoro-nvidia.txt)) | GeForce GTX 16 and RTX 20 series or newer, RTX 50 included, with an NVIDIA driver of version 580 or later | about 1.8 GB |
+| Chatterbox Turbo | 2.6.0 with torchaudio, CUDA 12.6 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | up to the RTX 40 series; not RTX 50 cards, which need a newer CUDA than PyTorch 2.6 has | about 2.3 GB |
+
+The CUDA builds carry NVIDIA's CUDA libraries inside them, under NVIDIA's own licence terms; like the other packages they are
+installed on your computer at your request and are not part of this repository.
+
+When the service finds an NVIDIA driver it asks its workers for the card (`cuda`). A model whose own PyTorch is the CPU build
+(installed without `--nvidia`) runs on the CPU anyway, and its card on Models & features says it ran on the CPU. To switch a
+model between the two, delete its environment folder (`.venv-kokoro` or `.venv-chatterbox`) and run its installer again with or
+without `--nvidia`; the model files in `hf-cache` stay. `"device": "cpu"` in `runtime.local.json` keeps every model on the CPU.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
@@ -272,23 +334,23 @@ interpreter paths used by the adapters. A catalog entry means integration exists
 not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). A model without a guided installer that is missing files says so when it is asked to speak, and points here.
 
 Two packages are optional and not part of the core install: `misaki` (English phoneme rules for the lip-sync
-tracks of aligned takes; it comes with Kokoro) and `librosa` (the time-stretch in `fit.py`, which the exporter does
-not use). The app, Cast and scene export run without them.
+tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the exporter asks Kokoro's environment for them) and
+`librosa` (the time-stretch in `fit.py`, which the exporter does not use). The app, Cast and scene export run without them.
 
 | Family | Runtime path | Setup status |
 |---|---|---|
-| Kokoro | `.venv/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned CPU runtime and checkpoint ([above](#kokoro-on-the-cpu)). |
-| Phonon 31M English | `.venv/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
+| Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
+| Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
 | Chatterbox Original/Turbo/VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned CPU runtime and Turbo's checkpoint ([above](#chatterbox-turbo-on-the-cpu)). Original and VC use the same environment and need the `ResembleAI/chatterbox` checkpoint, which no installer fetches yet. A GPU build of PyTorch is yours to install there. |
 | Breeze | `.venv-breeze/Scripts/python.exe` | Separate environment, BF16 standalone wrapper. Needs the pinned checkpoint and text/audio tokenizer files. Review its non-commercial model license first. |
 | faster-Qwen | `.venv-fqwen/Scripts/python.exe` | Separate environment; faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1, Transformers 5.15.1 were tested locally. Needs exact catalog snapshots. Stock qwen-tts is a different comparison runtime. |
 | VoxCPM2 | Dedicated catalog environment and pinned source/ROCm overlay | Needs a GPU with at least 8 GB of memory (it peaked at 5.6 GB). Tested only on one AMD Radeon AI PRO R9700 with ROCm. It reads pinned source under `out/voxcpm2/source/src` and the Qwen environment's packages, so it is not a portable automatic installation. |
 | Drama 3 | Core environment plus separate speech.cpp | Pinned native download installer below; studio and cloning use CPU. |
 
-Do not install every family's dependencies into the core environment. Runtime
-dependency conflicts are why the workers are separate. This release does not
-claim turnkey NVIDIA/Linux/macOS support or reproducible builds of all optional
-model environments. Public installer recipes for the other families are not written yet.
+Do not install a model's dependencies into the core environment. Runtime dependency conflicts are why every model has an
+environment of its own and the workers are separate processes. This release does not claim Linux or macOS support, tested NVIDIA
+support (the `--nvidia` builds are untried) or reproducible builds of all optional model environments. Public installer recipes
+for the other families are not written yet.
 
 For Drama, first read its [model license](https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE),
 then explicitly run:
@@ -305,8 +367,11 @@ occurs during ordinary generation. Keep the installer receipt with the model.
 
 ## Hardware and state settings
 
-`runtime.local.json` optionally supplies `hip_visible_devices` and
-`disable_cudnn` and `drama_design_device`; copy/edit the provided example for your own hardware only. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
+`runtime.local.json` optionally supplies `device`, `hip_visible_devices`,
+`disable_cudnn` and `drama_design_device`; copy/edit the provided example for your own hardware only. `device` is `auto` (the
+default: the graphics card when there is an NVIDIA driver, or when the service's own PyTorch can see one), `cpu` or `cuda`
+(also the name a ROCm build of PyTorch answers to on an AMD card); `--device` on `serve.py` or `desktop.py` chooses for one
+run. A model whose PyTorch cannot use the card runs on the CPU whatever is chosen. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
 Environment `HIP_VISIBLE_DEVICES` takes precedence. The public default does not
 hide GPU 0. `--device cpu` avoids GPU selection.
 
@@ -353,10 +418,11 @@ adds sits in its own folder, and deleting that folder removes it. In this order:
    sets a `state_root` (see above). On **System & backups**, press **Back up now** (tick **Saved voices** and **Export
    packages** to include those), then copy the ZIP out of `backups\`. That folder is inside the one you are about to delete.
    [Back up and restore the library](USER_GUIDE.md#back-up-and-restore-the-library) has the details.
-3. **Delete the shortcut.** `setup-desktop.bat` put **Fel's Voice Lab** on your Desktop, outside the folder, and it would
-   otherwise be left pointing at nothing.
-4. **Delete the Lab folder.** The environments (`.venv`, `.venv-desktop` and any other `.venv-` folder), `hf-cache`, `data` and
-   `out` go with it. A library that `state_root` moved elsewhere stays where it is: delete that folder too if you want it gone.
+3. **Delete the shortcut.** `setup.bat` (or `setup-desktop.bat`) put **Fel's Voice Lab** on your Desktop, outside the folder, and
+   it would otherwise be left pointing at nothing.
+4. **Delete the Lab folder.** The environments (`.venv`, `.venv-desktop`, `.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and
+   any other `.venv-` folder), `hf-cache`, `data` and `out` go with it. A library that `state_root` moved elsewhere stays where it
+   is: delete that folder too if you want it gone.
 
 Three things are outside the folder:
 

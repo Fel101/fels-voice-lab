@@ -51,7 +51,7 @@ class WorkerProcess:
         self.log_path = Path(log_path)
         self.cwd = str(cwd)
         self.env = env
-        self.timeouts = {"health": 45, "load": 600, "prepare_reference": 120,
+        self.timeouts = {"health": 45, "load": 600, "prepare_reference": 120, "phonemize": 120,
                          "generate": 300, "unload": 30, "shutdown": 10}
         if timeouts:
             self.timeouts.update(timeouts)

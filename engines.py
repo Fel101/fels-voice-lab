@@ -7,7 +7,8 @@ Each engine's speak() returns (wav float32 numpy, sample_rate, info dict). info 
 
 import time
 
-from common import LAB, REFERENCE_TEXT, Timer, save_wav, sync, to_numpy
+from common import LAB, REFERENCE_TEXT, Timer, sync, to_numpy
+import synthetic_label
 
 import numpy as np
 
@@ -238,17 +239,19 @@ def build_engine(key, device):
     return {"kokoro": Kokoro, "phonon-31m-en": Phonon, "turbo": ChatterboxTurbo, "orig": ChatterboxOriginal}[key](device)
 
 
-def ensure_reference():
-    """A ~14 s clip of Kokoro's af_heart, used as the reference voice for the Chatterbox clones.
+def ensure_reference(kokoro=None):
+    """A ~14 s clip of Kokoro's af_heart, the default reference voice that the cloning models' checks clone.
 
-    Synthetic fixture with no human source recording. Model terms and applicable identity rights still apply. It needs Kokoro in
-    the same environment, so the Chatterbox worker, which runs in .venv-chatterbox, calls it only when Kokoro is there.
+    Synthetic fixture with no human source recording. Model terms and applicable identity rights still apply. It needs Kokoro,
+    so the Kokoro worker and Kokoro's installer make it, with the model they have already loaded (`kokoro`); without one it
+    loads Kokoro on the CPU.
     """
     if REFERENCE_WAV.exists():
         return
     REFERENCE_DIR.mkdir(exist_ok=True)
-    print("Making the reference voice clip (Kokoro af_heart, on CPU) ...", flush=True)
-    eng = build_engine("kokoro", "cpu")
+    print("Making the reference voice clip (Kokoro af_heart) ...", flush=True)
+    eng = kokoro or build_engine("kokoro", "cpu")
     wav, sr, _ = eng.speak(REFERENCE_TEXT, voice="af_heart")
-    save_wav(REFERENCE_WAV, wav, sr)
+    # Kokoro made it, so it carries the AI-generated speech label like every other clip the Lab makes.
+    synthetic_label.write_wav(REFERENCE_WAV, to_numpy(wav), sr, engine_id="kokoro")
     print(f"  reference clip: {len(wav) / sr:.1f} s", flush=True)

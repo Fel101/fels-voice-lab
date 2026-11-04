@@ -28,7 +28,7 @@
       "local_revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
       "parameters": "82M",
       "backend": {"name": "kokoro", "package_version": "0.9.4", "transformers_version": "5.2.0"},
-      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10"},
+      "runtime": {"environment": ".venv-kokoro", "python": ".venv-kokoro/Scripts/python.exe", "python_version": "3.12.10"},
       "precision": {"status": "runtime_default_not_measured", "value": null},
       "integration": {"status": "integrated", "service_api": true},
       "capabilities": {
@@ -50,7 +50,7 @@
       "parameters": "31M",
       "backend": {"name": "ptts", "package_version": "0.5.0", "quantization": "q8",
                   "voices_checkpoint": "gradium/phonon-voices", "voices_revision": "da6c9ec0d47be8df5c87c730a3aa97187f3229c3"},
-      "runtime": {"environment": ".venv", "python": ".venv/Scripts/python.exe", "python_version": "3.12.10", "device": "cpu",
+      "runtime": {"environment": ".venv-phonon", "python": ".venv-phonon/Scripts/python.exe", "python_version": "3.12.10", "device": "cpu",
                   "note": "CPU only. The ptts wheel needs numpy and nothing else, so there is no PyTorch."},
       "precision": {"status": "pinned_quantization", "value": "q8_0"},
       "integration": {"status": "integrated", "service_api": true},

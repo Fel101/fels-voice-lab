@@ -87,13 +87,13 @@ class ServerCase(unittest.TestCase):
 
 
 class FakeLab:
-    """A lab folder holding a one-package lock and small stand-ins for the two repositories, at the real revisions."""
+    """A lab folder holding a two-package lock and small stand-ins for the two repositories, at the real revisions."""
     CONTENTS = [
         {"config.json": b'{"lang": "en"}', "default-voice.safetensors": noise(3_000, 1), "model.q8.gguf": noise(40_000, 2),
          "tokenizer.json": b'{"model": {}}'},
         {"voices.jsonl": b'{"name": "Harper"}\n', "voices/aaa.safetensors": noise(5_000, 3), "voices/bbb.safetensors": noise(5_001, 4)},
     ]
-    LOCK = f"# a stand-in for requirements/phonon.txt\nptts==0.5.0 --hash=sha256:{HASH}\n"
+    LOCK = f"# a stand-in for requirements/phonon.txt\nnumpy==1.26.4 --hash=sha256:{HASH}\nptts==0.5.0 --hash=sha256:{HASH}\n"
 
     def __init__(self, folder):
         self.root = Path(folder)
@@ -154,21 +154,29 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertIn("no", voices["license_source"].lower())
         self.assertTrue(model["license_source"])
 
-    def test_the_package_list_pins_the_one_runtime_the_catalog_names(self):
+    def test_the_package_list_pins_the_runtime_the_catalog_names_and_no_pytorch(self):
         lines = [line.strip() for line in (ROOT / ip.LOCK).read_text("utf-8").splitlines()]
         lines = [line for line in lines if line and not line.startswith("#")]
-        self.assertEqual(len(lines), 1)
-        self.assertRegex(lines[0], r"^ptts==\S+ --hash=sha256:[0-9a-f]{64}$")
+        for line in lines:
+            self.assertRegex(line, r"^[A-Za-z0-9][A-Za-z0-9._-]*==\S+ --hash=sha256:[0-9a-f]{64}$")
         packages = base.read_lock(ROOT / ip.LOCK)
-        self.assertEqual([item["key"] for item in packages], ["ptts"])
-        self.assertEqual(packages[0]["version"], ENTRY["backend"]["package_version"])
-        self.assertNotIn("numpy", lines[0], "numpy is the core's, pinned in requirements/core.txt")
+        self.assertEqual(len(lines), len(packages))
+        self.assertEqual(ip.runtime_package(packages)["version"], ENTRY["backend"]["package_version"])
+        self.assertNotIn("torch", {item["key"] for item in packages})
 
-    def test_the_package_list_leaves_the_core_requirements_alone(self):
-        core = {base.canonical(re.split(r"[=<>]", line)[0]) for line in (ROOT / "requirements" / "core.txt").read_text("utf-8").splitlines()
+    def test_the_package_list_is_the_runtime_and_the_core_requirements_at_the_same_versions(self):
+        # The worker runs the lab's own modules in .venv-phonon, so numpy and soundfile behave as they do in .venv.
+        core = {base.canonical(re.split(r"==", line.strip())[0]): re.split(r"==", line.strip())[1]
+                for line in (ROOT / "requirements" / "core.txt").read_text("utf-8").splitlines()
                 if line.strip() and not line.startswith("#")}
+        packages = {item["key"]: item["version"] for item in base.read_lock(ROOT / ip.LOCK)}
         self.assertIn("numpy", core)
-        self.assertFalse(core & {item["key"] for item in base.read_lock(ROOT / ip.LOCK)})
+        self.assertEqual(packages, {**core, "ptts": ENTRY["backend"]["package_version"]})
+
+    def test_the_catalog_runs_phonon_in_its_own_environment(self):
+        self.assertEqual(ENTRY["runtime"]["environment"], ip.ENVIRONMENT)
+        self.assertEqual(ENTRY["runtime"]["python"], f"{ip.ENVIRONMENT}/Scripts/python.exe")
+        self.assertEqual(ip.environment_python(ROOT), ROOT / ENTRY["runtime"]["python"])
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
         data = (ROOT / "setup-phonon.bat").read_bytes()
@@ -182,8 +190,11 @@ class ShippedFilesTests(unittest.TestCase):
         last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
         self.assertIn("pause", lines[last_run + 1:])
 
-    def test_the_core_setup_points_at_the_installer(self):
-        self.assertIn("setup-phonon.bat", (ROOT / "tools" / "setup_core.py").read_text("utf-8"))
+    def test_the_first_setup_offers_the_installer(self):
+        from tools import first_setup
+        self.assertEqual(first_setup.MODELS["phonon"],
+                         {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "nvidia": False})
+        self.assertIn("setup-phonon.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = " ".join((ROOT / "docs" / "SETUP.md").read_text("utf-8").split())
@@ -195,7 +206,7 @@ class ShippedFilesTests(unittest.TestCase):
         everything = sum(item["size"] for repo in REAL_MANIFEST["repos"] for item in repo["files"])
         for number in (f"{ENTRY['capabilities']['voice_selection']['count']} English preset voices",
                        base.size_text(weights["size"]), base.size_text(sum(item["size"] for item in voices["files"])),
-                       f"{ip.PACKAGE_DOWNLOAD_MB} MB", f"{ip.PACKAGE_DISK_MB} MB"):
+                       f"{ip.PACKAGES_DOWNLOAD_MB} MB", f"{ip.PACKAGES_DISK_MB} MB", ".venv-phonon"):
             self.assertIn(number, setup)
         self.assertLess(everything, 100 * 10**6, "the whole download stays under a hundred megabytes")
         for name in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"):
@@ -206,8 +217,9 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertTrue((ROOT / "tools" / "install_phonon.py").read_bytes().isascii())
         packages = base.read_lock(ROOT / ip.LOCK)
         pending = [(repo, item) for repo in REAL_MANIFEST["repos"] for item in repo["files"]]
-        for todo, left, only in ((1, pending, False), (0, pending, False), (0, [], False), (0, pending, True)):
-            text = ip.plan_text(REAL_MANIFEST, packages, todo, left, checkpoint_only=only)
+        for todo, left, only, exists in ((len(packages), pending, False, False), (1, pending, False, True),
+                                         (0, pending, False, True), (0, [], False, True), (0, pending, True, True)):
+            text = ip.plan_text(REAL_MANIFEST, packages, todo, left, checkpoint_only=only, environment_exists=exists)
             self.assertTrue(text.isascii())
             self.assertLessEqual(max(len(line) for line in text.splitlines()), 110)
 
@@ -222,18 +234,27 @@ class EnvironmentTests(unittest.TestCase):
         self.assertRegex(self.problems(system="linux")[0], "64-bit Windows")
         self.assertRegex(self.problems(machine="arm64")[0], "64-bit Windows")
         self.assertRegex(self.problems(bits=32)[0], "64-bit Windows")
-        self.assertRegex(self.problems(version=(3, 11, 9))[0], "Python 3.11; the lab runs on Python 3.12")
+        self.assertRegex(self.problems(version=(3, 11, 9))[0], "Python 3.11; the pinned packages are built for Python 3.12")
         self.assertRegex(self.problems(prefix=str(ROOT / "other"))[0], r"own Python.*install_phonon\.py")
 
-    def test_the_runtime_needs_pip_and_numpy_and_is_not_replaced_at_another_version(self):
-        packages = base.read_lock(ROOT / ip.LOCK)
-        self.assertEqual(ip.package_problems([], {"numpy": "1.26.4"}, has_pip=True), [])
-        self.assertRegex(ip.package_problems([], {"numpy": "1.26.4"}, has_pip=False)[0], "pip is not installed")
-        self.assertRegex(ip.package_problems([], {}, has_pip=True)[0], "numpy is not installed here.*setup.bat")
-        other = ip.package_problems([(packages[0], "0.4.0")], {"numpy": "1.26.4"}, has_pip=True)
+    def test_the_environment_needs_pip_and_its_runtime_is_not_replaced_at_another_version(self):
+        runtime = ip.runtime_package(base.read_lock(ROOT / ip.LOCK))
+        self.assertEqual(ip.package_problems([], has_pip=True), [])
+        self.assertIn(".venv-phonon has no pip", ip.package_problems([], has_pip=False)[0])
+        other = ip.package_problems([(runtime, "0.4.0")], has_pip=True)
         self.assertEqual(len(other), 1)
+        self.assertIn(".venv-phonon already has other versions", other[0])
         self.assertIn("ptts 0.4.0 (the list pins 0.5.0)", other[0])
         self.assertIn("--checkpoint-only", other[0])
+
+    def test_the_model_files_alone_need_an_environment_that_already_has_the_runtime(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIn("there is no .venv-phonon here", ip.checkpoint_only_problems(folder, {})[0])
+            python = ip.environment_python(folder)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"")
+            self.assertIn("ptts is not among them", ip.checkpoint_only_problems(folder, {"numpy": "1.26.4"})[0])
+            self.assertEqual(ip.checkpoint_only_problems(folder, {"ptts": "0.5.0"}), [])
 
     def test_a_folder_path_too_long_for_windows_is_refused_unless_long_paths_are_on(self):
         manifest = REAL_MANIFEST
@@ -253,16 +274,22 @@ class EnvironmentTests(unittest.TestCase):
 class PlanTests(unittest.TestCase):
     PENDING = [(repo, item) for repo in REAL_MANIFEST["repos"] for item in repo["files"]]
 
-    def plan(self, todo=1, pending=True, only=False):
+    PACKAGES = len(base.read_lock(ROOT / ip.LOCK))
+
+    def plan(self, todo=None, pending=True, only=False, exists=False):
         packages = base.read_lock(ROOT / ip.LOCK)
-        return " ".join(ip.plan_text(REAL_MANIFEST, packages, todo, self.PENDING if pending else [], checkpoint_only=only).split())
+        return " ".join(ip.plan_text(REAL_MANIFEST, packages, self.PACKAGES if todo is None else todo,
+                                     self.PENDING if pending else [], checkpoint_only=only, environment_exists=exists).split())
 
     def test_the_plan_says_what_is_installed_where_and_how_much_to_download(self):
         text = self.plan()
-        for part in ("Phonon 31M English on the CPU", "ptts 0.5.0", "7 MB wheel", "needs only numpy", "About 18 MB on disk",
+        for part in ("Phonon 31M English on the CPU", "First a Python environment of its own, .venv-phonon",
+                     "changes no other model's packages", f"{self.PACKAGES} of {self.PACKAGES} to install there", "ptts 0.5.0",
+                     "7 MB wheel", "needs only NumPy", f"About {ip.PACKAGES_DOWNLOAD_MB} MB to download and "
+                     f"{ip.PACKAGES_DISK_MB} MB on disk", "there is no PyTorch", "requirements/phonon.txt",
                      "revision 8c64b55", "huggingface.co/gradium/phonon-31m-en", "the 65 MB model", "37 English preset voices",
                      "revision da6c9ec", "huggingface.co/gradium/phonon-voices (10 MB)", "75 MB to download", "SHA-256",
-                     "nothing system-wide",
+                     "(.venv-phonon, hf-cache and out\\phonon)", "nothing system-wide",
                      "pip keeps its usual download cache in your user profile", "speech check"):
             self.assertIn(part, text)
 
@@ -272,13 +299,15 @@ class PlanTests(unittest.TestCase):
                      "Ask Gradium before you publish", "MIT OR Apache-2.0"):
             self.assertIn(part, text)
 
-    def test_the_plan_warns_that_other_models_will_need_testing_again(self):
-        self.assertIn("will ask you to test the other models there again", self.plan())
+    def test_the_plan_no_longer_warns_that_other_models_need_testing_again(self):
+        # Phonon has its own environment now, so installing it changes no other model's packages or checks.
+        self.assertNotIn("test the other models", self.plan())
 
     def test_the_plan_reflects_what_is_already_done(self):
-        self.assertIn("ptts 0.5.0 is already installed", self.plan(todo=0))
+        self.assertIn(f"all {self.PACKAGES} are already installed in .venv-phonon, ptts 0.5.0 among them", self.plan(todo=0))
+        self.assertIn(".venv-phonon is already here. Python packages: 1 of", self.plan(todo=1, exists=True))
         self.assertIn("Everything is already in place", self.plan(pending=False))
-        self.assertIn("left alone (--checkpoint-only)", self.plan(only=True))
+        self.assertIn("the ones in .venv-phonon are left alone (--checkpoint-only)", self.plan(only=True))
 
 
 class InstallPackagesTests(unittest.TestCase):
@@ -291,7 +320,7 @@ class InstallPackagesTests(unittest.TestCase):
 
         ip.install_packages(ROOT, runner=runner)
         command, kwargs = calls[0]
-        self.assertEqual(command[:4], [sys.executable, "-m", "pip", "install"])
+        self.assertEqual(command[:4], [str(ROOT / ".venv-phonon" / "Scripts" / "python.exe"), "-m", "pip", "install"])
         for flag in ("--require-hashes", "--no-deps", "--only-binary=:all:", "--no-input", "--disable-pip-version-check"):
             self.assertIn(flag, command)
         self.assertEqual(Path(command[command.index("-r") + 1]), ROOT / "requirements" / "phonon.txt")
@@ -305,7 +334,7 @@ class InstallPackagesTests(unittest.TestCase):
 
 
 class SpeechCheckTests(unittest.TestCase):
-    GOOD = '{"voice": "Harper", "problem": null, "load_seconds": 1.2, "total_seconds": 0.4, "audio_seconds": 2.6}'
+    GOOD = '{"voice": "Harper", "problem": null, "load_seconds": 1.2, "total_seconds": 0.4, "audio_seconds": 2.6, "ptts": "0.5.0"}'
 
     def check(self, stdout="", stderr="", code=0, error=None):
         calls = []
@@ -319,10 +348,10 @@ class SpeechCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             return ip.run_speech_check(folder, runner=runner), calls, Path(folder)
 
-    def test_the_clip_is_made_offline_in_a_fresh_process_and_its_numbers_come_back(self):
+    def test_the_clip_is_made_offline_by_the_new_environment_and_its_numbers_come_back(self):
         result, calls, folder = self.check(stdout="runtime noise\n" + self.GOOD + "\n", stderr="a warning\n")
         command, kwargs = calls[0]
-        self.assertEqual(command[:2], [sys.executable, "-c"])
+        self.assertEqual(command[:2], [str(folder / ".venv-phonon" / "Scripts" / "python.exe"), "-c"])
         self.assertIn('engine_checks.smoke_request("phonon-31m-en")', command[2])
         self.assertEqual(command[3:], [str(folder), str(folder / "out" / "phonon" / "install-check.wav")])
         self.assertEqual((kwargs["env"]["HF_HUB_OFFLINE"], kwargs["env"]["TRANSFORMERS_OFFLINE"]), ("1", "1"))
@@ -354,6 +383,7 @@ class SpeechCheckTests(unittest.TestCase):
             (lab / "engines.py").write_text(
                 "import numpy as np\n"
                 "class Phonon:\n"
+                "    version = '0.5.0'\n"
                 "    def __init__(self, device):\n"
                 "        assert device == 'cpu'\n"
                 "    def speak(self, text, voice=None):\n"
@@ -366,7 +396,8 @@ class SpeechCheckTests(unittest.TestCase):
                                   timeout=120)
             self.assertEqual(done.returncode, 0, done.stderr)
             result = base.last_json_line(done.stdout)
-            self.assertEqual((result["voice"], result["problem"], result["total_seconds"]), ("Harper", None, 0.25))
+            self.assertEqual((result["voice"], result["problem"], result["total_seconds"], result["ptts"]),
+                             ("Harper", None, 0.25, "0.5.0"))
             self.assertAlmostEqual(result["audio_seconds"], 1.0)
             samples, rate = sf.read(str(wav))
             self.assertEqual((rate, len(samples)), (24000, 24000))
@@ -384,11 +415,12 @@ class ReceiptTests(unittest.TestCase):
             lab = FakeLab(folder)
             (lab.root / "out" / "phonon").mkdir(parents=True)
             packages = base.read_lock(lab.root / ip.LOCK)
-            check = {"voice": "Harper", "problem": None, "load_seconds": 1.2, "total_seconds": 0.4, "audio_seconds": 2.6, "wav": "x"}
-            with mock.patch.object(base, "installed_versions", lambda: {"ptts": "0.5.0"}):
-                receipt = json.loads(ip.write_receipt(lab.root, lab.manifest, packages, check).read_text("utf-8"))
+            check = {"voice": "Harper", "problem": None, "load_seconds": 1.2, "total_seconds": 0.4, "audio_seconds": 2.6, "wav": "x",
+                     "ptts": "0.5.0"}
+            receipt = json.loads(ip.write_receipt(lab.root, lab.manifest, packages, check).read_text("utf-8"))
             self.assertEqual(receipt["lock_sha256"], sha((lab.root / ip.LOCK).read_bytes()))
-        self.assertEqual((receipt["schema"], receipt["ptts"]), (1, "0.5.0"))
+        self.assertEqual((receipt["schema"], receipt["ptts"], receipt["environment"], receipt["packages_pinned"]),
+                         (1, "0.5.0", ".venv-phonon", 2))
         self.assertEqual([item["revision"] for item in receipt["repos"]], [repo["revision"] for repo in REAL_MANIFEST["repos"]])
         self.assertEqual([item["license"] for item in receipt["repos"]], ["Apache-2.0", None])
         self.assertEqual(receipt["files"][0], "gradium/phonon-31m-en/config.json")
@@ -400,35 +432,45 @@ class ReceiptTests(unittest.TestCase):
 
 
 class RunTests(ServerCase):
-    """The whole install with pip, the model host and Phonon replaced by stand-ins."""
+    """The whole install with venv, pip, the model host and Phonon replaced by stand-ins."""
 
     def setUp(self):
         super().setUp()
         self.lab = FakeLab(self.base)
         self.server.files = self.lab.served()
-        self.installed = {"numpy": "1.26.4"}
+        self.installed = {}
         self.calls = []
         wav = self.base / "out" / "phonon" / "install-check.wav"
-        self.check = {"voice": "Harper", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": wav}
+        self.check = {"voice": "Harper", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": wav,
+                      "ptts": "0.5.0"}
+
+        def venv(root, **kwargs):
+            self.calls.append("venv")
+            self.make_environment({"pip": "26.2.2"})
 
         def pip(root, **kwargs):
             self.calls.append("pip")
-            self.installed["ptts"] = "0.5.0"
+            self.installed.update({"numpy": "1.26.4", "ptts": "0.5.0"})
 
         def speak(root, **kwargs):
             self.calls.append("check")
             wav.parent.mkdir(parents=True, exist_ok=True)
             return self.check
 
-        real_package_problems = ip.package_problems
         for owner, name, value in ((ip, "ROOT", self.base), (base, "HOST", self.server.address),
-                                   (base, "installed_versions", lambda: dict(self.installed)), (ip, "install_packages", pip),
+                                   (ip, "environment_versions", lambda root, **kwargs: dict(self.installed)),
+                                   (ip, "make_environment", venv), (ip, "install_packages", pip),
                                    (ip, "run_speech_check", speak), (ip, "interpreter_problems", lambda root: []),
-                                   (base, "space_problems", lambda root, need: []),
-                                   (ip, "package_problems", lambda different, installed: real_package_problems(different, installed, has_pip=True))):
+                                   (base, "space_problems", lambda root, need: [])):
             patch = mock.patch.object(owner, name, value)
             patch.start()
             self.addCleanup(patch.stop)
+
+    def make_environment(self, packages):
+        python = self.base / ".venv-phonon" / "Scripts" / "python.exe"
+        python.parent.mkdir(parents=True, exist_ok=True)
+        python.write_bytes(b"")
+        self.installed.update(packages)
 
     def args(self, **options):
         return argparse.Namespace(**{"yes": False, "dry_run": False, "checkpoint_only": False, **options})
@@ -443,6 +485,7 @@ class RunTests(ServerCase):
         self.assertEqual(self.calls, [])
         self.assertFalse((self.base / "hf-cache").exists())
         self.assertFalse((self.base / "out").exists())
+        self.assertFalse((self.base / ".venv-phonon").exists())
 
     def test_a_dry_run_shows_the_plan_and_changes_nothing(self):
         status, out, err = self.run_main("--dry-run")
@@ -466,13 +509,14 @@ class RunTests(ServerCase):
         self.assertIn("Nothing was changed.", lines)
         self.untouched()
         self.assertEqual(ip.run(self.args(), say=lines.append, ask=lambda prompt: " Yes ", interactive=True), 0)
-        self.assertEqual(self.calls, ["pip", "check"])
+        self.assertEqual(self.calls, ["venv", "pip", "check"])
 
     def test_the_whole_install_runs_in_order_and_ends_with_a_receipt(self):
         status, out, err = self.run_main("--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, ["pip", "check"])
-        self.assertIn("Installing the Python package", out)
+        self.assertEqual(self.calls, ["venv", "pip", "check"])
+        self.assertIn("Making .venv-phonon:", out)
+        self.assertIn("Installing the Python packages into .venv-phonon", out)
         self.assertIn("[1/4] config.json", out)
         self.assertIn("[1/3] voices.jsonl", out)
         self.assertIn("Phonon is installed and spoke a test sentence (2.6 s of audio in 1.1 s after a 4.2 s load).", out)
@@ -489,33 +533,31 @@ class RunTests(ServerCase):
 
     def test_the_lab_counts_phonon_as_installed_afterwards(self):
         self.run_main("--yes")
-        python = self.base / ".venv" / "Scripts" / "python.exe"
-        python.parent.mkdir(parents=True)
-        python.write_bytes(b"")
-        site = self.base / ".venv" / "Lib" / "site-packages"
-        (site / "ptts-0.5.0.dist-info").mkdir(parents=True)
+        # the run made .venv-phonon's Python; pip's stand-in left no dist-info, so add the one the lab looks for
+        (self.base / ".venv-phonon" / "Lib" / "site-packages" / "ptts-0.5.0.dist-info").mkdir(parents=True)
         # the stand-in files sit at the catalog's revisions, so the lab's file check agrees that Phonon is there
         report = engine_checks.installation(ENTRY, self.base)
         self.assertEqual((report["installed"], report["missing"]), (True, []))
 
     def test_the_package_is_left_alone_when_it_is_already_installed(self):
-        self.installed["ptts"] = "0.5.0"
+        self.make_environment({"numpy": "1.26.4", "ptts": "0.5.0"})
         status, out, _err = self.run_main("--yes")
         self.assertEqual(status, 0)
         self.assertEqual(self.calls, ["check"])
-        self.assertIn("ptts 0.5.0 is already installed", out.replace("\n     ", " "))
+        self.assertIn("all 2 are already installed in .venv-phonon, ptts 0.5.0 among them", " ".join(out.split()))
 
     def test_a_different_version_of_the_runtime_stops_everything_before_any_change(self):
-        self.installed["ptts"] = "0.4.0"
+        self.make_environment({"pip": "26.2.2", "ptts": "0.4.0"})
         status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
         self.assertIn("This computer cannot take the plan yet:", err)
         self.assertIn("ptts 0.4.0 (the list pins 0.5.0)", " ".join(err.split()))
-        self.untouched()
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.base / "hf-cache").exists())
         self.assertEqual(self.server.requests, [])
 
     def test_the_model_files_alone_can_be_added_to_an_environment_that_has_its_own_runtime(self):
-        self.installed["ptts"] = "0.4.0"
+        self.make_environment({"ptts": "0.4.0"})
         status, out, _err = self.run_main("--yes", "--checkpoint-only")
         self.assertEqual(status, 0)
         self.assertEqual(self.calls, ["check"])
@@ -545,7 +587,7 @@ class RunTests(ServerCase):
         with mock.patch.object(ip, "install_packages", lambda root, **kwargs: None):
             status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
-        self.assertIn("pip finished but ptts is still missing", err)
+        self.assertIn("pip finished but 2 packages are still missing, for example numpy", err)
 
     def test_a_failed_speech_check_leaves_the_files_and_writes_no_receipt(self):
         def silent(root, **kwargs):

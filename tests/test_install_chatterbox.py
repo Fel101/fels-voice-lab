@@ -140,7 +140,9 @@ class ShippedFilesTests(unittest.TestCase):
         for engine in ("turbo", "orig", "chatterbox-vc"):
             self.assertEqual(CATALOG[engine]["runtime"]["python"], ic.PYTHON, engine)
             self.assertEqual(CATALOG[engine]["runtime"]["environment"], ic.ENVIRONMENT, engine)
-        self.assertEqual(CATALOG["kokoro"]["runtime"]["python"], ".venv/Scripts/python.exe")
+        # Kokoro and Phonon have environments of their own too, so no two installers ever share one.
+        guided = {CATALOG[engine]["runtime"]["environment"] for engine in ("kokoro", "phonon-31m-en", "turbo")}
+        self.assertEqual(guided, {".venv-kokoro", ".venv-phonon", ".venv-chatterbox"})
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
         data = (ROOT / "setup-chatterbox.bat").read_bytes()
@@ -154,8 +156,11 @@ class ShippedFilesTests(unittest.TestCase):
         last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
         self.assertIn("pause", lines[last_run + 1:])
 
-    def test_the_core_setup_points_at_the_installer(self):
-        self.assertIn("setup-chatterbox.bat", (ROOT / "tools" / "setup_core.py").read_text("utf-8"))
+    def test_the_first_setup_offers_the_installer(self):
+        from tools import first_setup
+        self.assertEqual(first_setup.MODELS["chatterbox"],
+                         {"engine": "turbo", "script": "tools/install_chatterbox.py", "nvidia": True})
+        self.assertIn("setup-chatterbox.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = " ".join((ROOT / "docs" / "SETUP.md").read_text("utf-8").split())
@@ -272,19 +277,32 @@ class EnvironmentVersionsTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
-    def plan(self, todo=73, pending=True, exists=False, only=False):
-        packages = base.read_lock(ROOT / ic.LOCK)
+    def plan(self, todo=73, pending=True, exists=False, only=False, nvidia=False):
+        packages = ic.pinned_packages(ROOT, nvidia=nvidia)
         files = REAL_MANIFEST["files"] if pending else []
-        return " ".join(ic.plan_text(REAL_MANIFEST, packages, todo, files, environment_exists=exists, checkpoint_only=only).split())
+        return " ".join(ic.plan_text(REAL_MANIFEST, packages, todo, files, environment_exists=exists, checkpoint_only=only,
+                                     nvidia=nvidia).split())
 
     def test_the_plan_says_what_is_installed_where_and_how_much_to_download(self):
         text = self.plan()
         for part in ("Chatterbox Turbo 350M on the CPU", "a Python environment of its own, .venv-chatterbox",
-                     "PyTorch 2.6 cannot share .venv with the PyTorch 2.12", "73 of 73 to install there", "PyTorch 2.6 for the CPU",
+                     "Chatterbox's PyTorch 2.6 could not share one with the PyTorch 2.12 that Kokoro uses",
+                     "73 of 73 to install there", "PyTorch 2.6 for the CPU",
                      "About 400 MB to download and 2.0 GB on disk", "requirements/chatterbox-cpu.txt", "revision 749d1c1",
                      "huggingface.co/ResembleAI/chatterbox-turbo", "the 1.9 GB language model", "the 1.1 GB speech decoder",
                      "3.0 GB to download", "catalog/chatterbox_turbo_snapshot.json", "nothing system-wide",
-                     "pip keeps its usual download cache in your user profile", "clones that recording", "without using the network"):
+                     "pip keeps its usual download cache in your user profile", "clones that recording", "without using the network",
+                     "On a CPU this takes a few minutes."):
+            self.assertIn(part, text)
+        self.assertNotIn("NVIDIA", text)
+
+    def test_the_nvidia_plan_names_the_cuda_builds_the_cards_they_run_on_and_that_they_are_untried(self):
+        text = self.plan(nvidia=True)
+        for part in ("Chatterbox Turbo 350M on an NVIDIA graphics card",
+                     "the CUDA 12.6 builds of PyTorch 2.6 and torchaudio for NVIDIA graphics cards (not yet tried on one)",
+                     f"About {base.mb_text(ic.PACKAGES_DOWNLOAD_MB + ic.NVIDIA_EXTRA_DOWNLOAD_MB)} to download",
+                     "requirements/chatterbox-cpu.txt and requirements/chatterbox-nvidia.txt", "It runs on the graphics card.",
+                     "up to the GeForce RTX 40 series", "not on RTX 50 series cards", "hardware report on GitHub"):
             self.assertIn(part, text)
 
     def test_the_plan_says_which_licence_covers_what_and_that_every_clip_is_watermarked(self):
@@ -347,6 +365,31 @@ class InstallPackagesTests(unittest.TestCase):
         self.assertEqual(kwargs["cwd"], ROOT)
         self.assertNotIn("index-url", " ".join(command))
 
+    def test_for_nvidia_pip_gets_the_cpu_list_with_the_cuda_torch_and_torchaudio_in_their_place(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)  # its lock pins chatterbox-tts and torch
+            cuda = f"torch @ https://example.invalid/torch-2.6.0%2Bcu126-cp312-cp312-win_amd64.whl --hash=sha256:{'ef' * 32}"
+            (lab.root / ic.NVIDIA_LOCK).write_text(f"# a stand-in for requirements/chatterbox-nvidia.txt\n{cuda}\n", "utf-8")
+            ic.install_packages(lab.root, nvidia=True,
+                                runner=lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0))
+            written = Path(calls[0][calls[0].index("-r") + 1])
+            self.assertEqual(written, lab.root / "out" / "chatterbox" / "requirements-nvidia.txt")
+            lines = [line for line in written.read_text("utf-8").splitlines() if not line.startswith("#")]
+        self.assertEqual(lines, [f"chatterbox-tts==0.1.7 --hash=sha256:{HASH}", cuda])
+
+    def test_the_nvidia_list_swaps_only_torch_and_torchaudio_for_cuda_builds_of_the_same_versions(self):
+        cpu = {item["key"]: item for item in base.read_lock(ROOT / ic.LOCK)}
+        gpu = base.read_lock(ROOT / ic.NVIDIA_LOCK)
+        self.assertEqual([item["key"] for item in gpu], ["torch", "torchaudio"])
+        for item in gpu:
+            self.assertEqual(item["version"], cpu[item["key"]]["version"] + "+cu126")
+        for line in base.lock_lines(ROOT / ic.NVIDIA_LOCK).values():
+            self.assertRegex(line, r"^torch(audio)? @ https://download\.pytorch\.org/whl/cu126/torch(audio)?-2\.6\.0%2Bcu126-cp312-"
+                                   r"cp312-win_amd64\.whl --hash=sha256:[0-9a-f]{64}$")
+        swapped = ic.pinned_packages(ROOT, nvidia=True)
+        self.assertEqual([item["key"] for item in swapped], list(cpu))
+
     def test_a_pip_failure_says_to_fix_it_and_run_again(self):
         with self.assertRaisesRegex(ic.InstallError, "pip stopped with exit code 3.*run the installer again"):
             ic.install_packages(ROOT, runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 3))
@@ -356,7 +399,7 @@ class SpeechCheckTests(unittest.TestCase):
     GOOD = ('{"problem": null, "load_seconds": 9.9, "reference_seconds": 12.7, "reference_total_seconds": 31.0, '
             '"prepare_seconds": 1.0, "total_seconds": 6.0, "audio_seconds": 2.2, "torch": "2.6.0+cpu"}')
 
-    def check(self, stdout="", stderr="", code=0, error=None):
+    def check(self, stdout="", stderr="", code=0, error=None, device="cpu"):
         calls = []
 
         def runner(command, **kwargs):
@@ -366,7 +409,7 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return ic.run_speech_check(folder, runner=runner), calls, Path(folder)
+            return ic.run_speech_check(folder, device=device, runner=runner), calls, Path(folder)
 
     def test_the_clips_are_made_offline_by_the_new_environment_and_their_numbers_come_back(self):
         result, calls, folder = self.check(stdout="loaded PerthNet\n" + self.GOOD + "\n", stderr="a warning\n")
@@ -375,7 +418,7 @@ class SpeechCheckTests(unittest.TestCase):
         self.assertIn("from engines import ChatterboxTurbo", command[2])
         self.assertIn('engine_checks.smoke_request("turbo")', command[2])
         self.assertEqual(command[3:], [str(folder), str(folder / "out" / "chatterbox" / "install-reference.wav"),
-                                       str(folder / "out" / "chatterbox" / "install-check.wav")])
+                                       str(folder / "out" / "chatterbox" / "install-check.wav"), "cpu"])
         self.assertEqual((kwargs["env"]["HF_HUB_OFFLINE"], kwargs["env"]["TRANSFORMERS_OFFLINE"]), ("1", "1"))
         self.assertEqual((result["audio_seconds"], result["torch"]), (2.2, "2.6.0+cpu"))
         self.assertEqual(result["wav"], folder / "out" / "chatterbox" / "install-check.wav")
@@ -421,11 +464,12 @@ class SpeechCheckTests(unittest.TestCase):
                 "def smoke_request(engine):\n    assert engine == 'turbo'\n    return {'engine': engine, 'text': 'check'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
             reference, wav = Path(folder) / "reference.wav", Path(folder) / "clip.wav"
-            done = subprocess.run([sys.executable, "-c", ic.SPEECH_CHECK, str(lab), str(reference), str(wav)], capture_output=True,
-                                  text=True, timeout=120)
+            done = subprocess.run([sys.executable, "-c", ic.SPEECH_CHECK, str(lab), str(reference), str(wav), "cpu"],
+                                  capture_output=True, text=True, timeout=120)
             self.assertEqual(done.returncode, 0, done.stderr)
             result = base.last_json_line(done.stdout)
-            self.assertEqual((result["problem"], result["torch"], result["total_seconds"]), (None, "2.6.0+cpu", 0.5))
+            self.assertEqual((result["problem"], result["torch"], result["total_seconds"], result["device"]),
+                             (None, "2.6.0+cpu", 0.5, "cpu"))
             self.assertAlmostEqual(result["reference_seconds"], 6.0)
             self.assertAlmostEqual(result["audio_seconds"], 2.0)
             self.assertEqual(sf.info(str(reference)).frames, 6 * 24000)

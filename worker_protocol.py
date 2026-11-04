@@ -4,7 +4,7 @@ import json
 
 PROTOCOL_VERSION = 1
 MAX_MESSAGE_BYTES = 64 * 1024
-METHODS = frozenset({"health", "load", "prepare_reference", "generate", "generate_stream", "unload", "shutdown"})
+METHODS = frozenset({"health", "load", "prepare_reference", "phonemize", "generate", "generate_stream", "unload", "shutdown"})
 
 
 class ProtocolError(RuntimeError):

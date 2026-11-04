@@ -1,9 +1,9 @@
 """The Voice Lab's HTTP API, written down once.
 
-Every route serve.py answers has a row in ROUTES below. From that one table this module builds the OpenAPI document
-(openapi.json, also served at GET /api/openapi.json) and the reference tables in docs/API.md; tools/build_api_docs.py writes
-both files. tests/test_api_docs.py reads serve.py's source and fails when serve.py answers a route that has no row here, so a
-new route has to be documented or marked internal on purpose.
+Every route serve.py answers is a row in ROUTES below. The service's dispatch is built from this table (routes.py): serve.py
+registers one handler for each row and will not start with a row nobody answers or a handler with no row, so a new route has
+to be documented or marked internal on purpose. From the same table this module builds the OpenAPI document (openapi.json,
+also served at GET /api/openapi.json) and the reference tables in docs/API.md; tools/build_api_docs.py writes both files.
 
 A route is *documented* when scripts may rely on it: its shape changes only with a new version and a CHANGELOG line. It is
 *internal* when it exists for the Lab's own pages (the pages, their scripts, appearance, pickers); it can change at any time
@@ -292,9 +292,12 @@ ROUTES = [
               (409, "The GPU worker is busy. One generation runs at a time; a second request is refused, not queued."),
               (504, "The engine did not answer in time.")),
       notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does."),
-    R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text, without loading a model.",
+    R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text.",
       body=(F("text", "string", "1 to 1200 characters.", True), F("language", "string", "Default `English`.")),
-      reply="`language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`."),
+      reply="`language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.",
+      notes="Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is "
+            "not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot "
+            "take is refused with a 400 before anything loads."),
 
     # ---------------------------------------------------------------- Cast
     R("GET", "/api/cast", "Cast", "List every character with its voices and their recordings.",

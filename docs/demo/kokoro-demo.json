@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "file": "kokoro-demo.mp3",
+  "sha256": "cf1b659edba7449f9b7f486a0dda3cd60db7bd8892f581edf55a898f18e6b16a",
+  "bytes": 256326,
+  "seconds": 40.12,
+  "made_with": "Fel's Voice Lab 0.1.0, POST /api/speak for each line on the CPU, joined with 0.45 s pauses",
+  "model": {
+    "engine": "kokoro",
+    "name": "Kokoro 82M",
+    "checkpoint": "hexgrad/Kokoro-82M",
+    "revision": "f3ff3571791e39611d31c381e3a41a3af07b4987"
+  },
+  "licence": "Apache-2.0: the Kokoro-82M weights and its preset voices (hexgrad/Kokoro-82M model card).",
+  "synthetic": "Every voice in it is a preset voice of the model; no person's recording was used or cloned.",
+  "label": "AI-generated speech: a synthetic voice made by Kokoro 82M with Fel's Voice Lab 0.1.0, not a recording of a person speaking. IPTC digital source type: http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+  "lines": [
+    {
+      "voice": "af_heart",
+      "language": "English",
+      "text": "Hello, and welcome to Fel's Voice Lab. Everything you hear was made on a mini PC, using only its processor. No cloud, and no graphics card.",
+      "seconds": 9.93
+    },
+    {
+      "voice": "bm_george",
+      "language": "English",
+      "text": "Every voice is one of Kokoro's preset voices. The Lab casts them as characters, directs their lines, and keeps every take.",
+      "seconds": 9.15
+    },
+    {
+      "voice": "bf_emma",
+      "language": "English",
+      "text": "A scene comes together line by line, and the whole of it exports as one package, with captions and lip-sync tracks.",
+      "seconds": 7.2
+    },
+    {
+      "voice": "am_michael",
+      "language": "English",
+      "text": "And every file it makes says, inside it, that the voice is synthetic.",
+      "seconds": 5.03
+    },
+    {
+      "voice": "ef_dora",
+      "language": "Spanish",
+      "text": "También habla español.",
+      "seconds": 1.8
+    },
+    {
+      "voice": "ff_siwis",
+      "language": "French",
+      "text": "Et le français, aussi.",
+      "seconds": 1.88
+    },
+    {
+      "voice": "af_heart",
+      "language": "English",
+      "text": "Have a listen, then make it your own.",
+      "seconds": 2.45
+    }
+  ]
+}

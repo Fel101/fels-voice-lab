@@ -45,8 +45,10 @@ For aligned takes, each sound's share of its word's time follows a rough length:
   pipelines also give word times; its other pipelines give phoneme times only.
 - **Other English takes** use their stored forced alignment (see [ALIGNMENT.md](ALIGNMENT.md)). Each word's time is
   shared out over its phonemes from misaki's English rules, which use the same symbols Kokoro does. The phoneme times
-  inside a word are estimates. misaki comes with Kokoro and is not part of the core install: without it an aligned
-  take gets no track (`lip_sync: not_written`, with the reason), and Kokoro takes are unaffected.
+  inside a word are estimates. misaki comes with Kokoro, in Kokoro's own environment `.venv-kokoro`, and is not part of
+  the core install: the export asks that environment's Python for the phonemes of every aligned take of a package in one
+  call. Without Kokoro installed, an aligned take gets no track (`lip_sync: not_written`, with the reason), and Kokoro takes
+  are unaffected.
 - **Takes made before schema 7** have no stored Kokoro times, so they keep the aligned track. Only takes made from now
   on store them.
 - **Edited takes** (a trim, a cut of the silence, fades, a gain) keep their original's phoneme times, moved earlier by the

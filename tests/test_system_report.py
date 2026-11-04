@@ -26,8 +26,13 @@ Usage = namedtuple("Usage", "total used free")
 FFMPEG = {"found": True, "ready": True, "version": "7.1", "message": None,
           "formats": {"wav": True, "flac": True, "ogg": True, "mp3": False, "m4a": True}}
 ENGINES = {"device": "cuda", "engines": [
-    {"id": "kokoro", "name": "Kokoro", "state": "usable"}, {"id": "turbo", "name": "Chatterbox Turbo", "state": "not_installed"},
-    {"id": "moss", "name": "MOSS", "state": "not_integrated"}]}
+    {"id": "kokoro", "name": "Kokoro", "state": "usable", "check": {"status": "passed", "ran_on": "cpu", "real_time_factor": 0.276}},
+    {"id": "turbo", "name": "Chatterbox Turbo", "state": "not_installed", "check": None},
+    {"id": "moss", "name": "MOSS", "state": "not_integrated"}],
+    "speed": [{"engine": "kokoro", "device": "cpu", "clips": 5, "median_real_time_factor": 0.25, "last_total_s": 1.0,
+               "last_audio_seconds": 4.0, "last_measured_at": "t"}]}
+HARDWARE = {"processor": "AMD Ryzen 7 PRO 8845HS w/ Radeon 780M Graphics",
+            "graphics_cards": [{"name": "NVIDIA GeForce RTX 4070", "driver": "32.0.15.6094"}, {"name": "Card", "driver": None}]}
 
 
 class TempBase(unittest.TestCase):
@@ -42,7 +47,8 @@ class TempBase(unittest.TestCase):
     def report(self, **changes):
         report = {
             "generated_at": "2026-10-25T12:00:00+00:00", "app": {"name": "Fixture", "version": "9.9.9"},
-            "system": {"python": "3.12.4", "platform": "Windows-11", "device": "cuda", "free_ram_gb": 21.5},
+            "system": {"python": "3.12.4", "platform": "Windows-11", "device": "cuda", "free_ram_gb": 21.5, "total_ram_gb": 31.7,
+                       **HARDWARE},
             "library": {"path": str(self.base / "VoiceLab"), "schemas": {"evaluations": 2, "scenes": 1, "cast": 8},
                         "counts": {"characters": 3, "identities": 5, "references": 4, "takes": 120, "scenes": 2}},
             "ffmpeg": FFMPEG,
@@ -110,6 +116,13 @@ class EnginesAndLogTests(TempBase):
         self.assertEqual({key: count for key, count in summary["counts"].items() if count}, {"usable": 1, "not_installed": 1})
         self.assertEqual(list(summary["counts"])[:6], list(system_report.ENGINE_STATES))
 
+    def test_each_model_says_where_its_last_test_ran_and_how_fast_and_the_speed_table_comes_along(self):
+        summary = system_report.engines_summary(ENGINES)
+        self.assertEqual(summary["rows"][0], {"id": "kokoro", "name": "Kokoro", "state": "usable", "ran_on": "cpu",
+                                              "real_time_factor": 0.276})
+        self.assertEqual(summary["rows"][1], {"id": "turbo", "name": "Chatterbox Turbo", "state": "not_installed"})
+        self.assertEqual(summary["speed"], [{"engine": "kokoro", "device": "cpu", "clips": 5, "median_real_time_factor": 0.25}])
+
     def test_a_state_added_later_is_counted_and_named_not_dropped_or_crashed_on(self):
         payload = {"device": "cpu", "engines": [{"id": "x", "name": "X", "state": "brand_new"}]}
         summary = system_report.engines_summary(payload)
@@ -149,9 +162,12 @@ class BuildTests(TempBase):
         log.parent.mkdir(parents=True)
         log.write_text("start\n", encoding="utf-8")
         report = system_report.build(app="Fixture", version="9.9.9", state_root=root, out_dir=out, device="cpu", ffmpeg=FFMPEG,
-                                     engine_status=ENGINES, log_path=log, free_ram=12.34)
+                                     engine_status=ENGINES, log_path=log, free_ram=12.34, total_ram=31.66, hardware=HARDWARE)
         self.assertEqual(report["app"], {"name": "Fixture", "version": "9.9.9"})
         self.assertEqual(report["system"]["free_ram_gb"], 12.3)
+        self.assertEqual(report["system"]["total_ram_gb"], 31.7)
+        self.assertEqual((report["system"]["processor"], report["system"]["graphics_cards"]),
+                         (HARDWARE["processor"], HARDWARE["graphics_cards"]))
         self.assertEqual(report["system"]["device"], "cpu")
         self.assertEqual(report["library"]["path"], str(root))
         self.assertEqual(report["library"]["schemas"]["cast"], CAST_SCHEMA_VERSION)
@@ -170,8 +186,10 @@ class BuildTests(TempBase):
     def test_a_library_that_does_not_exist_yet_reports_nothing_in_it_and_does_not_create_it(self):
         root = self.base / "new-lab"
         report = system_report.build(app="Fixture", version="1", state_root=root, out_dir=self.base, device="cpu", ffmpeg=FFMPEG,
-                                     engine_status=ENGINES, log_path=None, free_ram=1.0)
+                                     engine_status=ENGINES, log_path=None, free_ram=1.0, hardware={})
         self.assertEqual(report["library"]["schemas"], {})
+        self.assertEqual((report["system"]["total_ram_gb"], report["system"]["processor"], report["system"]["graphics_cards"]),
+                         (None, None, []))
         self.assertEqual(report["library"]["counts"]["takes"], 0)
         self.assertEqual((report["backups"]["count"], report["backups"]["latest"], report["log"]), (0, None, None))
         self.assertFalse(root.exists(), "reading the report must not create the library")
@@ -186,15 +204,18 @@ class DiagnosticsTests(TempBase):
         sep = os.sep
         self.assertEqual(self.text(), "\n".join([
             "Fixture 9.9.9 diagnostics, 2026-10-25T12:00:00+00:00",
-            "System: Python 3.12.4, Windows-11, device cuda, 21.5 GB RAM free",
+            "System: Python 3.12.4, Windows-11, device cuda, 21.5 GB RAM free of 31.7 GB",
+            "Processor: AMD Ryzen 7 PRO 8845HS w/ Radeon 780M Graphics",
+            "Graphics: NVIDIA GeForce RTX 4070 (driver 32.0.15.6094); Card",
             f"Library: ~{sep}VoiceLab",
             "  schemas: evaluations 2, scenes 1, cast 8",
             "  contents: 3 characters, 5 voice identities, 4 references, 120 takes, 2 scenes",
             "FFmpeg 7.1 found; ffprobe found; can write: WAV yes, FLAC yes, Ogg yes, MP3 no, AAC yes",
             "Disk: library drive 200.0 GB free of 500.0 GB; install drive unreadable",
             "Models (device cuda): 1 usable, 1 not installed",
-            "  kokoro: usable",
+            "  kokoro: usable (tested on cpu, 0.28 s per second of audio)",
             "  turbo: not installed",
+            "Speed of recent clips: kokoro on cpu, 0.25 s per second of audio over 5 clips",
             f"Service log: ~{sep}lab{sep}out{sep}logs{sep}service-1.log (1234 bytes)",
             f"Backups: 2 in ~{sep}VoiceLab{sep}backups; newest voice-lab-library-20261025-120000.zip (5.0 MB)",
             "Not included: scripts, transcripts, names of characters or voices, and recordings. The home folder is shown as ~."]))
@@ -203,7 +224,7 @@ class DiagnosticsTests(TempBase):
         root = self.base / "lab"
         build_library(root)
         report = system_report.build(app="Fixture", version="9.9.9", state_root=root, out_dir=self.base, device="cpu", ffmpeg=FFMPEG,
-                                     engine_status=ENGINES, log_path=None, free_ram=8.0)
+                                     engine_status=ENGINES, log_path=None, free_ram=8.0, hardware=HARDWARE)
         text = self.text(report)
         for private in (PRIVATE_NAME, PRIVATE_VOICE, PRIVATE_LINE, "line-0"):
             self.assertNotIn(private, text)

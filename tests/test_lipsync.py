@@ -1,7 +1,9 @@
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import kokoro_support
@@ -162,11 +164,67 @@ class TakeTrackTests(unittest.TestCase):
 
     def test_without_misaki_an_aligned_take_gets_no_track_and_the_reason_says_so(self):
         aligned = self.take(1.0, [{"word": "Hi", "start": 0.0, "end": 0.4}], "Hi")
-        with mock.patch.dict(sys.modules, {"misaki": None}):  # an environment where misaki was never installed
+        # misaki is missing here, and so is Kokoro's environment, which would otherwise be asked.
+        with mock.patch.dict(sys.modules, {"misaki": None}), \
+                mock.patch.object(lipsync, "KOKORO_PYTHON", lipsync.KOKORO_PYTHON.with_name("missing.exe")), \
+                mock.patch.dict(lipsync._KNOWN, clear=True):
             track, reason = lipsync.track_for_takes([aligned])
         self.assertIsNone(track)
         self.assertIn("misaki", reason)
-        self.assertIn("not installed", reason)
+        self.assertIn("Kokoro, which is not installed", reason)
+
+
+class KokoroEnvironmentPhonemeTests(unittest.TestCase):
+    """The service's .venv has no misaki; Kokoro's own environment answers for every text of an export in one process."""
+
+    def setUp(self):
+        for patcher in (mock.patch.dict(sys.modules, {"misaki": None}), mock.patch.dict(lipsync._KNOWN, clear=True)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.python = folder / "python.exe"  # stands in for .venv-kokoro's Python; the runner never starts it
+        self.python.write_bytes(b"")
+        self.calls = []
+
+    def runner(self, answer, code=0):
+        def run(command, **kwargs):
+            self.calls.append((command, kwargs))
+            texts = json.loads(kwargs["input"])
+            words = answer(texts) if callable(answer) else answer
+            return mock.Mock(returncode=code, stdout="loading spaCy...\n" + json.dumps(words) + "\n")
+        return run
+
+    @staticmethod
+    def phonemes(texts):
+        return [[[word, list(word.lower())] for word in text.split()] for text in texts]
+
+    def test_one_process_answers_every_text_and_later_calls_use_what_it_found(self):
+        lipsync.prime_english_phonemes(["Hi there", "Go", "Hi there"], python=self.python, runner=self.runner(self.phonemes))
+        self.assertEqual(len(self.calls), 1)
+        command, options = self.calls[0]
+        self.assertEqual(command[1:3], ["-I", "-c"])
+        self.assertEqual(json.loads(options["input"]), ["Go", "Hi there"])
+        with mock.patch.object(lipsync, "prime_english_phonemes", side_effect=AssertionError("asked again")):
+            self.assertEqual(lipsync.english_word_phonemes("Hi there"), [("Hi", ["h", "i"]), ("there", list("there"))])
+
+    def test_a_failed_or_malformed_answer_leaves_the_texts_out(self):
+        for runner in (self.runner(self.phonemes, code=1), self.runner([["one answer for two texts"]])):
+            lipsync.prime_english_phonemes(["a b", "c"], python=self.python, runner=runner)
+            self.assertEqual(lipsync._KNOWN, {})
+
+    def test_no_kokoro_environment_starts_nothing(self):
+        lipsync.prime_english_phonemes(["Hi"], python=self.python.with_name("missing.exe"), runner=self.runner(AssertionError))
+        self.assertEqual(self.calls, [])
+
+    def test_only_aligned_english_takes_without_kokoro_times_are_asked_for(self):
+        takes = [{"word_timings": {"language": "en", "text": "Asked for"}},
+                 {"word_timings": {"language": "en", "text": "Kokoro made it"}, "phoneme_timings": {"phonemes": []}},
+                 {"word_timings": {"language": "fr", "text": "Bonjour"}},
+                 {"word_timings": {"language": "en", "text": "Failed", "error": "no speech"}},
+                 {}]
+        with mock.patch.object(lipsync, "prime_english_phonemes") as prime:
+            lipsync.prime_for_takes(takes)
+        prime.assert_called_once_with(["Asked for"])
 
     def test_spans_outside_the_clip_are_cut_to_it(self):
         track = lipsync.build_track([("p", 0.9, 1.5)], 1.0, timing_source="word-distribution")

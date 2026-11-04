@@ -54,9 +54,8 @@ def main():
         install([str(python), "-m", "pip", "install", "pip==26.2.2"])
         install([str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements/core.txt")])
         unfinished.unlink()
-    print("Core ready. Run setup-kokoro.bat to add Kokoro, the small speech model that runs on the CPU, setup-phonon.bat "
-          "to add Phonon, a smaller English one with 37 preset voices, or setup-chatterbox.bat to add Chatterbox Turbo, which "
-          "clones a voice from a recording. Other models: docs/SETUP.md.")
+    # setup.bat goes on with tools/first_setup.py: the desktop window, then the speech models.
+    print("Core ready.")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,12 @@
-# Phonon's runtime: ptts 0.5.0, pinned with the SHA-256 of its Windows x64 wheel (tools/install_phonon.py installs it with --require-hashes).
-# It needs only numpy, which requirements/core.txt already pins, and it is MIT OR Apache-2.0.
+# Phonon 31M English, for 64-bit Windows and Python 3.12. tools/install_phonon.py installs this file into .venv-phonon, an
+# environment of its own, with --require-hashes. Its runtime is ptts 0.5.0, pinned with the SHA-256 of its Windows x64 wheel;
+# it needs only numpy and is MIT OR Apache-2.0. The packages of requirements/core.txt are repeated at the same versions,
+# because the worker runs the Lab's own modules in .venv-phonon.
+cffi==2.1.1 --hash=sha256:f53e442b08449d42821fa4a4fba000095af9f62742a500f978a9f557ec44339a
+numpy==1.26.4 --hash=sha256:08beddf13648eb95f8d867350f6a018a4be2e5ad54c8d8caed89ebca558b2818
 ptts==0.5.0 --hash=sha256:92a4ef33f5a1faad16a2b6c883c1bb00accdf884d58ef2d7c57d8717b1ea4fcd
+pycparser==3.11 --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+pyloudnorm==0.2.0 --hash=sha256:9bb69afb904f59d007a7f9ba3d75d16fb8aeef35c44d6df822a9f192d69cf13f
+scipy==1.17.1 --hash=sha256:41b71f4a3a4cab9d366cd9065b288efc4d4f3c0b37a91a8e0947fb5bd7f31d87
+soundfile==0.14.0 --hash=sha256:299491d3499460fb1b74bb4bd78b57ffc2d243a5fafa7b6ec1b264875c78453e
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

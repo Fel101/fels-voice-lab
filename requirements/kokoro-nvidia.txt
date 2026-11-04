@@ -1,0 +1,6 @@
+# Kokoro on an NVIDIA graphics card: `tools/install_kokoro.py --nvidia` installs requirements/kokoro-cpu.txt with this torch in
+# place of the CPU build. It is the CUDA 13.0 build of the same PyTorch 2.12.0, from PyTorch's own index, pinned by its
+# SHA-256 (1.9 GB). The Windows CUDA wheels carry their CUDA libraries inside them, so nothing else changes.
+# CUDA 13.0 needs a card from the GeForce GTX 16 or RTX 20 series or newer (RTX 50 included) and an NVIDIA driver of version
+# 580 or later; it does not support older cards such as the GTX 10 series. The Lab has not been tried on an NVIDIA card yet.
+torch @ https://download.pytorch.org/whl/cu130/torch-2.12.0%2Bcu130-cp312-cp312-win_amd64.whl --hash=sha256:24e75a0c3ea4243067d7560955f2eef6466e9365de7dd4a3a4b8693c9ac4bccf

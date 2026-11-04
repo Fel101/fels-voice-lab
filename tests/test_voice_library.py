@@ -16,6 +16,7 @@ import soundfile as sf
 
 from cast_store import CastStore
 import reference_catalog
+import synthetic_label
 import serve
 from worker_pool import read_catalog
 
@@ -176,7 +177,10 @@ class VoiceLibraryTests(unittest.TestCase):
                     self.assertEqual(row["id"], row["identity_id"])
                     with urllib.request.urlopen(base + row["audition"]["audio_url"], timeout=5) as response:
                         self.assertEqual(response.headers.get_content_type(), "audio/wav")
-                        self.assertEqual(response.read(), self.audio)
+                        # A take is the fixture's samples in a WAV that carries the AI-generated speech label.
+                        audition = response.read()
+                    self.assertEqual(sf.read(io.BytesIO(audition), dtype="float32")[0].tolist(), self.samples.tolist())
+                    self.assertTrue(synthetic_label.is_labelled(sf.SoundFile(io.BytesIO(audition)).comment))
                 for headers in ({"Host":"example.invalid"}, {"Origin":"https://example.invalid"}, {"Origin":"null"}):
                     request = urllib.request.Request(base + "/api/voice-library", headers=headers)
                     with self.assertRaises(urllib.error.HTTPError) as caught:

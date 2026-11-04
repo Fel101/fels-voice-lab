@@ -49,7 +49,7 @@ class CatalogPinTests(unittest.TestCase):
         self.assertEqual(caps["voice_design"]["status"], "unsupported_by_checkpoint")
         self.assertEqual(caps["voice_selection"]["status"], "worker_verified")
         self.assertEqual(ENTRY["integration"], {"status": "integrated", "service_api": True})
-        self.assertEqual(ENTRY["runtime"]["environment"], ".venv")
+        self.assertEqual(ENTRY["runtime"]["environment"], ".venv-phonon", "Phonon has an environment of its own")
         self.assertIsNone(ENTRY["backend"].get("device"), "the device is the runtime's (cpu), not a backend option")
         self.assertEqual(ENTRY["runtime"]["device"], "cpu")
 

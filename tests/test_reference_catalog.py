@@ -23,6 +23,7 @@ import soundfile as sf
 
 from cast_store import CastStore
 import reference_catalog as catalog
+import synthetic_label
 import serve
 from worker_pool import read_catalog
 
@@ -116,8 +117,8 @@ class ReferenceCatalogTests(ReferenceFixtures):
         character = self.cast.create_character("Harbor narrator", "An invented calm narrator")
         identity = self.cast.create_identity(character["id"], "qwen3-tts-1.7b-base", "Candidate narrator")
         audio, rate = sf.read(io.BytesIO(self.audio), dtype="float32")
-        source = io.BytesIO()
-        sf.write(source, audio, rate, format="WAV", subtype="PCM_16")
+        # The design take this reference was made from: a take's file is its samples with the AI-generated speech label.
+        source = io.BytesIO(synthetic_label.wav_bytes(audio, rate, engine_id="qwen3-tts-1.7b-base"))
         reference = self.cast.add_reference(identity["id"], "source.wav", source.getvalue(),
             transcript="Words in the recording.", origin="Original synthetic design", allowed_use="Local fixtures only")
         generation_identity = self.cast.get_generation_identity(identity["id"], reference["id"])

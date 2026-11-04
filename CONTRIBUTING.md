@@ -23,11 +23,18 @@ Contract tests do not establish perceptual voice quality. Hardware/model
 acceptance should report exact runtimes, checkpoints, words, identity, acting,
 resource usage and shutdown behavior separately.
 
-The HTTP API is documented in `docs/API.md` and `openapi.json`, which are written from one table, `api_spec.py`. A route
-added to or removed from `serve.py` needs a row there, documented or marked `internal=True` (the Lab's own pages and
-helpers); `tests/test_api_docs.py` reads `serve.py` and fails until the table agrees. After editing the table run
-`.venv\Scripts\python.exe tools/build_api_docs.py` (`--check` only reports). `/api/speak` stays one blocking call that
-answers a whole WAV file, and `tests/test_api_contract.py` holds it to that.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is a one-page map of the processes, the environments and which file decides what.
+
+The HTTP API is one table, `api_spec.py`: the service's dispatch is built from it (`routes.py`), and `docs/API.md` and
+`openapi.json` are written from it. To add a route, give it a row there, documented or marked `internal=True` (the Lab's own
+pages and helpers), and a function in `serve.make_handler` registered with `@router.get(path)` or `@router.post(path)` under
+the same path. The service refuses to start with a row that has no function or a function that has no row, and
+`tests/test_api_docs.py` checks the same. After editing the table run `.venv\Scripts\python.exe tools/build_api_docs.py`
+(`--check` only reports). `/api/speak` stays one blocking call that answers a whole WAV file, and
+`tests/test_api_contract.py` holds it to that.
+
+Lint with `ruff check .`. Format the files you add with `ruff format`: `ruff format --check .` runs in CI too, and skips the
+older files listed in `ruff.toml` until someone reworks one, reformats it and takes it off the list.
 
 The Cast database is versioned (`CAST_SCHEMA_VERSION` in `cast_store.py`, one `_step` for each version). A step that adds a
 column also needs two things beside it. Every test that builds an older database by dropping columns and lowering

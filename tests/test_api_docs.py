@@ -1,9 +1,10 @@
 """The API reference tells the truth about serve.py.
 
-Every route serve.py answers has a row in api_spec.ROUTES, documented or marked internal; every row names a route serve.py still
-answers; a path parameter's documented pattern is the one serve.py matches; and openapi.json and docs/API.md hold what the
-table says. serve.py is read as source (api_route_scan), never run, and its dispatch is not changed for this: the tests below
-also edit a copy of that source to show that a new route is caught.
+serve.py answers exactly the rows of api_spec.ROUTES. routes.py builds the service's dispatch from that table and serve.py
+registers one handler for each row, so a route cannot be answered without a row nor listed without an answer: make_handler
+refuses to build either way. These tests build the request handler on stand-in stores and hold its table to api_spec, check
+that a request made from each row's examples reaches that row and only it, and that openapi.json and docs/API.md hold what the
+table says.
 """
 import ast
 import contextlib
@@ -14,30 +15,18 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import api_route_scan
-import api_spec
-from tools import build_api_docs
+import api_spec  # noqa: E402
+import routes  # noqa: E402
+from tools import build_api_docs  # noqa: E402
 
 SERVE = ROOT / "serve.py"
 GUIDE = ROOT / "docs" / "API.md"
-
-# Strings in serve.py's handlers that start with /api/ but are not routes.
-NOT_ROUTES = {"/api/scenes/": "chooses the 2 MiB body limit for scene calls and builds a preview's URL; it answers nothing"}
-
-
-def gaps(scan, rows, not_routes=NOT_ROUTES):
-    """(routes the source answers that have no row, rows for routes it does not answer, strings the scan cannot explain)."""
-    answered = scan.shapes()
-    listed = {(row.method, api_spec.shape(row.path)) for row in rows}
-    unlisted = sorted(f"{method} {shape}" for method, shape in answered if (method, shape) not in listed)
-    gone = sorted(f"{method} {shape}" for method, shape in listed if (method, shape) not in answered)
-    return unlisted, gone, scan.unexplained(not_routes)
 
 
 def strings_in(path):
@@ -45,71 +34,75 @@ def strings_in(path):
             if isinstance(node, ast.Constant) and isinstance(node.value, str)}
 
 
-class RouteCoverageTests(unittest.TestCase):
+def built_handler():
+    """serve.py's request handler, built the way main() builds it but on stand-in stores in a temporary library."""
+    import serve
+    from cast_store import CastStore
+    from worker_pool import read_catalog
+
+    folder = tempfile.TemporaryDirectory(prefix="voice-lab-api-docs-")
+    entries = {entry["id"]: entry for entry in read_catalog()["engines"]}
+    engines = SimpleNamespace(entries=entries, api_entries=entries, device="cpu", loaded=[])
+    handler = serve.make_handler(engines, 1, CastStore(Path(folder.name)), scene_store=SimpleNamespace(root=Path(folder.name)),
+                                 batch_runner=SimpleNamespace(), evaluation_store=SimpleNamespace(),
+                                 engine_installer=SimpleNamespace(close=lambda: None))
+    return handler, folder
+
+
+def example(row):
+    """A request path for a row, its parameters filled with their documented examples."""
+    if row.path.endswith("/*"):
+        return row.path[:-1] + "example"
+    return row.path.format(**{name: api_spec.PATH_PARAMS[name][2] for name in api_spec.path_names(row.path)})
+
+
+class RouteTableTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = SERVE.read_text(encoding="utf-8")
-        cls.scan = api_route_scan.scan(cls.source)
+        handler, cls.folder = built_handler()
+        cls.router = handler.router
 
-    def test_the_scan_finds_the_routes_serve_answers(self):
-        shapes = self.scan.shapes()
-        for route in (("GET", "/api/health"), ("POST", "/api/speak"), ("POST", "/api/performance"),
-                      ("GET", "/api/takes/{}/audio"), ("POST", "/api/scenes/jobs/{}/pause"), ("POST", "/api/scenes/import"),
-                      ("GET", "/api/drama3/jobs/{}/audio"), ("GET", "/api/drama3/info"), ("GET", "/out/*"),
-                      ("GET", "/voice_lab_cast.js"), ("GET", "/"), ("GET", "/api/scenes/{}/previews/{}.wav")):
-            with self.subTest(route):
-                self.assertIn(route, shapes)
-        self.assertGreater(len(shapes), 100, "the scan has stopped reading serve.py's dispatch")
+    @classmethod
+    def tearDownClass(cls):
+        cls.folder.cleanup()
 
-    def test_every_route_serve_answers_has_a_row(self):
-        unlisted, _gone, _odd = gaps(self.scan, api_spec.ROUTES)
-        self.assertEqual(unlisted, [], "serve.py answers these but api_spec.ROUTES has no row for them. Add a row for each, "
-                                       "documented, or with internal=True, then run tools/build_api_docs.py.")
+    def test_serve_answers_every_row_and_nothing_else(self):
+        self.assertEqual(set(self.router.handlers), {(row.method, row.path) for row in api_spec.ROUTES})
+        self.assertGreater(len(self.router.handlers), 100)
 
-    def test_every_row_is_a_route_serve_still_answers(self):
-        _unlisted, gone, _odd = gaps(self.scan, api_spec.ROUTES)
-        self.assertEqual(gone, [], "api_spec.ROUTES lists these but serve.py no longer answers them. Remove the rows, then run "
-                                  "tools/build_api_docs.py.")
+    def test_a_request_made_from_each_rows_examples_reaches_that_row(self):
+        for row in api_spec.ROUTES:
+            with self.subTest(f"{row.method} {row.path}"):
+                route, handler, _params = self.router.match(row.method, example(row))
+                self.assertIs(route, row)
+                self.assertIs(handler, self.router.handlers[(row.method, row.path)])
 
-    def test_no_api_string_in_the_handlers_escapes_the_scan(self):
-        _unlisted, _gone, odd = gaps(self.scan, api_spec.ROUTES)
-        self.assertEqual(odd, [], "do_GET or do_POST holds these /api/ strings that are not routes the scan could read. If one "
-                                  "is a route, give it a row (and a form the scan reads, or extend api_route_scan); if not, "
-                                  "name it in NOT_ROUTES with the reason.")
-
-    def test_a_parameters_pattern_is_the_one_serve_matches(self):
-        listed = {(row.method, api_spec.shape(row.path)): row for row in api_spec.ROUTES}
-        for (method, shape), options in self.scan.shapes().items():
-            row = listed.get((method, shape))
-            if row is None:
-                continue
-            declared = [api_spec.PATH_PARAMS[name][1] for name in api_spec.path_names(row.path)]
-            with self.subTest(f"{method} {shape}"):
-                self.assertIn(declared, [list(item) for item in options],
-                              "the patterns api_spec.PATH_PARAMS gives this route's parameters are not the ones serve.py matches")
-
-    def test_a_request_built_from_each_rows_examples_reaches_it(self):
-        patterns = {}
-        for item in self.scan.found:
-            if item.kind == "pattern":
-                patterns.setdefault(item.method, []).append(item.regex)
+    def test_a_parameter_that_breaks_its_documented_pattern_reaches_nothing(self):
         for row in api_spec.ROUTES:
             names = api_spec.path_names(row.path)
             if not names:
                 continue
-            sample = row.path.format(**{name: api_spec.PATH_PARAMS[name][2] for name in names})
+            path = row.path.format(**{name: "not a valid one!" for name in names})
             with self.subTest(f"{row.method} {row.path}"):
-                self.assertTrue(any(re.fullmatch(regex, sample) for regex in patterns.get(row.method, ())),
-                                f"no pattern in serve.py matches {sample}")
+                found = self.router.match(row.method, path)
+                self.assertTrue(found is None or found[0].path.endswith("/*"), found and found[0].path)
+
+    def test_the_parameters_reach_the_handler_by_name(self):
+        take = api_spec.PATH_PARAMS["take_id"][2]
+        self.assertEqual(self.router.match("GET", f"/api/takes/{take}/audio")[2], {"take_id": take})
+        scene, preview = api_spec.PATH_PARAMS["scene_id"][2], api_spec.PATH_PARAMS["preview_file"][2]
+        self.assertEqual(self.router.match("GET", f"/api/scenes/{scene}/previews/{preview}.wav")[2],
+                         {"scene_id": scene, "preview_file": preview})
+        self.assertEqual(self.router.match("GET", "/out/conversions/a/converted.wav")[2], {"rest": "conversions/a/converted.wav"})
 
     def test_every_path_parameter_is_defined_and_every_definition_is_used(self):
         used = {name for row in api_spec.ROUTES for name in api_spec.path_names(row.path)}
         self.assertEqual(sorted(used - set(api_spec.PATH_PARAMS)), [])
         self.assertEqual(sorted(set(api_spec.PATH_PARAMS) - used), [])
-        for name, (doc, pattern, example) in api_spec.PATH_PARAMS.items():
+        for name, (doc, pattern, example_value) in api_spec.PATH_PARAMS.items():
             with self.subTest(name):
                 self.assertTrue(doc.endswith("."), "a parameter's meaning is a sentence")
-                self.assertRegex(example, f"^(?:{pattern})$")
+                self.assertRegex(example_value, f"^(?:{pattern})$")
 
     def test_query_fields_and_answer_headers_are_names_serve_uses(self):
         names = strings_in(SERVE)
@@ -129,179 +122,55 @@ class RouteCoverageTests(unittest.TestCase):
                     self.assertIn(field.name, names, "no Lab module reads a field with this name: a typo, or a field that went")
 
 
-class NewRoutesAreCaughtTests(unittest.TestCase):
-    """The same checks, run on a copy of serve.py that has gained something."""
+class RouterTests(unittest.TestCase):
+    """routes.Router on small tables of its own, and make_handler with a table that has gained a row."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.source = SERVE.read_text(encoding="utf-8")
+    @staticmethod
+    def rows(*paths):
+        return [api_spec.R(method, path, "Service", "A route.") for method, path in paths]
 
-    def edited(self, old, new):
-        text = self.source.replace(old, new, 1)
-        self.assertNotEqual(text, self.source, "the anchor line in serve.py moved; update this test")
-        return api_route_scan.scan(text)
+    def test_a_handler_for_a_route_with_no_row_is_refused(self):
+        router = routes.Router(self.rows(("GET", "/api/a")))
+        with self.assertRaisesRegex(routes.RouteError, r"GET /api/brand-new has no row in api_spec\.ROUTES"):
+            router.get("/api/brand-new")(lambda *args: None)
 
-    def test_a_new_exact_route_has_no_row(self):
-        scan = self.edited('            elif path == "/api/health":',
-                           '            elif path == "/api/brand-new":\n                self._json(200, {})\n'
-                           '            elif path == "/api/health":')
-        self.assertEqual(gaps(scan, api_spec.ROUTES)[0], ["GET /api/brand-new"])
+    def test_a_row_with_no_handler_is_refused(self):
+        router = routes.Router(self.rows(("GET", "/api/a"), ("POST", "/api/b")))
+        router.get("/api/a")(lambda *args: None)
+        with self.assertRaisesRegex(routes.RouteError, r"no handler in serve\.py: POST /api/b$"):
+            router.check()
 
-    def test_a_new_pattern_route_has_no_row(self):
-        scan = self.edited('                if path == "/api/preferences":',
-                           '                if re.fullmatch(r"/api/widgets/[a-f0-9]{32}/spin", path):\n                    return\n'
-                           '                if path == "/api/preferences":')
-        self.assertEqual(gaps(scan, api_spec.ROUTES)[0], ["POST /api/widgets/{}/spin"])
+    def test_a_row_listed_twice_or_answered_twice_is_refused(self):
+        with self.assertRaisesRegex(routes.RouteError, "two rows"):
+            routes.Router(self.rows(("GET", "/api/a"), ("GET", "/api/a")))
+        router = routes.Router(self.rows(("GET", "/api/a")))
+        router.get("/api/a")(lambda *args: None)
+        with self.assertRaisesRegex(routes.RouteError, "two handlers"):
+            router.get("/api/a")(lambda *args: None)
 
-    def test_a_new_prefix_route_has_no_row(self):
-        scan = self.edited('            elif path.startswith("/out/"):',
-                           '            elif path.startswith("/files/"):\n                pass\n'
-                           '            elif path.startswith("/out/"):')
-        self.assertEqual(gaps(scan, api_spec.ROUTES)[0], ["GET /files/*"])
+    def test_a_plain_path_wins_then_the_patterns_in_order_then_the_longest_prefix(self):
+        take = api_spec.PATH_PARAMS["take_id"][2]
+        router = routes.Router(self.rows(("GET", "/api/x/*"), ("GET", "/api/x/y/*"), ("GET", "/api/x/info"),
+                                         ("GET", "/api/x/{take_id}")))
+        for path, expected in (("/api/x/info", "/api/x/info"), (f"/api/x/{take}", "/api/x/{take_id}"),
+                               ("/api/x/y/z", "/api/x/y/*"), ("/api/x/other", "/api/x/*")):
+            with self.subTest(path):
+                self.assertEqual(router.match("GET", path)[0].path, expected)
+        self.assertIsNone(router.match("POST", "/api/x/info"))
+        self.assertIsNone(router.match("GET", "/api/elsewhere"))
 
-    def test_a_new_page_script_has_no_row(self):
-        text = self.source.replace('"voice_lab_drama.js"})', '"voice_lab_drama.js", "voice_lab_new.js"})', 1)
-        self.assertNotEqual(text, self.source)
-        self.assertEqual(gaps(api_route_scan.scan(text), api_spec.ROUTES)[0], ["GET /voice_lab_new.js"])
+    def test_a_literal_part_of_a_path_is_not_read_as_a_pattern(self):
+        router = routes.Router(self.rows(("GET", "/api/scenes/{scene_id}/export.json")))
+        scene = api_spec.PATH_PARAMS["scene_id"][2]
+        self.assertIsNotNone(router.match("GET", f"/api/scenes/{scene}/export.json"))
+        self.assertIsNone(router.match("GET", f"/api/scenes/{scene}/exportxjson"))
 
-    def test_a_new_route_under_the_drama_prefix_has_no_row(self):
-        scan = self.edited("if suffix=='info':return",
-                           "if suffix=='extra':return self._json(200,{})\n                    if suffix=='info':return")
-        self.assertEqual(gaps(scan, api_spec.ROUTES)[0], ["GET /api/drama3/extra"])
-
-    def test_a_route_written_in_a_way_the_scan_does_not_read_trips_the_net(self):
-        scan = self.edited('            elif path == "/api/health":',
-                           '            elif path.endswith("/api/hidden"):\n                self._json(200, {})\n'
-                           '            elif path == "/api/health":')
-        unlisted, gone, odd = gaps(scan, api_spec.ROUTES)
-        self.assertEqual((unlisted, gone), ([], []))
-        self.assertEqual(odd, ["/api/hidden"])
-
-    def test_a_row_the_service_no_longer_answers_is_stale(self):
-        scan = self.edited('            elif path == "/api/health":', '            elif path == "/api/health-gone":')
-        unlisted, gone, _odd = gaps(scan, api_spec.ROUTES)
-        self.assertEqual(unlisted, ["GET /api/health-gone"])
-        self.assertEqual(gone, ["GET /api/health"])
-
-    def test_a_missing_row_is_reported(self):
-        rows = [row for row in api_spec.ROUTES if api_spec.key(row) != "GET /api/info"]
-        self.assertEqual(gaps(api_route_scan.scan(self.source), rows)[0], ["GET /api/info"])
-
-    def test_a_changed_parameter_pattern_does_not_match_the_documented_one(self):
-        scan = self.edited('re.fullmatch(r"/api/takes/[a-f0-9]{32}/audio", path)',
-                           're.fullmatch(r"/api/takes/[a-f0-9]{36}/audio", path)')
-        options = scan.shapes()[("GET", "/api/takes/{}/audio")]
-        self.assertEqual(options, [("[a-f0-9]{36}",)])
-        self.assertNotIn([api_spec.PATH_PARAMS["take_id"][1]], [list(item) for item in options])
-
-
-SYNTHETIC = '''
-SCRIPTS = frozenset({"a.js", "b.js"})
-
-def helper(path):
-    return path == "/api/not-a-handler"
-
-def make():
-    class Handler:
-        def do_GET(self):
-            path = self.path
-            if path == "/api/a":
-                pass
-            elif path in ("/api/b", "/api/c"):
-                pass
-            elif path.lstrip("/") in SCRIPTS:
-                pass
-            elif re.fullmatch(r"/api/x/[a-f0-9]{32}/audio", path):
-                pass
-            elif re.fullmatch(r"/api/y/([A-Za-z0-9][A-Za-z0-9._-]{0,89})/verify", path):
-                pass
-            elif re.fullmatch(r"/api/z/(pause|resume)", path):
-                pass
-            elif re.fullmatch(r"/api/w/[a-f0-9]{32}/export\\.json", path):
-                pass
-            elif re.match(r"/api/m/[a-f0-9]{32}", path):
-                pass
-            elif target.path == "/api/not-the-request":
-                pass
-            elif path.startswith("/api/d/"):
-                rest = path[len("/api/d/"):]
-                if rest == "info":
-                    pass
-                found = re.fullmatch(r"jobs/([a-f0-9]{32})(?:/(audio|metadata))?", rest)
-            limit = 1 if path.startswith("/api/sizing/") else 2
-
-        def do_POST(self):
-            if self.path != "/api/e":
-                pass
-            if path == "/api/f" or path == "/api/g":
-                pass
-'''
-
-
-class ScanTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.scan = api_route_scan.scan(SYNTHETIC)
-        cls.shapes = cls.scan.shapes()
-
-    def test_it_reads_equality_membership_and_inequality(self):
-        for route in (("GET", "/api/a"), ("GET", "/api/b"), ("GET", "/api/c"), ("POST", "/api/e"), ("POST", "/api/f"),
-                      ("POST", "/api/g")):
-            self.assertIn(route, self.shapes)
-
-    def test_it_reads_a_named_set_of_scripts_with_the_leading_slash_restored(self):
-        self.assertIn(("GET", "/a.js"), self.shapes)
-        self.assertIn(("GET", "/b.js"), self.shapes)
-
-    def test_it_reads_patterns_and_keeps_each_parameters_pattern(self):
-        self.assertEqual(self.shapes[("GET", "/api/x/{}/audio")], [("[a-f0-9]{32}",)])
-        self.assertEqual(self.shapes[("GET", "/api/y/{}/verify")], [("[A-Za-z0-9][A-Za-z0-9._-]{0,89}",)])
-        self.assertEqual(self.shapes[("GET", "/api/w/{}/export.json")], [("[a-f0-9]{32}",)])
-
-    def test_match_is_read_like_fullmatch(self):
-        self.assertEqual(self.shapes[("GET", "/api/m/{}")], [("[a-f0-9]{32}",)])
-
-    def test_only_the_request_path_counts_not_any_attribute_called_path(self):
-        self.assertNotIn(("GET", "/api/not-the-request"), self.shapes)
-
-    def test_plain_alternatives_are_several_routes(self):
-        self.assertIn(("GET", "/api/z/pause"), self.shapes)
-        self.assertIn(("GET", "/api/z/resume"), self.shapes)
-
-    def test_a_prefix_is_a_route_only_when_an_if_tests_it(self):
-        self.assertIn(("GET", "/api/d/*"), self.shapes)
-        self.assertNotIn(("GET", "/api/sizing/*"), self.shapes)
-        self.assertEqual(self.scan.unexplained(), ["/api/not-the-request", "/api/sizing/"])
-        self.assertEqual(self.scan.unexplained({"/api/sizing/": "a size", "/api/not-the-request": "another"}), [])
-
-    def test_the_rest_of_a_path_after_a_prefix_is_read_too(self):
-        self.assertIn(("GET", "/api/d/info"), self.shapes)
-        self.assertEqual(self.shapes[("GET", "/api/d/jobs/{}")], [("[a-f0-9]{32}",)])
-        self.assertIn(("GET", "/api/d/jobs/{}/audio"), self.shapes)
-        self.assertIn(("GET", "/api/d/jobs/{}/metadata"), self.shapes)
-        regexes = [item.regex for item in self.scan.found if item.kind == "pattern" and "jobs" in item.text]
-        self.assertTrue(any(re.fullmatch(regex, "/api/d/jobs/" + "0" * 32 + "/audio") for regex in regexes))
-        self.assertFalse(any(re.fullmatch(regex, "/api/d/jobs/" + "0" * 32 + "/other") for regex in regexes))
-
-    def test_functions_that_are_not_the_handlers_are_ignored(self):
-        self.assertNotIn(("GET", "/api/not-a-handler"), self.shapes)
-        self.assertNotIn("/api/not-a-handler", self.scan.strings)
-
-    def test_a_pattern_it_cannot_read_is_an_error_and_not_a_guess(self):
-        source = 'def do_GET(self):\n    if re.fullmatch(r"/api/x/\\d+", path):\n        pass\n'
-        with self.assertRaises(ValueError):
-            api_route_scan.scan(source)
-
-    def test_every_pattern_it_cannot_read_is_an_error(self):
-        for pattern in (r"a|b", r"a.b", r"a\dc", r"a+", r"a(b", r"a[b"):
-            with self.subTest(pattern), self.assertRaises(ValueError):
-                api_route_scan.expand(pattern)
-
-    def test_expand_handles_optional_and_nested_groups(self):
-        self.assertEqual(sorted(shape for shape, _ in api_route_scan.expand(r"a/(x|y)/b(?:/(c|d))?")),
-                         ["a/x/b", "a/x/b/c", "a/x/b/d", "a/y/b", "a/y/b/c", "a/y/b/d"])
-        self.assertEqual(api_route_scan.expand(r"a/([a-f0-9]{32})"), [("a/{}", ("[a-f0-9]{32}",))])
-        self.assertEqual(api_route_scan.expand(r"a/[0-9]+\.wav"), [("a/{}.wav", ("[0-9]+",))])
+    def test_make_handler_will_not_build_with_a_row_that_nobody_answers(self):
+        extra = api_spec.R("GET", "/api/brand-new", "Service", "Answered by nobody.")
+        with mock.patch.object(api_spec, "ROUTES", [*api_spec.ROUTES, extra]):
+            with self.assertRaisesRegex(routes.RouteError, "GET /api/brand-new"):
+                handler, folder = built_handler()
+                folder.cleanup()
 
 
 class TableTests(unittest.TestCase):

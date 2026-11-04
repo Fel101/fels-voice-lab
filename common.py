@@ -76,9 +76,27 @@ def require_ram(min_gb, what):
                           "Close something heavy (a program with a large model loaded) and retry.")
 
 
-def pick_device(want="auto"):
-    if want == "cpu":
-        return "cpu"
+DEVICES = ("auto", "cpu", "cuda")
+
+
+def pick_device(want="auto", *, nvidia_present=None):
+    """The device the service asks its workers for: "cpu", or "cuda" for a graphics card (NVIDIA, or AMD through a ROCm build
+    of PyTorch, which answers to the same name). "auto" takes runtime.local.json's "device" when it sets one; otherwise a
+    graphics card when this computer has an NVIDIA driver or this environment's PyTorch can see one, and the CPU when not.
+
+    The service's .venv holds no PyTorch, so the NVIDIA driver is what usually decides. A worker whose own PyTorch cannot use
+    the card (the CPU build the installers put in unless told --nvidia) runs on the CPU anyway: see
+    worker_runtime.usable_device."""
+    if want == "auto":
+        want = runtime_setting("device", "auto")
+        if want not in DEVICES:
+            raise ValueError(f'runtime.local.json: "device" must be one of {", ".join(DEVICES)}, not {want!r}.')
+    if want != "auto":
+        return want
+    if nvidia_present is None:
+        from hardware import nvidia_driver_present as nvidia_present
+    if nvidia_present():
+        return "cuda"
     try:
         torch = torch_runtime()
     except ModuleNotFoundError as exc:

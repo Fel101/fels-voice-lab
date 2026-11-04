@@ -99,13 +99,15 @@ class ServerCase(unittest.TestCase):
 
 
 class FakeLab:
-    """A lab folder holding a three-package lock and a small stand-in for the model files, at the real revision."""
+    """A lab folder holding a three-package lock, its GPU swap and a small stand-in for the model files, at the real revision."""
     CONTENTS = {"config.json": b'{"n_token": 178}', "kokoro-v1_0.pth": noise(40_000, 1), "README.md": b"---\nlicense: apache-2.0\n---\n",
                 "voices/af_heart.pt": noise(5_000, 2), "voices/bm_george.pt": noise(5_001, 3), "voices/ef_dora.pt": noise(5_002, 4),
                 "voices/jf_alpha.pt": noise(5_003, 5), "voices/zf_xiaoxiao.pt": noise(5_004, 6)}
     LOCK = ("# a stand-in for requirements/kokoro-cpu.txt\n"
             f"alpha==1.0 --hash=sha256:{HASH}\ntorch==2.12.0 --hash=sha256:{HASH}\n"
             f"en_core_web_sm @ https://example.invalid/en_core_web_sm-3.8.0-py3-none-any.whl --hash=sha256:{HASH}\n")
+    NVIDIA_LOCK = ("# a stand-in for requirements/kokoro-nvidia.txt\n"
+                   f"torch @ https://example.invalid/whl/cu130/torch-2.12.0%2Bcu130-cp312-cp312-win_amd64.whl --hash=sha256:{'cd' * 32}\n")
 
     def __init__(self, folder):
         self.root = Path(folder)
@@ -115,6 +117,7 @@ class FakeLab:
                     "files": [{"path": path, "size": len(data), "sha256": sha(data)} for path, data in self.CONTENTS.items()]}
         (self.root / ik.MANIFEST).write_text(json.dumps(manifest), "utf-8")
         (self.root / ik.LOCK).write_text(self.LOCK, "utf-8")
+        (self.root / ik.NVIDIA_LOCK).write_text(self.NVIDIA_LOCK, "utf-8")
         self.manifest = manifest
 
     def served(self):
@@ -183,11 +186,34 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertEqual(len(urls), 1)
         self.assertTrue(urls[0].startswith("en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/"))
 
-    def test_the_package_list_leaves_the_core_requirements_alone(self):
-        core = {ik.canonical(re.split(r"[=<>]", line)[0]) for line in (ROOT / "requirements" / "core.txt").read_text("utf-8").splitlines()
-                if line.strip() and not line.startswith("#")}
+    def test_the_package_list_repeats_the_core_requirements_at_the_same_versions(self):
+        # The worker runs the lab's own modules in .venv-kokoro, so numpy and soundfile behave as they do in .venv.
+        core = dict(re.split(r"==", line.strip(), maxsplit=1)
+                    for line in (ROOT / "requirements" / "core.txt").read_text("utf-8").splitlines()
+                    if line.strip() and not line.startswith("#"))
+        packages = {item["key"]: item["version"] for item in ik.read_lock(ROOT / ik.LOCK)}
         self.assertIn("numpy", core)
-        self.assertFalse(core & {item["key"] for item in ik.read_lock(ROOT / ik.LOCK)})
+        for name, version in core.items():
+            self.assertEqual(packages.get(ik.canonical(name)), version, name)
+
+    def test_the_catalog_runs_kokoro_in_its_own_environment(self):
+        self.assertEqual(KOKORO_ENTRY["runtime"]["environment"], ik.ENVIRONMENT)
+        self.assertEqual(KOKORO_ENTRY["runtime"]["python"], f"{ik.ENVIRONMENT}/Scripts/python.exe")
+        self.assertEqual(ik.environment_python(ROOT), ROOT / KOKORO_ENTRY["runtime"]["python"])
+        self.assertEqual(engine_checks.REQUIRED_PACKAGES["kokoro"], ("kokoro",))
+
+    def test_the_nvidia_list_swaps_only_torch_for_a_cuda_build_of_the_same_version_from_pytorchs_index(self):
+        cpu = ik.read_lock(ROOT / ik.LOCK)
+        gpu = ik.read_lock(ROOT / ik.NVIDIA_LOCK)
+        self.assertEqual([item["key"] for item in gpu], ["torch"])
+        cpu_torch = next(item for item in cpu if item["key"] == "torch")
+        self.assertEqual(gpu[0]["version"], cpu_torch["version"] + "+cu130")
+        line = ik.lock_lines(ROOT / ik.NVIDIA_LOCK)["torch"]
+        self.assertRegex(line, r"^torch @ https://download\.pytorch\.org/whl/cu130/torch-2\.12\.0%2Bcu130-cp312-cp312-win_amd64\.whl "
+                               r"--hash=sha256:[0-9a-f]{64}$")
+        swapped = ik.pinned_packages(ROOT, nvidia=True)
+        self.assertEqual([item["key"] for item in swapped], [item["key"] for item in cpu])
+        self.assertEqual([item for item in swapped if item["key"] != "torch"], [item for item in cpu if item["key"] != "torch"])
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
         data = (ROOT / "setup-kokoro.bat").read_bytes()
@@ -202,8 +228,10 @@ class ShippedFilesTests(unittest.TestCase):
             last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
             self.assertIn("pause", lines[last_run + 1:], name)
 
-    def test_the_core_setup_points_at_the_installer(self):
-        self.assertIn("setup-kokoro.bat", (ROOT / "tools" / "setup_core.py").read_text("utf-8"))
+    def test_the_first_setup_offers_the_installer(self):
+        from tools import first_setup
+        self.assertEqual(first_setup.MODELS["kokoro"], {"engine": "kokoro", "script": "tools/install_kokoro.py", "nvidia": True})
+        self.assertIn("setup-kokoro.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = (ROOT / "docs" / "SETUP.md").read_text("utf-8")
@@ -228,8 +256,10 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertTrue((ROOT / "tools" / "install_kokoro.py").read_bytes().isascii())
         packages = ik.read_lock(ROOT / ik.LOCK)
         files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, ["all"]))
-        for todo, only in ((len(packages), False), (0, False), (0, True)):
-            text = ik.plan_text(REAL_MANIFEST, packages, todo, files, files, checkpoint_only=only)
+        for todo, only, exists, nvidia in ((len(packages), False, False, False), (3, False, True, False), (0, False, True, False),
+                                           (0, True, True, False), (len(packages), False, False, True)):
+            text = ik.plan_text(REAL_MANIFEST, packages, todo, files, files, checkpoint_only=only, environment_exists=exists,
+                                nvidia=nvidia)
             self.assertTrue(text.isascii())
             self.assertLessEqual(max(len(line) for line in text.splitlines()), 110)
 
@@ -350,7 +380,68 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_a_missing_pip_is_reported(self):
         self.assertEqual(ik.package_problems([], has_pip=True), [])
-        self.assertIn("pip is not installed", ik.package_problems([], has_pip=False)[0])
+        self.assertIn(".venv-kokoro has no pip. Delete the .venv-kokoro folder", ik.package_problems([], has_pip=False)[0])
+
+    def test_the_versions_in_the_engines_environment_are_read_by_its_own_python(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(ik.environment_versions(folder, runner=lambda *a, **k: self.fail("ran without an environment")), {})
+            python = ik.environment_python(folder)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"")
+            calls = []
+
+            def runner(command, **kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0, 'noise\n{"Jinja2": "3.1.6", "torch": "2.12.0"}\n', "")
+
+            self.assertEqual(ik.environment_versions(folder, runner=runner), {"jinja2": "3.1.6", "torch": "2.12.0"})
+            self.assertEqual(calls[0][:3], [str(python), "-I", "-c"])
+            broken = lambda command, **kwargs: subprocess.CompletedProcess(command, 1, "", "ImportError: no encodings")  # noqa: E731
+            with self.assertRaisesRegex(ik.InstallError, r"(?s)\.venv-kokoro is here but its Python does not run.*no encodings"
+                                                         r".*Delete the \.venv-kokoro folder"):
+                ik.environment_versions(folder, runner=broken)
+
+    def test_the_environment_is_made_from_the_python_that_made_dot_venv(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            def runner(command, **kwargs):
+                calls.append((command, kwargs))
+                python = ik.environment_python(folder)
+                python.parent.mkdir(parents=True)
+                python.write_bytes(b"")
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.dict("os.environ", {"__PYVENV_LAUNCHER__": "x", "VIRTUAL_ENV": "y"}):
+                ik.make_environment(folder, runner=runner)
+            command, kwargs = calls[0]
+            self.assertEqual(command, [getattr(sys, "_base_executable", sys.executable), "-m", "venv",
+                                       str(Path(folder) / ".venv-kokoro")])
+            self.assertNotIn("VIRTUAL_ENV", kwargs["env"])
+            self.assertNotIn("__PYVENV_LAUNCHER__", kwargs["env"])
+            with self.assertRaisesRegex(ik.InstallError, "could not make .venv-other"):
+                ik.make_env(folder, ".venv-other", runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 1))
+
+    def test_the_model_files_alone_need_an_environment_that_already_has_kokoro(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIn("there is no .venv-kokoro here", ik.checkpoint_only_problems(folder, {})[0])
+            python = ik.environment_python(folder)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"")
+            self.assertIn("kokoro is not among them", ik.checkpoint_only_problems(folder, {"torch": "2.12.0"})[0])
+            self.assertEqual(ik.checkpoint_only_problems(folder, {"kokoro": "0.9.4"}), [])
+
+    def test_the_nvidia_build_needs_an_nvidia_driver(self):
+        self.assertEqual(ik.nvidia_problems(present=True), [])
+        problem = ik.nvidia_problems(present=False)[0]
+        self.assertIn("no NVIDIA driver", problem)
+        self.assertIn("leave out --nvidia", problem)
+        with mock.patch.dict("os.environ", {"SystemRoot": str(ROOT / "no-such-windows")}):
+            self.assertFalse(ik.nvidia_driver_present())
+
+    def test_a_gpu_list_may_only_swap_packages_the_cpu_list_pins(self):
+        cpu = [{"name": "torch", "key": "torch", "version": "2.12.0", "sha256": HASH}]
+        with self.assertRaisesRegex(ik.InstallError, "swaps torchaudio, which the CPU list does not pin"):
+            ik.swap_packages(cpu, [{"name": "torchaudio", "key": "torchaudio", "version": "2.12.0+cu130", "sha256": HASH}])
 
     def test_a_folder_path_too_long_for_windows_is_refused_unless_long_paths_are_on(self):
         short = Path("C:/voice-lab")
@@ -505,9 +596,12 @@ class CheckpointDownloadTests(ServerCase):
         with mock.patch.object(kokoro_support, "KOKORO_REPO_CACHE", cache):
             self.assertEqual(kokoro_support.kokoro_snapshot_dir(), self.lab.snapshot())
             self.assertEqual(kokoro_support.discover_kokoro_voices(), ["af_heart", "bm_george", "ef_dora"])
-        python = self.base / ".venv" / "Scripts" / "python.exe"
+        python = self.base / ".venv-kokoro" / "Scripts" / "python.exe"
         python.parent.mkdir(parents=True)
         python.write_bytes(b"")
+        report = engine_checks.installation(KOKORO_ENTRY, self.base)
+        self.assertEqual((report["installed"], report["missing"]), (False, ["kokoro (Python package)"]))
+        (self.base / ".venv-kokoro" / "Lib" / "site-packages" / "kokoro-0.9.4.dist-info").mkdir(parents=True)
         report = engine_checks.installation(KOKORO_ENTRY, self.base)
         self.assertEqual((report["installed"], report["missing"]), (True, []))
 
@@ -548,10 +642,13 @@ class CheckpointDownloadTests(ServerCase):
 
 
 class PlanTests(unittest.TestCase):
-    def plan(self, voices=("supported",), todo=89, pending=True, only=False):
+    PACKAGES = len(ik.read_lock(ROOT / ik.LOCK))
+
+    def plan(self, voices=("supported",), todo=None, pending=True, only=False, exists=False, nvidia=False):
         files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, list(voices)))
-        packages = ik.read_lock(ROOT / ik.LOCK)
-        return ik.plan_text(REAL_MANIFEST, packages, todo, files, files if pending else [], checkpoint_only=only)
+        packages = ik.pinned_packages(ROOT, nvidia=nvidia)
+        return ik.plan_text(REAL_MANIFEST, packages, self.PACKAGES if todo is None else todo, files, files if pending else [],
+                            checkpoint_only=only, environment_exists=exists, nvidia=nvidia)
 
     @staticmethod
     def flat(text):
@@ -559,13 +656,26 @@ class PlanTests(unittest.TestCase):
 
     def test_the_plan_says_what_is_installed_where_and_how_much_to_download(self):
         text = self.flat(self.plan())
-        for part in ("Kokoro 82M on the CPU", "89 of 89 to install", "PyTorch for the CPU", "revision f3ff357",
-                     "huggingface.co/hexgrad/Kokoro-82M", "327 MB checkpoint", "41 voices", "Apache-2.0", "SHA-256",
-                     "nothing system-wide", "pip keeps its usual download cache in your user profile", "speech check"):
+        for part in ("Kokoro 82M on the CPU", "First a Python environment of its own, .venv-kokoro, made from the same Python 3.12",
+                     f"{self.PACKAGES} of {self.PACKAGES} to install there", "PyTorch for the CPU",
+                     f"About {ik.mb_text(ik.PACKAGES_DOWNLOAD_MB)} to download and {ik.mb_text(ik.PACKAGES_DISK_MB)} on disk",
+                     "requirements/kokoro-cpu.txt", "revision f3ff357", "huggingface.co/hexgrad/Kokoro-82M", "327 MB checkpoint",
+                     "41 voices", "Apache-2.0", "SHA-256", "(.venv-kokoro, hf-cache and out\\kokoro)", "nothing system-wide",
+                     "pip keeps its usual download cache in your user profile", "speech check"):
             self.assertIn(part, text)
+        self.assertNotIn("NVIDIA", text)
         self.assertIn("28 English voices", self.flat(self.plan(["english"])))
         self.assertIn("and 1 English voice.", self.flat(self.plan(["bm_george"])))
         self.assertIn("and 1 voice.", self.flat(self.plan(["ef_dora"])))
+
+    def test_the_nvidia_plan_names_the_cuda_build_its_size_and_that_it_is_untried(self):
+        text = self.flat(self.plan(nvidia=True))
+        for part in ("Kokoro 82M on an NVIDIA graphics card", "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)",
+                     f"About {ik.mb_text(ik.PACKAGES_DOWNLOAD_MB + ik.NVIDIA_EXTRA_DOWNLOAD_MB)} to download",
+                     "requirements/kokoro-cpu.txt and requirements/kokoro-nvidia.txt", "speaks one sentence, which you can play "
+                     "afterwards, on the graphics card.", "GTX 16 or RTX 20 series card or newer", "driver of version 580",
+                     "hardware report on GitHub"):
+            self.assertIn(part, text)
 
     def test_the_plan_names_the_packages_with_licences_other_than_mit_bsd_or_apache(self):
         text = self.flat(self.plan())
@@ -574,9 +684,10 @@ class PlanTests(unittest.TestCase):
             self.assertIn(part, text)
 
     def test_the_plan_reflects_what_is_already_done(self):
-        self.assertIn("all 89 are already installed", self.flat(self.plan(todo=0)))
+        self.assertIn(f"all {self.PACKAGES} are already installed in .venv-kokoro", self.flat(self.plan(todo=0)))
+        self.assertIn(".venv-kokoro is already here. Python packages: 3 of", self.flat(self.plan(todo=3, exists=True)))
         self.assertIn("Everything is already in place", self.flat(self.plan(pending=False)))
-        self.assertIn("left alone (--checkpoint-only)", self.flat(self.plan(only=True)))
+        self.assertIn("the ones in .venv-kokoro are left alone (--checkpoint-only)", self.flat(self.plan(only=True)))
 
     def test_voices_that_need_more_packages_are_called_out_only_when_chosen(self):
         self.assertNotIn("Misaki", self.plan())
@@ -594,7 +705,7 @@ class InstallPackagesTests(unittest.TestCase):
 
         ik.install_packages(ROOT, runner=runner)
         command, kwargs = calls[0]
-        self.assertEqual(command[:4], [sys.executable, "-m", "pip", "install"])
+        self.assertEqual(command[:4], [str(ROOT / ".venv-kokoro" / "Scripts" / "python.exe"), "-m", "pip", "install"])
         for flag in ("--require-hashes", "--no-deps", "--only-binary=:all:", "--no-input", "--disable-pip-version-check"):
             self.assertIn(flag, command)
         self.assertEqual(Path(command[command.index("-r") + 1]), ROOT / "requirements" / "kokoro-cpu.txt")
@@ -602,13 +713,25 @@ class InstallPackagesTests(unittest.TestCase):
         self.assertNotIn("--index-url", " ".join(command))
         self.assertNotIn("--extra-index-url", " ".join(command))
 
+    def test_for_nvidia_pip_gets_the_cpu_list_with_the_cuda_torch_in_its_place(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            ik.install_packages(lab.root, nvidia=True,
+                                runner=lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0))
+            written = Path(calls[0][calls[0].index("-r") + 1])
+            self.assertEqual(written, lab.root / "out" / "kokoro" / "requirements-nvidia.txt")
+            lines = [line for line in written.read_text("utf-8").splitlines() if not line.startswith("#")]
+        self.assertEqual(lines, [f"alpha==1.0 --hash=sha256:{HASH}", FakeLab.NVIDIA_LOCK.splitlines()[1],
+                                 f"en_core_web_sm @ https://example.invalid/en_core_web_sm-3.8.0-py3-none-any.whl --hash=sha256:{HASH}"])
+
     def test_a_pip_failure_says_to_fix_it_and_run_again(self):
         with self.assertRaisesRegex(ik.InstallError, "pip stopped with exit code 2.*run the installer again"):
             ik.install_packages(ROOT, runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 2))
 
 
 class SpeechCheckTests(unittest.TestCase):
-    def check(self, stdout="", stderr="", code=0, error=None):
+    def check(self, stdout="", stderr="", code=0, error=None, device="cpu"):
         calls = []
 
         def runner(command, **kwargs):
@@ -618,19 +741,26 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return ik.run_speech_check(folder, runner=runner), calls, Path(folder)
+            return ik.run_speech_check(folder, device=device, runner=runner), calls, Path(folder)
 
-    GOOD = '{"voice": "af_heart", "problem": null, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6}'
+    GOOD = ('{"voice": "af_heart", "problem": null, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, '
+            '"torch": "2.12.0+cpu", "device": "cpu"}')
 
-    def test_the_clip_is_made_offline_in_a_fresh_process_and_its_numbers_come_back(self):
+    def test_the_clip_is_made_offline_by_the_new_environment_and_its_numbers_come_back(self):
         result, calls, folder = self.check(stdout="loguru noise\n" + self.GOOD + "\n", stderr="a warning\n")
         command, kwargs = calls[0]
-        self.assertEqual(command[:2], [sys.executable, "-c"])
+        self.assertEqual(command[:2], [str(folder / ".venv-kokoro" / "Scripts" / "python.exe"), "-c"])
         self.assertIn("engine_checks.smoke_request", command[2])
-        self.assertEqual(command[3:], [str(folder), str(folder / "out" / "kokoro" / "install-check.wav")])
+        self.assertEqual(command[3:], [str(folder), str(folder / "out" / "kokoro" / "install-check.wav"), "cpu"])
         self.assertEqual((kwargs["env"]["HF_HUB_OFFLINE"], kwargs["env"]["TRANSFORMERS_OFFLINE"]), ("1", "1"))
-        self.assertEqual(result["voice"], "af_heart")
+        self.assertEqual((result["voice"], result["torch"]), ("af_heart", "2.12.0+cpu"))
         self.assertEqual(result["wav"], folder / "out" / "kokoro" / "install-check.wav")
+
+    def test_on_the_graphics_card_the_check_asks_for_cuda_and_a_cuda_failure_points_at_the_driver(self):
+        _result, calls, _folder = self.check(stdout=self.GOOD, device="cuda")
+        self.assertEqual(calls[0][0][-1], "cuda")
+        with self.assertRaisesRegex(ik.InstallError, r"(?s)CUDA driver version is insufficient.*version 580 or later.*without --nvidia"):
+            self.check(stderr="RuntimeError: CUDA driver version is insufficient for CUDA runtime version", code=1, device="cuda")
 
     def test_a_crash_shows_the_end_of_the_output(self):
         with self.assertRaisesRegex(ik.InstallError, r"in place, but Kokoro did not load or speak:\n(.*\n)*last line"):
@@ -654,7 +784,7 @@ class SpeechCheckTests(unittest.TestCase):
         self.assertEqual(ik.last_json_line('{"a": 1}\nWARNING {oops\n{broken\n'), {"a": 1})
         self.assertIsNone(ik.last_json_line("nothing\nuseful\n"))
 
-    def test_the_check_script_writes_the_clip_and_reports_it(self):
+    def test_the_check_script_writes_the_clip_makes_the_default_reference_and_reports_both(self):
         with tempfile.TemporaryDirectory() as folder:
             lab, wav = Path(folder) / "lab", Path(folder) / "clip.wav"
             lab.mkdir()
@@ -665,23 +795,31 @@ class SpeechCheckTests(unittest.TestCase):
                 "        assert device == 'cpu'\n"
                 "    def speak(self, text, voice='af_heart'):\n"
                 "        t = np.arange(24000) / 24000\n"
-                "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 0.25}\n", "utf-8")
+                "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 0.25}\n"
+                "def ensure_reference(kokoro):\n"
+                "    assert isinstance(kokoro, Kokoro), 'the model already loaded speaks the reference'\n"
+                "    open(__file__ + '.reference', 'w').close()\n", "utf-8")
             (lab / "engine_checks.py").write_text(
                 "def smoke_request(engine):\n    return {'engine': engine, 'text': 'check', 'voice': 'af_heart'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
-            done = subprocess.run([sys.executable, "-c", ik.SPEECH_CHECK, str(lab), str(wav)], capture_output=True, text=True,
-                                  timeout=120)
+            (lab / "kokoro_support.py").write_text("def discover_kokoro_voices():\n    return ['af_heart']\n", "utf-8")
+            (lab / "torch.py").write_text("__version__ = '2.12.0+cpu'\n", "utf-8")
+            done = subprocess.run([sys.executable, "-c", ik.SPEECH_CHECK, str(lab), str(wav), "cpu"], capture_output=True,
+                                  text=True, timeout=120)
             self.assertEqual(done.returncode, 0, done.stderr)
             result = ik.last_json_line(done.stdout)
             self.assertEqual((result["voice"], result["problem"], result["total_seconds"]), ("af_heart", None, 0.25))
+            self.assertEqual((result["torch"], result["device"]), ("2.12.0+cpu", "cpu"))
             self.assertAlmostEqual(result["audio_seconds"], 1.0)
             samples, rate = sf.read(str(wav))
             self.assertEqual((rate, len(samples)), (24000, 24000))
+            self.assertTrue((lab / "engines.py.reference").is_file())
 
     def test_the_names_the_check_script_uses_exist_in_the_lab(self):
         import engines
         self.assertTrue(callable(engine_checks.smoke_request) and callable(engine_checks.audible))
-        self.assertTrue(hasattr(engines, "Kokoro"))
+        self.assertTrue(hasattr(engines, "Kokoro") and callable(engines.ensure_reference))
+        self.assertTrue(callable(kokoro_support.discover_kokoro_voices))
         compile(ik.SPEECH_CHECK, "<speech check>", "exec")
 
 
@@ -692,11 +830,13 @@ class ReceiptTests(unittest.TestCase):
             (lab.root / "out" / "kokoro").mkdir(parents=True)
             packages = ik.read_lock(lab.root / ik.LOCK)
             files = ik.checkpoint_files(lab.manifest, ik.choose_voices(lab.manifest, ["bm_george"]))
-            check = {"voice": "af_heart", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": "x"}
+            check = {"voice": "af_heart", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": "x",
+                     "torch": "2.12.0+cu130", "device": "cuda"}
             receipt = json.loads(ik.write_receipt(lab.root, lab.manifest, packages, files, check).read_text("utf-8"))
             self.assertEqual(receipt["lock_sha256"], sha((lab.root / ik.LOCK).read_bytes()))
         self.assertEqual((receipt["schema"], receipt["packages_pinned"], receipt["revision"], receipt["license"]),
                          (1, 3, REAL_MANIFEST["revision"], "Apache-2.0"))
+        self.assertEqual((receipt["environment"], receipt["torch"], receipt["device"]), (".venv-kokoro", "2.12.0+cu130", "cuda"))
         self.assertEqual(receipt["files"], ["config.json", "kokoro-v1_0.pth", "README.md", "voices/bm_george.pt"])
         self.assertEqual(receipt["checkpoint_bytes"], sum(len(FakeLab.CONTENTS[path]) for path in receipt["files"]))
         self.assertEqual(receipt["speech_check"], {"voice": "af_heart", "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6})
@@ -705,24 +845,32 @@ class ReceiptTests(unittest.TestCase):
 
 
 class RunTests(ServerCase):
-    """The whole install with pip, the model host and Kokoro replaced by stand-ins."""
+    """The whole install with venv, pip, the model host and Kokoro replaced by stand-ins."""
     LOCKED = {"alpha": "1.0", "torch": "2.12.0", "en-core-web-sm": "3.8.0"}
 
     def setUp(self):
         super().setUp()
         self.lab = FakeLab(self.base)
         self.server.files = self.lab.served()
-        self.installed = {"numpy": "1.26.4"}
+        self.installed = {}
         self.calls = []
+        self.pip_options = []
+        self.check_devices = []
         wav = self.base / "out" / "kokoro" / "install-check.wav"
         self.check = {"voice": "af_heart", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": wav}
 
+        def venv(root, **kwargs):
+            self.calls.append("venv")
+            self.make_environment({"pip": "26.2.2"})
+
         def pip(root, **kwargs):
             self.calls.append("pip")
+            self.pip_options.append(kwargs)
             self.installed.update(self.LOCKED)
 
         def speak(root, **kwargs):
             self.calls.append("check")
+            self.check_devices.append(kwargs.get("device"))
             wav.parent.mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -730,16 +878,25 @@ class RunTests(ServerCase):
             patch = mock.patch.object(ik, target, value)
             patch.start()
             self.addCleanup(patch.stop)
-        for name, replacement in (("installed_versions", lambda: dict(self.installed)), ("install_packages", pip),
-                                  ("run_speech_check", speak), ("interpreter_problems", lambda root: []),
-                                  ("long_path_problems", lambda root: []), ("space_problems", lambda root, need: []),
-                                  ("package_problems", lambda different: [f"{item['name']} is {have}" for item, have in different])):
+        for name, replacement in (("environment_versions", lambda root, **kwargs: dict(self.installed)),
+                                  ("make_environment", venv), ("install_packages", pip), ("run_speech_check", speak),
+                                  ("interpreter_problems", lambda root: []), ("long_path_problems", lambda root: []),
+                                  ("space_problems", lambda root, need: []), ("nvidia_problems", lambda: []),
+                                  ("package_problems", lambda different, **kwargs: [f"{item['name']} is {have}"
+                                                                                    for item, have in different])):
             patch = mock.patch.object(ik, name, replacement)
             patch.start()
             self.addCleanup(patch.stop)
 
+    def make_environment(self, packages):
+        python = self.base / ".venv-kokoro" / "Scripts" / "python.exe"
+        python.parent.mkdir(parents=True, exist_ok=True)
+        python.write_bytes(b"")
+        self.installed.update(packages)
+
     def args(self, **options):
-        return argparse.Namespace(**{"yes": False, "dry_run": False, "voices": ["supported"], "checkpoint_only": False, **options})
+        return argparse.Namespace(**{"yes": False, "dry_run": False, "voices": ["supported"], "checkpoint_only": False,
+                                     "nvidia": False, **options})
 
     def run_main(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -751,6 +908,7 @@ class RunTests(ServerCase):
         self.assertEqual(self.calls, [])
         self.assertFalse((self.base / "hf-cache").exists())
         self.assertFalse((self.base / "out").exists())
+        self.assertFalse((self.base / ".venv-kokoro").exists())
 
     def test_a_dry_run_shows_the_plan_and_changes_nothing(self):
         status, out, err = self.run_main("--dry-run")
@@ -779,13 +937,15 @@ class RunTests(ServerCase):
         self.assertEqual(ik.run(self.args(), say=lines.append, ask=closed, interactive=True), 1)
         self.untouched()
         self.assertEqual(ik.run(self.args(), say=lines.append, ask=lambda prompt: " Yes ", interactive=True), 0)
-        self.assertEqual(self.calls, ["pip", "check"])
+        self.assertEqual(self.calls, ["venv", "pip", "check"])
 
     def test_the_whole_install_runs_in_order_and_ends_with_a_receipt(self):
         status, out, err = self.run_main("--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, ["pip", "check"])
-        self.assertIn("Installing the Python packages", out)
+        self.assertEqual(self.calls, ["venv", "pip", "check"])
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": False}], ["cpu"]))
+        self.assertIn("Making .venv-kokoro:", out)
+        self.assertIn("Installing the Python packages into .venv-kokoro", out)
         self.assertIn("[1/6] config.json", out)
         self.assertIn("Kokoro is installed and spoke a test sentence (2.6 s of audio in 1.1 s after a 4 s load).", out)
         self.assertIn("Listen to it: out\\kokoro\\install-check.wav", out)
@@ -796,29 +956,50 @@ class RunTests(ServerCase):
         self.assertEqual(len(receipt["files"]), 6)
         self.assertTrue((self.lab.snapshot() / "voices" / "af_heart.pt").is_file())
 
+    def test_on_request_the_cuda_build_is_installed_and_checked_on_the_graphics_card(self):
+        status, out, err = self.run_main("--yes", "--nvidia")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": True}], ["cuda"]))
+        self.assertIn("Kokoro 82M on an NVIDIA graphics card", out)
+        self.assertIn("spoke a test sentence on the graphics card", out)
+
+    def test_the_cuda_build_is_refused_on_a_computer_without_an_nvidia_driver(self):
+        with mock.patch.object(ik, "nvidia_problems", lambda: ["no NVIDIA driver here"]):
+            status, _out, err = self.run_main("--yes", "--nvidia")
+        self.assertEqual(status, 1)
+        self.assertIn("no NVIDIA driver here", err)
+        self.untouched()
+
     def test_packages_that_are_already_installed_are_left_alone(self):
-        self.installed.update(self.LOCKED)
+        self.make_environment(self.LOCKED)
         status, out, _err = self.run_main("--yes")
         self.assertEqual(status, 0)
         self.assertEqual(self.calls, ["check"])
-        self.assertIn("all 3 are already installed", out.replace("\n     ", " "))
+        self.assertIn("all 3 are already installed in .venv-kokoro", " ".join(out.split()))
 
     def test_a_different_version_of_a_pinned_package_stops_everything_before_any_change(self):
-        self.installed["torch"] = "2.12.0+rocm7.14.0"
+        self.make_environment({"torch": "2.12.0+rocm7.14.0"})
         status, out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
         self.assertIn("This computer cannot take the plan yet:", err)
         self.assertIn("torch is 2.12.0+rocm7.14.0", err)
-        self.untouched()
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.base / "hf-cache").exists())
         self.assertEqual(self.server.requests, [])
 
     def test_the_checkpoint_alone_can_be_added_to_an_environment_that_has_its_own_packages(self):
-        self.installed["torch"] = "2.12.0+rocm7.14.0"
+        self.make_environment({"torch": "2.12.0+rocm7.14.0", "kokoro": "0.9.4"})
         status, out, _err = self.run_main("--yes", "--checkpoint-only")
         self.assertEqual(status, 0)
         self.assertEqual(self.calls, ["check"])
         self.assertIn("left alone (--checkpoint-only)", out)
         self.assertTrue((self.lab.snapshot() / "kokoro-v1_0.pth").is_file())
+
+    def test_the_checkpoint_alone_is_refused_when_there_is_no_environment_to_add_it_to(self):
+        status, _out, err = self.run_main("--yes", "--checkpoint-only")
+        self.assertEqual(status, 1)
+        self.assertIn("there is no .venv-kokoro here", " ".join(err.split()))
+        self.untouched()
 
     def test_a_computer_that_fails_a_check_is_told_why_and_nothing_is_changed(self):
         with mock.patch.object(ik, "interpreter_problems", lambda root: ["Run it with this folder's own Python."]), \
@@ -856,7 +1037,7 @@ class RunTests(ServerCase):
         self.assertFalse((self.base / "out" / "kokoro" / "installation.json").exists())
 
     def test_a_second_run_downloads_and_installs_nothing_new(self):
-        self.run_main("--yes")
+        self.assertEqual(self.run_main("--yes")[0], 0)
         asked, self.calls[:] = len(self.server.requests), []
         status, _out, _err = self.run_main("--yes")
         self.assertEqual(status, 0)

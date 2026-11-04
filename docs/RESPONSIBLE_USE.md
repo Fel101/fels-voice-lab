@@ -18,10 +18,20 @@ remain even though this application is MIT. Re-cloning through another engine
 does not remove a reference's restrictions. Keep Chatterbox's watermark and
 Fish attribution where applicable. See [the license inventory](../THIRD_PARTY_NOTICES.md).
 
-This repository deliberately includes no voice recordings or generated examples.
-If publishing demos later, use newly consented recordings or appropriately
-licensed synthetic presets, review all accompanying terms, and disclose
+This repository includes no voice recordings. Its one generated example,
+`docs/demo/kokoro-demo.mp3`, uses only Kokoro's own Apache-2.0 preset voices, and its
+manifest says how it was made. If you publish demos, use newly consented recordings or
+appropriately licensed synthetic presets, review all accompanying terms, and disclose
 synthetic speech where required. Do not upload private consent records as demos.
+
+Every audio file the Lab makes is labelled inside it as AI-generated speech: its comment
+tag names the model and the Lab and carries the IPTC digital source type for media made by
+a trained model. Your own reference recordings are never labelled. Keep the label when you
+publish. A tag is easy to strip, so it does not replace telling listeners, and it is not a
+watermark; Chatterbox's own Perth watermark is a separate mark inside the sound. Rules for
+labelling synthetic audio vary: the EU AI Act, for example, has transparency obligations
+for AI-generated audio (Article 50) that may apply to you or to what you publish. Check
+what applies where you are.
 
 This page identifies publishing risks and license obligations; it does not
 certify compliance with every jurisdiction, third-party claim, or future use.

@@ -30,9 +30,10 @@ from scipy.signal import resample_poly
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import ffmpeg_tools  # noqa: E402  finding FFmpeg and what this build can encode
+import synthetic_label  # noqa: E402  the AI-generated speech label every delivered file carries
 import word_timing  # noqa: E402  pure helpers only: phrase grouping and offsets; the exporter never writes Cast data
 from fit import fit_status  # noqa: E402  slot status only; the stretch itself is not applied by the exporter
-from lipsync import check_track, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
+from lipsync import check_track, prime_for_takes, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
 from output_license import license_profile  # noqa: E402
 from scene_selection import validate_selected_take  # noqa: E402
 from cast_store import RetirementReader
@@ -139,8 +140,8 @@ def filename_from_template(template, *, line_id, character_name, take_id):
 def probe_media(path, ffprobe):
     command = [
         ffprobe, "-v", "error", "-select_streams", "a:0",
-        "-show_entries", "stream=codec_name,sample_rate,channels,duration",
-        "-show_entries", "format=duration", "-of", "json", str(path),
+        "-show_entries", "stream=codec_name,sample_rate,channels,duration:stream_tags=comment",
+        "-show_entries", "format=duration:format_tags=comment", "-of", "json", str(path),
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode:
@@ -149,11 +150,14 @@ def probe_media(path, ffprobe):
         data = json.loads(result.stdout)
         stream = data["streams"][0]
         duration = stream.get("duration") or data.get("format", {}).get("duration")
+        # The label sits in the container's tags, except in Ogg, where Vorbis keeps it on the stream.
+        comment = (data.get("format", {}).get("tags") or {}).get("comment") or (stream.get("tags") or {}).get("comment")
         return {
             "codec": stream.get("codec_name"),
             "sample_rate": int(stream["sample_rate"]),
             "channels": int(stream["channels"]),
             "duration_seconds": float(duration),
+            "comment": comment,
         }
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise ExportError(f"ffprobe returned incomplete audio metadata for {path}.") from exc
@@ -370,6 +374,7 @@ def transcode(ffmpeg, source, destination, fmt, args, source_probe):
     if args.output_rate:
         command.extend(["-ar", str(args.output_rate)])
     command.extend(codec)
+    command.extend(synthetic_label.ffmpeg_args())
     muxer = {"ogg": "ogg", "mp3": "mp3", "m4a": "ipod"}.get(fmt)
     if muxer:
         command.extend(["-f", muxer])
@@ -412,7 +417,7 @@ def resample_audio(audio, source_rate, target_rate):
 
 def write_pcm16(path, audio, sample_rate):
     path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(path, audio, sample_rate, format="WAV", subtype="PCM_16")
+    synthetic_label.write_wav(path, audio, sample_rate)
     if not path.is_file() or path.stat().st_size == 0:
         raise ExportError(f"Could not write PCM WAV: {path}")
 
@@ -750,6 +755,8 @@ def export_package(args):
     take_original_paths = {}
     try:
         char_folders = {}
+        # The phoneme rules for aligned English takes live in Kokoro's environment: one call there covers every line.
+        prime_for_takes([take for item in selected for take in item["takes"]])
         for item in selected:
             line = item["line"]
             take = item["takes"][0]
@@ -1003,6 +1010,8 @@ def export_package(args):
                 "loudness_true_peak_dbtp": args.loudness_true_peak,
                 "limiter_dbfs": args.limiter_dbfs,
             },
+            # Every delivered file and the scene mix carry this comment (synthetic_label.py); verify checks it is there.
+            "synthetic_label": synthetic_label.comment(),
             "timing": {
                 "source": "sample-count durations from decoded selected segments, validated with ffprobe, plus scene pauses",
                 "caption_granularity": "word phrases where every take of a line has stored word times; one caption per line otherwise",
@@ -1128,6 +1137,9 @@ def verify_export(args):
                                       f"{record['output_path']} ({media['codec']})")
                 if abs(media["duration_seconds"] - record["duration_seconds"]) > 0.03:
                     raise ExportError(f"Duration changed after export: {record['output_path']}")
+                # A package exported before files were labelled says nothing about a label, and is checked without one.
+                if manifest.get("synthetic_label") and not synthetic_label.is_labelled(media["comment"]):
+                    raise ExportError(f"The AI-generated speech label is missing from {record['output_path']}.")
         if record["asset_type"].startswith(("original_take_wav", "line_deliverable_", "scene_mix_")):
             if not record.get("license"):
                 raise ExportError(f"Audio asset is missing license/provenance classification: {record['output_path']}")
@@ -1161,7 +1173,8 @@ def verify_export(args):
     print(f"Selected line/segment takes reproduced: {len(take_ids)}")
     print(f"Assets hash-checked: {checked}; original take WAVs match Cast and copied hashes.")
     print(f"Subtitles/transcript verified: {len(line_ids)} line-level cues; no word timing.")
-    print("Deliverable codecs (WAV, FLAC, Ogg, MP3, AAC) and durations were verified with ffprobe where present.")
+    print("Deliverable codecs (WAV, FLAC, Ogg, MP3, AAC), durations and the AI-generated speech label were verified with "
+          "ffprobe where present.")
 
 
 def add_processing_arguments(parser):

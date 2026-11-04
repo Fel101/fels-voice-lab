@@ -353,7 +353,7 @@ Turn text into audio. `speak` and `performance` answer with the finished WAV fil
 | POST | [`/api/speak`](#post-api-speak) | Speak text with one engine and answer with the finished WAV file. |
 | POST | [`/api/stream`](#post-api-stream) | Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made. |
 | POST | [`/api/performance`](#post-api-performance) | Speak a line as a Cast voice and save it as a take. |
-| POST | [`/api/kokoro/phonemize`](#post-api-kokoro-phonemize) | Show the phonemes Kokoro would speak for a text, without loading a model. |
+| POST | [`/api/kokoro/phonemize`](#post-api-kokoro-phonemize) | Show the phonemes Kokoro would speak for a text. |
 
 <a id="post-api-speak"></a>
 
@@ -470,7 +470,7 @@ See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and 
 
 #### `POST /api/kokoro/phonemize`
 
-Show the phonemes Kokoro would speak for a text, without loading a model.
+Show the phonemes Kokoro would speak for a text.
 
 | Request field | Type | Meaning |
 |---|---|---|
@@ -478,6 +478,8 @@ Show the phonemes Kokoro would speak for a text, without loading a model.
 | `language` | string | Default `English`. |
 
 **Answer:** `200`, JSON. `language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.
+
+Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot take is refused with a 400 before anything loads.
 
 ### Cast
 
@@ -1754,10 +1756,11 @@ These serve the Lab's own pages. They can change at any time and are not part of
 
 ## Keeping this page true
 
-Every route `serve.py` answers has a row in `api_spec.py`, either documented or marked `internal=True`.
-`tests/test_api_docs.py` reads `serve.py` and fails when it answers a route that has no row, when a row names a route it no
-longer answers, when a path parameter's pattern differs from the one `serve.py` matches, and when `openapi.json` or the
-reference above is not what the table gives. After you change the table, write both again:
+Every route `serve.py` answers is a row in `api_spec.py`, either documented or marked `internal=True`, and the service's
+dispatch is built from that table (`routes.py`): `serve.py` registers one function for each row and will not start with a row
+that no function answers, or a function for a route with no row. A path parameter is matched with the pattern the table gives
+it. `tests/test_api_docs.py` checks the same, that a request made from each row's examples reaches that row, and that
+`openapi.json` and the reference above are what the table gives. After you change the table, write both again:
 
 ```powershell
 .venv\Scripts\python.exe tools\build_api_docs.py

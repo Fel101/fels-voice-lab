@@ -9,7 +9,10 @@ import wave
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from tools.dataset_workbench import DatasetError, PROJECT_ROOT, inspect_wav, main, prepare_dataset
+from unittest import mock
+
+from tools import dataset_workbench
+from tools.dataset_workbench import DatasetError, inspect_wav, main, prepare_dataset
 
 
 def write_wave(path: Path, frequency: int, *, samples: int = 8000, rate: int = 16000, amplitude: int = 9000) -> None:
@@ -111,8 +114,12 @@ class DatasetWorkbenchTests(unittest.TestCase):
             prepare_dataset(self.write_manifest(), self.audio_root, self.output_root)
 
     def test_cli_prepare_smoke_uses_scoped_output_and_prints_version(self) -> None:
-        allowed_output = PROJECT_ROOT / "out" / "datasets"
-        allowed_output.mkdir(parents=True, exist_ok=True)
+        # The CLI only writes under <lab>/out/datasets. A temporary lab folder stands in for the real one, so the run leaves
+        # the real out/ folder alone.
+        lab = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.enterContext(mock.patch.object(dataset_workbench, "PROJECT_ROOT", lab))
+        allowed_output = lab / "out" / "datasets"
+        allowed_output.mkdir(parents=True)
         with tempfile.TemporaryDirectory(dir=allowed_output) as output_root:
             stdout = io.StringIO()
             with redirect_stdout(stdout):

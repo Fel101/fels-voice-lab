@@ -38,15 +38,23 @@ shell uses pywebview (BSD-3-Clause), Python.NET (MIT), and Microsoft Edge WebVie
 (Microsoft terms). They retain their own dependency licenses. This repository
 does not redistribute Python, FFmpeg, WebView2 or a frozen executable.
 
-`tools/install_kokoro.py` installs the 89 packages pinned in `requirements/kokoro-cpu.txt`
-(PyTorch, Transformers, spaCy and their dependencies) into `.venv`. Nearly all are MIT, BSD
+Every model installer makes an environment of its own and installs into it the core packages above at the same versions, with
+the model's own.
+
+`tools/install_kokoro.py` installs the 96 packages pinned in `requirements/kokoro-cpu.txt`
+(PyTorch, Transformers, spaCy and their dependencies) into an environment of its own, `.venv-kokoro`. Nearly all are MIT, BSD
 or Apache. phonemizer-fork and the espeak-ng library inside espeakng-loader are GPL-3.0,
 num2words is LGPL, and certifi and tqdm are MPL-2.0. They are fetched from PyPI and GitHub
 on the user's computer, not copied into this repository.
 
-`tools/install_phonon.py` installs the one package pinned in `requirements/phonon.txt` into `.venv`: the `ptts` runtime
-(MIT OR Apache-2.0), a Rust extension that needs only NumPy. It is fetched from PyPI on the user's computer, not copied
-into this repository.
+`tools/install_phonon.py` installs the 8 packages pinned in `requirements/phonon.txt` into an environment of its own,
+`.venv-phonon`: the `ptts` runtime (MIT OR Apache-2.0), a Rust extension that needs only NumPy, and the core packages. They are
+fetched from PyPI on the user's computer, not copied into this repository.
+
+With `--nvidia`, `tools/install_kokoro.py` and `tools/install_chatterbox.py` take the CUDA builds of PyTorch (and, for
+Chatterbox, torchaudio) pinned in `requirements/kokoro-nvidia.txt` and `requirements/chatterbox-nvidia.txt` from PyTorch's own
+index instead of the CPU builds. Those wheels carry NVIDIA's CUDA libraries, which come under NVIDIA's licence terms. Like the
+other packages they are fetched on the user's computer at their request and are not part of this repository.
 
 `tools/install_chatterbox.py` installs the 73 packages pinned in `requirements/chatterbox-cpu.txt` into an environment of
 its own, `.venv-chatterbox`: `chatterbox-tts` (MIT, Resemble AI, with S3Gen decoder files that keep Apache-2.0 headers from
@@ -70,8 +78,9 @@ and enabled components; do not bundle an arbitrary executable with this project.
 | Breeze TTS 2 and derived checkpoints | [BreezeBlue Research and Non-Commercial License 1.1](https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE), including self-hosted output restrictions. Its Apache source license does **not** make the weights or those outputs commercially unrestricted. |
 | Drama 3, including Q4 conversion | [Fish Audio Community License 1.0](https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE). Commercial use is conditional, including combined affiliate revenue below USD 500,000; hosted speech/voice-cloning services need a separate agreement. Preserve “Built with Fish Audio” attribution and derivative notices. The model is not OSI open source. |
 
-Weights, native runtimes, recordings, training data and generated samples are
-not part of this repository. The Drama installer obtains the pinned
+Weights, native runtimes, recordings and training data are not part of this
+repository. The one generated sample, `docs/demo/kokoro-demo.mp3`, was spoken by Kokoro 82M in its own
+preset voices (Apache-2.0); `docs/demo/kokoro-demo.json` records how it was made. The Drama installer obtains the pinned
 third-party runtime, model and their notices separately after explicit invocation, and
 the Kokoro installer does the same for the pinned Kokoro checkpoint, its model card and its voices, the Phonon installer
 for the pinned Phonon model and the 37 preset voices with their catalog, and the Chatterbox installer for the pinned

@@ -17,6 +17,7 @@ import soundfile as sf
 from evaluation_diagnostics import analyze_audio
 from evaluation_store import digest_bytes, digest_json
 from runtime_folders import COMPARISONS_DIR
+import synthetic_label
 
 
 TAKE_ID = re.compile(r"[a-f0-9]{32}\Z")
@@ -39,7 +40,8 @@ def _listening_copy(content, destination):
             target_gain = 10 ** ((-23.0 - measured) / 20)
     ceiling = 10 ** (-1.0 / 20)
     gain = min(target_gain, 10 ** (12.0 / 20), ceiling / peak if peak else 1.0)
-    sf.write(destination, np.clip(audio * gain, -ceiling, ceiling), rate, subtype="PCM_16")
+    # Labelled as AI-generated, but with no engine named: these copies are for blind listening.
+    synthetic_label.write_wav(destination, np.clip(audio * gain, -ceiling, ceiling), rate)
     return {
         "method": "per-clip EBU R128 gain match with -1 dBFS sample-peak ceiling",
         "target_lufs": -23.0, "input_lufs": input_lufs,

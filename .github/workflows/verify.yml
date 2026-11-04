@@ -17,6 +17,7 @@ jobs:
         run: |
           python -m pip install -r requirements/lint.txt
           ruff check .
+          ruff format --check .
       - name: Install core only
         run: |
           python -m venv .venv

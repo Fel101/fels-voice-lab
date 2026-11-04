@@ -9,11 +9,34 @@ Two timing sources feed the same track format:
   to rough phoneme lengths. The phoneme times are estimates.
 
 Aligned English takes get their phonemes from misaki's grapheme-to-phoneme rules (Apache-2.0, installed with Kokoro),
-which use the same symbols as Kokoro's input. misaki is optional: without it an aligned take gets no track and the
-reason says so, while Kokoro takes are unaffected. A take with neither Kokoro's times nor English word times gets no track.
+which use the same symbols as Kokoro's input. misaki lives in Kokoro's own environment, .venv-kokoro, so the exporter, which runs
+in the service's .venv, asks that environment's Python for the phonemes of every text it needs in one go
+(prime_english_phonemes). misaki is optional: without Kokoro installed an aligned take gets no track and the reason says so,
+while Kokoro takes are unaffected. A take with neither Kokoro's times nor English word times gets no track.
 """
 
+import json
+import os
+import subprocess
+from pathlib import Path
+
 from kokoro_timing import FRAME_SECONDS
+
+# The Python of Kokoro's environment, which holds misaki and the spaCy model its English rules use.
+KOKORO_PYTHON = Path(__file__).resolve().parent / ".venv-kokoro" / "Scripts" / "python.exe"
+G2P_TIMEOUT = 300
+G2P_KEPT = 2000     # texts whose phonemes are kept between calls; the store starts again when it would hold more
+G2P_SCRIPT = """
+import json, sys
+from misaki import en
+g2p = en.G2P(trf=False, british=False)
+found = []
+for text in json.loads(sys.stdin.read()):
+    _phonemes, tokens = g2p(text)
+    found.append([[token.text, list(token.phonemes or "")] for token in tokens if any(c.isalnum() for c in token.text)])
+print(json.dumps(found))
+"""
+_KNOWN = {}
 
 FORMAT = "voice-lab-lipsync-v1"
 VISEMES = ("rest", "closed", "teeth", "tongue_th", "tongue", "sibilant", "velar",
@@ -75,11 +98,50 @@ def weight(symbol):
     return 1.0
 
 
+def prime_english_phonemes(texts, *, python=None, runner=subprocess.run):
+    """Work out the English phonemes of many texts at once in Kokoro's environment, when misaki cannot be imported here (the
+    service's .venv does not hold it). english_word_phonemes then answers from what this keeps. Nothing happens when misaki is
+    importable here or Kokoro is not installed; a run that fails leaves the texts out, and english_word_phonemes says so."""
+    wanted = sorted({text for text in texts if isinstance(text, str) and text not in _KNOWN})
+    if not wanted:
+        return
+    try:
+        from misaki import en  # noqa: F401
+        return
+    except ImportError:
+        pass
+    python = Path(python or KOKORO_PYTHON)
+    if not python.is_file():
+        return
+    try:
+        done = runner([str(python), "-I", "-c", G2P_SCRIPT], input=json.dumps(wanted), capture_output=True, text=True,
+                      encoding="utf-8", errors="replace", timeout=G2P_TIMEOUT,
+                      env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
+                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        found = json.loads((done.stdout or "").strip().splitlines()[-1]) if done.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        found = None
+    if not isinstance(found, list) or len(found) != len(wanted):
+        return
+    if len(_KNOWN) + len(wanted) > G2P_KEPT:
+        _KNOWN.clear()
+    for text, words in zip(wanted, found):
+        _KNOWN[text] = [(word, list(symbols)) for word, symbols in words]
+
+
 def english_word_phonemes(text):
-    """[(word, [phoneme symbols])] for the text's words, using misaki's English rules. Only tokens with letters or
-    digits count, which matches the words the aligner returns."""
+    """[(word, [phoneme symbols])] for the text's words, using misaki's English rules: here when misaki can be imported, or from
+    Kokoro's environment (see prime_english_phonemes). Only tokens with letters or digits count, which matches the words the
+    aligner returns. Raises ImportError when neither has misaki."""
     global _G2P
-    from misaki import en
+    try:
+        from misaki import en
+    except ImportError:
+        if text not in _KNOWN:
+            prime_english_phonemes([text])
+        if text in _KNOWN:
+            return [(word, list(symbols)) for word, symbols in _KNOWN[text]]
+        raise
     if _G2P is None:
         _G2P = en.G2P(trf=False, british=False)
     _phonemes, tokens = _G2P(text)
@@ -186,9 +248,20 @@ def take_phoneme_spans(take):
     words = [(word["start"], word["end"]) for word in record["words"]]
     try:
         phonemes = english_word_phonemes(record["text"])
-    except ImportError as exc:  # misaki comes with Kokoro; an environment without it still exports, minus this track
-        raise ValueError("the English phoneme rules (misaki) are not installed in this environment") from exc
+    except ImportError as exc:  # misaki comes with Kokoro; a Lab without Kokoro still exports, minus this track
+        raise ValueError("the English phoneme rules (misaki) come with Kokoro, which is not installed") from exc
     return DISTRIBUTED, distribute_words(words, phonemes)
+
+
+def prime_for_takes(takes):
+    """Ask Kokoro's environment once for the phonemes of every aligned English take among `takes` that has no Kokoro times,
+    so building the tracks one line at a time starts no further process."""
+    texts = []
+    for take in takes:
+        record = take.get("word_timings")
+        if not take.get("phoneme_timings") and record and record.get("language") == "en" and not record.get("error"):
+            texts.append(record.get("text"))
+    prime_english_phonemes(texts)
 
 
 def track_for_takes(takes, *, trim_start=0.0, trim_end=0.0):

@@ -1,0 +1,61 @@
+name: Hardware report
+description: Tell us how the Lab ran on your computer, especially on a graphics card, so others know what to expect.
+title: "Hardware report: "
+labels: ["hardware report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The Lab has been checked on one Windows 11 computer, on its CPU. A report from yours helps fill in
+        [the hardware table](https://github.com/Fel101/fels-voice-lab/blob/main/docs/TROUBLESHOOTING.md#what-runs-on-which-computer),
+        whether things worked or not. NVIDIA reports are especially welcome: the `--nvidia` installs have not been tried
+        on an NVIDIA card yet.
+
+        Leave out anything private: no recordings, scripts, transcripts or names of real people's voices.
+  - type: textarea
+    id: report
+    attributes:
+      label: The Lab's own report
+      description: >-
+        In the Lab, open System & backups, press "Copy report for a bug report" and paste it here. It names the version,
+        Python, Windows, the processor, graphics card and memory, and which models passed their test on which device and how
+        fast. It holds no scripts, transcripts, voice names or recordings, and your home folder reads as ~.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: gpu
+    attributes:
+      label: Graphics card the models ran on
+      options:
+        - None (CPU only)
+        - NVIDIA
+        - AMD
+        - Intel
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: install
+    attributes:
+      label: How the models were installed
+      description: >-
+        For example "setup.bat, recommended models" or "setup-kokoro.bat --nvidia". Add the NVIDIA driver version if you
+        used --nvidia (nvidia-smi prints it).
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened
+      description: >-
+        Which models you tried, whether Test passed on Models & features, roughly how long a line took, and anything that
+        failed. For a failure, paste the installer's last lines or the error on the model's card.
+    validations:
+      required: true
+  - type: textarea
+    id: receipts
+    attributes:
+      label: Installer receipts (optional)
+      description: >-
+        Each guided install leaves a small installation.json in out\kokoro, out\phonon or out\chatterbox. It names the
+        packages, the PyTorch build and how long the speech check took. Paste the ones you have.
+      render: json

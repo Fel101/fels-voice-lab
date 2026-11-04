@@ -18,11 +18,16 @@ ROOT = Path(__file__).resolve().parent
 
 
 class DesktopBackend:
-    def __init__(self, *, root=ROOT, state_root=None, python=None, device="auto"):
+    """The service one desktop window owns. Its session folder goes in `sessions` (out/desktop by default), and
+    `service_args` are added to the service's command line; the tests use both to keep a run out of the real out/ folder."""
+
+    def __init__(self, *, root=ROOT, state_root=None, python=None, device="auto", sessions=None, service_args=()):
         self.root = Path(root).resolve()
         self.state_root = Path(state_root or root).resolve()
         self.python = Path(python or self.root / ".venv/Scripts/python.exe").resolve()
         self.device = device
+        self.sessions = Path(sessions or self.root / "out/desktop")
+        self.service_args = [str(arg) for arg in service_args]
         self.process = None
         self.job = None
         self.log = None
@@ -34,9 +39,8 @@ class DesktopBackend:
         if not self.python.is_file():
             raise RuntimeError("The backend Python is missing. Run setup.bat first.")
         from desktop_process import OwnedJob
-        logs = self.root / "out/desktop"
-        logs.mkdir(parents=True, exist_ok=True)
-        self.session = Path(tempfile.mkdtemp(prefix="session-", dir=logs))
+        self.sessions.mkdir(parents=True, exist_ok=True)
+        self.session = Path(tempfile.mkdtemp(prefix="session-", dir=self.sessions))
         (self.session / "request.json").write_text(json.dumps({"nonce": self.nonce}), "utf-8")
         self.log = (self.session / "backend.log").open("w", encoding="utf-8")
         self.job = OwnedJob()
@@ -45,7 +49,7 @@ class DesktopBackend:
         command = [str(self.python), "-X", "utf8", "-u", "-c", gate,
                    str(self.root / "serve.py"), "--port", "0", "--device", self.device,
                    "--state-root", str(self.state_root), "--desktop-session", str(self.session),
-                   "--parent-pid", str(os.getpid())]
+                   "--parent-pid", str(os.getpid()), *self.service_args]
         try:
             self.process = subprocess.Popen(command, cwd=self.root, stdin=subprocess.PIPE,
                 stdout=self.log, stderr=subprocess.STDOUT,
@@ -106,7 +110,7 @@ def show_error(message):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-root", type=Path)
-    parser.add_argument("--device", choices=("auto", "cpu"), default="auto")
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--smoke-seconds", type=float, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if os.name != "nt":

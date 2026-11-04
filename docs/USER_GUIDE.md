@@ -305,7 +305,9 @@ of either and read as out of date once.
 Press **Test** on a card to run that test. The first test loads the model, which can
 take a minute or more, and other model requests are refused until it finishes. A failed test shows its
 reason. Results are saved per device in `data/engines/checks.json` under the state root, so a
-test on the GPU does not mark the CPU as usable.
+test on the GPU does not mark the CPU as usable. When the service uses a graphics card but a model's own PyTorch is a CPU
+build, that model runs on the CPU, and its card says **Speaks now on CPU** and why. Each model has a Python environment of
+its own, so installing one never marks another's test out of date.
 
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
@@ -388,9 +390,11 @@ is in it, and the name of the service log. It says whether FFmpeg is found and w
 this build can write; **Check FFmpeg again** looks again after you install it, with no restart. It shows the free space
 on the library's drive and the program's drive, flagging either under 5 GB, and counts the models by state.
 
-**Copy report for a bug report** puts the same facts on the clipboard as plain text, and **Show the report** shows exactly
-what will be copied. The text holds no scripts, transcripts, names of characters or voices, or recordings, and your home
-folder reads as `~`. Read it before you share it: a path can still carry a folder name you chose.
+**Copy report for a bug report** puts the same facts on the clipboard as plain text, with the processor, the graphics cards
+and total memory, where each model's last test ran and how fast, and the speed of recent clips. **Show the report** shows
+exactly what will be copied. The text holds no scripts, transcripts, names of characters or voices, or recordings, and your
+home folder reads as `~`. Read it before you share it: a path can still carry a folder name you chose. The
+[hardware report](https://github.com/Fel101/fels-voice-lab/issues/new?template=hardware_report.yml) on GitHub asks for it.
 
 **Measure folders** adds the size of each library folder (and whether a backup holds it) and of the backups, voice
 conversions, logs, worker scratch folders and desktop sessions. It waits for the button because it walks those folders,

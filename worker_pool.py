@@ -10,6 +10,7 @@ from pathlib import Path
 from worker_process import (WorkerCancelled, WorkerError, WorkerProcess, WorkerRequestError,
                             WorkerTimeout, WorkerUnavailable)
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
+from kokoro_support import resolve_kokoro_language
 from phonon_support import PHONON_ENGINE_ID, check_request as check_phonon_request
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
 from local_ownership import LocalOwnership
@@ -340,6 +341,28 @@ class EnginePool:
                                             store=self.check_store, probe=self.install_probe,
                                             fingerprint_of=self.fingerprint_probe, ram_needs=self.ram_needs,
                                             ram=self.ram_probe() if self.ram_probe else None)
+
+    def phonemize(self, text, language="English"):
+        """The phonemes Kokoro would speak for a text. Kokoro's language rules live in its own environment, so its worker
+        answers, and it is loaded first when it is not already. A text or language it cannot take is refused here, before
+        any worker starts."""
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("Text must contain at least one non-whitespace character.")
+        if len(text) > 1200:
+            raise ValueError("Keep it under 1200 characters.")
+        resolve_kokoro_language(language, [])
+        self._acquire_job()
+        try:
+            self.last_used = time.time()
+            worker = self._ensure_loaded_locked("kokoro")
+            return worker.call("phonemize", text=text, language=language)
+        except (WorkerUnavailable, WorkerTimeout):
+            record = self.workers.get("kokoro")
+            if record:
+                self._discard_locked("kokoro", record["worker"])
+            raise
+        finally:
+            self._gpu_job.release()
 
     def prepare_reference(self, key, path, *, exaggeration=0.5, profile=None,
                           reference_text="", xvec_only=False):

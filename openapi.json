@@ -960,10 +960,11 @@
     "/api/kokoro/phonemize": {
       "post": {
         "operationId": "post_api_kokoro_phonemize",
-        "summary": "Show the phonemes Kokoro would speak for a text, without loading a model.",
+        "summary": "Show the phonemes Kokoro would speak for a text.",
         "tags": [
           "Speaking"
         ],
+        "description": "Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot take is refused with a 400 before anything loads.",
         "requestBody": {
           "required": true,
           "content": {

@@ -58,6 +58,38 @@ class EnsureReferenceTests(unittest.TestCase):
         info = sf.info(str(self.clip))
         self.assertEqual((info.samplerate, info.frames), (24000, 2400))
 
+    def test_a_kokoro_that_is_already_loaded_speaks_it_and_no_second_one_is_built(self):
+        with mock.patch.object(engines, "build_engine", side_effect=AssertionError("built a second Kokoro")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            engines.ensure_reference(FakeKokoro())
+        self.assertEqual(sf.info(str(self.clip)).frames, 2400)
+
+
+class KokoroWorkerReferenceTests(unittest.TestCase):
+    """Kokoro has .venv-kokoro to itself, so its own worker makes the default reference the cloning checks clone."""
+
+    def make(self, voices, ensure):
+        from worker_runtime import EngineWorkerRuntime
+        model = FakeKokoro()
+        with mock.patch("kokoro_support.discover_kokoro_voices", return_value=voices), \
+                mock.patch.object(engines, "ensure_reference", ensure), contextlib.redirect_stdout(io.StringIO()) as printed:
+            EngineWorkerRuntime._make_default_reference(model)
+        return model, printed.getvalue()
+
+    def test_the_loaded_model_speaks_the_clip(self):
+        ensure = mock.Mock()
+        model, _printed = self.make(["af_heart", "bm_george"], ensure)
+        ensure.assert_called_once_with(model)
+
+    def test_without_the_af_heart_voice_nothing_is_made(self):
+        ensure = mock.Mock()
+        self.make(["bm_george"], ensure)
+        ensure.assert_not_called()
+
+    def test_a_failure_is_printed_and_the_load_goes_on(self):
+        _model, printed = self.make(["af_heart"], mock.Mock(side_effect=OSError("disk full")))
+        self.assertIn("The default reference clip was not made: OSError: disk full", printed)
+
 
 if __name__ == "__main__":
     unittest.main()

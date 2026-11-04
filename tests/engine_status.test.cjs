@@ -79,6 +79,19 @@ test('state text names the device and keeps install and conversion states apart'
   assert.equal(c.engineStateText({state: 'not_installed'}, 'cpu', job()), 'Installing…');
 });
 
+test('a model whose PyTorch cannot use the graphics card is said to speak on the CPU, and why', () => {
+  const {context: c} = harness();
+  const fellBack = {state: 'usable', check: {status: 'passed', checked_at: '2026-11-03T10:00:00+00:00', total_s: 0.8,
+    audio_seconds: 2.7, ran_on: 'cpu'}};
+  assert.equal(c.engineStateText(fellBack, 'cuda'), 'Speaks now on CPU');
+  assert.equal(c.engineDetailText(fellBack, 'cuda'),
+    "Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio, on the CPU: this model's PyTorch cannot use the graphics card.");
+  const onCard = {...fellBack, check: {...fellBack.check, ran_on: 'cuda'}};
+  assert.equal(c.engineStateText(onCard, 'cuda'), 'Speaks now on GPU');
+  assert.equal(c.engineDetailText(onCard, 'cuda'), 'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio.');
+  assert.equal(c.engineStateText({...fellBack, state: 'check_failed'}, 'cuda'), 'Test failed on CPU');
+});
+
 test('detail text lists what is missing and what the last test measured', () => {
   const {context: c} = harness();
   assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing: ['.venv/python.exe', 'hf/snapshot']}}, 'cpu'),

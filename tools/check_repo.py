@@ -7,6 +7,7 @@ not ignored), or every file under the folder when it is not a Git checkout. It n
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import posixpath
 import re
@@ -23,6 +24,10 @@ FORBIDDEN_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus", 
                       ".bin", ".sqlite3", ".db", ".log", ".exe", ".dll", ".zip", ".7z"}
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif"}
 IMAGE_FOLDERS = ("assets/", "docs/")
+# The one kind of audio the repository may hold: a demo the Lab made from a model's preset voices, in docs/demo, beside a
+# manifest (the same name, .json) that records its SHA-256 and says no person's recording was used. Anything else is refused.
+DEMO_FOLDER = "docs/demo/"
+DEMO_SUFFIXES = {".mp3"}
 PRIVATE_FOLDERS = {"out", "data", "reference", "hf-cache", "dist", "build"}
 LARGEST_BYTES = 2 * 1024 * 1024
 RULES = {
@@ -82,6 +87,21 @@ def dead_links(root, shipped):
     return findings
 
 
+def declared_demo(root, name):
+    """Whether a published file is a synthetic demo that its manifest vouches for: in docs/demo, an MP3 whose manifest names it,
+    matches its SHA-256 and states that it is synthetic."""
+    path = Path(root) / name
+    if not name.startswith(DEMO_FOLDER) or path.suffix.lower() not in DEMO_SUFFIXES:
+        return False
+    try:
+        manifest = json.loads(path.with_suffix(".json").read_text("utf-8"))
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except (OSError, ValueError):
+        return False
+    return (isinstance(manifest, dict) and manifest.get("file") == path.name and manifest.get("sha256") == digest
+            and str(manifest.get("label", "")).startswith("AI-generated speech:") and bool(manifest.get("synthetic")))
+
+
 def audit(root=ROOT, deny=()):
     """The published file names and what is wrong with them. `deny` lists words that must not appear in any text file;
     a finding says which entry of `deny` matched (its position), never the word."""
@@ -96,7 +116,9 @@ def audit(root=ROOT, deny=()):
         suffix = path.suffix.lower()
         if any(part in PRIVATE_FOLDERS or part.startswith(".venv") for part in Path(name).parts[:-1]):
             findings.append({"path": name, "rule": "private_folder"})
-        if (suffix in FORBIDDEN_SUFFIXES or name.endswith(".local.json")
+        if declared_demo(root, name):
+            pass
+        elif (suffix in FORBIDDEN_SUFFIXES or name.endswith(".local.json")
                 or path.name == ".env" or (path.name.startswith(".env.") and path.name != ".env.example")):
             findings.append({"path": name, "rule": "private_or_binary_file"})
         elif suffix in IMAGE_SUFFIXES and not name.startswith(IMAGE_FOLDERS):

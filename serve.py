@@ -12,7 +12,6 @@ import base64
 from datetime import datetime
 import functools
 import hashlib
-import io
 import json
 import os
 import re
@@ -23,16 +22,18 @@ import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs as parse_drama_query
+from urllib.parse import parse_qs, quote, urlparse
 
-from common import LAB, OUT, free_ram_gb, pick_device, ram_report, require_ram
+from common import DEVICES, LAB, OUT, free_ram_gb, pick_device, ram_report, require_ram
 from ram_needs import MIN_FREE_RAM_GB
 
 import soundfile as sf
 
 import api_spec
+from routes import Router
 import housekeeping
 import library_backup
+import synthetic_label
 import system_report
 from app_version import APP_NAME, VERSION
 from housekeeping import run_startup_sweep
@@ -53,13 +54,11 @@ from evaluation_cast import import_cast_takes
 from evaluation_suites import list_suites
 from ui_preferences import UiPreferences
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio, save_designed_reference
-from kokoro_support import (discover_kokoro_voices, kokoro_languages,
-                            normalize_kokoro_voices, phonemize_kokoro)
+from kokoro_support import discover_kokoro_voices, kokoro_languages, normalize_kokoro_voices
 from phonon_support import PHONON_ENGINE_ID, discover_phonon_voices, identity_options as phonon_identity_options
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from performance_settings import DEFAULTS, effective_settings, performance_controls
 from language_matrix import unscreened_languages
-from urllib.parse import quote
 
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
 # The Lab's pages. Another website may open them in a tab, and may make no other request (Handler._local_only).
@@ -243,6 +242,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 from drama3_lab_studio import create
                 drama_box.append(create(engines,cast))
             return drama_box[0]
+    router = Router()  # the rows of api_spec.ROUTES, each answered by a function below the class
+
     class Handler(BaseHTTPRequestHandler):
         _request_id = None
         _status = 0
@@ -621,263 +622,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         def do_GET(self):
             if not self._local_only():
                 return self._json(403, {"error": "local requests only"})
-            parsed = urlparse(self.path)
-            path = parsed.path
-            if path == '/theme.js':
-                return self._send(200, (LAB / 'theme.js').read_bytes(), 'text/javascript; charset=utf-8')
-            if path == '/voice_workflows.js':
-                return self._send(200, (LAB / 'voice_workflows.js').read_bytes(), 'text/javascript; charset=utf-8')
-            if path == '/voice_library.js':
-                return self._send(200, (LAB / 'voice_library.js').read_bytes(), 'text/javascript; charset=utf-8')
-            if path == '/api/preferences':
-                return self._json(200, preferences.get())
-            if path == '/drama3-studio.js':
-                return self._send(200,(LAB/'drama3_studio.js').read_bytes(),'text/javascript; charset=utf-8')
-            if path.lstrip('/') in PAGE_SCRIPTS:
-                return self._send(200, (LAB / path.lstrip('/')).read_bytes(), 'text/javascript; charset=utf-8')
-            if path.startswith('/api/drama3/'):
-                try:
-                    from drama3_production import capabilities
-                    studio=drama();suffix=path[len('/api/drama3/'):]
-                    if suffix=='info':return self._json(200,{**capabilities(),'sources':studio.sources(),'jobs':studio.list()})
-                    match=re.fullmatch(r'jobs/([a-f0-9]{32})(?:/(audio|metadata|package))?',suffix)
-                    if not match:return self._json(404,{'error':'Drama endpoint not found'})
-                    if match.group(2):
-                        data,ctype=studio.artifact(*match.groups())
-                        return self._send(200,data,ctype,{'Content-Disposition':'inline' if match.group(2)=='audio' else 'attachment; filename=drama-take.'+('zip' if match.group(2)=='package' else 'json')})
-                    return self._json(200,studio.get(match.group(1),int(parse_drama_query(parsed.query).get('offset',['0'])[0])))
-                except KeyError as exc:return self._json(404,{'error':str(exc)})
-                except (ValueError,RuntimeError) as exc:return self._json(400,{'error':str(exc)})
-            if path in ("/", "/index.html"):
-                self._send(200, preferences.render(PAGE), "text/html; charset=utf-8")
-            elif path in ("/compare", "/compare.html"):
-                self._send(200, preferences.render(COMPARE_PAGE), "text/html; charset=utf-8")
-            elif path == "/api/info":
-                self._json(200, {"device": engines.device, "loaded": engines.loaded,
-                                 "voices": discover_kokoro_voices(), "kokoro_languages": kokoro_languages(),
-                                 "phonon_voices": discover_phonon_voices(),
-                                 "free_ram_gb": round(free_ram_gb(), 1)})
-            elif path == "/api/catalog":
-                self._json(200, engines.catalog)
-            elif path == "/api/performance/settings":
-                schemas = []
-                for key, entry in engines.api_entries.items():
-                    if key in DEFAULTS:
-                        schemas.append(performance_schema(key, entry))
-                self._json(200, {"engines": schemas, "unscreened_languages": unscreened_by_engine(engines.api_entries)})
-            elif path == "/api/evaluations/suites":
-                self._json(200, list_suites())
-            elif path == "/api/evaluations":
-                self._json(200, {"runs": evaluations.list_runs()})
-            elif path == "/api/evaluations/blind-sessions":
-                self._json(200, {"sessions": evaluations.list_blind_sessions()})
-            elif re.fullmatch(r"/api/evaluations/runs/[A-Za-z0-9_-]{1,80}", path):
-                try:
-                    self._json(200, {"run": evaluations.get_run(path.rsplit("/", 1)[1])})
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/evaluations/blind-sessions/[a-f0-9]{32}", path):
-                try:
-                    self._json(200, {"session": evaluations.get_blind_session(path.rsplit("/", 1)[1])})
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/evaluations/blind-audio/[a-f0-9]{32}", path):
-                try:
-                    self._send(200, evaluations.get_blind_audio_path(path.rsplit("/", 1)[1]).read_bytes(), "audio/wav")
-                except (KeyError, FileNotFoundError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/evaluations/items/[a-f0-9]{32}", path):
-                try:
-                    self._json(200, {"item": evaluations.get_item(path.rsplit("/", 1)[1])})
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-            elif path == "/api/cast":
-                self._json(200, {"schema_version": 1, "characters": cast.list_cast()})
-            elif path == "/api/scenes":
-                self._json(200, {"schema_version": 1, "scenes": scenes.list_scenes()})
-            elif path == "/api/exports":
-                from urllib.parse import parse_qs
-                # ?recheck=1 asks FFmpeg again, for a page whose user has just installed it.
-                recheck = parse_qs(parsed.query).get("recheck") == ["1"]
-                self._json(200, {"exports": export_panel.list_exports(scenes.root),
-                                 "ffmpeg": export_panel.ffmpeg_report(refresh=recheck)})
-            elif path == "/api/system":
-                from urllib.parse import parse_qs
-                recheck = parse_qs(parsed.query).get("recheck") == ["1"]
-                report = system_report.build(
-                    app=APP_NAME, version=VERSION, state_root=library_root, out_dir=OUT, device=engines.device,
-                    ffmpeg=export_panel.ffmpeg_report(refresh=recheck), engine_status=engines.engine_status(),
-                    log_path=getattr(log, "path", None), free_ram=free_ram_gb())
-                report["diagnostics"] = system_report.diagnostics_text(report)
-                self._json(200, report)
-            elif path == "/api/system/storage":
-                self._json(200, system_report.storage(library_root, OUT))
-            elif path == "/api/system/backups":
-                self._json(200, {"folder": str(backups_folder), "backups": library_backup.list_backups(backups_folder),
-                                 "plan": library_backup.plan(library_root), "task": backup_task.status(),
-                                 "suggested_folder": library_backup.suggested_folder(library_root)})
-            elif path == "/api/system/task":
-                self._json(200, {"task": backup_task.status()})
-            elif re.fullmatch(r"/api/takes/[a-f0-9]{32}/voice-match", path):
-                try:
-                    self._json(200, {"voice_match": speaker_similarity.voice_match(cast, path.split("/")[3])})
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-                except FileNotFoundError as exc:
-                    self._json(503, {"error": str(exc)})
-            elif path == "/api/scenes/template.json":
-                self._json(200, json_template())
-            elif path == "/api/scenes/template.csv":
-                self._send(200, csv_template(), "text/csv; charset=utf-8",
-                           {"Content-Disposition": "attachment; filename=voice-lab-scene-template.csv"})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}", path):
-                try:
-                    self._json(200, {"scene": scenes.get_scene(path.rsplit("/", 1)[1])})
-                except (ValueError, KeyError, RuntimeError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}/export\.json", path):
-                scene_id = path.split("/")[3]
-                try:
-                    self._send(200, scenes.export_json(scene_id), "application/json; charset=utf-8",
-                               {"Content-Disposition": f"attachment; filename=scene-{scene_id}.json"})
-                except (ValueError, KeyError, RuntimeError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}/export\.csv", path):
-                scene_id = path.split("/")[3]
-                try:
-                    self._send(200, scenes.export_csv(scene_id), "text/csv; charset=utf-8",
-                               {"Content-Disposition": f"attachment; filename=scene-{scene_id}.csv"})
-                except (ValueError, KeyError, RuntimeError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}/previews/[A-Za-z0-9._-]+\.wav", path):
-                # Preview audio lives in the scene store's own output folder, which need not be the project's out/.
-                folder = (scenes.output_root / path.split("/")[3]).resolve()
-                target = (folder / path.rsplit("/", 1)[1]).resolve()
-                if target.parent == folder and target.is_file():
-                    self._send(200, target.read_bytes(), "audio/wav")
-                else:
-                    self._json(404, {"error": "Scene preview not found."})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}/segments", path):
-                from urllib.parse import parse_qs
-                scene_id = path.split("/")[3]
-                line_id = (parse_qs(parsed.query).get("line_id") or [None])[0]
-                try:
-                    self._json(200, {"segments": scenes.segment_preview(scene_id, line_id)})
-                except (ValueError, KeyError, RuntimeError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/[a-f0-9]{32}/jobs", path):
-                scene_id = path.split("/")[3]
-                try:
-                    self._json(200, {"jobs": scenes.list_jobs(scene_id)})
-                except (ValueError, KeyError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/jobs/[a-f0-9]{32}", path):
-                try:
-                    self._json(200, {"job": scenes.get_job(path.rsplit("/", 1)[1])})
-                except (ValueError, KeyError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/scenes/jobs/[a-f0-9]{32}/manifest\.json", path):
-                job_id = path.split("/")[4]
-                try:
-                    valid, info = scenes.verify_job_manifest(job_id)
-                    if not valid:
-                        self._json(409, {"error": "Batch manifest checksum mismatch.", "details": info})
-                    else:
-                        self._send(200, Path(info["path"]).read_bytes(), "application/json; charset=utf-8")
-                except (ValueError, KeyError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif path == "/api/pronunciations":
-                from urllib.parse import parse_qs
-                params = parse_qs(parsed.query)
-                character_id = (params.get("character_id") or [None])[0]
-                self._json(200, {"pronunciations": cast.list_pronunciations(character_id)})
-            elif path == "/api/takes":
-                from urllib.parse import parse_qs
-                params = parse_qs(parsed.query)
-                identity_id = (params.get("identity_id") or [None])[0]
-                line_id = (params.get("line_id") or [None])[0]
-                self._json(200, {"takes": cast.list_takes(identity_id, line_id)})
-            elif re.fullmatch(r"/api/takes/[a-f0-9]{32}", path):
-                try:
-                    self._json(200, {"take": cast.get_take(path.split("/")[3])})
-                except (ValueError, KeyError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/takes/[a-f0-9]{32}/waveform", path):
-                params = parse_drama_query(parsed.query)
-                try:
-                    self._json(200, cast.take_waveform(path.split("/")[3], (params.get("points") or ["600"])[0]))
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-                except ValueError as exc:
-                    self._json(400, {"error": str(exc)})
-            elif path == "/api/references":
-                self._json(200, {"references": list_references(LAB, cast)})
-            elif path == "/api/voice-library":
-                params = parse_drama_query(parsed.query)
-                self._json(200, list_voice_library(LAB, cast, include_retired=(params.get("include_retired") or [""])[0] == "1"))
-            elif path == "/api/purges/preview":
-                params = parse_drama_query(parsed.query)
-                try:
-                    self._json(200, cast.purge_preview((params.get("kind") or [None])[0], (params.get("id") or [None])[0]))
-                except KeyError as exc:
-                    self._json(404, {"error": str(exc)})
-                except ValueError as exc:
-                    self._json(400, {"error": str(exc)})
-            elif path == "/api/reference-audio":
-                try:
-                    params = parse_drama_query(parsed.query)
-                    requested = (params.get("path") or [None])[0]
-                    target, content_type = resolve_reference_audio(requested, LAB, cast)
-                    self._send(200, target.read_bytes(), content_type)
-                except (OSError, RuntimeError, ValueError):
-                    self._json(404, {"error": "Reference audio is unavailable or outside this Lab's reference storage."})
-            elif path == "/api/conversion/sources":
-                self._json(200, {"sources": _conversion_asset_rows(cast, target=False)})
-            elif path == "/api/conversion/targets":
-                self._json(200, {"targets": _conversion_asset_rows(cast, target=True)})
-            elif re.fullmatch(r"/api/references/[a-f0-9]{32}/audio", path):
-                ref_id = path.split("/")[3]
-                try:
-                    target = cast.get_media_path("reference", ref_id)
-                    self._send(200, target.read_bytes(), "audio/wav", {"X-Reference-Version": ref_id})
-                except (ValueError, KeyError, FileNotFoundError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/references/[a-f0-9]{32}/source", path):
-                ref_id = path.split("/")[3]
-                try:
-                    target = cast.get_media_path("reference_source", ref_id)
-                    content_type = {".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg", ".mp3": "audio/mpeg",
-                                    ".m4a": "audio/mp4"}.get(target.suffix.lower(), "application/octet-stream")
-                    self._send(200, target.read_bytes(), content_type, {"X-Reference-Version": ref_id})
-                except (ValueError, KeyError, FileNotFoundError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif re.fullmatch(r"/api/takes/[a-f0-9]{32}/audio", path):
-                take_id = path.split("/")[3]
-                try:
-                    target = cast.get_media_path("take", take_id)
-                    self._send(200, target.read_bytes(), "audio/wav", {"X-Take-Id": take_id})
-                except (ValueError, KeyError, FileNotFoundError) as exc:
-                    self._json(404, {"error": str(exc)})
-            elif path == "/api/health":
-                self._json(200, {**engines.health(), "version": VERSION})
-            elif path == "/api/openapi.json":
-                self._json(200, api_spec.build_openapi())
-            elif path == "/api/engines/status":
-                self._json(200, {**engines.engine_status(), "install": installer.snapshot()})
-            elif path.startswith("/out/"):  # files the Lab wrote to its out folder, such as a converted voice
-                parts = path[5:].split("/")
-                # Plain names only. An empty or ".." part, a drive or a backslash could name something outside out/, and
-                # //server/share/x.wav would have Windows contact that server before the check below could refuse it.
-                if any(part in ("", ".", "..") or "\\" in part or ":" in part for part in parts):
-                    return self._json(404, {"error": "not found"})
-                target = OUT.joinpath(*parts).resolve()
-                ctype = {".wav": "audio/wav", ".json": "application/json"}.get(target.suffix)
-                if ctype and OUT.resolve() in target.parents and target.is_file():
-                    self._send(200, target.read_bytes(), ctype)
-                else:
-                    self._json(404, {"error": "not found"})
-            else:
-                self._json(404, {"error": "not found"})
+            return self._dispatch("GET")
 
         @answer_unexpected_errors
         def do_POST(self):
@@ -886,620 +631,1020 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 # anything bigger than a request may be is left unread rather than waited for.
                 self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
                 return self._json(403, {"error": "local requests only"})
+            return self._dispatch("POST")
+
+        def _dispatch(self, method):
+            """Answer with the handler that routes.py finds for the request among the rows of api_spec.ROUTES, or with a 404.
+
+            A POST's JSON body is read here, except for the routes that take a recording's bytes, which read their own. What a
+            handler raises and does not answer itself is answered here the same way for every route: a body that is too big is
+            413, a thing that does not exist 404, a request the Lab cannot take 400, and a worker's error keeps its own status."""
             parsed = urlparse(self.path)
             path = parsed.path
-            preview = re.fullmatch(r"/api/identities/([a-f0-9]{32})/references/preview", path)
-            if preview:
-                try:
-                    body = self._read_body(MAX_UPLOAD_BYTES)
-                    encoded = self.headers.get("X-Reference-Metadata", "")
-                    metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-                    if not isinstance(metadata, dict):
-                        raise ValueError("Reference metadata must be an object.")
-                    audio, metrics = cast.preview_reference(
-                        preview.group(1), metadata.get("filename"), body, edits=metadata.get("edits"))
-                    quality = json.dumps(metrics["quality"], separators=(",", ":")).encode("ascii")
-                    headers = {"X-Reference-Duration": f"{metrics['duration_seconds']:.3f}",
-                               "X-Reference-Sample-Rate": str(metrics["sample_rate"]),
-                               "X-Reference-RMS": f"{metrics['rms_dbfs']:.1f}",
-                               "X-Reference-Quality": base64.urlsafe_b64encode(quality).decode("ascii")}
-                    return self._send(200, audio, "audio/wav", headers)
-                except OverflowError as exc:
-                    return self._json(413, {"error": str(exc)})
-                except KeyError as exc:
-                    return self._json(404, {"error": str(exc)})
-                except (ValueError, RuntimeError, json.JSONDecodeError) as exc:
-                    return self._json(400, {"error": str(exc)})
-            upload = re.fullmatch(r"/api/identities/([a-f0-9]{32})/references", path)
-            if upload:
-                try:
-                    body = self._read_body(MAX_UPLOAD_BYTES)
-                    encoded = self.headers.get("X-Reference-Metadata", "")
-                    metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-                    if not isinstance(metadata, dict):
-                        raise ValueError("Reference metadata must be an object.")
-                    saved = cast.add_reference(upload.group(1), metadata.get("filename"), body,
-                                               transcript=metadata.get("transcript", ""),
-                                               origin=metadata.get("origin", ""),
-                                               allowed_use=metadata.get("allowed_use", ""),
-                                               edits=metadata.get("edits"))
-                    return self._json(201, {"reference": saved})
-                except OverflowError as exc:
-                    return self._json(413, {"error": str(exc)})
-                except KeyError as exc:
-                    return self._json(404, {"error": str(exc)})
-                except (ValueError, RuntimeError, json.JSONDecodeError) as exc:
-                    return self._json(400, {"error": str(exc)})
-            try:
-                scene_request = path == "/api/scenes" or path == "/api/scenes/import" or path.startswith("/api/scenes/")
-                req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_request else MAX_REQUEST_BYTES)
-                if path == "/api/preferences":
-                    try:
-                        return self._json(200, preferences.save(req))
-                    except OSError:
-                        return self._json(500, {"error": "Could not save appearance preferences."})
-                if path == "/api/exports/preview":
-                    return self._json(200, export_panel.run(scenes.root, req, dry_run=True))
-                if path == "/api/exports":
-                    try:
-                        return self._json(201, export_panel.run(scenes.root, req))
-                    except export_panel.ExportBusy as exc:
-                        return self._json(409, {"error": str(exc)})
-                export_verify = re.fullmatch(r"/api/exports/([A-Za-z0-9][A-Za-z0-9._-]{0,89})/verify", path)
-                if export_verify:
-                    return self._json(200, export_panel.verify(scenes.root, export_verify.group(1)))
-                transcript_draft = re.fullmatch(r"/api/references/([a-f0-9]{32})/transcript-suggestion", path)
-                if transcript_draft:
-                    # A draft only: nothing is saved or approved until the user checks and saves the text.
-                    try:
-                        audio = cast.get_media_path("reference", transcript_draft.group(1))
-                        return self._json(200, {"suggestion": transcript_suggest.suggest(audio)})
-                    except KeyError as exc:
-                        return self._json(404, {"error": str(exc)})
-                    except FileNotFoundError as exc:
-                        return self._json(404, {"error": str(exc)})
-                    except transcript_suggest.TranscriptBusy as exc:
-                        return self._json(409, {"error": str(exc)})
-                    except transcript_suggest.TranscriptUnavailable as exc:
-                        return self._json(503, {"error": str(exc)})
-                    except RuntimeError as exc:
-                        return self._json(500, {"error": str(exc)})
-                if path == "/api/system/backups":
-                    include = req.get("include", list(library_backup.OPTIONAL))
-                    if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
-                        raise ValueError("include must be a list of section names.")
-                    library_backup.chosen_sections(include)  # an unknown name is refused now, not after the thread starts
-                    return self._start_task("backup", "Backing up the library", logged(
-                        "backup", lambda progress: library_backup.create(
-                            library_root, backups_folder, include=include, app=APP_NAME, version=VERSION, progress=progress),
-                        lambda result: f"{result['name']}, {result['files']} files, {result['bytes']} bytes"))
-                if path == "/api/system/backups/verify":
-                    source = library_backup.backup_path(backups_folder, req.get("name"))
-                    return self._start_task("check", f"Checking {source.name}", logged(
-                        "check", lambda progress: library_backup.verify(source, progress=progress),
-                        lambda result: f"{result['name']} {'passed' if result['ok'] else 'did not pass'}"))
-                if path == "/api/system/backups/restore":
-                    source = library_backup.backup_path(backups_folder, req.get("name"))
-                    target = library_backup.restore_target(library_root, req.get("folder"))
-                    return self._start_task("restore", f"Restoring {source.name}", logged(
-                        "restore", lambda progress: {**library_backup.restore(source, target, progress=progress),
-                                                     "folder": target.name},
-                        lambda result: f"{result['folder']}, {result['files']} files"))
-                if path == "/api/system/use-library":
-                    return self._json(200, library_backup.use_library(
-                        APP_ROOT, library_backup.restore_target(library_root, req.get("folder"))))
-                if path == "/api/system/cleanup":
-                    log_file = getattr(log, "path", None)
-                    result = housekeeping.apply(housekeeping.plan(OUT, keep=[log_file] if log_file else []), OUT)
-                    log.event(f"cleanup on request removed {result['removed']} items ({result['bytes']} bytes)"
-                              + (f"; {len(result['errors'])} could not be removed" if result["errors"] else ""))
-                    return self._json(200, result)
-                if path == '/api/drama3/jobs':
-                    return self._json(202,{'job':drama().start(req)})
-                drama_cancel=re.fullmatch(r'/api/drama3/jobs/([a-f0-9]{32})/cancel',path)
-                if drama_cancel:return self._json(200,{'job':drama().cancel(drama_cancel.group(1))})
-            except OverflowError as exc:
-                return self._json(413, {"error": str(exc)})
-            except ValueError as exc:
-                return self._json(400, {"error": str(exc)})
-            except KeyError as exc:  # such as a Drama job that does not exist
-                return self._json(404, {"error": str(exc)})
-            except WorkerError as exc:
-                return self._json(exc.status_code, {"error": str(exc)})
-
-            try:
-                if path == "/api/convert":
-                    source_path, source_info = _conversion_audio_path(
-                        req.get("source_path"), "Source performance", target=False, cast=cast)
-                    target_path, target_info = _conversion_audio_path(
-                        req.get("target_reference_path"), "Target voice reference", target=True, cast=cast)
-                    if source_path == target_path:
-                        raise ValueError("Source performance and target voice reference must be separate files.")
-                    target_metadata = {}
-                    reference_id = req.get("target_reference_id")
-                    if reference_id:
-                        reference = cast.get_reference(reference_id)
-                        recorded_target = Path(cast.get_media_path("reference", reference_id)).resolve()
-                        if recorded_target != target_path:
-                            raise ValueError("Target reference path does not match the selected Cast reference version.")
-                        target_metadata = {
-                            "reference_version_id": reference["id"],
-                            "origin": reference.get("origin", ""),
-                            "allowed_use": reference.get("allowed_use", ""),
-                        }
-                    else:
-                        target_metadata = next((row for row in _conversion_asset_rows(cast, target=True)
-                                                if Path(row["path"]).resolve() == target_path), {})
-                    wav, sample_rate, engine_info = engines.convert(str(source_path), str(target_path))
-                    import numpy as np
-                    audio = np.asarray(wav, dtype=np.float32).reshape(-1)
-                    if not audio.size or not np.isfinite(audio).all():
-                        raise RuntimeError("Chatterbox voice conversion produced empty or invalid audio.")
-                    conversion_id = uuid.uuid4().hex
-                    artifact_dir = OUT / "conversions" / conversion_id
-                    artifact_dir.mkdir(parents=True, exist_ok=False)
-                    audio_path = artifact_dir / "converted.wav"
-                    manifest_path = artifact_dir / "manifest.json"
-                    wav_buf = io.BytesIO()
-                    sf.write(wav_buf, audio, int(sample_rate), format="WAV", subtype="PCM_16")
-                    wav_bytes = wav_buf.getvalue()
-                    with audio_path.open("xb") as output:
-                        output.write(wav_bytes)
-                    manifest = {
-                        "schema_version": 1, "conversion_id": conversion_id,
-                        "created_at_local": datetime.now().astimezone().isoformat(),
-                        "task": "voice_conversion", "watermark": "PerthImplicitWatermarker",
-                        "model": engine_info,
-                        "source_performance": {
-                            "path": str(source_path), "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
-                            "sample_rate_hz": source_info.samplerate,
-                            "duration_seconds": round(float(source_info.duration), 4),
-                            **({"cast_take_id": next((row.get("take_id") for row in _conversion_asset_rows(cast)
-                                                     if Path(row["path"]).resolve() == source_path), None)})
-                        },
-                        "target_voice_reference": {
-                            "path": str(target_path), "sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
-                            "sample_rate_hz": target_info.samplerate,
-                            "duration_seconds": round(float(target_info.duration), 4),
-                            **target_metadata,
-                        },
-                        "output": {
-                            "path": str(audio_path.resolve()), "sha256": hashlib.sha256(wav_bytes).hexdigest(),
-                            "sample_rate_hz": int(sample_rate), "duration_seconds": len(audio) / int(sample_rate),
-                        },
-                    }
-                    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-                    audio_url = "/out/" + str(audio_path.resolve().relative_to(OUT.resolve())).replace("\\", "/")
-                    return self._json(201, {"conversion": {
-                        "conversion_id": conversion_id, "audio_url": audio_url,
-                        "audio_path": str(audio_path.resolve()), "manifest_path": str(manifest_path.resolve()),
-                        "manifest": manifest,
-                    }})
-                if path == "/api/kokoro/phonemize":
-                    return self._json(200, phonemize_kokoro(req.get("text", ""), req.get("language", "English")))
-                if path == "/api/scenes":
-                    return self._json(201, {"scene": scenes.create_scene(req)})
-                if path == "/api/evaluations/runs/import":
-                    return self._json(201, {"run": evaluations.register_run_manifest(req.get("manifest_path", ""))})
-                if path == "/api/evaluations/cast-import":
-                    return self._json(201, {"run": import_cast_takes(
-                        cast, evaluations, req.get("take_ids"), title=req.get("title", "Saved voice comparison"))})
-                if path == "/api/evaluations/blind-sessions":
-                    return self._json(201, {"session": evaluations.create_blind_session(
-                        req.get("run_id"), req.get("evaluator", "local listener"))})
-                blind_rating = re.fullmatch(r"/api/evaluations/blind-sessions/([a-f0-9]{32})/ratings", path)
-                if blind_rating:
-                    return self._json(200, {"session": evaluations.save_rating(
-                        blind_rating.group(1), req.get("trial_id"), req.get("ratings"), req.get("notes", ""))})
-                blind_reveal = re.fullmatch(r"/api/evaluations/blind-sessions/([a-f0-9]{32})/reveal", path)
-                if blind_reveal:
-                    return self._json(200, {"session": evaluations.reveal_blind_session(blind_reveal.group(1))})
-                transcript = re.fullmatch(r"/api/evaluations/items/([a-f0-9]{32})/transcript", path)
-                if transcript:
-                    return self._json(200, evaluations.add_transcript(
-                        transcript.group(1), req.get("heard_text"), req.get("evaluator")))
-                if path == "/api/scenes/import":
-                    fmt = req.get("format")
-                    content = req.get("content")
-                    if not isinstance(content, str) or len(content.encode("utf-8")) > MAX_SCENE_REQUEST_BYTES:
-                        raise ValueError("Scene import content must be UTF-8 text up to 2 MiB.")
-                    if fmt == "json":
-                        try:
-                            manifest = json.loads(content)
-                        except json.JSONDecodeError as exc:
-                            raise ValueError(f"Invalid scene JSON: {exc}") from exc
-                    elif fmt == "csv":
-                        manifest = scenes.import_csv(content.encode("utf-8"))
-                    else:
-                        raise ValueError("Scene import format must be json or csv.")
-                    return self._json(201, {"scene": scenes.create_scene(manifest)})
-                scene_update = re.fullmatch(r"/api/scenes/([a-f0-9]{32})", path)
-                if scene_update:
-                    return self._json(200, {"scene": scenes.update_scene(
-                        scene_update.group(1), req, expected_revision=req.get("expected_revision"))})
-                scene_job = re.fullmatch(r"/api/scenes/([a-f0-9]{32})/jobs", path)
-                if scene_job:
-                    job = scenes.create_job(scene_job.group(1), req.get("line_ids"), req.get("segment_ids"))
-                    batches.wake()
-                    return self._json(202, {"job": job})
-                scene_select = re.fullmatch(r"/api/scenes/([a-f0-9]{32})/select", path)
-                if scene_select:
-                    return self._json(200, {"scene": scenes.select_take(scene_select.group(1), req.get("line_id"),
-                        req.get("take_id"), req.get("segment_id"))})
-                scene_preview = re.fullmatch(r"/api/scenes/([a-f0-9]{32})/preview", path)
-                if scene_preview:
-                    preview = scenes.assemble_preview(scene_preview.group(1))
-                    preview_url = f"/api/scenes/{scene_preview.group(1)}/previews/"
-                    preview["audio_url"] = preview_url + Path(preview["audio_path"]).name
-                    preview["mastered_audio_url"] = preview_url + Path(preview["mastered_audio_path"]).name
-                    return self._json(201, {"preview": preview})
-                scene_action = re.fullmatch(r"/api/scenes/jobs/([a-f0-9]{32})/(pause|resume|cancel|retry)", path)
-                if scene_action:
-                    job_id, action = scene_action.groups()
-                    if action == "pause":
-                        job = scenes.request_pause(job_id)
-                    elif action == "resume":
-                        job = scenes.resume(job_id)
-                    elif action == "cancel":
-                        job = scenes.cancel(job_id)
-                    else:
-                        job = scenes.retry_failed(job_id)
-                    batches.wake()
-                    return self._json(200, {"job": job})
-                character = re.fullmatch(r"/api/characters/([a-f0-9]{32})", path)
-                identities = re.fullmatch(r"/api/characters/([a-f0-9]{32})/identities", path)
-                identity_update = re.fullmatch(r"/api/identities/([a-f0-9]{32})/update", path)
-                ref_version = re.fullmatch(r"/api/references/([a-f0-9]{32})/versions", path)
-                from_take = re.fullmatch(r"/api/identities/([a-f0-9]{32})/references/from-take", path)
-                pronunciation = path == "/api/pronunciations"
-                take_update = re.fullmatch(r"/api/takes/([a-f0-9]{32})/update", path)
-                take_edit_save = re.fullmatch(r"/api/takes/([a-f0-9]{32})/edit", path)
-                take_edit_preview = re.fullmatch(r"/api/takes/([a-f0-9]{32})/edit-preview", path)
-                if path == "/api/characters":
-                    return self._json(201, {"character": cast.create_character(req.get("name"), req.get("description", ""), req.get("tags"))})
-                if character:
-                    return self._json(200, {"character": cast.update_character(character.group(1), req)})
-                if identities:
-                    engine_id = req.get("engine_id")
-                    entry = engines.api_entries.get(engine_id)
-                    if entry is None:
-                        raise ValueError("Choose an engine exposed by the local service.")
-                    capabilities = entry.get("capabilities", {})
-                    clone_status = capabilities.get("voice_cloning", {}).get("status")
-                    fixed_voice = capabilities.get("voice_selection", {}).get("status") == "supported"
-                    preset_voice = (engine_id in PRESET_VOICE_ENGINES and
-                                    capabilities.get("voice_selection", {}).get("status") in {"supported", "worker_verified"})
-                    if clone_status not in {"supported", "worker_verified"} and not (engine_id == "kokoro" and fixed_voice) and not preset_voice:
-                        raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
-                    if engine_id == "kokoro":
-                        options = {"voice": ",".join(normalize_kokoro_voices(
-                            req.get("voice", "af_heart"), discover_kokoro_voices()))}
-                    elif engine_id == PHONON_ENGINE_ID:
-                        # Its voices are read from the installed catalog, so nothing has to be loaded first.
-                        options = phonon_identity_options(capabilities, req.get("speaker"), req.get("language"),
-                                                          performance_controls(engine_id, capabilities))
-                    elif preset_voice:
-                        loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
-                        if not loaded_info:
-                            raise ValueError("Load the CustomVoice checkpoint first so its local speakers and languages can be verified.")
-                        supported_speakers = loaded_info.get("supported_speakers") or []
-                        supported_languages = loaded_info.get("supported_languages") or []
-                        speaker = req.get("speaker")
-                        language = req.get("language")
-                        if not isinstance(speaker, str) or speaker not in supported_speakers:
-                            raise ValueError("Choose a speaker reported by the loaded CustomVoice checkpoint.")
-                        language_match = next((item for item in supported_languages
-                                               if isinstance(language, str) and item.casefold() == language.casefold()), None)
-                        if language_match is None:
-                            raise ValueError("Choose a language reported by the loaded CustomVoice checkpoint.")
-                        default_direction = req.get("default_direction", "")
-                        if not isinstance(default_direction, str) or len(default_direction) > 1000:
-                            raise ValueError("Preset delivery instruction must be text of 1000 characters or fewer.")
-                        controls = performance_controls(engine_id, capabilities)
-                        checkpoint = loaded_info.get("checkpoint") or entry["checkpoint"]
-                        checkpoint_revision = loaded_info.get("checkpoint_revision") or entry["local_revision"]
-                        if checkpoint != entry["checkpoint"] or checkpoint_revision != entry["local_revision"]:
-                            raise ValueError("The loaded CustomVoice model does not match the catalog's pinned checkpoint revision.")
-                        options = {
-                            "checkpoint": checkpoint,
-                            "checkpoint_revision": checkpoint_revision,
-                            "speaker": speaker, "language": language_match,
-                            "supported_speakers": list(supported_speakers),
-                            "supported_languages": list(supported_languages),
-                            "default_direction": default_direction.strip(),
-                            "settings_schema": controls["controls"],
-                            "capability_snapshot": {"voice_direction": controls["direction"],
-                                "sampling_controls": capabilities.get("sampling_controls", {}),
-                                "acting_controls": capabilities.get("acting_controls", [])},
-                        }
-                    else:
-                        options = {}
-                    return self._json(201, {"identity": cast.create_identity(identities.group(1), engine_id,
-                                                                              req.get("label"), options,
-                                                                              req.get("notes", ""))})
-                if identity_update:
-                    return self._json(200, {"identity": cast.update_identity(
-                        identity_update.group(1), req, fixed_voices=discover_kokoro_voices())})
-                if ref_version:
-                    return self._json(201, {"reference": cast.add_reference_version(ref_version.group(1), req)})
-                if from_take:
-                    return self._json(201, {"reference": cast.add_reference_from_take(
-                        from_take.group(1), req.get("take_id"), transcript=req.get("transcript"),
-                        edits=req.get("edits"), origin=req.get("origin"), allowed_use=req.get("allowed_use"))})
-                if pronunciation:
-                    return self._json(200, {"pronunciation": cast.save_pronunciation(
-                        source=req.get("source"), replacement=req.get("replacement"),
-                        character_id=req.get("character_id"), notes=req.get("notes", ""))})
-                if take_update:
-                    return self._json(200, {"take": cast.set_take_state(take_update.group(1),
-                        status=req.get("status"), rating=req.get("rating"), notes=req.get("notes"))})
-                if take_edit_save:
-                    edit_key = req.pop("idempotency_key", None)
-                    take, replayed = cast.create_edited_take(take_edit_save.group(1), req, request_key=edit_key)
-                    return self._json(200 if replayed else 201, {"take": take, "replayed": replayed})
-                if take_edit_preview:
-                    audio, report = cast.preview_edit(take_edit_preview.group(1), req)
-                    return self._send(200, audio, "audio/wav", {
-                        "X-Audio-Seconds": f"{report['duration_seconds']:.2f}",
-                        "X-Edit-Start-Seconds": f"{report['start_seconds']:.3f}",
-                        "X-Edit-End-Seconds": f"{report['end_seconds']:.3f}",
-                        "X-Peak-Dbfs": "" if report["peak_dbfs"] is None else f"{report['peak_dbfs']:.2f}"})
-                if path == "/api/retirements":
-                    return self._json(201, cast.retire(req.get("kind"), req.get("id"), reason=req.get("reason", "")))
-                if path == "/api/retirements/restore":
-                    return self._json(200, cast.restore(req.get("kind"), req.get("id")))
-                if path == "/api/purges":
-                    return self._json(200, cast.purge(req.get("kind"), req.get("id"), reason=req.get("reason", ""),
-                                                      confirm=req.get("confirm")))
-                engine_check = re.fullmatch(r"/api/engines/([a-z0-9][a-z0-9.-]{0,80})/check", path)
-                if engine_check:
-                    return self._json(200, {"check": engines.check(engine_check.group(1))})
-                engine_install = re.fullmatch(r"/api/engines/([a-z0-9][a-z0-9.-]{0,80})/install", path)
-                if engine_install:
-                    dry_run = req.get("dry_run", False)
-                    if not isinstance(dry_run, bool):
-                        raise ValueError("dry_run must be true or false.")
-                    if dry_run:
-                        return self._json(200, {"plan": installer.plan(engine_install.group(1))})
-                    return self._json(200, {"install": installer.start(engine_install.group(1))})
-                if path == "/api/performance":
-                    return self._perform(req)
-            except KeyError as exc:
-                return self._json(404, {"error": str(exc)})
-            except (ValueError, MemoryError) as exc:
-                return self._json(400, {"error": str(exc)})
-            except WorkerError as exc:
-                return self._json(exc.status_code, {"error": str(exc)})
-            except Exception as exc:
-                return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
-            if self.path == "/api/unload":
-                try:
-                    engines.unload()
-                    return self._json(200, {"ok": True})
-                except WorkerError as exc:
-                    return self._json(exc.status_code, {"error": str(exc)})
-            if self.path == "/api/load":
-                try:
-                    return self._json(200, engines.load(req.get("engine", "kokoro"), profile=req.get("profile")))
-                except (ValueError, MemoryError) as exc:
-                    return self._json(400, {"error": str(exc)})
-                except WorkerError as exc:
-                    return self._json(exc.status_code, {"error": str(exc)})
-            if self.path == "/api/prepare-reference":
-                try:
-                    result = engines.prepare_reference(req.get("engine"), req.get("path"),
-                                                       exaggeration=req.get("exaggeration", 0.5),
-                                                       profile=req.get("profile"),
-                                                       reference_text=req.get("reference_text", ""),
-                                                       xvec_only=req.get("xvec_only", False))
-                    return self._json(200, result)
-                except (ValueError, MemoryError) as exc:
-                    return self._json(400, {"error": str(exc)})
-                except WorkerError as exc:
-                    return self._json(exc.status_code, {"error": str(exc)})
-            if path == "/api/stream":
-                started = time.perf_counter()
-                self._note(engine=req.get("engine"))
-                save_path = None
-                save_name = req.get("save_voice_as")
-                if save_name not in (None, ""):
-                    if req.get("engine") != "qwen3-tts-1.7b-voice-design" or req.get("mode", "design") != "design":
-                        return self._json(400, {"error": "Only a Qwen VoiceDesign stream can be saved as a reusable voice reference."})
-                    if not isinstance(save_name, str) or not VOICE_ASSET_NAME_RE.fullmatch(save_name):
-                        return self._json(400, {"error": "save_voice_as must be a safe name with up to two folders; use letters, digits, underscores, or hyphens."})
-                    asset_root = LAB / "data" / "voices"
-                    asset_root.mkdir(parents=True, exist_ok=True)
-                    resolved_root = asset_root.resolve()
-                    if LAB.resolve() not in resolved_root.parents:
-                        return self._json(400, {"error": "Voice asset storage must remain inside voice-lab/data/voices/."})
-                    save_path = resolved_root.joinpath(*save_name.split("/")).with_suffix(".wav")
-                    if resolved_root not in save_path.resolve().parents:
-                        return self._json(400, {"error": "Voice asset path must remain inside voice-lab/data/voices/."})
-                    if save_path.exists() or save_path.with_suffix(".json").exists():
-                        return self._json(409, {"error": f"Voice asset {save_name!r} already exists; choose another name."})
-
-                state = {"headers_sent": False, "first_byte_s": None, "first_audio_s": None,
-                         "chunks": [], "sample_count": 0, "next_sequence": 0, "sample_rate": None}
-
-                def begin_stream(meta):
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-                    self.send_header("Cache-Control", "no-store")
-                    self.send_header("Connection", "close")
-                    self.send_header("X-Voice-Lab-Stream", "native-generator")
-                    self.end_headers()
-                    state["headers_sent"] = True
-                    state["first_byte_s"] = time.perf_counter() - started
-                    try:
-                        self._stream_line({"type": "start", **meta,
-                                           "service_first_byte_s": state["first_byte_s"]})
-                    except OSError as exc:
-                        raise ConnectionAbortedError("Client disconnected before audio generation started.") from exc
-
-                def send_audio(packet):
-                    if state["sample_rate"] is not None and packet["sample_rate"] != state["sample_rate"]:
-                        raise RuntimeError("Stream sample rate changed after the response started.")
-                    if (packet["sequence"] != state["next_sequence"] or
-                            packet["sample_start"] != state["sample_count"]):
-                        raise RuntimeError("Stream sample offsets are discontinuous.")
-                    state["sample_rate"] = packet["sample_rate"]
-                    state["sample_count"] += packet["sample_count"]
-                    state["next_sequence"] += 1
-                    if save_path is not None:
-                        state["chunks"].append(packet["pcm"])
-                    event = {"type": "audio", "sequence": packet["sequence"],
-                             "sample_start": packet["sample_start"], "sample_count": packet["sample_count"],
-                             "sample_rate": packet["sample_rate"], "sample_format": "pcm_s16le",
-                             "data": packet["data"], "service_first_audio_s": None}
-                    if packet["sequence"] == 0:
-                        state["first_audio_s"] = time.perf_counter() - started
-                        event["service_first_audio_s"] = state["first_audio_s"]
-                        event["generator_first_chunk_s"] = packet.get("generator_first_chunk_s")
-                        event["backend_chunk_index"] = packet.get("backend_chunk_index")
-                    try:
-                        self._stream_line(event)
-                    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
-                        return False
-                    return True
-
-                try:
-                    result = engines.stream_qwen(req, begin_stream, send_audio)
-                    saved_asset = None
-                    if save_path is not None:
-                        import numpy as np
-                        raw_pcm = b"".join(state["chunks"])
-                        if len(raw_pcm) != state["sample_count"] * 2:
-                            raise RuntimeError("Stream capture byte count did not match delivered samples.")
-                        audio = np.frombuffer(raw_pcm, dtype="<i2")
-                        wav_buf = io.BytesIO()
-                        sf.write(wav_buf, audio, int(result["sample_rate"]), format="WAV", subtype="PCM_16")
-                        save_designed_reference(save_path, wav_buf.getvalue(), req, result,
-                                                engines.entries.get(req.get("engine"), {}))
-                        saved_asset = str(save_path.resolve())
-                    complete = {
-                        "type": "complete", "engine": result.get("engine"), "mode": result.get("mode"),
-                        "streaming_kind": result.get("streaming_kind", "native_generator"),
-                        "chunk_count": result.get("chunk_count"), "backend_chunk_count": result.get("backend_chunk_count"),
-                        "sample_count": result.get("sample_count"), "sample_rate": result.get("sample_rate"),
-                        "audio_seconds": (result.get("sample_count", 0) / result["sample_rate"]
-                                          if result.get("sample_rate") else None),
-                        "generator_first_chunk_s": result.get("generator_first_chunk_s"),
-                        "service_first_byte_s": state["first_byte_s"],
-                        "service_first_audio_s": state["first_audio_s"],
-                        "generation_total_s": result.get("total_s"),
-                        "service_total_s": time.perf_counter() - started,
-                        "sampling": result.get("sampling"), "backend": result.get("backend"),
-                        "checkpoint": result.get("checkpoint"),
-                        "checkpoint_revision": result.get("checkpoint_revision"),
-                        "reference_cache_hit": result.get("reference_cache_hit"),
-                        "speaker": result.get("speaker"), "saved_asset": saved_asset,
-                    }
-                    self._stream_line(complete)
-                except (ValueError, MemoryError) as exc:
-                    if state["headers_sent"]:
-                        try:
-                            self._stream_line({"type": "error", "error": str(exc)})
-                        except OSError:
-                            pass
-                    else:
-                        return self._json(400, {"error": str(exc)})
-                except WorkerError as exc:
-                    if state["headers_sent"]:
-                        try:
-                            self._stream_line({"type": "error", "error": str(exc)})
-                        except OSError:
-                            pass
-                    else:
-                        return self._json(exc.status_code, {"error": str(exc)})
-                except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
-                    # A disconnected consumer has already cleared its own pending browser audio.
-                    pass
-                except Exception as exc:
-                    if state["headers_sent"]:
-                        try:
-                            self._stream_line({"type": "error", "error": f"{type(exc).__name__}: {exc}"})
-                        except OSError:
-                            pass
-                    else:
-                        return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
-                self.close_connection = True
-                return
-            if self.path != "/api/speak":
+            found = router.match(method, path)
+            if found is None:
+                if method == "POST":
+                    # Read the body through, as a refusal does, so the client gets the 404 rather than a reset connection.
+                    self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
                 return self._json(404, {"error": "not found"})
-            save_name = req.get("save_voice_as")
-            save_path = None
-            if save_name not in (None, ""):
-                save_engine = req.get("engine", "kokoro")
-                can_save_design = (save_engine == "breeze-tts-2" and req.get("mode", "design") == "design") or (
-                    save_engine in {"qwen3-tts-1.7b-voice-design", "voxcpm2"} and req.get("mode", "design") == "design")
-                if not can_save_design:
-                    return self._json(400, {"error": "Reusable voice assets can be saved from Breeze, Qwen VoiceDesign, or VoxCPM2 design takes."})
-                if not isinstance(save_name, str) or not VOICE_ASSET_NAME_RE.fullmatch(save_name):
-                    return self._json(400, {"error": "save_voice_as must be a safe name with up to two folders; use letters, digits, underscores, or hyphens."})
-                asset_root = LAB / "data" / "voices"
-                asset_root.mkdir(parents=True, exist_ok=True)
-                resolved_root = asset_root.resolve()
-                if LAB.resolve() not in resolved_root.parents:
-                    return self._json(400, {"error": "Voice asset storage must remain inside voice-lab/data/voices/."})
-                save_path = resolved_root.joinpath(*save_name.split("/")).with_suffix(".wav")
-                if resolved_root not in save_path.resolve().parents:
-                    return self._json(400, {"error": "Voice asset path must remain inside voice-lab/data/voices/."})
-                if save_path.exists() or save_path.with_suffix(".json").exists():
-                    return self._json(409, {"error": f"Voice asset {save_name!r} already exists; choose another name."})
-            self._note(engine=req.get("engine", "kokoro"))
+            route, handler, params = found
             try:
-                wav, sr, info = engines.speak(req)
-            except (ValueError, MemoryError) as exc:
-                return self._json(400, {"error": str(exc)})
-            except WorkerError as exc:
-                return self._json(exc.status_code, {"error": str(exc)})
+                req = None
+                if method == "POST" and route.body_kind != "audio":
+                    scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
+                    req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES)
+                return handler(self, parsed, req, **params)
+            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+                raise
             except Exception as exc:
-                return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
-            buf = io.BytesIO()
-            sf.write(buf, wav, sr, format="WAV", subtype="PCM_16")
-            audio_body = buf.getvalue()
-            headers = {
-                "X-Gen-Seconds": f"{info['total_s']:.2f}",
-                "X-Audio-Seconds": f"{len(wav) / sr:.2f}",
-                "X-First-Chunk": f"{info['first_chunk_s']:.2f}" if info.get("first_chunk_s") else "",
-            }
-            if save_path is not None:
-                try:
-                    save_designed_reference(save_path, audio_body, req, info,
-                                            engines.entries.get(req.get("engine"), {}))
-                except FileExistsError:
-                    return self._json(409, {"error": f"Voice asset {save_name!r} already exists; choose another name."})
-                headers["X-Voice-Asset-Path"] = str(save_path.resolve())
-            if info.get("mode"):
-                headers["X-Generation-Mode"] = info["mode"]
-            if info.get("profile"):
-                headers["X-Decode-Profile"] = info["profile"]
-            generation = info.get("generation") or {}
-            if generation.get("profile_effective"):
-                headers["X-Decode-Profile-Effective"] = generation["profile_effective"]
-                headers["X-Profile-Fallback"] = str(bool(generation.get("fallback_to_eager"))).lower()
-            if generation.get("max_new_tokens_effective") is not None:
-                headers["X-Effective-Max-New-Tokens"] = str(generation["max_new_tokens_effective"])
-            if generation.get("audio_frames") is not None:
-                headers["X-Audio-Frames"] = str(generation["audio_frames"])
-            if generation.get("prefill_tokens") is not None:
-                headers["X-Prefill-Tokens"] = str(generation["prefill_tokens"])
-            if info.get("reference_cache_hit") is not None:
-                headers["X-Reference-Cache-Hit"] = str(bool(info["reference_cache_hit"])).lower()
-            if info.get("backend"):
-                headers["X-Voice-Backend"] = info["backend"]
-            if info.get("checkpoint"):
-                headers["X-Model-Checkpoint"] = info["checkpoint"]
-            if info.get("checkpoint_revision"):
-                headers["X-Checkpoint-Revision"] = info["checkpoint_revision"]
-            if info.get("language"):
-                headers["X-Voice-Language"] = info["language"]
-            if info.get("speaker"):
-                headers["X-Voice-Speaker"] = info["speaker"]
-            if info.get("sampling"):
-                headers["X-Effective-Sampling-Settings"] = json.dumps(info["sampling"], separators=(",", ":"))
-            self._send(200, audio_body, "audio/wav", headers)
+                if self._status:
+                    raise  # the answer has begun; answer_unexpected_errors and the request log take it from here
+                status = (413 if isinstance(exc, OverflowError) else 404 if isinstance(exc, KeyError)
+                          else 400 if isinstance(exc, (ValueError, MemoryError))
+                          else exc.status_code if isinstance(exc, WorkerError) else None)
+                if status is None:
+                    raise
+                return self._json(status, {"error": str(exc)})
 
+        def _no_query(self, parsed):
+            """True when the request named a query string, which the model routes refuse with a 404 (docs/API.md says so)."""
+            return bool(parsed.query)
+
+    # ------------------------------------------------------------------------------------------------ pages and their scripts
+    # Every function below answers the rows of api_spec.ROUTES it names, and is called with the request handler, the parsed
+    # URL, the JSON body of a POST (None for a GET and for a recording's upload) and the path's parameters by name.
+
+    @router.get("/", "/index.html")
+    def main_page(self, parsed, req):
+        self._send(200, preferences.render(PAGE), "text/html; charset=utf-8")
+
+    @router.get("/compare", "/compare.html")
+    def compare_page(self, parsed, req):
+        self._send(200, preferences.render(COMPARE_PAGE), "text/html; charset=utf-8")
+
+    @router.get("/theme.js", "/voice_workflows.js", "/voice_library.js", "/drama3-studio.js",
+                *(f"/{name}" for name in sorted(PAGE_SCRIPTS)))
+    def page_script(self, parsed, req):
+        name = "drama3_studio.js" if parsed.path == "/drama3-studio.js" else parsed.path.lstrip("/")
+        self._send(200, (LAB / name).read_bytes(), "text/javascript; charset=utf-8")
+
+    @router.get("/out/*")
+    def out_file(self, parsed, req, rest):
+        """Files the Lab wrote to its out folder, such as a converted voice."""
+        parts = rest.split("/")
+        # Plain names only. An empty or ".." part, a drive or a backslash could name something outside out/, and
+        # //server/share/x.wav would have Windows contact that server before the check below could refuse it.
+        if any(part in ("", ".", "..") or "\\" in part or ":" in part for part in parts):
+            return self._json(404, {"error": "not found"})
+        target = OUT.joinpath(*parts).resolve()
+        ctype = {".wav": "audio/wav", ".json": "application/json"}.get(target.suffix)
+        if ctype and OUT.resolve() in target.parents and target.is_file():
+            self._send(200, target.read_bytes(), ctype)
+        else:
+            self._json(404, {"error": "not found"})
+
+    # ------------------------------------------------------------------------------------------------ page helpers
+
+    @router.get("/api/preferences")
+    def get_preferences(self, parsed, req):
+        self._json(200, preferences.get())
+
+    @router.post("/api/preferences")
+    def save_preferences(self, parsed, req):
+        try:
+            self._json(200, preferences.save(req))
+        except OSError:
+            self._json(500, {"error": "Could not save appearance preferences."})
+
+    @router.get("/api/references")
+    def reference_list(self, parsed, req):
+        self._json(200, {"references": list_references(LAB, cast)})
+
+    @router.get("/api/voice-library")
+    def voice_library(self, parsed, req):
+        params = parse_qs(parsed.query)
+        self._json(200, list_voice_library(LAB, cast, include_retired=(params.get("include_retired") or [""])[0] == "1"))
+
+    @router.get("/api/reference-audio")
+    def reference_audio(self, parsed, req):
+        try:
+            requested = (parse_qs(parsed.query).get("path") or [None])[0]
+            target, content_type = resolve_reference_audio(requested, LAB, cast)
+            self._send(200, target.read_bytes(), content_type)
+        except (OSError, RuntimeError, ValueError):
+            self._json(404, {"error": "Reference audio is unavailable or outside this Lab's reference storage."})
+
+    @router.get("/api/conversion/sources")
+    def conversion_sources(self, parsed, req):
+        self._json(200, {"sources": _conversion_asset_rows(cast, target=False)})
+
+    @router.get("/api/conversion/targets")
+    def conversion_targets(self, parsed, req):
+        self._json(200, {"targets": _conversion_asset_rows(cast, target=True)})
+
+    @router.post("/api/system/use-library")
+    def use_library(self, parsed, req):
+        self._json(200, library_backup.use_library(APP_ROOT, library_backup.restore_target(library_root, req.get("folder"))))
+
+    # ------------------------------------------------------------------------------------------------ service and models
+
+    @router.get("/api/health")
+    def health(self, parsed, req):
+        self._json(200, {**engines.health(), "version": VERSION})
+
+    @router.get("/api/info")
+    def info(self, parsed, req):
+        self._json(200, {"device": engines.device, "loaded": engines.loaded,
+                         "voices": discover_kokoro_voices(), "kokoro_languages": kokoro_languages(),
+                         "phonon_voices": discover_phonon_voices(), "free_ram_gb": round(free_ram_gb(), 1)})
+
+    @router.get("/api/catalog")
+    def catalog(self, parsed, req):
+        self._json(200, engines.catalog)
+
+    @router.get("/api/openapi.json")
+    def openapi(self, parsed, req):
+        self._json(200, api_spec.build_openapi())
+
+    @router.get("/api/engines/status")
+    def engine_status(self, parsed, req):
+        self._json(200, {**engines.engine_status(), "install": installer.snapshot()})
+
+    @router.post("/api/engines/{engine_id}/check")
+    def engine_check(self, parsed, req, engine_id):
+        self._json(200, {"check": engines.check(engine_id)})
+
+    @router.post("/api/engines/{engine_id}/install")
+    def engine_install(self, parsed, req, engine_id):
+        dry_run = req.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("dry_run must be true or false.")
+        if dry_run:
+            return self._json(200, {"plan": installer.plan(engine_id)})
+        self._json(200, {"install": installer.start(engine_id)})
+
+    @router.get("/api/performance/settings")
+    def performance_settings(self, parsed, req):
+        schemas = [performance_schema(key, entry) for key, entry in engines.api_entries.items() if key in DEFAULTS]
+        self._json(200, {"engines": schemas, "unscreened_languages": unscreened_by_engine(engines.api_entries)})
+
+    @router.post("/api/unload")
+    def unload(self, parsed, req):
+        if self._no_query(parsed):
+            return self._json(404, {"error": "not found"})
+        engines.unload()
+        self._json(200, {"ok": True})
+
+    @router.post("/api/load")
+    def load(self, parsed, req):
+        if self._no_query(parsed):
+            return self._json(404, {"error": "not found"})
+        self._json(200, engines.load(req.get("engine", "kokoro"), profile=req.get("profile")))
+
+    @router.post("/api/prepare-reference")
+    def prepare_reference(self, parsed, req):
+        if self._no_query(parsed):
+            return self._json(404, {"error": "not found"})
+        self._json(200, engines.prepare_reference(req.get("engine"), req.get("path"),
+                                                  exaggeration=req.get("exaggeration", 0.5), profile=req.get("profile"),
+                                                  reference_text=req.get("reference_text", ""),
+                                                  xvec_only=req.get("xvec_only", False)))
+
+    def voice_asset_path(save_name):
+        """Where a design take named save_voice_as is kept, under data/voices; ValueError for a name the Lab will not use and
+        FileExistsError for one that is taken."""
+        if not isinstance(save_name, str) or not VOICE_ASSET_NAME_RE.fullmatch(save_name):
+            raise ValueError("save_voice_as must be a safe name with up to two folders; use letters, digits, underscores, or "
+                             "hyphens.")
+        asset_root = LAB / "data" / "voices"
+        asset_root.mkdir(parents=True, exist_ok=True)
+        resolved_root = asset_root.resolve()
+        if LAB.resolve() not in resolved_root.parents:
+            raise ValueError("Voice asset storage must remain inside voice-lab/data/voices/.")
+        save_path = resolved_root.joinpath(*save_name.split("/")).with_suffix(".wav")
+        if resolved_root not in save_path.resolve().parents:
+            raise ValueError("Voice asset path must remain inside voice-lab/data/voices/.")
+        if save_path.exists() or save_path.with_suffix(".json").exists():
+            raise FileExistsError(f"Voice asset {save_name!r} already exists; choose another name.")
+        return save_path
+
+    @router.post("/api/speak")
+    def speak(self, parsed, req):
+        if self._no_query(parsed):  # docs/API.md: /api/speak?x=1 is a 404
+            return self._json(404, {"error": "not found"})
+        save_name = req.get("save_voice_as")
+        save_path = None
+        if save_name not in (None, ""):
+            save_engine = req.get("engine", "kokoro")
+            can_save_design = (save_engine == "breeze-tts-2" and req.get("mode", "design") == "design") or (
+                save_engine in {"qwen3-tts-1.7b-voice-design", "voxcpm2"} and req.get("mode", "design") == "design")
+            if not can_save_design:
+                return self._json(400, {"error": "Reusable voice assets can be saved from Breeze, Qwen VoiceDesign, or VoxCPM2 "
+                                                 "design takes."})
+            try:
+                save_path = voice_asset_path(save_name)
+            except FileExistsError as exc:
+                return self._json(409, {"error": str(exc)})
+        self._note(engine=req.get("engine", "kokoro"))
+        try:
+            wav, sr, info = engines.speak(req)
+        except (ValueError, MemoryError) as exc:
+            return self._json(400, {"error": str(exc)})
+        except WorkerError as exc:
+            return self._json(exc.status_code, {"error": str(exc)})
+        except Exception as exc:
+            return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+        audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", "kokoro"))
+        headers = {
+            "X-Gen-Seconds": f"{info['total_s']:.2f}",
+            "X-Audio-Seconds": f"{len(wav) / sr:.2f}",
+            "X-First-Chunk": f"{info['first_chunk_s']:.2f}" if info.get("first_chunk_s") else "",
+        }
+        if save_path is not None:
+            try:
+                save_designed_reference(save_path, audio_body, req, info, engines.entries.get(req.get("engine"), {}))
+            except FileExistsError:
+                return self._json(409, {"error": f"Voice asset {save_name!r} already exists; choose another name."})
+            headers["X-Voice-Asset-Path"] = str(save_path.resolve())
+        if info.get("mode"):
+            headers["X-Generation-Mode"] = info["mode"]
+        if info.get("profile"):
+            headers["X-Decode-Profile"] = info["profile"]
+        generation = info.get("generation") or {}
+        if generation.get("profile_effective"):
+            headers["X-Decode-Profile-Effective"] = generation["profile_effective"]
+            headers["X-Profile-Fallback"] = str(bool(generation.get("fallback_to_eager"))).lower()
+        if generation.get("max_new_tokens_effective") is not None:
+            headers["X-Effective-Max-New-Tokens"] = str(generation["max_new_tokens_effective"])
+        if generation.get("audio_frames") is not None:
+            headers["X-Audio-Frames"] = str(generation["audio_frames"])
+        if generation.get("prefill_tokens") is not None:
+            headers["X-Prefill-Tokens"] = str(generation["prefill_tokens"])
+        if info.get("reference_cache_hit") is not None:
+            headers["X-Reference-Cache-Hit"] = str(bool(info["reference_cache_hit"])).lower()
+        if info.get("backend"):
+            headers["X-Voice-Backend"] = info["backend"]
+        if info.get("checkpoint"):
+            headers["X-Model-Checkpoint"] = info["checkpoint"]
+        if info.get("checkpoint_revision"):
+            headers["X-Checkpoint-Revision"] = info["checkpoint_revision"]
+        if info.get("language"):
+            headers["X-Voice-Language"] = info["language"]
+        if info.get("speaker"):
+            headers["X-Voice-Speaker"] = info["speaker"]
+        if info.get("sampling"):
+            headers["X-Effective-Sampling-Settings"] = json.dumps(info["sampling"], separators=(",", ":"))
+        self._send(200, audio_body, "audio/wav", headers)
+
+    @router.post("/api/stream")
+    def stream(self, parsed, req):
+        started = time.perf_counter()
+        self._note(engine=req.get("engine"))
+        save_path = None
+        save_name = req.get("save_voice_as")
+        if save_name not in (None, ""):
+            if req.get("engine") != "qwen3-tts-1.7b-voice-design" or req.get("mode", "design") != "design":
+                return self._json(400, {"error": "Only a Qwen VoiceDesign stream can be saved as a reusable voice reference."})
+            try:
+                save_path = voice_asset_path(save_name)
+            except FileExistsError as exc:
+                return self._json(409, {"error": str(exc)})
+
+        state = {"headers_sent": False, "first_byte_s": None, "first_audio_s": None,
+                 "chunks": [], "sample_count": 0, "next_sequence": 0, "sample_rate": None}
+
+        def begin_stream(meta):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.send_header("X-Voice-Lab-Stream", "native-generator")
+            self.end_headers()
+            state["headers_sent"] = True
+            state["first_byte_s"] = time.perf_counter() - started
+            try:
+                self._stream_line({"type": "start", **meta, "service_first_byte_s": state["first_byte_s"]})
+            except OSError as exc:
+                raise ConnectionAbortedError("Client disconnected before audio generation started.") from exc
+
+        def send_audio(packet):
+            if state["sample_rate"] is not None and packet["sample_rate"] != state["sample_rate"]:
+                raise RuntimeError("Stream sample rate changed after the response started.")
+            if (packet["sequence"] != state["next_sequence"] or
+                    packet["sample_start"] != state["sample_count"]):
+                raise RuntimeError("Stream sample offsets are discontinuous.")
+            state["sample_rate"] = packet["sample_rate"]
+            state["sample_count"] += packet["sample_count"]
+            state["next_sequence"] += 1
+            if save_path is not None:
+                state["chunks"].append(packet["pcm"])
+            event = {"type": "audio", "sequence": packet["sequence"],
+                     "sample_start": packet["sample_start"], "sample_count": packet["sample_count"],
+                     "sample_rate": packet["sample_rate"], "sample_format": "pcm_s16le",
+                     "data": packet["data"], "service_first_audio_s": None}
+            if packet["sequence"] == 0:
+                state["first_audio_s"] = time.perf_counter() - started
+                event["service_first_audio_s"] = state["first_audio_s"]
+                event["generator_first_chunk_s"] = packet.get("generator_first_chunk_s")
+                event["backend_chunk_index"] = packet.get("backend_chunk_index")
+            try:
+                self._stream_line(event)
+            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+                return False
+            return True
+
+        def stream_error(text):
+            try:
+                self._stream_line({"type": "error", "error": text})
+            except OSError:
+                pass
+
+        try:
+            result = engines.stream_qwen(req, begin_stream, send_audio)
+            saved_asset = None
+            if save_path is not None:
+                import numpy as np
+                raw_pcm = b"".join(state["chunks"])
+                if len(raw_pcm) != state["sample_count"] * 2:
+                    raise RuntimeError("Stream capture byte count did not match delivered samples.")
+                audio = np.frombuffer(raw_pcm, dtype="<i2")
+                save_designed_reference(save_path, synthetic_label.wav_bytes(audio, int(result["sample_rate"]),
+                                                                             engine_id=req.get("engine")),
+                                        req, result, engines.entries.get(req.get("engine"), {}))
+                saved_asset = str(save_path.resolve())
+            self._stream_line({
+                "type": "complete", "engine": result.get("engine"), "mode": result.get("mode"),
+                "streaming_kind": result.get("streaming_kind", "native_generator"),
+                "chunk_count": result.get("chunk_count"), "backend_chunk_count": result.get("backend_chunk_count"),
+                "sample_count": result.get("sample_count"), "sample_rate": result.get("sample_rate"),
+                "audio_seconds": (result.get("sample_count", 0) / result["sample_rate"] if result.get("sample_rate") else None),
+                "generator_first_chunk_s": result.get("generator_first_chunk_s"),
+                "service_first_byte_s": state["first_byte_s"],
+                "service_first_audio_s": state["first_audio_s"],
+                "generation_total_s": result.get("total_s"),
+                "service_total_s": time.perf_counter() - started,
+                "sampling": result.get("sampling"), "backend": result.get("backend"),
+                "checkpoint": result.get("checkpoint"),
+                "checkpoint_revision": result.get("checkpoint_revision"),
+                "reference_cache_hit": result.get("reference_cache_hit"),
+                "speaker": result.get("speaker"), "saved_asset": saved_asset,
+            })
+        except (ValueError, MemoryError) as exc:
+            if not state["headers_sent"]:
+                return self._json(400, {"error": str(exc)})
+            stream_error(str(exc))
+        except WorkerError as exc:
+            if not state["headers_sent"]:
+                return self._json(exc.status_code, {"error": str(exc)})
+            stream_error(str(exc))
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+            pass  # a disconnected consumer has already cleared its own pending browser audio
+        except Exception as exc:
+            if not state["headers_sent"]:
+                return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+            stream_error(f"{type(exc).__name__}: {exc}")
+        self.close_connection = True
+
+    @router.post("/api/performance")
+    def performance(self, parsed, req):
+        self._perform(req)
+
+    @router.post("/api/kokoro/phonemize")
+    def kokoro_phonemize(self, parsed, req):
+        self._json(200, engines.phonemize(req.get("text", ""), req.get("language", "English")))
+
+    @router.post("/api/convert")
+    def convert(self, parsed, req):
+        source_path, source_info = _conversion_audio_path(req.get("source_path"), "Source performance", target=False, cast=cast)
+        target_path, target_info = _conversion_audio_path(req.get("target_reference_path"), "Target voice reference",
+                                                          target=True, cast=cast)
+        if source_path == target_path:
+            raise ValueError("Source performance and target voice reference must be separate files.")
+        reference_id = req.get("target_reference_id")
+        if reference_id:
+            reference = cast.get_reference(reference_id)
+            recorded_target = Path(cast.get_media_path("reference", reference_id)).resolve()
+            if recorded_target != target_path:
+                raise ValueError("Target reference path does not match the selected Cast reference version.")
+            target_metadata = {"reference_version_id": reference["id"], "origin": reference.get("origin", ""),
+                               "allowed_use": reference.get("allowed_use", "")}
+        else:
+            target_metadata = next((row for row in _conversion_asset_rows(cast, target=True)
+                                    if Path(row["path"]).resolve() == target_path), {})
+        try:
+            wav, sample_rate, engine_info = engines.convert(str(source_path), str(target_path))
+        except WorkerError:
+            raise
+        import numpy as np
+        audio = np.asarray(wav, dtype=np.float32).reshape(-1)
+        if not audio.size or not np.isfinite(audio).all():
+            raise RuntimeError("Chatterbox voice conversion produced empty or invalid audio.")
+        conversion_id = uuid.uuid4().hex
+        artifact_dir = OUT / "conversions" / conversion_id
+        artifact_dir.mkdir(parents=True, exist_ok=False)
+        audio_path = artifact_dir / "converted.wav"
+        manifest_path = artifact_dir / "manifest.json"
+        wav_bytes = synthetic_label.wav_bytes(audio, int(sample_rate), engine_id="chatterbox-vc")
+        with audio_path.open("xb") as output:
+            output.write(wav_bytes)
+        manifest = {
+            "schema_version": 1, "conversion_id": conversion_id,
+            "created_at_local": datetime.now().astimezone().isoformat(),
+            "task": "voice_conversion", "watermark": "PerthImplicitWatermarker",
+            "model": engine_info,
+            "source_performance": {
+                "path": str(source_path), "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+                "sample_rate_hz": source_info.samplerate,
+                "duration_seconds": round(float(source_info.duration), 4),
+                **({"cast_take_id": next((row.get("take_id") for row in _conversion_asset_rows(cast)
+                                         if Path(row["path"]).resolve() == source_path), None)})
+            },
+            "target_voice_reference": {
+                "path": str(target_path), "sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
+                "sample_rate_hz": target_info.samplerate,
+                "duration_seconds": round(float(target_info.duration), 4),
+                **target_metadata,
+            },
+            "output": {
+                "path": str(audio_path.resolve()), "sha256": hashlib.sha256(wav_bytes).hexdigest(),
+                "sample_rate_hz": int(sample_rate), "duration_seconds": len(audio) / int(sample_rate),
+            },
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        audio_url = "/out/" + str(audio_path.resolve().relative_to(OUT.resolve())).replace("\\", "/")
+        self._json(201, {"conversion": {
+            "conversion_id": conversion_id, "audio_url": audio_url,
+            "audio_path": str(audio_path.resolve()), "manifest_path": str(manifest_path.resolve()),
+            "manifest": manifest,
+        }})
+
+    # ------------------------------------------------------------------------------------------------ Cast
+
+    @router.get("/api/cast")
+    def cast_list(self, parsed, req):
+        self._json(200, {"schema_version": 1, "characters": cast.list_cast()})
+
+    @router.post("/api/characters")
+    def create_character(self, parsed, req):
+        self._json(201, {"character": cast.create_character(req.get("name"), req.get("description", ""), req.get("tags"))})
+
+    @router.post("/api/characters/{character_id}")
+    def update_character(self, parsed, req, character_id):
+        self._json(200, {"character": cast.update_character(character_id, req)})
+
+    @router.post("/api/characters/{character_id}/identities")
+    def create_identity(self, parsed, req, character_id):
+        engine_id = req.get("engine_id")
+        entry = engines.api_entries.get(engine_id)
+        if entry is None:
+            raise ValueError("Choose an engine exposed by the local service.")
+        capabilities = entry.get("capabilities", {})
+        clone_status = capabilities.get("voice_cloning", {}).get("status")
+        fixed_voice = capabilities.get("voice_selection", {}).get("status") == "supported"
+        preset_voice = (engine_id in PRESET_VOICE_ENGINES and
+                        capabilities.get("voice_selection", {}).get("status") in {"supported", "worker_verified"})
+        if clone_status not in {"supported", "worker_verified"} and not (engine_id == "kokoro" and fixed_voice) and not preset_voice:
+            raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
+        if engine_id == "kokoro":
+            options = {"voice": ",".join(normalize_kokoro_voices(req.get("voice", "af_heart"), discover_kokoro_voices()))}
+        elif engine_id == PHONON_ENGINE_ID:
+            # Its voices are read from the installed catalog, so nothing has to be loaded first.
+            options = phonon_identity_options(capabilities, req.get("speaker"), req.get("language"),
+                                              performance_controls(engine_id, capabilities))
+        elif preset_voice:
+            loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
+            if not loaded_info:
+                raise ValueError("Load the CustomVoice checkpoint first so its local speakers and languages can be verified.")
+            supported_speakers = loaded_info.get("supported_speakers") or []
+            supported_languages = loaded_info.get("supported_languages") or []
+            speaker = req.get("speaker")
+            language = req.get("language")
+            if not isinstance(speaker, str) or speaker not in supported_speakers:
+                raise ValueError("Choose a speaker reported by the loaded CustomVoice checkpoint.")
+            language_match = next((item for item in supported_languages
+                                   if isinstance(language, str) and item.casefold() == language.casefold()), None)
+            if language_match is None:
+                raise ValueError("Choose a language reported by the loaded CustomVoice checkpoint.")
+            default_direction = req.get("default_direction", "")
+            if not isinstance(default_direction, str) or len(default_direction) > 1000:
+                raise ValueError("Preset delivery instruction must be text of 1000 characters or fewer.")
+            controls = performance_controls(engine_id, capabilities)
+            checkpoint = loaded_info.get("checkpoint") or entry["checkpoint"]
+            checkpoint_revision = loaded_info.get("checkpoint_revision") or entry["local_revision"]
+            if checkpoint != entry["checkpoint"] or checkpoint_revision != entry["local_revision"]:
+                raise ValueError("The loaded CustomVoice model does not match the catalog's pinned checkpoint revision.")
+            options = {
+                "checkpoint": checkpoint,
+                "checkpoint_revision": checkpoint_revision,
+                "speaker": speaker, "language": language_match,
+                "supported_speakers": list(supported_speakers),
+                "supported_languages": list(supported_languages),
+                "default_direction": default_direction.strip(),
+                "settings_schema": controls["controls"],
+                "capability_snapshot": {"voice_direction": controls["direction"],
+                                        "sampling_controls": capabilities.get("sampling_controls", {}),
+                                        "acting_controls": capabilities.get("acting_controls", [])},
+            }
+        else:
+            options = {}
+        self._json(201, {"identity": cast.create_identity(character_id, engine_id, req.get("label"), options,
+                                                          req.get("notes", ""))})
+
+    @router.post("/api/identities/{identity_id}/update")
+    def update_identity(self, parsed, req, identity_id):
+        self._json(200, {"identity": cast.update_identity(identity_id, req, fixed_voices=discover_kokoro_voices())})
+
+    def reference_metadata(self):
+        """The X-Reference-Metadata header of a recording's upload: base64url JSON with its name, words, origin and terms."""
+        encoded = self.headers.get("X-Reference-Metadata", "")
+        metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))  # a bad one is a ValueError: 400
+        if not isinstance(metadata, dict):
+            raise ValueError("Reference metadata must be an object.")
+        return metadata
+
+    @router.post("/api/identities/{identity_id}/references/preview")
+    def preview_reference(self, parsed, req, identity_id):
+        try:
+            body = self._read_body(MAX_UPLOAD_BYTES)
+            metadata = reference_metadata(self)
+            audio, metrics = cast.preview_reference(identity_id, metadata.get("filename"), body, edits=metadata.get("edits"))
+        except RuntimeError as exc:
+            return self._json(400, {"error": str(exc)})
+        quality = json.dumps(metrics["quality"], separators=(",", ":")).encode("ascii")
+        self._send(200, audio, "audio/wav", {"X-Reference-Duration": f"{metrics['duration_seconds']:.3f}",
+                                             "X-Reference-Sample-Rate": str(metrics["sample_rate"]),
+                                             "X-Reference-RMS": f"{metrics['rms_dbfs']:.1f}",
+                                             "X-Reference-Quality": base64.urlsafe_b64encode(quality).decode("ascii")})
+
+    @router.post("/api/identities/{identity_id}/references")
+    def upload_reference(self, parsed, req, identity_id):
+        try:
+            body = self._read_body(MAX_UPLOAD_BYTES)
+            metadata = reference_metadata(self)
+            saved = cast.add_reference(identity_id, metadata.get("filename"), body,
+                                       transcript=metadata.get("transcript", ""), origin=metadata.get("origin", ""),
+                                       allowed_use=metadata.get("allowed_use", ""), edits=metadata.get("edits"))
+        except RuntimeError as exc:
+            return self._json(400, {"error": str(exc)})
+        self._json(201, {"reference": saved})
+
+    @router.post("/api/identities/{identity_id}/references/from-take")
+    def reference_from_take(self, parsed, req, identity_id):
+        self._json(201, {"reference": cast.add_reference_from_take(
+            identity_id, req.get("take_id"), transcript=req.get("transcript"), edits=req.get("edits"),
+            origin=req.get("origin"), allowed_use=req.get("allowed_use"))})
+
+    @router.post("/api/references/{reference_id}/versions")
+    def reference_version(self, parsed, req, reference_id):
+        self._json(201, {"reference": cast.add_reference_version(reference_id, req)})
+
+    @router.get("/api/references/{reference_id}/audio")
+    def reference_version_audio(self, parsed, req, reference_id):
+        try:
+            target = cast.get_media_path("reference", reference_id)
+            self._send(200, target.read_bytes(), "audio/wav", {"X-Reference-Version": reference_id})
+        except (ValueError, KeyError, FileNotFoundError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/references/{reference_id}/source")
+    def reference_version_source(self, parsed, req, reference_id):
+        try:
+            target = cast.get_media_path("reference_source", reference_id)
+            content_type = {".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg", ".mp3": "audio/mpeg",
+                            ".m4a": "audio/mp4"}.get(target.suffix.lower(), "application/octet-stream")
+            self._send(200, target.read_bytes(), content_type, {"X-Reference-Version": reference_id})
+        except (ValueError, KeyError, FileNotFoundError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/references/{reference_id}/transcript-suggestion")
+    def transcript_suggestion(self, parsed, req, reference_id):
+        # A draft only: nothing is saved or approved until the user checks and saves the text.
+        try:
+            audio = cast.get_media_path("reference", reference_id)
+            self._json(200, {"suggestion": transcript_suggest.suggest(audio)})
+        except (KeyError, FileNotFoundError) as exc:
+            self._json(404, {"error": str(exc)})
+        except transcript_suggest.TranscriptBusy as exc:
+            self._json(409, {"error": str(exc)})
+        except transcript_suggest.TranscriptUnavailable as exc:
+            self._json(503, {"error": str(exc)})
+        except RuntimeError as exc:
+            self._json(500, {"error": str(exc)})
+
+    @router.get("/api/pronunciations")
+    def pronunciation_list(self, parsed, req):
+        character_id = (parse_qs(parsed.query).get("character_id") or [None])[0]
+        self._json(200, {"pronunciations": cast.list_pronunciations(character_id)})
+
+    @router.post("/api/pronunciations")
+    def save_pronunciation(self, parsed, req):
+        self._json(200, {"pronunciation": cast.save_pronunciation(
+            source=req.get("source"), replacement=req.get("replacement"), character_id=req.get("character_id"),
+            notes=req.get("notes", ""))})
+
+    @router.post("/api/retirements")
+    def retire(self, parsed, req):
+        self._json(201, cast.retire(req.get("kind"), req.get("id"), reason=req.get("reason", "")))
+
+    @router.post("/api/retirements/restore")
+    def restore_retired(self, parsed, req):
+        self._json(200, cast.restore(req.get("kind"), req.get("id")))
+
+    @router.get("/api/purges/preview")
+    def purge_preview(self, parsed, req):
+        params = parse_qs(parsed.query)
+        try:
+            self._json(200, cast.purge_preview((params.get("kind") or [None])[0], (params.get("id") or [None])[0]))
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+
+    @router.post("/api/purges")
+    def purge(self, parsed, req):
+        self._json(200, cast.purge(req.get("kind"), req.get("id"), reason=req.get("reason", ""), confirm=req.get("confirm")))
+
+    # ------------------------------------------------------------------------------------------------ takes
+
+    @router.get("/api/takes")
+    def take_list(self, parsed, req):
+        params = parse_qs(parsed.query)
+        self._json(200, {"takes": cast.list_takes((params.get("identity_id") or [None])[0], (params.get("line_id") or [None])[0])})
+
+    @router.get("/api/takes/{take_id}")
+    def take(self, parsed, req, take_id):
+        try:
+            self._json(200, {"take": cast.get_take(take_id)})
+        except (ValueError, KeyError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/takes/{take_id}/audio")
+    def take_audio(self, parsed, req, take_id):
+        try:
+            target = cast.get_media_path("take", take_id)
+            self._send(200, target.read_bytes(), "audio/wav", {"X-Take-Id": take_id})
+        except (ValueError, KeyError, FileNotFoundError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/takes/{take_id}/waveform")
+    def take_waveform(self, parsed, req, take_id):
+        try:
+            self._json(200, cast.take_waveform(take_id, (parse_qs(parsed.query).get("points") or ["600"])[0]))
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+
+    @router.get("/api/takes/{take_id}/voice-match")
+    def take_voice_match(self, parsed, req, take_id):
+        try:
+            self._json(200, {"voice_match": speaker_similarity.voice_match(cast, take_id)})
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+        except FileNotFoundError as exc:
+            self._json(503, {"error": str(exc)})
+
+    @router.post("/api/takes/{take_id}/update")
+    def update_take(self, parsed, req, take_id):
+        self._json(200, {"take": cast.set_take_state(take_id, status=req.get("status"), rating=req.get("rating"),
+                                                     notes=req.get("notes"))})
+
+    @router.post("/api/takes/{take_id}/edit")
+    def edit_take(self, parsed, req, take_id):
+        edit_key = req.pop("idempotency_key", None)
+        take, replayed = cast.create_edited_take(take_id, req, request_key=edit_key)
+        self._json(200 if replayed else 201, {"take": take, "replayed": replayed})
+
+    @router.post("/api/takes/{take_id}/edit-preview")
+    def preview_take_edit(self, parsed, req, take_id):
+        audio, report = cast.preview_edit(take_id, req)
+        self._send(200, audio, "audio/wav", {
+            "X-Audio-Seconds": f"{report['duration_seconds']:.2f}",
+            "X-Edit-Start-Seconds": f"{report['start_seconds']:.3f}",
+            "X-Edit-End-Seconds": f"{report['end_seconds']:.3f}",
+            "X-Peak-Dbfs": "" if report["peak_dbfs"] is None else f"{report['peak_dbfs']:.2f}"})
+
+    # ------------------------------------------------------------------------------------------------ scenes
+
+    @router.get("/api/scenes")
+    def scene_list(self, parsed, req):
+        self._json(200, {"schema_version": 1, "scenes": scenes.list_scenes()})
+
+    @router.post("/api/scenes")
+    def create_scene(self, parsed, req):
+        self._json(201, {"scene": scenes.create_scene(req)})
+
+    @router.get("/api/scenes/template.json")
+    def scene_template_json(self, parsed, req):
+        self._json(200, json_template())
+
+    @router.get("/api/scenes/template.csv")
+    def scene_template_csv(self, parsed, req):
+        self._send(200, csv_template(), "text/csv; charset=utf-8",
+                   {"Content-Disposition": "attachment; filename=voice-lab-scene-template.csv"})
+
+    @router.post("/api/scenes/import")
+    def import_scene(self, parsed, req):
+        fmt = req.get("format")
+        content = req.get("content")
+        if not isinstance(content, str) or len(content.encode("utf-8")) > MAX_SCENE_REQUEST_BYTES:
+            raise ValueError("Scene import content must be UTF-8 text up to 2 MiB.")
+        if fmt == "json":
+            try:
+                manifest = json.loads(content)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid scene JSON: {exc}") from exc
+        elif fmt == "csv":
+            manifest = scenes.import_csv(content.encode("utf-8"))
+        else:
+            raise ValueError("Scene import format must be json or csv.")
+        self._json(201, {"scene": scenes.create_scene(manifest)})
+
+    @router.get("/api/scenes/{scene_id}")
+    def scene(self, parsed, req, scene_id):
+        try:
+            self._json(200, {"scene": scenes.get_scene(scene_id)})
+        except (ValueError, KeyError, RuntimeError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/scenes/{scene_id}")
+    def update_scene(self, parsed, req, scene_id):
+        self._json(200, {"scene": scenes.update_scene(scene_id, req, expected_revision=req.get("expected_revision"))})
+
+    @router.get("/api/scenes/{scene_id}/export.json")
+    def scene_export_json(self, parsed, req, scene_id):
+        try:
+            self._send(200, scenes.export_json(scene_id), "application/json; charset=utf-8",
+                       {"Content-Disposition": f"attachment; filename=scene-{scene_id}.json"})
+        except (ValueError, KeyError, RuntimeError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/scenes/{scene_id}/export.csv")
+    def scene_export_csv(self, parsed, req, scene_id):
+        try:
+            self._send(200, scenes.export_csv(scene_id), "text/csv; charset=utf-8",
+                       {"Content-Disposition": f"attachment; filename=scene-{scene_id}.csv"})
+        except (ValueError, KeyError, RuntimeError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/scenes/{scene_id}/previews/{preview_file}.wav")
+    def scene_preview_audio(self, parsed, req, scene_id, preview_file):
+        # Preview audio lives in the scene store's own output folder, which need not be the project's out/.
+        folder = (scenes.output_root / scene_id).resolve()
+        target = (folder / f"{preview_file}.wav").resolve()
+        if target.parent == folder and target.is_file():
+            self._send(200, target.read_bytes(), "audio/wav")
+        else:
+            self._json(404, {"error": "Scene preview not found."})
+
+    @router.get("/api/scenes/{scene_id}/segments")
+    def scene_segments(self, parsed, req, scene_id):
+        line_id = (parse_qs(parsed.query).get("line_id") or [None])[0]
+        try:
+            self._json(200, {"segments": scenes.segment_preview(scene_id, line_id)})
+        except (ValueError, KeyError, RuntimeError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/scenes/{scene_id}/jobs")
+    def scene_jobs(self, parsed, req, scene_id):
+        try:
+            self._json(200, {"jobs": scenes.list_jobs(scene_id)})
+        except (ValueError, KeyError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/scenes/{scene_id}/jobs")
+    def create_scene_job(self, parsed, req, scene_id):
+        job = scenes.create_job(scene_id, req.get("line_ids"), req.get("segment_ids"))
+        batches.wake()
+        self._json(202, {"job": job})
+
+    @router.post("/api/scenes/{scene_id}/select")
+    def select_scene_take(self, parsed, req, scene_id):
+        self._json(200, {"scene": scenes.select_take(scene_id, req.get("line_id"), req.get("take_id"), req.get("segment_id"))})
+
+    @router.post("/api/scenes/{scene_id}/preview")
+    def scene_preview(self, parsed, req, scene_id):
+        preview = scenes.assemble_preview(scene_id)
+        preview_url = f"/api/scenes/{scene_id}/previews/"
+        preview["audio_url"] = preview_url + Path(preview["audio_path"]).name
+        preview["mastered_audio_url"] = preview_url + Path(preview["mastered_audio_path"]).name
+        self._json(201, {"preview": preview})
+
+    @router.get("/api/scenes/jobs/{job_id}")
+    def scene_job(self, parsed, req, job_id):
+        try:
+            self._json(200, {"job": scenes.get_job(job_id)})
+        except (ValueError, KeyError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/scenes/jobs/{job_id}/manifest.json")
+    def scene_job_manifest(self, parsed, req, job_id):
+        try:
+            valid, info = scenes.verify_job_manifest(job_id)
+            if not valid:
+                self._json(409, {"error": "Batch manifest checksum mismatch.", "details": info})
+            else:
+                self._send(200, Path(info["path"]).read_bytes(), "application/json; charset=utf-8")
+        except (ValueError, KeyError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/scenes/jobs/{job_id}/pause", "/api/scenes/jobs/{job_id}/resume", "/api/scenes/jobs/{job_id}/cancel",
+                 "/api/scenes/jobs/{job_id}/retry")
+    def scene_job_action(self, parsed, req, job_id):
+        action = parsed.path.rsplit("/", 1)[1]
+        job = {"pause": scenes.request_pause, "resume": scenes.resume, "cancel": scenes.cancel,
+               "retry": scenes.retry_failed}[action](job_id)
+        batches.wake()
+        self._json(200, {"job": job})
+
+    # ------------------------------------------------------------------------------------------------ export packages
+
+    @router.get("/api/exports")
+    def export_list(self, parsed, req):
+        # ?recheck=1 asks FFmpeg again, for a page whose user has just installed it.
+        recheck = parse_qs(parsed.query).get("recheck") == ["1"]
+        self._json(200, {"exports": export_panel.list_exports(scenes.root), "ffmpeg": export_panel.ffmpeg_report(refresh=recheck)})
+
+    @router.post("/api/exports/preview")
+    def export_preview(self, parsed, req):
+        self._json(200, export_panel.run(scenes.root, req, dry_run=True))
+
+    @router.post("/api/exports")
+    def export(self, parsed, req):
+        try:
+            self._json(201, export_panel.run(scenes.root, req))
+        except export_panel.ExportBusy as exc:
+            self._json(409, {"error": str(exc)})
+
+    @router.post("/api/exports/{export_id}/verify")
+    def verify_export(self, parsed, req, export_id):
+        self._json(200, export_panel.verify(scenes.root, export_id))
+
+    # ------------------------------------------------------------------------------------------------ comparisons
+
+    @router.get("/api/evaluations/suites")
+    def evaluation_suites(self, parsed, req):
+        self._json(200, list_suites())
+
+    @router.get("/api/evaluations")
+    def evaluation_runs(self, parsed, req):
+        self._json(200, {"runs": evaluations.list_runs()})
+
+    @router.get("/api/evaluations/runs/{run_id}")
+    def evaluation_run(self, parsed, req, run_id):
+        try:
+            self._json(200, {"run": evaluations.get_run(run_id)})
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/evaluations/runs/import")
+    def import_evaluation_run(self, parsed, req):
+        self._json(201, {"run": evaluations.register_run_manifest(req.get("manifest_path", ""))})
+
+    @router.post("/api/evaluations/cast-import")
+    def import_cast_comparison(self, parsed, req):
+        self._json(201, {"run": import_cast_takes(cast, evaluations, req.get("take_ids"),
+                                                  title=req.get("title", "Saved voice comparison"))})
+
+    @router.get("/api/evaluations/blind-sessions")
+    def blind_sessions(self, parsed, req):
+        self._json(200, {"sessions": evaluations.list_blind_sessions()})
+
+    @router.post("/api/evaluations/blind-sessions")
+    def create_blind_session(self, parsed, req):
+        self._json(201, {"session": evaluations.create_blind_session(req.get("run_id"), req.get("evaluator", "local listener"))})
+
+    @router.get("/api/evaluations/blind-sessions/{session_id}")
+    def blind_session(self, parsed, req, session_id):
+        try:
+            self._json(200, {"session": evaluations.get_blind_session(session_id)})
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/evaluations/blind-sessions/{session_id}/ratings")
+    def rate_blind_session(self, parsed, req, session_id):
+        self._json(200, {"session": evaluations.save_rating(session_id, req.get("trial_id"), req.get("ratings"),
+                                                            req.get("notes", ""))})
+
+    @router.post("/api/evaluations/blind-sessions/{session_id}/reveal")
+    def reveal_blind_session(self, parsed, req, session_id):
+        self._json(200, {"session": evaluations.reveal_blind_session(session_id)})
+
+    @router.get("/api/evaluations/blind-audio/{item_id}")
+    def blind_audio(self, parsed, req, item_id):
+        try:
+            self._send(200, evaluations.get_blind_audio_path(item_id).read_bytes(), "audio/wav")
+        except (KeyError, FileNotFoundError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.get("/api/evaluations/items/{item_id}")
+    def evaluation_item(self, parsed, req, item_id):
+        try:
+            self._json(200, {"item": evaluations.get_item(item_id)})
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/evaluations/items/{item_id}/transcript")
+    def item_transcript(self, parsed, req, item_id):
+        self._json(200, evaluations.add_transcript(item_id, req.get("heard_text"), req.get("evaluator")))
+
+    # ------------------------------------------------------------------------------------------------ system and backups
+
+    @router.get("/api/system")
+    def system(self, parsed, req):
+        recheck = parse_qs(parsed.query).get("recheck") == ["1"]
+        ram = ram_report()
+        report = system_report.build(
+            app=APP_NAME, version=VERSION, state_root=library_root, out_dir=OUT, device=engines.device,
+            ffmpeg=export_panel.ffmpeg_report(refresh=recheck), engine_status=engines.engine_status(),
+            log_path=getattr(log, "path", None), free_ram=ram["free_gb"], total_ram=ram["total_gb"])
+        report["diagnostics"] = system_report.diagnostics_text(report)
+        self._json(200, report)
+
+    @router.get("/api/system/storage")
+    def storage(self, parsed, req):
+        self._json(200, system_report.storage(library_root, OUT))
+
+    @router.get("/api/system/backups")
+    def backups(self, parsed, req):
+        self._json(200, {"folder": str(backups_folder), "backups": library_backup.list_backups(backups_folder),
+                         "plan": library_backup.plan(library_root), "task": backup_task.status(),
+                         "suggested_folder": library_backup.suggested_folder(library_root)})
+
+    @router.get("/api/system/task")
+    def task(self, parsed, req):
+        self._json(200, {"task": backup_task.status()})
+
+    @router.post("/api/system/backups")
+    def back_up(self, parsed, req):
+        include = req.get("include", list(library_backup.OPTIONAL))
+        if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
+            raise ValueError("include must be a list of section names.")
+        library_backup.chosen_sections(include)  # an unknown name is refused now, not after the thread starts
+        self._start_task("backup", "Backing up the library", logged(
+            "backup", lambda progress: library_backup.create(
+                library_root, backups_folder, include=include, app=APP_NAME, version=VERSION, progress=progress),
+            lambda result: f"{result['name']}, {result['files']} files, {result['bytes']} bytes"))
+
+    @router.post("/api/system/backups/verify")
+    def check_backup(self, parsed, req):
+        source = library_backup.backup_path(backups_folder, req.get("name"))
+        self._start_task("check", f"Checking {source.name}", logged(
+            "check", lambda progress: library_backup.verify(source, progress=progress),
+            lambda result: f"{result['name']} {'passed' if result['ok'] else 'did not pass'}"))
+
+    @router.post("/api/system/backups/restore")
+    def restore_backup(self, parsed, req):
+        source = library_backup.backup_path(backups_folder, req.get("name"))
+        target = library_backup.restore_target(library_root, req.get("folder"))
+        self._start_task("restore", f"Restoring {source.name}", logged(
+            "restore", lambda progress: {**library_backup.restore(source, target, progress=progress), "folder": target.name},
+            lambda result: f"{result['folder']}, {result['files']} files"))
+
+    @router.post("/api/system/cleanup")
+    def cleanup(self, parsed, req):
+        log_file = getattr(log, "path", None)
+        result = housekeeping.apply(housekeeping.plan(OUT, keep=[log_file] if log_file else []), OUT)
+        log.event(f"cleanup on request removed {result['removed']} items ({result['bytes']} bytes)"
+                  + (f"; {len(result['errors'])} could not be removed" if result["errors"] else ""))
+        self._json(200, result)
+
+    # ------------------------------------------------------------------------------------------------ Drama studio
+
+    @router.get("/api/drama3/*", "/api/drama3/info", "/api/drama3/jobs/{job_id}", "/api/drama3/jobs/{job_id}/audio",
+                "/api/drama3/jobs/{job_id}/metadata", "/api/drama3/jobs/{job_id}/package")
+    def drama_read(self, parsed, req, job_id=None, rest=None):
+        from drama3_production import capabilities
+        try:
+            studio = drama()
+            suffix = parsed.path[len("/api/drama3/"):]
+            if suffix == "info":
+                return self._json(200, {**capabilities(), "sources": studio.sources(), "jobs": studio.list()})
+            match = re.fullmatch(r"jobs/([a-f0-9]{32})(?:/(audio|metadata|package))?", suffix)
+            if not match:
+                return self._json(404, {"error": "Drama endpoint not found"})
+            if match.group(2):
+                data, ctype = studio.artifact(*match.groups())
+                disposition = ("inline" if match.group(2) == "audio" else
+                               "attachment; filename=drama-take." + ("zip" if match.group(2) == "package" else "json"))
+                return self._send(200, data, ctype, {"Content-Disposition": disposition})
+            offset = int(parse_qs(parsed.query).get("offset", ["0"])[0])
+            self._json(200, studio.get(match.group(1), offset))
+        except KeyError as exc:
+            self._json(404, {"error": str(exc)})
+        except (ValueError, RuntimeError) as exc:
+            self._json(400, {"error": str(exc)})
+
+    @router.post("/api/drama3/jobs")
+    def start_drama_job(self, parsed, req):
+        self._json(202, {"job": drama().start(req)})
+
+    @router.post("/api/drama3/jobs/{job_id}/cancel")
+    def cancel_drama_job(self, parsed, req, job_id):
+        self._json(200, {"job": drama().cancel(job_id)})
+
+    router.check()
+    Handler.router = router  # the table it answers, read by the tests
     return Handler
 
 
@@ -1566,7 +1711,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {VERSION}")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--device", default="auto", choices=("auto", "cpu"))
+    parser.add_argument("--device", default="auto", choices=DEVICES,
+                        help="auto (the default) uses a graphics card when there is one; cpu or cuda chooses")
     parser.add_argument("--idle-minutes", type=float, default=10, help="unload models after this long idle (0 = never)")
     parser.add_argument("--state-root", default=str(LAB), help="local Cast/Scene data root (defaults to this project)")
     parser.add_argument("--preload", default="", help="comma list of engines to load at start (kokoro, turbo, orig)")
@@ -1574,6 +1720,8 @@ def main():
     parser.add_argument("--no-cleanup", action="store_true",
                         help="do not sweep stale worker folders, desktop sessions and old service logs from out/ at start")
     parser.add_argument("--desktop-session", type=Path, help=argparse.SUPPRESS)
+    # Where this run's service log goes instead of out/logs; the tests use it to leave the real out/ folder alone.
+    parser.add_argument("--log-dir", type=Path, default=OUT / "logs", help=argparse.SUPPRESS)
     args = parser.parse_args()
     folder_notes = migrate_program_folders(LAB)
     device = pick_device(args.device)
@@ -1592,7 +1740,7 @@ def main():
                                   lab_root=state_root)
     server = LocalThreadingHTTPServer(("127.0.0.1", args.port), BaseHTTPRequestHandler)
     batch_runner = SceneBatchRunner(scenes, f"http://127.0.0.1:{server.server_address[1]}")
-    request_log = RequestLog(OUT / "logs")
+    request_log = RequestLog(args.log_dir)
     server.RequestHandlerClass = make_handler(engines, server.server_address[1], cast, scenes, batch_runner, evaluations,
                                               request_log)
     request_log.start(APP_NAME, VERSION, port=server.server_address[1], device=device, state_root=state_root)

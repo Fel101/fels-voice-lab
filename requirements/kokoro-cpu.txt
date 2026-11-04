@@ -1,10 +1,12 @@
-# Kokoro 82M on the CPU, for 64-bit Windows and Python 3.12. tools/install_kokoro.py installs this file into .venv.
+# Kokoro 82M on the CPU, for 64-bit Windows and Python 3.12. tools/install_kokoro.py installs this file into .venv-kokoro, an
+# environment of its own, so nothing another model installs can clash with it.
 # Every line pins one file by its SHA-256, so pip refuses to install anything else. These are the versions Kokoro was
 # checked with on the development machine, except torch: that machine uses an AMD ROCm build, and this file takes the
-# CPU build PyPI serves for Windows. The packages in requirements/core.txt are not repeated here.
+# CPU build PyPI serves for Windows. The packages of requirements/core.txt are repeated at the same versions, because the
+# worker runs the Lab's own modules in .venv-kokoro. requirements/kokoro-nvidia.txt swaps torch for a CUDA build.
 # docopt is left out on purpose. It has no wheel, and only the num2words command-line script imports it.
-# To change a pin: resolve with `pip install --dry-run --report` in an environment that has requirements/core.txt,
-# run the speech check in tools/install_kokoro.py, then copy each package's version and SHA-256 here.
+# To change a pin: resolve with `pip install --dry-run --report` in a fresh Python 3.12 environment that has
+# requirements/core.txt, run the speech check in tools/install_kokoro.py, then copy each package's version and SHA-256 here.
 addict==2.4.0 --hash=sha256:249bb56bbfd3cdc2a004ea0ff4c2b6ddc84d53bc2194761636eb314d5cfa5dfc
 annotated-doc==0.0.5 --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101
 annotated-types==0.8.0 --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
@@ -14,6 +16,7 @@ babel==2.18.0 --hash=sha256:e2b422b277c2b9a9630c1d7903c2a00d0830c409c59ac8cae908
 blis==1.3.3 --hash=sha256:f20f7ad69aaffd1ce14fe77de557b6df9b61e0c9e582f75a843715d836b5c8af
 catalogue==2.0.10 --hash=sha256:58c2de0020aa90f4a2da7dfad161bf7b3b054c86a5f09fcedc0b2b740c109a9f
 certifi==2026.7.22 --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+cffi==2.1.1 --hash=sha256:f53e442b08449d42821fa4a4fba000095af9f62742a500f978a9f557ec44339a
 charset-normalizer==3.5.1 --hash=sha256:3617ac3cfd8b9888f145ad89dd6e692285834b0201c6074a5eeaad3fd4d668c2
 click==8.5.0 --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
 cloudpathlib==0.25.0 --hash=sha256:8faef3ed3a0dd71d134e8617b4fdc5ce56a12a6b485c080cfe80106e5f1d1f5d
@@ -51,12 +54,15 @@ mpmath==1.3.0 --hash=sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f
 murmurhash==1.0.15 --hash=sha256:f4ac15a2089dc42e6eb0966622d42d2521590a12c92480aafecf34c085302cca
 networkx==3.6.1 --hash=sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762
 num2words==0.5.14 --hash=sha256:1c8e5b00142fc2966fd8d685001e36c4a9911e070d1b120e1beb721fa1edb33d
+numpy==1.26.4 --hash=sha256:08beddf13648eb95f8d867350f6a018a4be2e5ad54c8d8caed89ebca558b2818
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 phonemizer-fork==3.3.2 --hash=sha256:97305c76f4183b3825dae8f4c032265fe78c9946ce58c47d4b62161349264b74
 preshed==3.0.13 --hash=sha256:04d8f13f2986e5d11af5ac51f55ce3106c70c41b483d20ea392e6180bdd0f870
+pycparser==3.11 --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
 pydantic==2.13.5 --hash=sha256:346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73
 pydantic_core==2.46.5 --hash=sha256:5e81740c09e310f5aa5cbd3e434a01c154d4bef93241c7877b39f211d2b78ba8
 Pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+pyloudnorm==0.2.0 --hash=sha256:9bb69afb904f59d007a7f9ba3d75d16fb8aeef35c44d6df822a9f192d69cf13f
 pyparsing==3.3.2 --hash=sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d
 python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
 PyYAML==6.0.3 --hash=sha256:5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b
@@ -68,11 +74,13 @@ rfc3986==1.5.0 --hash=sha256:a86d6e1f5b1dc238b218b012df0aa79409667bb209e58da56d0
 rich==15.0.0 --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb
 rpds-py==2026.6.3 --hash=sha256:2c958bf94822e9290a40aaf2a822d4bc5c88099093e3948ad6c571eca9272e5f
 safetensors==0.5.3 --hash=sha256:836cbbc320b47e80acd40e44c8682db0e8ad7123209f69b093def21ec7cafd11
+scipy==1.17.1 --hash=sha256:41b71f4a3a4cab9d366cd9065b288efc4d4f3c0b37a91a8e0947fb5bd7f31d87
 segments==2.4.0 --hash=sha256:4021dc67f201cc03c864c74c618bdb163b1af629da3040babbaa37d8813f3db0
 setuptools==81.0.0 --hash=sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6
 shellingham==1.5.4 --hash=sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686
 six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
 smart_open==8.0.1 --hash=sha256:3e97f90e92a952cb57863dfe132082c400a52eeeb27c067692fb51dbcc5b0089
+soundfile==0.14.0 --hash=sha256:299491d3499460fb1b74bb4bd78b57ffc2d243a5fafa7b6ec1b264875c78453e
 spacy==3.8.16 --hash=sha256:5991c334e71c23b798c25e0d403295dde4d2d1fb58c2e075450b964db03c05ea
 spacy-curated-transformers==0.3.1 --hash=sha256:503559b6a1d6e44ec2c978e18ed871ce5c3d56871dc9216c0e1523428204e610
 spacy-legacy==3.0.12 --hash=sha256:476e3bd0d05f8c339ed60f40986c07387c0a71479245d6d0f4298dbd52cda55f
@@ -87,6 +95,7 @@ tqdm==4.70.1 --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e12
 transformers==5.2.0 --hash=sha256:9ecaf243dc45bee11a7d93f8caf03746accc0cb069181bbf4ad8566c53e854b4
 typer==0.27.2 --hash=sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d
 typer-slim==0.24.0 --hash=sha256:d5d7ee1ee2834d5020c7c616ed5e0d0f29b9a4b1dd283bdebae198ec09778d0e
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
 typing-inspection==0.4.4 --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
 uritemplate==4.2.0 --hash=sha256:962201ba1c4edcab02e60f9a0d3821e82dfc5d2d6662a21abd533879bdb8a686
 urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3

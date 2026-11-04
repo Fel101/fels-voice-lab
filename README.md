@@ -5,11 +5,18 @@ in your Cast, act dialogue with it, render whole scenes as batches, compare take
 production audio with a checksummed manifest. It runs on your own computer: the service listens only
 on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate.
 
-**An early release (0.1.0) for Windows 10/11 and Python 3.12.** It runs from source and has no
-installer. Model runtimes and weights are separate installations, so a fresh checkout is not a
-one-click setup of every model. It was built and checked on one Windows machine with an AMD GPU;
-there are no NVIDIA, Linux or macOS results. Original application code is MIT; borrowed code and
-optional models keep their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
+**An early release (0.1.0) for Windows 10/11 and Python 3.12.** It runs from source: `setup.bat` sets up the core, the
+desktop window and the speech models you choose, and each model runs in a Python environment of its own. It was built and
+checked on one Windows machine with an AMD GPU. The NVIDIA builds the installers offer have not been tried on an NVIDIA card
+yet, and there are no Linux or macOS results. Original application code is MIT; borrowed code and optional models keep their
+own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
+
+## Hear it
+
+[**Listen to a 40-second scene**](docs/demo/kokoro-demo.mp3) (MP3, 250 KB) in six of Kokoro 82M's preset voices: American,
+British, Spanish and French. The Lab spoke every line on a mini PC's processor, with no graphics card and no cloud service; no
+person's recording was used or cloned. Its [manifest](docs/demo/kokoro-demo.json) lists the lines, the voices, the model's pinned revision
+and the file's SHA-256. Like every file the Lab makes, the clip says inside it that it is AI-generated speech.
 
 ## A look at it
 
@@ -79,6 +86,7 @@ package back and checks every hash, the captions, and each file's codec and leng
   and retry, stale-take protection, undo and redo, and previews.
 - **Compare and export:** blind A/B listening on saved Cast takes, measurements, optional transcript
   and speaker proxies, packages in five formats with manifests and captions, and lip-sync tracks.
+  Every file the Lab makes is labelled inside it as AI-generated speech; your own recordings never are.
 - **Drama studio:** up to sixteen reference speakers, inline cues, long scripts, incremental PCM
   audition, retained jobs and mixed-audio packages.
 - **System and backups:** the version, FFmpeg, free disk space and model states in one place, a
@@ -117,18 +125,20 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 
 ## Start here
 
-1. Read [setup](docs/SETUP.md), install [Python 3.12](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)
-   (64-bit; the newer Python on python.org's front page does not work yet), put the Lab in a folder OneDrive does not sync,
-   such as `C:\voice-lab`, and run `setup.bat`.
-2. Run `setup-kokoro.bat` to add Kokoro, a small model that speaks on an ordinary CPU (about 600 MB of
-   downloads; it shows its plan and asks first). `setup-phonon.bat` adds Phonon the same way: smaller
-   still (about 80 MB), English only, with 37 preset voices. To clone a voice, run `setup-chatterbox.bat`: it adds
-   Chatterbox Turbo, which speaks in the voice of any recording longer than five seconds, in an environment of
-   its own (about 3.4 GB of downloads and 5 GB on disk; it also shows its plan and asks first). The core alone
-   opens the studio and manages its stores, but it cannot synthesize without a model. [Setup](docs/SETUP.md)
-   covers the other models.
-3. Run `setup-desktop.bat` once. Use the **Fel's Voice Lab** desktop icon afterward. Its dedicated
-   window runs without a console; closing it stops its backend.
+1. Install [Python 3.12](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) (64-bit; the newer Python on
+   python.org's front page does not work yet), put the Lab in a folder OneDrive does not sync, such as `C:\voice-lab`, and
+   run `setup.bat`.
+2. It sets up the core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
+   in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which
+   also speaks in the voice of any recording longer than five seconds (about 4 GB to download and 7 GB on disk, for a computer
+   with 16 GB of RAM or more). It shows every model's plan and asks once. On a computer with an NVIDIA driver it offers the
+   GPU builds too.
+3. Use the **Fel's Voice Lab** desktop icon. Its dedicated window runs without a console; closing it stops its backend.
+
+To add a model later, press **Install** on its card in **Models & features**, or run `setup-kokoro.bat`, `setup-phonon.bat`
+or `setup-chatterbox.bat`. The core alone opens the studio and manages its stores, but it cannot speak without a model.
+[Setup](docs/SETUP.md) covers every installer and the other models, and [troubleshooting](docs/TROUBLESHOOTING.md) says what
+runs on an 8, 16 or 32 GB computer and what to do when something stops.
 
 FFmpeg is not bundled. Install it (`winget install Gyan.FFmpeg`) for scene export, MP3 and AAC
 output, and M4A references. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
@@ -149,7 +159,9 @@ Read [desktop and state behavior](docs/SETUP.md).
 | Guide | Purpose |
 |---|---|
 | [Setup](docs/SETUP.md) | Environments, hardware, desktop launch, known installation limits and removing the Lab |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | What runs on which computer, setup and RAM problems, graphics cards, FFmpeg, reporting a problem |
 | [User guide](docs/USER_GUIDE.md) | Design through delivery, stopping and backups |
+| [Architecture](docs/ARCHITECTURE.md) | For contributors: the processes and environments, a request's path, where things are decided |
 | [Capabilities](MODEL_CAPABILITIES.md) | Integrated features versus trials and blocked models |
 | [Language screen](docs/LANGUAGE_MATRIX.md) | Languages each engine was screened in, with word error rates and the hardware used |
 | [Drama](docs/DRAMA3.md) / [production studio](docs/DRAMA3_EXPANSION.md) | Native runtime, cast, streaming and editing limits |
@@ -182,5 +194,6 @@ passing contract tests do not establish voice quality on every device/language.
 adapted components. Model licensing is separate: Breeze weights/self-hosted outputs
 are non-commercial, and Drama has conditional commercial and hosted-service terms.
 Check the full upstream licenses and recording permissions for your use. No model
-weights, voice recordings or generated samples are bundled. No affiliation with
+weights or voice recordings are bundled. The one generated sample, the demo above, is
+Kokoro's own preset voices (Apache-2.0), described in its manifest. No affiliation with
 or endorsement by the model publishers is implied.
