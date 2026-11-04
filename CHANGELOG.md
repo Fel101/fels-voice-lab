@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-11-04
 
 The first public release, for Windows 10/11 and Python 3.12. It runs from source, and model runtimes are installed
 separately ([setup](docs/SETUP.md)). What was and was not checked for each model is in
@@ -345,8 +345,9 @@ separately ([setup](docs/SETUP.md)). What was and was not checked for each model
   are pinned and checked by hash but have not been run on an NVIDIA card, and there are no Linux or macOS results. Only Kokoro,
   Phonon, Chatterbox Turbo and Drama 3 have installers, and VoxCPM2 needs pinned source and a ROCm overlay that this repository
   does not install. Nothing here trains or fine-tunes a model.
-- **Updates.** There is no published release yet, so `update.bat` has only run against stand-ins: GitHub's answers and
-  downloads, and Git repositories made by its tests. The first real update will be the one from this version. It trusts
+- **Updates.** This is the first release, so there was nothing to update from: `update.bat` has only run against stand-ins,
+  GitHub's answers and downloads and Git repositories made by its tests. The first real update will be the one from this
+  version. It trusts
   GitHub and this repository as the first download did: it takes files only from github.com over HTTPS and checks that a
   release's `app_version.py` matches its tag, but releases are not signed.
 - **The synthetic label** is a tag in the file's metadata, which an editor or a converter can drop. Takes, packages and
