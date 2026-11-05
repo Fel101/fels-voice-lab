@@ -376,6 +376,63 @@ card says it ran on the CPU. `"device": "cpu"` in `runtime.local.json`, or `--de
 hides the switches. Going back from a GPU build to the CPU build takes deleting the environment folder (`.venv-kokoro` or
 `.venv-chatterbox`) and installing again; the model files in `hf-cache` stay.
 
+## Qwen3-TTS on an NVIDIA graphics card
+
+The four Qwen3-TTS models run only on a graphics card in the Lab: their fast decoder, faster-qwen3-tts, records CUDA graphs, so
+there is no CPU build and their switch stays on GPU. **Install** on a Qwen card (it appears when the computer has an NVIDIA card
+and driver the build runs on), or the launcher with the model's name:
+
+```powershell
+setup-qwen.bat --model 0.6b-base
+setup-qwen.bat --model 1.7b-base
+setup-qwen.bat --model 1.7b-voice-design
+setup-qwen.bat --model 1.7b-custom-voice
+```
+
+| Model | What it does | Model files |
+|---|---|---|
+| Qwen3-TTS 0.6B Base (`0.6b-base`) | clones a voice from a short recording; the smallest and fastest | 2.5 GB |
+| Qwen3-TTS 1.7B Base (`1.7b-base`) | clones a voice from a short recording | 4.5 GB |
+| Qwen3-TTS 1.7B VoiceDesign (`1.7b-voice-design`) | makes a new voice from a written description | 4.5 GB |
+| Qwen3-TTS 1.7B CustomVoice (`1.7b-custom-voice`) | speaks in nine preset voices that take direction | 4.5 GB |
+
+The installer prints its plan and asks first (`--dry-run` and `--yes` work as for the other installers), and installs into this
+folder, in `.venv-fqwen`, `hf-cache` and `out\qwen`:
+
+1. **66 pinned Python packages** from [requirements/qwen-nvidia.txt](../requirements/qwen-nvidia.txt) into `.venv-fqwen`, which
+   the four models share: the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the same files as Chatterbox's NVIDIA
+   build), faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1 and Transformers 5.15.1, the versions the Lab's Qwen worker was
+   checked with. About 2.1 GB to download and 5.3 GB installed, once for all four. The upstream Gradio demo app and what only it
+   needs are left out.
+2. **The model's checkpoint** at the revision the catalog pins: the model, the 0.7 GB speech tokenizer that turns its codes into
+   sound, the text tokenizer, its settings and the model card, each checked against the SHA-256 in
+   `catalog/qwen3_tts_<model>_snapshot.json`.
+3. **A speech check on the card**: a fresh process loads the model through the Lab's Qwen worker without using the network,
+   warms it up with a short line, and speaks the Models page's check sentence: the Base models clone `reference\af_heart.wav`,
+   the clip Kokoro's installer makes (so install Kokoro first), VoiceDesign makes a voice from a description, and CustomVoice
+   uses its first preset voice. The clip and a receipt stay in `out\qwen` (`install-<model>.wav`, `installation-<model>.json`),
+   with how much graphics memory it used.
+
+Before anything is downloaded it stops on a computer without an NVIDIA driver, or with a card older than the GeForce GTX 16 and
+RTX 20 series or a driver older than 580. Each model wants 10 GB of free RAM before it loads. **Nobody has tried Qwen3-TTS on an
+NVIDIA card in the Lab yet.** What it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), run with `--checkpoint-only`
+against a ROCm build of the same packages: the 0.6B Base loaded in 40 seconds and used at most 2.8 GB of graphics memory, and
+its **Test** made 2.2 seconds of speech in 3.8 seconds; the 1.7B VoiceDesign loaded and warmed up in 56 seconds, spoke 1.9
+seconds in 2.9 seconds and used at most 4.6 GB. An 8 GB card should therefore hold one 1.7B model, with other programs' use of
+the card on top; close games and other models if a load runs out of graphics memory.
+
+For another graphics card (an AMD card with a ROCm build of PyTorch, say), make `.venv-fqwen` yourself with a GPU build of
+PyTorch, faster-qwen3-tts 0.4.0 and the other packages, then run the launcher with `--checkpoint-only`: it fetches the model
+files, leaves the packages alone and runs the speech check on that card.
+
+Licences: the Qwen3-TTS weights and `qwen-tts-hf` are Apache-2.0 (the Qwen team, Alibaba; the model cards say so), and
+`faster-qwen3-tts` is MIT. Most of the other packages are MIT, BSD or Apache; soxr and the libsndfile library inside SoundFile are
+LGPL-2.1, certifi and tqdm are MPL-2.0, and the CUDA builds carry NVIDIA's CUDA libraries under NVIDIA's own terms. They are
+installed on your computer at your request and are not part of this repository.
+
+To remove one model, delete its folder in `hf-cache\hub` (`models--Qwen--Qwen3-TTS-12Hz-0.6B-Base`, say) and its two files in
+`out\qwen`; delete `.venv-fqwen` only when removing all four.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and

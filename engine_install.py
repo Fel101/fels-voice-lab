@@ -1,8 +1,9 @@
 """Install an engine from the Models page: show the installer's plan, then run it and keep its progress.
 
 An engine with a guided installer (Kokoro: tools/install_kokoro.py, the script setup-kokoro.bat runs; Phonon:
-tools/install_phonon.py, the script setup-phonon.bat runs; Chatterbox Turbo: tools/install_chatterbox.py, the script
-setup-chatterbox.bat runs) can be installed from its card. The page first asks for the plan, which is the script's own
+tools/install_phonon.py, the script setup-phonon.bat runs; the Chatterbox models: tools/install_chatterbox.py, the script
+setup-chatterbox.bat runs; the Qwen3-TTS models: tools/install_qwen.py, the script setup-qwen.bat runs) can be installed from
+its card. The page first asks for the plan, which is the script's own
 --dry-run, so it shows what the script will really do and why it would refuse. Install now then starts the script with --yes as
 a child process under the lab's own Python, as its launcher does (each installer makes its model's own environment), and
 keeps the end of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so
@@ -30,6 +31,7 @@ import hardware
 import worker_pool
 from chatterbox_support import ORIGINAL_ENGINE_ID, TURBO_ENGINE_ID, VC_ENGINE_ID
 from phonon_support import PHONON_ENGINE_ID
+from qwen_support import QWEN_INSTALLER, QWEN_MODELS
 
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
 # that choose the engine's checkpoint. tests/test_engine_install.py keeps this in step with engine_checks.GUIDED_INSTALLERS and
@@ -37,11 +39,14 @@ from phonon_support import PHONON_ENGINE_ID
 INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/install_phonon.py",
               TURBO_ENGINE_ID: "tools/install_chatterbox.py",
               ORIGINAL_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
-              VC_ENGINE_ID: ("tools/install_chatterbox.py", "--original")}
+              VC_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
+              **{engine: (QWEN_INSTALLER, "--model", model) for engine, model in QWEN_MODELS.items()}}
 # Engine id -> the installer module whose --nvidia puts in a GPU build of PyTorch, and whose card_problems(cards) says why that
 # build would not run on this computer's NVIDIA cards.
+# Qwen3-TTS has only its NVIDIA build, so its installer always puts that in.
 GPU_BUILDS = {"kokoro": "tools.install_kokoro",
-              **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)}}
+              **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
+              **{engine: "tools.install_qwen" for engine in QWEN_MODELS}}
 NO_NVIDIA = "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver."
 # Every launcher runs its script with the lab's own Python, whichever environment the engine then runs in.
 LAB_PYTHON = ".venv/Scripts/python.exe"

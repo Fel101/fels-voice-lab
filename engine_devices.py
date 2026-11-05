@@ -93,7 +93,7 @@ def device_facts(engine, *, service_device, installed, build, choice, gpu_instal
                 "choosable": usable,
                 "reason": None if usable else (install_reason if service_device == "cuda" else NO_GPU),
                 "build": build,
-                "install": bool(install_ok and (not installed or build == "cpu")),
+                "install": bool(service_device == "cuda" and install_ok and (not installed or build == "cpu")),
                 "cpu": GPU_ONLY[engine],
             },
         }

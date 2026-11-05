@@ -103,7 +103,8 @@ class QwenWorker:
         if self.model is not None:
             return self._load_info(already_loaded=True)
         if self.device != "cuda":
-            raise RuntimeError("The pinned faster-Qwen checkpoint is verified only on the configured AMD GPU path.")
+            raise RuntimeError("Qwen3-TTS runs only on a graphics card in the Lab, because its fast decoder records CUDA "
+                               "graphs, and this worker has no graphics card it can use.")
         require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
 
         # Import the established compatibility shim before importing/loading the

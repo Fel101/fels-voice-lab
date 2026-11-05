@@ -297,6 +297,20 @@ class PoolDeviceTests(unittest.TestCase):
         kokoro = next(row for row in pool.engine_status()["engines"] if row["id"] == "kokoro")
         self.assertEqual((kokoro["device"], kokoro["state"], kokoro["check"]), ("cpu", "not_checked", None))
 
+    def test_a_gpu_only_model_names_its_launcher_only_where_the_app_can_install_it(self):
+        pool = self.pool()
+        missing = {"installed": False, "missing": ["x"], "environment": "e", "checkpoint": "c", "installer": "setup-qwen.bat"}
+        pool.install_probe = lambda entry: dict(missing)
+        refused = (False, "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver.")
+        for answer, named in ((GPU_OK, True), (refused, False)):
+            with self.subTest(answer=answer):
+                pool.gpu_install = lambda key, answer=answer: answer
+                rows = {row["id"]: row for row in pool.engine_status()["engines"]}
+                qwen = rows["qwen3-tts-0.6b-base"]
+                self.assertEqual("installer" in qwen["installation"], named)
+                self.assertEqual(qwen["gpu"]["install"], named)
+                self.assertIn("installer", rows["kokoro"]["installation"])  # a model with a CPU build keeps its launcher
+
     def test_a_check_is_kept_under_the_device_the_engine_ran_on(self):
         pool = self.pool()
         pool.check_store = engine_checks.EngineCheckStore(Path(self.temp.name) / "checks.json")

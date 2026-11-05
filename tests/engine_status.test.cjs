@@ -566,6 +566,22 @@ test('a model that runs only on the graphics card has CPU switched off, and says
   assert.deepEqual([view.note.hidden, view.note.textContent], [false, only]);
 });
 
+test('a model that runs only on a graphics card the app cannot install here offers no Install and says why', () => {
+  const {context: c} = harness();
+  c.modelCards = {qwen: card('Qwen3-TTS 1.7B Base')};
+  const reason = 'The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver.';
+  // The status leaves out the launcher of such a model: its installer would only refuse.
+  c.renderEngineStatus(gpuService([{id: 'qwen', name: 'Qwen3-TTS 1.7B Base', integrated: true, state: 'not_installed',
+    device: 'cuda', switch: 'gpu', installation: {installed: false, missing: ['hf-cache/hub/models--Qwen']}, check: null,
+    gpu: {choosable: false, reason, build: null, install: false, cpu: 'Qwen3-TTS runs only on a graphics card in the Lab.'}}]));
+  const view = c.modelCards.qwen;
+  assert.equal(view.action, 'none');
+  assert.equal(view.button.hidden, true);
+  assert.equal(view.details.textContent, 'Missing: hf-cache/hub/models--Qwen. The app cannot install it on this computer, for the '
+    + 'reason below; docs/SETUP.md (Model runtimes) says what it needs.');
+  assert.equal(view.note.textContent, reason + ' Qwen3-TTS runs only on a graphics card in the Lab.');
+});
+
 test('a busy service holds every switch', () => {
   const {context: c} = harness();
   c.modelCards = {kokoro: card('Kokoro 82M')};

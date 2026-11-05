@@ -133,8 +133,9 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
 
 ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer, `error` begins "
                         "by saying where to install it: Install on its Models & features card, or its launcher in the lab "
-                        "folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or "
-                        "`setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion).")
+                        "folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, "
+                        "`setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion) "
+                        "or `setup-qwen.bat` with `--model` and the Qwen3-TTS model.")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service

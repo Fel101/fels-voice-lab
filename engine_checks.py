@@ -17,6 +17,7 @@ import numpy as np
 from chatterbox_support import ORIGINAL_ENGINE_ID, ORIGINAL_FILES, TURBO_ENGINE_ID, TURBO_FILES, VC_ENGINE_ID, VC_FILES
 from kokoro_support import discover_kokoro_voices
 from phonon_support import PHONON_ENGINE_ID, VOICE_CATALOG, default_voice, voice_names
+from qwen_support import QWEN_FILES, QWEN_LAUNCHER, QWEN_MODELS
 
 LAB = Path(__file__).resolve().parent
 CHECK_TEXT = "This is a short check of the voice engine."
@@ -34,14 +35,18 @@ DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
 GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
-                     ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original"}
+                     ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original",
+                     **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()}}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
-# Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), and the three Chatterbox engines share
-# .venv-chatterbox; each installer makes its environment before it installs anything into it.
+# Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
+# .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
+# into it.
 REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
-                     **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)}}
+                     **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
+                     **{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS}}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
-REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES}
+REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES,
+                  **{engine: QWEN_FILES for engine in QWEN_MODELS}}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
@@ -379,6 +384,10 @@ def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine
                "min_free_ram_gb": ram_needs.get(entry["id"]), "device": engine_device}
         if facts:
             row.update(switch=facts["switch"], device_choice=facts["choice"], gpu=facts["gpu"])
+            if facts["gpu"].get("cpu") and not facts["gpu"]["install"] and not install["installed"]:
+                # A model that runs only on a graphics card, and whose GPU build the app cannot install on this computer: the
+                # card offers no Install and names no launcher that would refuse, and its switch note says why.
+                row["installation"] = {key: value for key, value in install.items() if key != "installer"}
         rows.append(row)
     return {"device": device, "busy": bool(busy), "engines": rows, "ram": ram,
             "speed": store.speed_rows() if store is not None else [],

@@ -316,7 +316,7 @@ Load an engine into memory ahead of its first use.
 | Also answers | When |
 |---|---|
 | `409` | The GPU worker is busy. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion). |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion) or `setup-qwen.bat` with `--model` and the Qwen3-TTS model. |
 
 <a id="post-api-unload"></a>
 
@@ -418,7 +418,7 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|
 | `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion). |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion) or `setup-qwen.bat` with `--model` and the Qwen3-TTS model. |
 | `504` | The engine did not answer in time. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).

@@ -267,6 +267,7 @@ function engineDetailText(row,device,job){
     var missing='Missing: '+(install.missing||[]).join('; ')+'.';
     if(job&&job.state==='failed'){return missing+' The install stopped (exit code '+job.exit_code+') after '+elapsedText(job.seconds)+'. Show output has the end of it, and all of it is in '+job.log+'. Press Install to try again: it continues where it stopped.';}
     if(install.installer){return missing+' Install adds it to this folder, as does '+install.installer+' in the lab folder; docs/SETUP.md says what it installs.';}
+    if((row.gpu||{}).cpu&&!(row.gpu||{}).choosable){return missing+' The app cannot install it on this computer, for the reason below; docs/SETUP.md (Model runtimes) says what it needs.';}
     return 'The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs. '+missing;
   }
   if(row.state==='conversion_task'){return 'Tested from Voice conversion, because it needs source audio.';}

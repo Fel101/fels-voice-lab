@@ -299,10 +299,15 @@ class InstallPointerTests(unittest.TestCase):
         self.assertTrue(engine_checks.install_pointer(nameless, missing_probe).startswith("kokoro is not installed."))
 
     def test_the_api_reference_and_the_setup_guide_name_every_launcher(self):
+        # The setup guide gives each launcher with the arguments that choose its model; the API reference names the launchers.
         setup = (ROOT / "docs" / "SETUP.md").read_text(encoding="utf-8")
         for launcher in engine_checks.GUIDED_INSTALLERS.values():
             with self.subTest(launcher=launcher):
-                self.assertIn(launcher, api_spec.ENGINE_NOT_INSTALLED)
+                command, *arguments = launcher.split()
+                self.assertIn(f"`{command}`", api_spec.ENGINE_NOT_INSTALLED)
+                for argument in arguments:
+                    if argument.startswith("--"):
+                        self.assertIn(f"`{argument}`", api_spec.ENGINE_NOT_INSTALLED)
                 self.assertIn(launcher, setup)
 
 
