@@ -169,23 +169,27 @@ class HardwareTests(unittest.TestCase):
         return run, calls
 
     def test_nvidia_smi_names_each_card_its_generation_and_the_driver(self):
-        run, calls = self.smi((0, "NVIDIA GeForce RTX 5070 Laptop GPU, 12.0, 581.80\nNVIDIA GeForce RTX 3060, 8.6, 581.80\n"))
+        run, calls = self.smi(
+            (0, "NVIDIA GeForce RTX 5070 Laptop GPU, 12.0, 581.80, 8151 MiB\nNVIDIA GeForce RTX 3060, 8.6, 581.80, [N/A]\n")
+        )
         cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[])
         self.assertEqual(
             cards,
             [
-                {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)},
-                {"name": "NVIDIA GeForce RTX 3060", "capability": (8, 6), "driver": (581, 80)},
+                {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80), "memory_mib": 8151},
+                {"name": "NVIDIA GeForce RTX 3060", "capability": (8, 6), "driver": (581, 80), "memory_mib": None},
             ],
         )
-        self.assertEqual(calls[0][1:], ["--query-gpu=name,compute_cap,driver_version", "--format=csv,noheader"])
+        self.assertEqual(calls[0][1:], ["--query-gpu=name,compute_cap,driver_version,memory.total", "--format=csv,noheader"])
 
     def test_an_nvidia_smi_too_old_for_compute_cap_is_asked_for_the_rest(self):
         run, calls = self.smi(
-            (6, 'Field "compute_cap" is not a valid field to query.'), (0, "NVIDIA GeForce GTX 1080, 472.12\n")
+            (6, 'Field "compute_cap" is not a valid field to query.'), (0, "NVIDIA GeForce GTX 1080, 472.12, 8192 MiB\n")
         )
         cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[])
-        self.assertEqual(cards, [{"name": "NVIDIA GeForce GTX 1080", "capability": None, "driver": (472, 12)}])
+        self.assertEqual(
+            cards, [{"name": "NVIDIA GeForce GTX 1080", "capability": None, "driver": (472, 12), "memory_mib": 8192}]
+        )
         self.assertEqual(len(calls), 2)
 
     def test_without_nvidia_smi_the_cards_windows_lists_give_the_names_and_drivers(self):
@@ -198,7 +202,14 @@ class HardwareTests(unittest.TestCase):
             with self.subTest(smi=smi):
                 self.assertEqual(
                     hardware.nvidia_cards(run=run, smi=smi, listed=listed),
-                    [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": None, "driver": (581, 80)}],
+                    [
+                        {
+                            "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+                            "capability": None,
+                            "driver": (581, 80),
+                            "memory_mib": None,
+                        }
+                    ],
                 )
         self.assertEqual(hardware.nvidia_cards(smi=False, listed=listed[:1]), [])
 

@@ -156,10 +156,15 @@ def load_source(path):
 
 
 def card_problems(cards):
-    """Why VoxCPM2's NVIDIA build would not run on these NVIDIA cards: a card older than the GTX 16 series, or a driver older
-    than 580. The Models page asks this too before it offers Install."""
+    """Why VoxCPM2's NVIDIA build would not run on these NVIDIA cards: a card older than the GTX 16 series, a driver older than
+    580, or less than 7 GB of graphics memory. The Models page asks this too before it offers Install."""
     return base.nvidia_card_problems(
-        cards, build=NVIDIA_BUILD, cards_text=NVIDIA_CARDS, lowest=NVIDIA_LOWEST_CAPABILITY, driver=NVIDIA_DRIVER
+        cards,
+        build=NVIDIA_BUILD,
+        cards_text=NVIDIA_CARDS,
+        lowest=NVIDIA_LOWEST_CAPABILITY,
+        driver=NVIDIA_DRIVER,
+        memory_gb=GPU_MEMORY_GB,
     )
 
 

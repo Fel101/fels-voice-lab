@@ -155,6 +155,17 @@ class ProblemAndPlanTests(unittest.TestCase):
         driver = iv.nvidia_problems(present=True, cards=[{**RTX_5070, "driver": (560, 94)}])
         self.assertIn("Update the driver", driver[0])
 
+    def test_a_card_with_too_little_memory_is_refused_and_an_8_gb_one_passes(self):
+        small = iv.nvidia_problems(present=True, cards=[{**RTX_5070, "name": "NVIDIA GeForce RTX 3050", "memory_mib": 6144}])
+        self.assertEqual(len(small), 1)
+        self.assertIn(
+            "needs a graphics card with at least 7 GB of memory, and the NVIDIA GeForce RTX 3050 has 6.0 GB", small[0]
+        )
+        self.assertEqual(iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": 8151}]), [])
+        self.assertEqual(
+            iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": None}]), []
+        )  # unknown: the load says
+
     def test_the_plan_names_the_source_the_model_the_memory_it_needs_and_the_licences(self):
         packages = base.read_lock(ROOT / iv.LOCK)
         text = " ".join(

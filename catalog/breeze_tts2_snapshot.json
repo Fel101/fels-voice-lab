@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "repo": "drbaph/Breeze-TTS-2-comfyui",
+  "revision": "a6bfd9d0d4e8b3b61c3a5ed3ecf55468c8ab88e4",
+  "folder": "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui",
+  "license": "BreezeBlue Research and Non-Commercial License",
+  "license_link": "https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE",
+  "license_source": "the model card, README.md, at this revision: license: other, license_name: breezeblue-research-and-non-commercial-license; it says commercial use requires written authorization from RESONIA, INC.",
+  "files": [
+    {"path": "Breeze-TTS-2-bf16.safetensors", "size": 6966557274, "sha256": "86fb2aba30c63e826393dba09168ebd6ef52278f0c0b57fb8dde4448e323300a"},
+    {"path": "README.md", "size": 3195, "sha256": "6bd1b918678e0f8cf3479532d4f51c9979c70d73bb8476544d97b6285082189e"},
+    {"path": "audio_tokenizer/config.json", "size": 2336, "sha256": "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167"},
+    {"path": "audio_tokenizer/configuration.json", "size": 76, "sha256": "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd"},
+    {"path": "audio_tokenizer/model.safetensors", "size": 682293092, "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"},
+    {"path": "audio_tokenizer/preprocessor_config.json", "size": 234, "sha256": "fcb3805e597e786d4067706e602f6688524640f8d3396790e2e09b5942fcbdfb"},
+    {"path": "config.json", "size": 10161, "sha256": "57849eb756ca1602efe89afcc5c70379dd127f8deeb9f655204d4340190ea929"},
+    {"path": "generation_config.json", "size": 251, "sha256": "2ef3f2c0ab8d9ad241059138a795433c5410fd9954efb9625674ecd2a9529434"},
+    {"path": "special_tokens_map.json", "size": 886, "sha256": "194f265bb588d142a16f27d9576104eb3dab3d7ba9961541d2d6e3d5e77e6470"},
+    {"path": "tokenizer.json", "size": 33386945, "sha256": "d3ec9ac3eb2392389b9f5112e85d8b43316494addb587ba7b7a9d61eac23af96"},
+    {"path": "tokenizer_config.json", "size": 1157960, "sha256": "2c084fd6725c2284e8aa6da095a8d036d48fe79665595bfcd50371821b620e44"}
+  ],
+  "not_fetched": [
+    {"path": "Breeze-TTS-2-int8-convrot.safetensors", "why": "an INT8 build that needs ComfyUI's comfy-kitchen kernels"},
+    {"path": "Breeze-TTS-2-int8-hybrid.safetensors", "why": "an INT8 build that needs ComfyUI's comfy-kitchen kernels"},
+    {"path": "Breeze-TTS-2-int8-text-encoder.safetensors", "why": "an INT8 build that needs ComfyUI's comfy-kitchen kernels"},
+    {"path": "benchmark_report.json", "why": "the converter's measurements"},
+    {"path": "quantization_report_int8_convrot.json", "why": "the converter's measurements"},
+    {"path": "quantization_report_int8_hybrid.json", "why": "the converter's measurements"},
+    {"path": "quantization_report_int8_text_encoder.json", "why": "the converter's measurements"},
+    {"path": ".gitattributes", "why": "repository housekeeping"}
+  ]
+}

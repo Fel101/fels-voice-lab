@@ -40,7 +40,7 @@ DRAMA_RECEIPT = "out/drama3/installation.json"
 GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
                      ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original",
                      **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()},
-                     "voxcpm2": "setup-voxcpm.bat"}
+                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
@@ -48,12 +48,16 @@ GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phon
 REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
                      **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
                      **{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS},
-                     "voxcpm2": ("torch", "transformers", "librosa")}
+                     "voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate")}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
 REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES,
                   **{engine: QWEN_FILES for engine in QWEN_MODELS},
                   "voxcpm2": ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json")}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
+# Where Breeze's loader looks for its files (breeze/loader.py: the models folder beside it, then the repository's name), and the
+# ones it cannot load without.
+BREEZE_FOLDER = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
+BREEZE_FILES = (BREEZE_WEIGHTS, "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors")
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
 
@@ -113,10 +117,8 @@ def installation(entry, root=LAB):
         checkpoint = "out/drama3"
         missing.extend(_drama_missing(root))
     elif engine == "breeze-tts-2":
-        checkpoint = "breeze/models"
-        folder = root / "breeze" / "models"
-        if not folder.is_dir() or next(folder.rglob(BREEZE_WEIGHTS), None) is None:
-            missing.append(f"breeze/models ({BREEZE_WEIGHTS})")
+        checkpoint = BREEZE_FOLDER
+        missing.extend(f"{BREEZE_FOLDER}/{name}" for name in BREEZE_FILES if not (root / BREEZE_FOLDER / name).is_file())
     else:
         cache = root / "hf-cache" if engine in TOP_LEVEL_CACHE else root / "hf-cache" / "hub"
         repo = entry["checkpoint"].replace("/", "--")

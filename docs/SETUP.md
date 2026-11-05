@@ -476,6 +476,43 @@ ran it, with a ROCm build of PyTorch for an AMD card in `.venv-fqwen`.
 Licences: the VoxCPM2 weights and VoxCPM's code are Apache-2.0 (OpenBMB). The packages keep their own licences, as for
 Qwen3-TTS above. To remove VoxCPM2, delete `.venv-voxcpm`, `out\voxcpm2` and `hf-cache\models--openbmb--VoxCPM2`.
 
+## Breeze TTS 2 on an NVIDIA graphics card
+
+Breeze TTS 2 (3B) makes a voice from a written description, clones one from a recording and its transcript, and takes
+direction such as whispering. **Its weights are not open for commercial use**: they, the converted files the Lab installs and
+what you make with them on your own computer are under the
+[BreezeBlue Research and Non-Commercial License](https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE), and
+commercial use needs written permission from RESONIA, INC. Read it before you install; the installer's plan says this first,
+and installing the weights means accepting it. Breeze's code, in `breeze\` in this folder, is Apache-2.0.
+
+The Lab runs Breeze only on a graphics card, with its BF16 weights, and it needs one with **at least 10 GB of memory**: it
+peaked at 7.5 GB (on an RTX 5090, by its model card, and on the AMD card below), so an 8 GB card is too small. The repository's
+smaller INT8 builds need ComfyUI's own kernels, which the Lab does not have. **Install** on its card appears when the computer
+has an NVIDIA card big enough and a driver the build runs on, or:
+
+```powershell
+setup-breeze.bat
+```
+
+It prints its plan and asks first, and installs into this folder, in `.venv-breeze`, `breeze\models` and `out\breeze`:
+
+1. **41 pinned Python packages** from [requirements/breeze-nvidia.txt](../requirements/breeze-nvidia.txt) into `.venv-breeze`:
+   the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0, Transformers 5.17.0, accelerate, safetensors, NumPy and
+   SoundFile, the versions the Lab's Breeze environment was checked with. About 2.0 GB to download and 4.8 GB installed.
+2. **The checkpoint** `drbaph/Breeze-TTS-2-comfyui` (a conversion of `BreezeBlue/Breeze-TTS-2`) at the pinned revision: the
+   7.0 GB BF16 model, the 0.7 GB audio tokenizer, the text tokenizer, settings and model card, 7.7 GB in all, into
+   `breeze\models\breezetts2\drbaph_Breeze-TTS-2-comfyui`, where Breeze's loader looks, each checked against the SHA-256 in
+   [catalog/breeze_tts2_snapshot.json](../catalog/breeze_tts2_snapshot.json).
+3. **A speech check on the card**: the Lab's Breeze worker loads the model without using the network (its load speaks a short
+   line itself) and speaks the Models page's check sentence in a voice made from a description. The clip and a receipt stay
+   in `out\breeze`.
+
+**Nobody has tried Breeze on an NVIDIA card in the Lab yet.** On one computer with an AMD Radeon AI PRO R9700 (32 GB), run with
+`--checkpoint-only` against a ROCm build of the same packages, it loaded in 64 seconds, spoke 3.0 seconds in 20 seconds and used
+at most 7.5 GB of graphics memory. It wants 12 GB of free RAM before it loads. For another graphics card, make `.venv-breeze`
+yourself with a GPU build of PyTorch and the packages above, then run the launcher with `--checkpoint-only`. To remove Breeze,
+delete `.venv-breeze`, `breeze\models` and `out\breeze`.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and

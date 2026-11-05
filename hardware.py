@@ -20,7 +20,7 @@ PROCESSOR_KEY = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SMI_TIMEOUT = 20
 # What nvidia-smi is asked. A driver older than 2022 does not know compute_cap, so it is asked again without it.
-SMI_FIELDS = (("name", "compute_cap", "driver_version"), ("name", "driver_version"))
+SMI_FIELDS = (("name", "compute_cap", "driver_version", "memory.total"), ("name", "driver_version", "memory.total"))
 
 
 def nvidia_driver_present(system_root=None):
@@ -75,6 +75,12 @@ def version_pair(text):
     """A "major.minor" number such as 12.0 or 581.80 as a pair of ints, (12, 0) or (581, 80); None for [N/A] or anything else."""
     match = re.fullmatch(r"\s*(\d+)\.(\d+)\s*", text or "")
     return (int(match[1]), int(match[2])) if match else None
+
+
+def memory_mib(text):
+    """nvidia-smi's memory.total, such as "8151 MiB", as a number of MiB; None for [N/A] or anything else."""
+    match = re.fullmatch(r"\s*(\d+)\s*MiB\s*", text or "")
+    return int(match[1]) if match else None
 
 
 def nvidia_driver_version(windows_version):
@@ -134,23 +140,25 @@ def _smi_cards(smi, run):
                 "name": found["name"],
                 "capability": version_pair(found.get("compute_cap")),
                 "driver": version_pair(found["driver_version"]),
+                "memory_mib": memory_mib(found["memory.total"]),
             }
         )
     return cards
 
 
 def nvidia_cards(*, run=subprocess.run, smi=None, listed=None):
-    """The NVIDIA graphics cards as [{"name", "capability", "driver"}]. capability is the card's CUDA compute capability as a
-    pair, such as (12, 0) for a GeForce RTX 50 series card and (8, 9) for an RTX 40, and driver is NVIDIA's driver version as a
-    pair, such as (581, 80). nvidia-smi answers both when it is there; without it, the names and driver versions Windows lists
-    are used and the capability is None. [] when this computer has no NVIDIA card."""
+    """The NVIDIA graphics cards as [{"name", "capability", "driver", "memory_mib"}]. capability is the card's CUDA compute
+    capability as a pair, such as (12, 0) for a GeForce RTX 50 series card and (8, 9) for an RTX 40, driver is NVIDIA's driver
+    version as a pair, such as (581, 80), and memory_mib its graphics memory (an "8 GB" card has about 8150). nvidia-smi answers
+    them when it is there; without it, the names and driver versions Windows lists are used, and the capability and memory are
+    None. [] when this computer has no NVIDIA card."""
     smi = nvidia_smi_path() if smi is None else smi
     if smi:
         cards = _smi_cards(smi, run)
         if cards is not None:
             return cards
     return [
-        {"name": card["name"], "capability": None, "driver": nvidia_driver_version(card.get("driver"))}
+        {"name": card["name"], "capability": None, "driver": nvidia_driver_version(card.get("driver")), "memory_mib": None}
         for card in (graphics_cards() if listed is None else listed)
         if "nvidia" in card["name"].lower()
     ]

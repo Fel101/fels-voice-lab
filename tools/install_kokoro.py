@@ -194,7 +194,10 @@ def checkpoint_files(manifest, voices):
 
 def snapshot_dir(root, manifest):
     """Where a checkpoint's files go: hf-cache/hub/models--<repo>/snapshots/<revision>, the Hugging Face cache, unless the file
-    list's "cache" names another folder (VoxCPM2's worker reads its files from the top of hf-cache)."""
+    list's "cache" names another cache folder (VoxCPM2's worker reads its files from the top of hf-cache) or its "folder" a
+    plain folder of its own (Breeze's loader reads breeze/models/...)."""
+    if "folder" in manifest:
+        return Path(root) / manifest["folder"]
     if "cache" in manifest:
         return Path(root) / manifest["cache"] / f"models--{manifest['repo'].replace('/', '--')}" / "snapshots" / manifest["revision"]
     return Path(root) / SNAPSHOT.format(repo=manifest["repo"].replace("/", "--"), revision=manifest["revision"])
@@ -332,11 +335,17 @@ NO_NVIDIA_DRIVER = ("--nvidia asks for the CUDA build of PyTorch, and this compu
                     "is missing). Install the driver from nvidia.com first, or leave out --nvidia for the CPU build.")
 
 
-def nvidia_card_problems(cards, *, build, cards_text, lowest=None, newest_major=None, driver=None):
+def nvidia_card_problems(cards, *, build, cards_text, lowest=None, newest_major=None, driver=None, memory_gb=None):
     """Why an NVIDIA build of PyTorch would not run on these cards, as sentences that name the card: a card of a generation the
-    build has no code for (older than `lowest`, or of a newer generation than `newest_major`), or a driver older than its CUDA
-    needs. An empty list when it would run, and when nvidia-smi could not say."""
+    build has no code for (older than `lowest`, or of a newer generation than `newest_major`), a driver older than its CUDA
+    needs, or, for a model that needs `memory_gb` GiB of graphics memory, no card with that much. An empty list when it would
+    run, and when nvidia-smi could not say."""
     problems = []
+    sizes = [card["memory_mib"] for card in cards if card.get("memory_mib")]
+    if memory_gb and sizes and max(sizes) < memory_gb * 1024:
+        biggest = max((card for card in cards if card.get("memory_mib")), key=lambda card: card["memory_mib"])
+        problems.append(f"{build} needs a graphics card with at least {memory_gb} GB of memory, and the {biggest['name']} has "
+                        f"{biggest['memory_mib'] / 1024:.1f} GB.")
     for card in cards:
         capability = card.get("capability")
         if capability and ((lowest and capability < lowest) or (newest_major is not None and capability[0] > newest_major)):
@@ -621,9 +630,10 @@ def download_checkpoint(root, manifest, files, *, say=say_now, pause=time.sleep)
         say(f"  [{position}/{len(files)}] {item['path']} ({size_text(item['size'])})")
         if not fetch(download_url(manifest, item), folder / item["path"], item["size"], item["sha256"], say=say, pause=pause):
             say("      already in place")
-    refs = folder.parent.parent / "refs"
-    refs.mkdir(parents=True, exist_ok=True)
-    (refs / "main").write_text(manifest["revision"], encoding="utf-8")
+    if "folder" not in manifest:    # a Hugging Face cache layout names its revision, as huggingface_hub does
+        refs = folder.parent.parent / "refs"
+        refs.mkdir(parents=True, exist_ok=True)
+        (refs / "main").write_text(manifest["revision"], encoding="utf-8")
 
 
 def make_environment(root, *, runner=subprocess.run):

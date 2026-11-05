@@ -3,7 +3,8 @@
 An engine with a guided installer (Kokoro: tools/install_kokoro.py, the script setup-kokoro.bat runs; Phonon:
 tools/install_phonon.py, the script setup-phonon.bat runs; the Chatterbox models: tools/install_chatterbox.py, the script
 setup-chatterbox.bat runs; the Qwen3-TTS models: tools/install_qwen.py, the script setup-qwen.bat runs; VoxCPM2:
-tools/install_voxcpm.py, the script setup-voxcpm.bat runs) can be installed from its card. The page first asks for the plan, which is the script's own
+tools/install_voxcpm.py, the script setup-voxcpm.bat runs; Breeze TTS 2: tools/install_breeze.py, the script
+setup-breeze.bat runs) can be installed from its card. The page first asks for the plan, which is the script's own
 --dry-run, so it shows what the script will really do and why it would refuse. Install now then starts the script with --yes as
 a child process under the lab's own Python, as its launcher does (each installer makes its model's own environment), and
 keeps the end of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so
@@ -41,14 +42,14 @@ INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/inst
               ORIGINAL_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
               VC_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
               **{engine: (QWEN_INSTALLER, "--model", model) for engine, model in QWEN_MODELS.items()},
-              "voxcpm2": "tools/install_voxcpm.py"}
+              "voxcpm2": "tools/install_voxcpm.py", "breeze-tts-2": "tools/install_breeze.py"}
 # Engine id -> the installer module whose --nvidia puts in a GPU build of PyTorch, and whose card_problems(cards) says why that
 # build would not run on this computer's NVIDIA cards.
-# Qwen3-TTS and VoxCPM2 have only their NVIDIA builds, so their installers always put that in.
+# Qwen3-TTS, VoxCPM2 and Breeze have only their NVIDIA builds, so their installers always put that in.
 GPU_BUILDS = {"kokoro": "tools.install_kokoro",
               **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
               **{engine: "tools.install_qwen" for engine in QWEN_MODELS},
-              "voxcpm2": "tools.install_voxcpm"}
+              "voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze"}
 NO_NVIDIA = "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver."
 # Every launcher runs its script with the lab's own Python, whichever environment the engine then runs in.
 LAB_PYTHON = ".venv/Scripts/python.exe"

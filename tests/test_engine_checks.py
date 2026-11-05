@@ -241,11 +241,16 @@ class InstallationTests(TempTree):
         self.write("out/drama3/runtime/speech.exe")
         self.assertTrue(installation(CATALOG["drama-3"], self.root)["installed"])
 
-    def test_breeze_needs_its_bf16_weight_file(self):
-        self.write(CATALOG["breeze-tts-2"]["runtime"]["python"])
+    def test_breeze_needs_its_packages_and_the_files_its_loader_reads_where_it_reads_them(self):
+        self.environment("breeze-tts-2", "transformers-5.17.0", "accelerate-1.15.0")
+        folder = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
         result = installation(CATALOG["breeze-tts-2"], self.root)
-        self.assertIn("breeze/models (Breeze-TTS-2-bf16.safetensors)", result["missing"])
-        self.write("breeze/models/breezetts2/example/Breeze-TTS-2-bf16.safetensors")
+        self.assertIn(f"{folder}/Breeze-TTS-2-bf16.safetensors", result["missing"])
+        self.assertEqual(result["installer"], "setup-breeze.bat")
+        self.write("breeze/models/breezetts2/example/Breeze-TTS-2-bf16.safetensors")    # not where the loader looks
+        self.assertFalse(installation(CATALOG["breeze-tts-2"], self.root)["installed"])
+        for name in ("Breeze-TTS-2-bf16.safetensors", "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors"):
+            self.write(f"{folder}/{name}")
         self.assertTrue(installation(CATALOG["breeze-tts-2"], self.root)["installed"])
 
     def put_phonon(self, *, package=True, model=True, voices=True):
