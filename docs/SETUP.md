@@ -8,9 +8,9 @@ Chatterbox Turbo is the one that clones a voice from a recording. Each has a lau
 `setup-phonon.bat`, `setup-chatterbox.bat`) for adding it later. Every other model has a guided installer and a launcher as
 well, and **Install** on its card in **Models & features** runs it:
 [Chatterbox 500M and Voice Conversion](#chatterbox-500m-and-voice-conversion) and [Drama 3](#drama-3-on-the-cpu) on the CPU,
-and the four [Qwen3-TTS](#qwen3-tts-on-an-nvidia-graphics-card) models, [VoxCPM2](#voxcpm2-on-an-nvidia-graphics-card) and
-[Breeze TTS 2](#breeze-tts-2-on-an-nvidia-graphics-card) on an NVIDIA graphics card only. A core installation without a model
-opens the studio and its stores, but cannot speak until one is installed.
+and the four [Qwen3-TTS](#qwen3-tts-on-a-graphics-card) models, [VoxCPM2](#voxcpm2-on-a-graphics-card) and
+[Breeze TTS 2](#breeze-tts-2-on-a-graphics-card) only on a graphics card, an NVIDIA card or an [AMD Radeon](#amd-radeon-cards).
+A core installation without a model opens the studio and its stores, but cannot speak until one is installed.
 
 Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and so on), apart from
 the service's `.venv`, so no installer can change the packages another model or the service depends on.
@@ -334,8 +334,8 @@ To remove them, delete `hf-cache\hub\models--ResembleAI--chatterbox` and, in `ou
 ## NVIDIA graphics cards
 
 Kokoro and the three Chatterbox models can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU
-one, and the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card (their sections follow this one). **Nobody
-has tried this on an NVIDIA card yet**: the builds are pinned by their SHA-256 and the installers check them, but whether they
+one, and the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, NVIDIA's or
+[AMD's](#amd-radeon-cards) (their sections follow). **Nobody has tried this on an NVIDIA card yet**: the builds are pinned by their SHA-256 and the installers check them, but whether they
 load and speak on your card is what a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) would tell the next person.
 
 ```powershell
@@ -354,9 +354,10 @@ gives each the build that runs on the card, and says why when one gets its CPU b
 | Kokoro | 2.12.0, CUDA 13.0 ([requirements/kokoro-nvidia.txt](../requirements/kokoro-nvidia.txt)) | GeForce GTX 16 and RTX 20 series or newer, RTX 50 included, with an NVIDIA driver of version 580 or later | about 1.8 GB |
 | Chatterbox Turbo, 500M and VC | 2.12.0 and torchaudio 2.11.0, CUDA 13.0 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | the same as Kokoro | about 1.7 GB |
 
-The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 have only an NVIDIA build, of the same PyTorch and torchaudio files, and their
-installers make the same checks. VoxCPM2's and Breeze's also refuse a card with less graphics memory than the model needs, 7
-and 10 GB, which `nvidia-smi` reports too.
+On a computer with an NVIDIA driver, the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 get the same PyTorch and torchaudio files,
+and their installers make the same checks. VoxCPM2's and Breeze's also refuse a card with less graphics memory than the model
+needs, 7 and 10 GB, which `nvidia-smi` reports too. On a computer whose card is an AMD Radeon they get AMD's build instead
+([AMD Radeon cards](#amd-radeon-cards)).
 
 Chatterbox asks for PyTorch 2.6, and PyTorch 2.6 has no build for RTX 50 series cards, so its NVIDIA build is the PyTorch 2.12
 that Kokoro's uses (one download serves both, from pip's cache) with torchaudio 2.11, the newest torchaudio. Chatterbox Turbo
@@ -366,8 +367,9 @@ your request and are not part of this repository.
 
 ### The GPU/CPU switch
 
-When the service finds an NVIDIA driver it asks its workers for the card (`cuda`), and every card on **Models & features** gets
-a **Runs on GPU | CPU** switch. It decides where that model runs from its next load (a loaded model is unloaded when it is
+When the service finds an NVIDIA driver, or an AMD card that AMD's ROCm build of PyTorch has code for, it asks its workers for
+the card (`cuda`, the name a ROCm build answers to as well), and every card on **Models & features** gets a **Runs on GPU |
+CPU** switch. It decides where that model runs from its next load (a loaded model is unloaded when it is
 switched), and the choice is kept in `data/engines/devices.json`. A model that was not switched uses the card when its PyTorch
 can.
 
@@ -380,19 +382,55 @@ can.
 - **A model with a GPU build** can be kept on the CPU with the switch; a CUDA build runs on the CPU too.
 - Phonon and Drama 3 run on the CPU, so their GPU is greyed out.
 - The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on the card, so their switch stays on GPU and CPU is greyed out.
-  Where the app cannot install their NVIDIA build (no NVIDIA driver, an older card or driver, or too little graphics memory),
-  their card has no **Install** and says why.
+  Their **Install** puts in the build for this computer's card: NVIDIA's, or AMD's on a computer with an AMD Radeon. Where the
+  app can install neither (no NVIDIA driver or AMD card, a card or driver the build cannot run on, or too little graphics
+  memory), their card has no **Install** and says why.
+- Kokoro and Chatterbox have NVIDIA builds only, so on a computer with an AMD card their GPU is greyed out and says so.
 
 A model whose PyTorch cannot use the card after all (a CUDA build with no code for this card) still runs on the CPU, and its
 card says it ran on the CPU. `"device": "cpu"` in `runtime.local.json`, or `--device cpu`, keeps every model on the CPU and
 hides the switches. Going back from a GPU build to the CPU build takes deleting the environment folder (`.venv-kokoro` or
 `.venv-chatterbox`) and installing again; the model files in `hf-cache` stay.
 
-## Qwen3-TTS on an NVIDIA graphics card
+## AMD Radeon cards
 
-The four Qwen3-TTS models run only on a graphics card in the Lab: their fast decoder, faster-qwen3-tts, records CUDA graphs, so
-there is no CPU build and their switch stays on GPU. **Install** on a Qwen card (it appears when the computer has an NVIDIA card
-and driver the build runs on), or the launcher with the model's name:
+The four Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run on an AMD Radeon card too. On a computer without an NVIDIA driver, their
+installers (and **Install** on their cards) put in AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11, from AMD's own
+index, in place of the CUDA builds, and leave the rest of the model's list as it is. Nothing needs setting up by hand beyond
+AMD's graphics driver (AMD Software: Adrenalin Edition, or PRO Edition for a workstation card).
+
+- **The card's chip.** Before anything is downloaded, the installer asks AMD's OpenCL driver, which comes with every AMD graphics
+  driver for Windows, which cards this computer has and which chip each one is: gfx1201 for a Radeon AI PRO R9700 or RX 9070,
+  gfx1103 for the Radeon 780M in a Ryzen processor. AMD publishes the code for each chip in packages of its own, so pip fetches
+  only this card's. [requirements/amd-rocm.txt](../requirements/amd-rocm.txt) pins every file by its SHA-256: PyTorch,
+  torchaudio, the ROCm runtime they load, and the code for 20 chips, those of the Radeon RX 5000, 6000, 7000 and 9000 series,
+  the Radeon PRO and AI PRO cards built on them, and the Radeon graphics in Ryzen processors. A card with another chip (a Radeon
+  RX 500 or Vega, say) is refused by name before anything changes.
+- **Which card, on a computer with two.** The Lab uses one AMD card: the one `HIP_VISIBLE_DEVICES`, or `hip_visible_devices` in
+  `runtime.local.json`, names; otherwise a separate card before one built into the processor, then the one with the most
+  memory. The plan says which it chose. Once PyTorch is in, the installer asks it which number it gives that card, finding it by
+  its PCI bus, and writes the number to `runtime.local.json` as `"hip_visible_devices"`, which every model's worker reads before
+  PyTorch starts.
+- **Size.** For the R9700, AMD's packages were 1.4 GB to download and took 4.2 GB in each model's environment; each installer's
+  plan gives its model's total.
+- **One package built from source.** `rocm`, a small part of the runtime, is published by AMD only as source: pip builds it after
+  the wheels are in, with the setuptools the model's own list pins, so pip runs nothing the lists do not pin.
+
+AMD's packages carry the ROCm runtime and libraries under AMD's own licence terms; like the other packages they are installed on
+your computer at your request and are not part of this repository.
+
+What it did on the development computer, an AMD mini PC with a Radeon AI PRO R9700 (32 GB) beside the Radeon 780M in its Ryzen 7
+PRO 8845HS: each installer chose the R9700 (the first wrote `"hip_visible_devices": "1"`, and the others found it there) and
+passed its speech check on it (each model's section has the numbers). Qwen3-TTS 1.7B CustomVoice was installed from its card on the Models page, and its **Test** passed on
+the R9700. **No other AMD chip has been tried yet**: if it works, or does not, a
+[hardware report](TROUBLESHOOTING.md#reporting-a-problem) helps the next person.
+
+## Qwen3-TTS on a graphics card
+
+The four Qwen3-TTS models run only on a graphics card in the Lab: their fast decoder, faster-qwen3-tts, records CUDA graphs (HIP
+graphs on an AMD card), so there is no CPU build and their switch stays on GPU. **Install** on a Qwen card (it appears when the
+computer has an NVIDIA card and driver the build runs on, or an AMD card that [AMD's build](#amd-radeon-cards) has code for), or
+the launcher with the model's name:
 
 ```powershell
 setup-qwen.bat --model 0.6b-base
@@ -415,7 +453,8 @@ folder, in `.venv-fqwen`, `hf-cache` and `out\qwen`:
    the four models share: the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the same files as Chatterbox's NVIDIA
    build), faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1 and Transformers 5.15.1, the versions the Lab's Qwen worker was
    checked with. About 2.1 GB to download and 5.3 GB installed, once for all four. The upstream Gradio demo app and what only it
-   needs are left out.
+   needs are left out. On an AMD card, [AMD's ROCm builds](#amd-radeon-cards) of PyTorch and torchaudio take the place of the
+   CUDA ones, with the ROCm runtime and the code for the card's chip: 73 packages for the R9700, which took 4.9 GB installed.
 2. **The model's checkpoint** at the revision the catalog pins: the model, the 0.7 GB speech tokenizer that turns its codes into
    sound, the text tokenizer, its settings and the model card, each checked against the SHA-256 in
    `catalog/qwen3_tts_<model>_snapshot.json`.
@@ -425,31 +464,34 @@ folder, in `.venv-fqwen`, `hf-cache` and `out\qwen`:
    uses its first preset voice. The clip and a receipt stay in `out\qwen` (`install-<model>.wav`, `installation-<model>.json`),
    with how much graphics memory it used.
 
-Before anything is downloaded it stops on a computer without an NVIDIA driver, or with a card older than the GeForce GTX 16 and
-RTX 20 series or a driver older than 580. Each model wants 10 GB of free RAM before it loads. **Nobody has tried Qwen3-TTS on an
-NVIDIA card in the Lab yet.** What it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), run with `--checkpoint-only`
-against a ROCm build of the same packages: the 0.6B Base loaded in 40 seconds and used at most 2.8 GB of graphics memory, and
-its **Test** made 2.2 seconds of speech in 3.8 seconds; the 1.7B VoiceDesign loaded and warmed up in 56 seconds, spoke 1.9
-seconds in 2.9 seconds and used at most 4.6 GB. An 8 GB card should therefore hold one 1.7B model, with other programs' use of
-the card on top; close games and other models if a load runs out of graphics memory.
+Before anything is downloaded it stops on a computer with neither an NVIDIA driver nor an AMD card, with an NVIDIA card older
+than the GeForce GTX 16 and RTX 20 series or a driver older than 580, or with an AMD card whose chip AMD's build has no code
+for. Each model wants 10 GB of free RAM before it loads. **Nobody has tried Qwen3-TTS on an NVIDIA card in the Lab yet.** What
+it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), installed with AMD's build: the 1.7B VoiceDesign loaded and
+warmed up in 50 seconds, spoke 1.9 seconds in 1.3 seconds and used at most 4.5 GB of graphics memory, and the 1.7B CustomVoice
+spoke 2.7 seconds in 3.9 seconds with at most 4.6 GB. Earlier, in an environment made by hand from ROCm builds of the same
+packages, the 0.6B Base loaded in 40 seconds, used at most 2.8 GB, and its **Test** made 2.2 seconds of speech in 3.8 seconds.
+An 8 GB card should therefore hold one 1.7B model, with other programs' use of the card on top; close games and other models if
+a load runs out of graphics memory.
 
-For another graphics card (an AMD card with a ROCm build of PyTorch, say), make `.venv-fqwen` yourself with a GPU build of
-PyTorch, faster-qwen3-tts 0.4.0 and the other packages, then run the launcher with `--checkpoint-only`: it fetches the model
-files, leaves the packages alone and runs the speech check on that card.
+For a graphics card neither build runs on, make `.venv-fqwen` yourself with a GPU build of PyTorch for it, faster-qwen3-tts
+0.4.0 and the other packages, then run the launcher with `--checkpoint-only`: it fetches the model files, leaves the packages
+alone and runs the speech check on that card.
 
 Licences: the Qwen3-TTS weights and `qwen-tts-hf` are Apache-2.0 (the Qwen team, Alibaba; the model cards say so), and
 `faster-qwen3-tts` is MIT. Most of the other packages are MIT, BSD or Apache; soxr and the libsndfile library inside SoundFile are
-LGPL-2.1, certifi and tqdm are MPL-2.0, and the CUDA builds carry NVIDIA's CUDA libraries under NVIDIA's own terms. They are
-installed on your computer at your request and are not part of this repository.
+LGPL-2.1, certifi and tqdm are MPL-2.0, the CUDA builds carry NVIDIA's CUDA libraries under NVIDIA's own terms, and AMD's builds
+carry AMD's ROCm runtime and libraries under AMD's. They are installed on your computer at your request and are not part of this
+repository.
 
 To remove one model, delete its folder in `hf-cache\hub` (`models--Qwen--Qwen3-TTS-12Hz-0.6B-Base`, say) and its two files in
 `out\qwen`; delete `.venv-fqwen` only when removing all four.
 
-## VoxCPM2 on an NVIDIA graphics card
+## VoxCPM2 on a graphics card
 
 VoxCPM2 (OpenBMB, 2B) makes a voice from a written description or clones one from a recording, and speaks at 48 kHz. The Lab
 runs it only on a graphics card with at least 7 GB of memory. **Install** on its card (it appears when the computer has an
-NVIDIA card and driver the build runs on), or:
+NVIDIA card and driver the build runs on, or an AMD card that [AMD's build](#amd-radeon-cards) has code for), or:
 
 ```powershell
 setup-voxcpm.bat
@@ -460,7 +502,8 @@ It prints its plan and asks first, and installs into this folder, in `.venv-voxc
 1. **62 pinned Python packages** from [requirements/voxcpm-nvidia.txt](../requirements/voxcpm-nvidia.txt) into `.venv-voxcpm`:
    the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the same files as the other NVIDIA builds), Transformers
    5.15.1, librosa, einops, pydantic, safetensors and tqdm, at the versions the Lab ran VoxCPM2 with. About 2.1 GB to download
-   and 5.1 GB installed.
+   and 5.1 GB installed. On an AMD card, [AMD's ROCm builds](#amd-radeon-cards) take the place of the CUDA ones, with the ROCm
+   runtime and the code for the card's chip: 69 packages for the R9700, which took 4.8 GB installed.
 2. **VoxCPM's source files**: the 25 files its inference imports, from github.com/OpenBMB/VoxCPM at the commit the Lab was
    checked with (f772e49), into `out\voxcpm2\source`, where the Lab's worker reads them, each checked against the SHA-256 in
    [catalog/voxcpm2_source.json](../catalog/voxcpm2_source.json). VoxCPM is not installed as a package, so the long list of
@@ -471,9 +514,12 @@ It prints its plan and asks first, and installs into this folder, in `.venv-voxc
 4. **A speech check on the card**: the Lab's VoxCPM2 worker loads the model without using the network and speaks the Models
    page's check sentence in a voice made from a description. The clip and a receipt stay in `out\voxcpm2`.
 
-It stops before anything is downloaded on a computer without an NVIDIA driver, or with a card or driver the CUDA 13.0 build
-cannot run on. **Nobody has tried VoxCPM2 on an NVIDIA card in the Lab yet.** On one computer with an AMD Radeon AI PRO R9700,
-run with `--checkpoint-only` and an empty `.venv-voxcpm` that borrows the Qwen environment's ROCm packages (below), it fetched
+It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, with an NVIDIA card or
+driver the CUDA 13.0 build cannot run on, or with an AMD card whose chip AMD's build has no code for. **Nobody has tried VoxCPM2
+on an NVIDIA card in the Lab yet.** Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700, it loaded in 22
+seconds, and its first take, the check sentence, was 4.6 seconds of speech made in 36 seconds with the warm-up, using at most 5.8
+GB of graphics memory. Before the installer could do that, the same computer ran it with `--checkpoint-only` and an empty
+`.venv-voxcpm` that borrows the Qwen environment's ROCm packages (below): it fetched
 the 25 source files from GitHub, loaded in 27 seconds and used at most 6.3 GB of graphics memory. The check sentence, with the
 Models page's fixed seed 42, ran on to 20.8 seconds of audio there, most of it after the sentence ended; the same sentence with
 seeds 7 and 1234 took 3.5 and 2.7 seconds, made in 4.6 and 3.3 seconds. The Lab now catches such a take (below). In a clean
@@ -490,15 +536,15 @@ each try. When all three tries run on, the generation fails rather than save a t
 the check sentence with seed 42 ran on in its first try and stopped at 11.2 seconds, and the second try made a 4.6-second
 take, the last 2.2 seconds of it quiet; seeds 7 and 1234 made the same 3.5 and 2.7 seconds as before, at their first try.
 
-For another graphics card, make `.venv-voxcpm` yourself with a GPU build of PyTorch and the packages above and run the launcher
-with `--checkpoint-only`, which fetches the source and model files and leaves the packages alone. A `.venv-voxcpm` with no
-PyTorch at all borrows the packages of `.venv-fqwen` instead, read-only and in VoxCPM2's worker only: that is how the Lab first
-ran it, with a ROCm build of PyTorch for an AMD card in `.venv-fqwen`.
+For a graphics card neither build runs on, make `.venv-voxcpm` yourself with a GPU build of PyTorch and the packages above and
+run the launcher with `--checkpoint-only`, which fetches the source and model files and leaves the packages alone. A
+`.venv-voxcpm` with no PyTorch at all borrows the packages of `.venv-fqwen` instead, read-only and in VoxCPM2's worker only: that
+is how the Lab first ran it, with a ROCm build of PyTorch for an AMD card in `.venv-fqwen`.
 
 Licences: the VoxCPM2 weights and VoxCPM's code are Apache-2.0 (OpenBMB). The packages keep their own licences, as for
 Qwen3-TTS above. To remove VoxCPM2, delete `.venv-voxcpm`, `out\voxcpm2` and `hf-cache\models--openbmb--VoxCPM2`.
 
-## Breeze TTS 2 on an NVIDIA graphics card
+## Breeze TTS 2 on a graphics card
 
 Breeze TTS 2 (3B) makes a voice from a written description, clones one from a recording and its transcript, and takes
 direction such as whispering. **Its weights are not open for commercial use**: they, the converted files the Lab installs and
@@ -510,7 +556,8 @@ and installing the weights means accepting it. Breeze's code, in `breeze\` in th
 The Lab runs Breeze only on a graphics card, with its BF16 weights, and it needs one with **at least 10 GB of memory**: it
 peaked at 7.5 GB (on an RTX 5090, by its model card, and on the AMD card below), so an 8 GB card is too small. The repository's
 smaller INT8 builds need ComfyUI's own kernels, which the Lab does not have. **Install** on its card appears when the computer
-has an NVIDIA card big enough and a driver the build runs on, or:
+has an NVIDIA card big enough and a driver the build runs on, or an AMD card big enough that [AMD's build](#amd-radeon-cards)
+has code for, or:
 
 ```powershell
 setup-breeze.bat
@@ -520,7 +567,9 @@ It prints its plan and asks first, and installs into this folder, in `.venv-bree
 
 1. **41 pinned Python packages** from [requirements/breeze-nvidia.txt](../requirements/breeze-nvidia.txt) into `.venv-breeze`:
    the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0, Transformers 5.17.0, accelerate, safetensors, NumPy and
-   SoundFile, the versions the Lab's Breeze environment was checked with. About 2.0 GB to download and 4.8 GB installed.
+   SoundFile, the versions the Lab's Breeze environment was checked with. About 2.0 GB to download and 4.8 GB installed. On an
+   AMD card, [AMD's ROCm builds](#amd-radeon-cards) take the place of the CUDA ones, with the ROCm runtime and the code for the
+   card's chip: 48 packages for the R9700, which took 4.5 GB installed.
 2. **The checkpoint** `drbaph/Breeze-TTS-2-comfyui` (a conversion of `BreezeBlue/Breeze-TTS-2`) at the pinned revision: the
    7.0 GB BF16 model, the 0.7 GB audio tokenizer, the text tokenizer, settings and model card, 7.7 GB in all, into
    `breeze\models\breezetts2\drbaph_Breeze-TTS-2-comfyui`, where Breeze's loader looks, each checked against the SHA-256 in
@@ -529,11 +578,12 @@ It prints its plan and asks first, and installs into this folder, in `.venv-bree
    line itself) and speaks the Models page's check sentence in a voice made from a description. The clip and a receipt stay
    in `out\breeze`.
 
-**Nobody has tried Breeze on an NVIDIA card in the Lab yet.** On one computer with an AMD Radeon AI PRO R9700 (32 GB), run with
-`--checkpoint-only` against a ROCm build of the same packages, it loaded in 64 seconds, spoke 3.0 seconds in 20 seconds and used
-at most 7.5 GB of graphics memory. It wants 12 GB of free RAM before it loads. For another graphics card, make `.venv-breeze`
-yourself with a GPU build of PyTorch and the packages above, then run the launcher with `--checkpoint-only`. To remove Breeze,
-delete `.venv-breeze`, `breeze\models` and `out\breeze`.
+It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, or with a card, driver or
+amount of graphics memory the build cannot run with. **Nobody has tried Breeze on an NVIDIA card in the Lab yet.** Installed
+with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61 seconds, spoke 3.0 seconds in 14.5
+seconds and used at most 7.5 GB of graphics memory. It wants 12 GB of free RAM before it loads. For a graphics card neither
+build runs on, make `.venv-breeze` yourself with a GPU build of PyTorch and the packages above, then run the launcher with
+`--checkpoint-only`. To remove Breeze, delete `.venv-breeze`, `breeze\models` and `out\breeze`.
 
 ## Model runtimes
 
@@ -550,9 +600,9 @@ tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the export
 | Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
 | Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
 | Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
-| Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned NVIDIA runtime and one model's checkpoint ([above](#qwen3-tts-on-an-nvidia-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
-| VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned NVIDIA runtime, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-an-nvidia-graphics-card)); needs a card with 7 GB of memory. |
-| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned NVIDIA runtime and the BF16 checkpoint ([above](#breeze-tts-2-on-an-nvidia-graphics-card)); needs a card with 10 GB of memory. Its weights are for research and non-commercial use only. |
+| Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned runtime for this computer's NVIDIA or AMD card and one model's checkpoint ([above](#qwen3-tts-on-a-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
+| VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned runtime for this computer's NVIDIA or AMD card, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-a-graphics-card)); needs a card with 7 GB of memory. |
+| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 10 GB of memory. Its weights are for research and non-commercial use only. |
 | Drama 3 | Core environment plus speech.cpp | `setup-drama3.bat` installs the pinned native runtime and the Q4_K model ([below](#drama-3-on-the-cpu)); runs on the CPU with 26 GB of free RAM. |
 
 Do not install a model's dependencies into the core environment. Runtime dependency conflicts are why every model has an
@@ -595,11 +645,13 @@ speech.cpp alone. To remove Drama 3, delete `out\drama3`; [DRAMA3.md](DRAMA3.md)
 
 `runtime.local.json` optionally supplies `device`, `hip_visible_devices`,
 `disable_cudnn` and `drama_design_device`; copy/edit the provided example for your own hardware only. `device` is `auto` (the
-default: the graphics card when there is an NVIDIA driver, or when the service's own PyTorch can see one), `cpu` or `cuda`
-(also the name a ROCm build of PyTorch answers to on an AMD card); `--device` on `serve.py` or `desktop.py` chooses for one
-run. A model whose PyTorch cannot use the card runs on the CPU whatever is chosen. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
-Environment `HIP_VISIBLE_DEVICES` takes precedence. The public default does not
-hide GPU 0. `--device cpu` avoids GPU selection.
+default: the graphics card when there is an NVIDIA driver, an AMD card that AMD's ROCm build of PyTorch has code for, or a
+service whose own PyTorch can see one), `cpu` or `cuda` (also the name a ROCm build of PyTorch answers to on an AMD card);
+`--device` on `serve.py` or `desktop.py` chooses for one run. A model whose PyTorch cannot use the card runs on the CPU whatever
+is chosen. `drama_design_device` (default `cpu`) selects the device for single-line Drama design only; `Vulkan1` is the experimental local GPU path. Drama cloning and studio synthesis always use CPU.
+`hip_visible_devices` is the number of the AMD card the models use, as PyTorch numbers the cards; on a computer with more than
+one AMD card the installers write it ([AMD Radeon cards](#amd-radeon-cards)). Environment `HIP_VISIBLE_DEVICES` takes
+precedence. The public default does not hide GPU 0. `--device cpu` avoids GPU selection.
 
 `min_free_ram_gb` changes how much free RAM the Lab wants before it loads an engine, on this computer only, for example
 `{"min_free_ram_gb": {"kokoro": 2}}`; 0 turns the check off for that engine. The defaults, in `ram_needs.py`, are the numbers

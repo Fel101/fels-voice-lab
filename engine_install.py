@@ -12,9 +12,11 @@ it holds the pool's job lock, so tests, loads and clips are refused instead of c
 the service stops the install and its children; the script continues where it stopped when it is run again.
 
 A card whose GPU/CPU switch says GPU installs the engine's NVIDIA build (the script's --nvidia), and an engine installed with
-the CPU build of PyTorch can get its NVIDIA build afterwards, which replaces PyTorch in its environment. gpu_build() says
-whether that can work on this computer before anything is asked of the script: an NVIDIA driver, and a card and driver the
-build runs on, from the installer's own card_problems().
+the CPU build of PyTorch can get its NVIDIA build afterwards, which replaces PyTorch in its environment. The models that run
+only on a graphics card (Qwen3-TTS, VoxCPM2, Breeze TTS 2) get the build for this computer's card, NVIDIA's or AMD's, whatever
+the switch says. gpu_build() says whether that can work on this computer before anything is asked of the script: an NVIDIA
+driver, and a card and driver the build runs on, from the installer's own card_problems(); or, for those models, an AMD card
+whose chip AMD's ROCm build has code for, from the installer's amd_card_problems().
 """
 
 import codecs
@@ -46,12 +48,17 @@ INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/inst
               "drama-3": "tools/install_drama3.py"}
 # Engine id -> the installer module whose --nvidia puts in a GPU build of PyTorch, and whose card_problems(cards) says why that
 # build would not run on this computer's NVIDIA cards.
-# Qwen3-TTS, VoxCPM2 and Breeze have only their NVIDIA builds, so their installers always put that in.
+# Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so their installers always put in a GPU build: NVIDIA's, or on a
+# computer whose card is an AMD Radeon, AMD's ROCm build, which their amd_card_problems(cards) judges.
 GPU_BUILDS = {"kokoro": "tools.install_kokoro",
               **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
               **{engine: "tools.install_qwen" for engine in QWEN_MODELS},
               "voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze"}
 NO_NVIDIA = "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver."
+NO_GPU = ("The app installs {name} for an NVIDIA graphics card or an AMD Radeon, and this computer has neither an NVIDIA driver "
+          "nor an AMD card that Windows lists.")
+NVIDIA_ONLY = ("The app installs {name}'s GPU build for NVIDIA graphics cards only, so on this computer's AMD card it runs on the "
+               "CPU.")
 # Every launcher runs its script with the lab's own Python, whichever environment the engine then runs in.
 LAB_PYTHON = ".venv/Scripts/python.exe"
 LOG_FOLDER = "out/install"
@@ -97,7 +104,7 @@ class EngineInstaller:
     """Plans and runs the guided installers for the Models page, one install at a time (see the note above)."""
 
     def __init__(self, pool, *, root=None, python=None, scripts=None, gpu_builds=None, nvidia_present=None,
-                 nvidia_cards=None):
+                 nvidia_cards=None, amd_listed=None, amd_cards=None):
         self.pool = pool
         self.root = Path(root or worker_pool.LAB)
         self.python = python    # None: the lab's own Python, as the launchers use
@@ -105,9 +112,12 @@ class EngineInstaller:
         self.gpu_builds = dict(GPU_BUILDS if gpu_builds is None else gpu_builds)
         self.nvidia_present = nvidia_present or hardware.nvidia_driver_present
         self.nvidia_cards = nvidia_cards or hardware.nvidia_cards
+        self.amd_listed = amd_listed or hardware.amd_listed
+        self.amd_cards = amd_cards or hardware.amd_cards
         self._lock = threading.Lock()
         self._cards_lock = threading.Lock()
         self._cards = None
+        self._amd = None
         self._job = None
         self._process = None
 
@@ -136,20 +146,34 @@ class EngineInstaller:
                 self._cards = (present, self.nvidia_cards() if present else [])
             return self._cards
 
+    def _amd_cards(self):
+        """The AMD cards AMD's driver lists, read once: the driver answers in a Python of its own, which takes a moment."""
+        with self._cards_lock:
+            if self._amd is None:
+                self._amd = list(self.amd_cards())
+            return self._amd
+
     def gpu_build(self, key):
         """(ok, reason): whether the app can install the GPU build of an engine on this computer. It needs an installer with an
         NVIDIA build, an NVIDIA driver, and a card and driver that the build runs on, which the installer's own card_problems
-        says. reason is None when it can, and otherwise the sentence the card shows."""
+        says; or, for a model that runs only on a graphics card, an AMD card that AMD's build has code for, which the
+        installer's amd_card_problems says. reason is None when it can, and otherwise the sentence the card shows."""
         entry = self.pool.entries.get(key) or {}
         name = entry.get("name", key)
         module = self.gpu_builds.get(key)
         if module is None or key not in self.scripts:
             return False, f"The app has no GPU build of {name} to install; it runs on the CPU."
-        present, cards = self._nvidia()
-        if not present:
-            return False, NO_NVIDIA
         try:
-            problems = importlib.import_module(module).card_problems(cards)
+            installer = importlib.import_module(module)
+            present, cards = self._nvidia()
+            if present:
+                problems = installer.card_problems(cards)
+            elif not self.amd_listed():
+                return False, NO_GPU.format(name=name) if hasattr(installer, "amd_card_problems") else NO_NVIDIA
+            elif hasattr(installer, "amd_card_problems"):
+                problems = installer.amd_card_problems(self._amd_cards(), root=self.root)
+            else:
+                return False, NVIDIA_ONLY.format(name=name)
         except Exception as exc:  # noqa: BLE001 - a card that cannot be judged must not break the Models page
             return False, f"The Lab could not check {name}'s GPU build against this card ({type(exc).__name__}: {exc})."
         return (False, " ".join(problems)) if problems else (True, None)

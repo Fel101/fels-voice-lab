@@ -79,12 +79,13 @@ def require_ram(min_gb, what):
 DEVICES = ("auto", "cpu", "cuda")
 
 
-def pick_device(want="auto", *, nvidia_present=None):
+def pick_device(want="auto", *, nvidia_present=None, amd_usable=None):
     """The device the service asks its workers for: "cpu", or "cuda" for a graphics card (NVIDIA, or AMD through a ROCm build
     of PyTorch, which answers to the same name). "auto" takes runtime.local.json's "device" when it sets one; otherwise a
-    graphics card when this computer has an NVIDIA driver or this environment's PyTorch can see one, and the CPU when not.
+    graphics card when this computer has an NVIDIA driver, an AMD card whose chip AMD's ROCm build of PyTorch has code for
+    (tools/amd_build.py), or this environment's PyTorch can see one, and the CPU when not.
 
-    The service's .venv holds no PyTorch, so the NVIDIA driver is what usually decides. A worker whose own PyTorch cannot use
+    The service's .venv holds no PyTorch, so the graphics card is what usually decides. A worker whose own PyTorch cannot use
     the card (the CPU build the installers put in unless told --nvidia) runs on the CPU anyway: see
     worker_runtime.usable_device."""
     if want == "auto":
@@ -96,6 +97,13 @@ def pick_device(want="auto", *, nvidia_present=None):
     if nvidia_present is None:
         from hardware import nvidia_driver_present as nvidia_present
     if nvidia_present():
+        return "cuda"
+    if amd_usable is None:
+        try:
+            from tools.amd_build import usable_card as amd_usable
+        except ImportError:  # a script started from elsewhere, without the lab folder on its path
+            amd_usable = bool
+    if amd_usable():
         return "cuda"
     try:
         torch = torch_runtime()

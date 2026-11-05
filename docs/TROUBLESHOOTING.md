@@ -15,12 +15,12 @@ than the computer has in all, more with a browser full of tabs open.
 | Kokoro 82M | 3 GB | Yes | Yes | Yes | 1.7 GB | `setup-kokoro.bat` |
 | Chatterbox Turbo 350M (cloning) | 8 GB | No | With little else open | Yes | 5 GB | `setup-chatterbox.bat` |
 | Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | 3.2 GB, and Turbo's environment | `setup-chatterbox.bat --original` |
-| Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `setup-qwen.bat --model` (NVIDIA) |
-| VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `setup-voxcpm.bat` (NVIDIA) |
-| Breeze TTS 2 | 12 GB, and a graphics card with 10 GB | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA) |
+| Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `setup-qwen.bat --model` (NVIDIA or AMD) |
+| VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `setup-voxcpm.bat` (NVIDIA or AMD) |
+| Breeze TTS 2 | 12 GB, and a graphics card with 10 GB | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA or AMD) |
 | Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `setup-drama3.bat` |
 
-The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, and the app installs them only for an NVIDIA one
+The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, an NVIDIA card or an AMD Radeon
 ([graphics cards](#graphics-cards)).
 
 The RAM numbers are the Lab's own rule, a measured peak with room to spare where one was measured; they live in
@@ -78,9 +78,9 @@ other AI tools), then try again. The Lab unloads one model before it loads the n
 table above for what fits your computer, and `min_free_ram_gb` to change a need.
 
 **"not installed".** The card on **Models & features** lists the files that are missing, and its **Install** button installs
-them. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for an NVIDIA graphics card and driver their build runs on
-(VoxCPM2 needs a card with 7 GB of memory, Breeze one with 10 GB); on another computer their card says why it has no
-**Install** ([Model runtimes](SETUP.md#model-runtimes)).
+them. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for a graphics card their build runs on, an NVIDIA card and
+driver or an AMD Radeon whose chip AMD's build has code for (VoxCPM2 needs a card with 7 GB of memory, Breeze one with 10 GB);
+on another computer their card says why it has no **Install** ([Model runtimes](SETUP.md#model-runtimes)).
 
 **"Installed, test out of date".** A package or a checkpoint changed since the last test. Press **Test**.
 
@@ -91,7 +91,7 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 
 **NVIDIA.** Kokoro and the Chatterbox models can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it
 finds an NVIDIA driver, or run `setup-kokoro.bat --nvidia` and `setup-chatterbox.bat --nvidia`. The Qwen3-TTS models, VoxCPM2
-and Breeze TTS 2 run only on a graphics card and have only an NVIDIA build, which **Install** on their cards puts in. Nobody
+and Breeze TTS 2 run only on a graphics card; on an NVIDIA one, **Install** on their cards puts in their NVIDIA build. Nobody
 has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome.
 
 - Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
@@ -110,11 +110,23 @@ has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a
 - The service uses the card when it finds an NVIDIA driver. To keep everything on the CPU, put `{"device": "cpu"}` in
   `runtime.local.json`.
 
-**AMD.** The Lab was built on an AMD card with ROCm builds of PyTorch, installed by hand into the models' environments; there is
-no guided installer for them. Make a model's environment with a ROCm build of PyTorch yourself, then run its launcher with
-`--checkpoint-only`, which fetches the model files, leaves the packages alone and runs the speech check ([Setup](SETUP.md)
-lists each model's packages). If the service does not pick the card by itself, put `{"device": "cuda"}` in
-`runtime.local.json` (ROCm answers to that name too).
+**AMD.** The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run on an AMD Radeon card with AMD's ROCm build of PyTorch, which
+**Install** on their cards (or their launchers) put in on a computer without an NVIDIA driver; [Setup](SETUP.md#amd-radeon-cards)
+says what it installs. Kokoro and Chatterbox have no AMD build and run on the CPU there. The Lab was checked on a Radeon AI PRO
+R9700, so a [hardware report](#reporting-a-problem) from another AMD card is welcome.
+
+- **"has no code for the ...".** AMD's build has code for the chips of the Radeon RX 5000, 6000, 7000 and 9000 series, the
+  Radeon PRO and AI PRO cards built on them, and the Radeon graphics in Ryzen processors. An older card (a Radeon RX 500 or
+  Vega, say) cannot run it, so these models have no **Install** there.
+- **"AMD's driver did not say which chip it has".** The installers ask AMD's OpenCL driver, which comes with the graphics
+  driver. Install or update AMD Software: Adrenalin Edition (PRO Edition for a workstation card) from amd.com, restart the Lab
+  and try again. The same goes for a speech check that fails with a HIP error.
+- **Two AMD cards**, such as a Ryzen processor's Radeon graphics beside a Radeon card: the Lab uses the separate card, and the
+  first install writes the number PyTorch gives it to `runtime.local.json` as `"hip_visible_devices"`. To use the other card,
+  change that number (or set `HIP_VISIBLE_DEVICES`) and run each model's launcher again: it adds the code for that card's chip.
+  An installer stops, and says which number to give, when the setting names a card other than the one it installed for.
+- The service uses the card when it finds one that AMD's build has code for. `{"device": "cpu"}` in `runtime.local.json`
+  keeps everything on the CPU.
 
 ## Export and audio
 

@@ -23,7 +23,10 @@ a model worker           engine_worker.py in that model's own environment: .venv
   talks to the worker in JSON lines over stdin and stdout ([worker_protocol.py](../worker_protocol.py)). Audio comes back as a
   temporary `.npy` file under `out/workers/<engine>-<pid>`. `worker_runtime.py` is the worker's side: load, generate, unload.
 - **The device.** The service asks for `cpu` or `cuda` (`common.pick_device`: `runtime.local.json`, then an NVIDIA driver,
-  then the CPU). A worker whose own PyTorch cannot use the card runs on the CPU and says so (`worker_runtime.usable_device`).
+  then an AMD card that AMD's ROCm build of PyTorch has code for, then the CPU). A worker whose own PyTorch cannot use the card
+  runs on the CPU and says so (`worker_runtime.usable_device`). On a computer with more than one AMD card, `common.py` sets
+  `HIP_VISIBLE_DEVICES` from `runtime.local.json`'s `hip_visible_devices`, which the installers write, before any worker
+  starts PyTorch.
 
 ## A request
 
@@ -65,6 +68,7 @@ appearance before the page paints.
 | What label does a clip carry inside its file? | [synthetic_label.py](../synthetic_label.py) |
 | What does the copied report say? | [system_report.py](../system_report.py) and [hardware.py](../hardware.py) |
 | Which NVIDIA build runs on this card? | `card_problems` in each installer, from [hardware.py](../hardware.py)'s `nvidia_cards`; `worker_runtime.usable_device` at run time |
+| Which AMD card, and which chip's code? | [tools/amd_build.py](../tools/amd_build.py) (`card_problems`, `chosen_card`, `settle_number`), from [hardware.py](../hardware.py)'s `amd_cards` and [requirements/amd-rocm.txt](../requirements/amd-rocm.txt) |
 | Is there a newer release, and how does a folder get it? | [updates.py](../updates.py) (the check) and [tools/update.py](../tools/update.py) (`update.bat`) |
 
 ## Adding

@@ -1,9 +1,10 @@
 """Where each model runs, the graphics card (GPU) or the processor (CPU), as chosen with the switch on its Models page card.
 
-The service picks one device when it starts (common.pick_device): the graphics card when it finds an NVIDIA driver, or when
-runtime.local.json or --device says "cuda", and the CPU otherwise. A service on the CPU keeps every model there. On a service
-with a graphics card, each model that can use one has a switch, and its choice is kept in data/engines/devices.json beside the
-test results; it applies from the model's next load. A model nobody has switched uses the card when its PyTorch can.
+The service picks one device when it starts (common.pick_device): the graphics card when it finds an NVIDIA driver or an AMD
+card that AMD's ROCm build of PyTorch has code for, or when runtime.local.json or --device says "cuda", and the CPU otherwise.
+A service on the CPU keeps every model there. On a service with a graphics card, each model that can use one has a switch, and
+its choice is kept in data/engines/devices.json beside the test results; it applies from the model's next load. A model nobody
+has switched uses the card when its PyTorch can.
 
 Which PyTorch a model's environment holds is read from the name of its dist-info folder, so nothing is imported: 2.12.0+cu130
 is an NVIDIA (CUDA) build, 2.12.0+rocm7.14.0 an AMD (ROCm) build, and 2.12.0 or 2.12.0+cpu the CPU build, which is what PyPI
@@ -42,8 +43,9 @@ GPU_ONLY = {
     "breeze-tts-2": "Breeze TTS 2 runs only on a graphics card in the Lab.",
 }
 NO_GPU = (
-    "This service runs every model on the CPU: it found no NVIDIA graphics card driver, or it was started for the CPU "
-    '(--device cpu, or "device": "cpu" in runtime.local.json). docs/TROUBLESHOOTING.md (Graphics cards) says more.'
+    "This service runs every model on the CPU: it found no NVIDIA graphics card driver and no AMD card that AMD's ROCm build "
+    'of PyTorch has code for, or it was started for the CPU (--device cpu, or "device": "cpu" in runtime.local.json). '
+    "docs/TROUBLESHOOTING.md (Graphics cards) says more."
 )
 _TORCH = re.compile(r"torch-(?P<version>[^-]+)\.dist-info", re.IGNORECASE)
 

@@ -40,10 +40,24 @@
     Community License first, it refuses a computer with less than 26 GB of RAM, it fetches the 20.8 GB model in 32 MB pieces
     six at a time, and it ends with a speech check on the CPU (on one 8-core CPU: loaded in 28 s, 2.3 s of audio in 9 s).
 
-  The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, so they have only an NVIDIA build, the CUDA 13.0
-  builds of PyTorch 2.12 and torchaudio 2.11 that Chatterbox's NVIDIA build uses. On a computer whose card or driver that
-  build cannot run on, their card has no **Install** and says why. None of the three has run on an NVIDIA card yet: each was
-  checked on an AMD Radeon AI PRO R9700 with `--checkpoint-only` and ROCm builds of the same packages.
+  The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card. On a computer with an NVIDIA driver they get
+  the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 that Chatterbox's NVIDIA build uses, and on one with an AMD Radeon
+  AMD's ROCm build (below). On a computer whose card or driver neither build can run on, their card has no **Install** and
+  says why. None of the three has run on an NVIDIA card yet.
+- **The graphics-card models install on an AMD Radeon too.** On a computer without an NVIDIA driver whose graphics card is an
+  AMD Radeon, **Install** on the cards of the four Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 (and their launchers) puts in
+  AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 from AMD's own index, in place of the CUDA builds, with the ROCm
+  runtime and the code for the card's chip; before, the environment had to be made by hand and the launcher run with
+  `--checkpoint-only`. The installer asks AMD's OpenCL driver which chip the card has, and
+  [requirements/amd-rocm.txt](requirements/amd-rocm.txt) pins every file by its SHA-256 for 20 chips: the Radeon RX 5000,
+  6000, 7000 and 9000 series, the Radeon PRO and AI PRO cards built on them, and the Radeon graphics in Ryzen processors. On a
+  computer with two AMD cards, such as a Ryzen processor's Radeon graphics beside a Radeon card, the Lab uses the separate card,
+  and the installer writes the number PyTorch gives it to `runtime.local.json` (`hip_visible_devices`), which the models'
+  workers read before PyTorch starts. The service now uses the graphics card on such a computer without being told. Checked on
+  an AMD mini PC with a Radeon AI PRO R9700 beside the Ryzen 7 PRO 8845HS's Radeon 780M: every installer chose the R9700 and
+  passed its speech check there (Qwen3-TTS 1.7B VoiceDesign spoke 1.9 s in 1.3 s, VoxCPM2 4.6 s in 36 s on its first take,
+  Breeze 3.0 s in 14.5 s), and Qwen3-TTS 1.7B CustomVoice installed from its card and passed **Test** on the R9700. Kokoro and
+  Chatterbox have NVIDIA builds only, so on an AMD card they run on the CPU.
 - **Graphics memory checked before a download.** The installers now read each NVIDIA card's memory from `nvidia-smi`, and
   VoxCPM2's and Breeze's refuse a card with less than 7 and 10 GB before they download anything. Breeze used up to 7.5 GB, so
   an 8 GB card is too small for it.

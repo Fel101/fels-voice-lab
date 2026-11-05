@@ -1,10 +1,11 @@
-"""tools/install_qwen.py: one of the four Qwen3-TTS models, for an NVIDIA graphics card, into the .venv-fqwen they share. Nothing
-here reaches the real network, pip, venv, a graphics card or the real Qwen3-TTS."""
+"""tools/install_qwen.py: one of the four Qwen3-TTS models, for an NVIDIA or AMD graphics card, into the .venv-fqwen they share.
+Nothing here reaches the real network, pip, venv, a graphics card or the real Qwen3-TTS."""
 
 import contextlib
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,9 @@ import engine_install  # noqa: E402
 import qwen_support  # noqa: E402
 import qwen_worker  # noqa: E402
 import soundfile as sf  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
+from tools import amd_build as amd  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 from tools import install_qwen as iq  # noqa: E402
 
@@ -40,7 +43,8 @@ def noise(length, seed=0):
 
 
 class FakeLab:
-    """A lab folder holding a two-package lock and small stand-ins for one Qwen checkpoint's files, at its real revision."""
+    """A lab folder holding a two-package lock, the AMD list, and small stand-ins for one Qwen checkpoint's files, at its real
+    revision."""
 
     LOCK = (
         f"# a stand-in for requirements/qwen-nvidia.txt\nfaster-qwen3-tts==0.4.0 --hash=sha256:{'ab' * 32}\n"
@@ -64,6 +68,7 @@ class FakeLab:
             (self.root / spec["manifest"]).write_text(json.dumps(other), "utf-8")
         (self.root / iq.MODELS[engine]["manifest"]).write_text(json.dumps(self.manifest), "utf-8")
         (self.root / iq.LOCK).write_text(self.LOCK, "utf-8")
+        (self.root / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
 
     def served(self):
         prefix = f"/{self.manifest['repo']}/resolve/{self.manifest['revision']}/"
@@ -192,12 +197,25 @@ class ShippedFilesTests(unittest.TestCase):
 
 
 class ProblemTests(unittest.TestCase):
-    def test_without_an_nvidia_driver_it_stops_and_says_there_is_no_cpu_build(self):
+    def test_without_an_nvidia_driver_or_an_amd_card_it_stops_and_says_there_is_no_cpu_build(self):
         problems = iq.nvidia_problems(present=False)
         self.assertEqual(problems, [iq.NO_NVIDIA_DRIVER])
-        self.assertIn("only on an NVIDIA graphics card", problems[0])
-        self.assertIn("--checkpoint-only", problems[0])
-        self.assertNotIn("CPU build", problems[0])
+        self.assertEqual(iq.gpu_problems(None, []), [iq.NO_NVIDIA_DRIVER])
+        text = " ".join(problems[0].split())
+        self.assertIn("only on a graphics card, an NVIDIA card or an AMD Radeon", text)
+        self.assertIn("AMD Software: Adrenalin Edition", text)
+        self.assertIn("--checkpoint-only", text)
+        self.assertNotIn("CPU build", text)
+
+    def test_an_amd_card_is_judged_by_the_chip_amds_build_has_code_for(self):
+        with tempfile.TemporaryDirectory() as folder:
+            FakeLab(folder)
+            with mock.patch.dict(os.environ):
+                os.environ.pop(amd.VARIABLE, None)
+                self.assertEqual(iq.gpu_problems("amd", [RADEON_780M, R9700], folder), [])
+                self.assertEqual(iq.amd_card_problems([RADEON_780M], root=folder), [])  # Qwen3-TTS asks no more memory
+                [old] = iq.gpu_problems("amd", [RADEON_VII], folder)
+            self.assertIn("has no code for the AMD Radeon VII (gfx906)", old)
 
     def test_an_rtx_50_card_passes_and_old_cards_and_drivers_are_refused_with_what_to_do(self):
         self.assertEqual(iq.nvidia_problems(present=True, cards=[RTX_5070]), [])
@@ -267,6 +285,42 @@ class PlanTests(unittest.TestCase):
         self.assertIn("faster-qwen3-tts is MIT", text)
         self.assertIn("in a voice made from a short description", text)
 
+    def test_on_an_amd_card_the_plan_names_amds_build_the_card_and_which_card_the_lab_uses(self):
+        packages = iq.pinned_packages(ROOT, R9700)
+        manifest = MANIFESTS[DESIGN]
+        text = " ".join(
+            iq.plan_text(
+                DESIGN,
+                manifest,
+                packages,
+                len(packages),
+                manifest["files"],
+                environment_exists=False,
+                checkpoint_only=False,
+                card=R9700,
+                cards=[RADEON_780M, R9700],
+            ).split()
+        )
+        self.assertIn("Fel's Voice Lab: Qwen3-TTS 1.7B VoiceDesign on an AMD graphics card", text)
+        self.assertIn(f"{len(packages)} of {len(packages)} to install there", text)
+        self.assertIn(
+            "AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the AMD Radeon AI PRO "
+            "R9700 (gfx1201)",
+            text,
+        )
+        self.assertIn("About 1.6 GB to download and 5.1 GB on disk", text)
+        self.assertIn("requirements/qwen-nvidia.txt and requirements/amd-rocm.txt", text)
+        self.assertIn(
+            "A speech check on the AMD Radeon AI PRO R9700: loads the model without using the network, records "
+            "its HIP graphs (AMD's CUDA graphs)",
+            text,
+        )
+        self.assertIn("This computer has 2 AMD graphics cards", text)
+        self.assertIn("under AMD's own licence terms", text)
+        self.assertNotIn("CUDA 13.0", text)
+        self.assertNotIn("Nobody has tried the Lab on an NVIDIA card", text)
+        text.encode("ascii")
+
     def test_the_plan_reflects_what_is_already_done(self):
         text = self.plan(todo=0, pending=[], environment_exists=True)
         self.assertIn("all 66 are already installed in .venv-fqwen", text)
@@ -285,7 +339,7 @@ class SpeechCheckTests(unittest.TestCase):
         '"device": "cuda", "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU", "peak_gpu_gb": 5.2}'
     )
 
-    def check(self, stdout="", stderr="", code=0, error=None, engine=DESIGN):
+    def check(self, stdout="", stderr="", code=0, error=None, engine=DESIGN, number=None):
         calls = []
 
         def runner(command, **kwargs):
@@ -295,7 +349,7 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return iq.run_speech_check(folder, engine, runner=runner), calls, Path(folder)
+            return iq.run_speech_check(folder, engine, number=number, runner=runner), calls, Path(folder)
 
     def test_the_check_runs_offline_in_the_shared_environment_and_its_numbers_come_back(self):
         result, calls, folder = self.check(stdout="Warning: flash-attn is not installed.\n" + self.GOOD + "\n")
@@ -307,6 +361,20 @@ class SpeechCheckTests(unittest.TestCase):
         self.assertEqual((kwargs["env"]["HF_HUB_OFFLINE"], kwargs["env"]["TRANSFORMERS_OFFLINE"]), ("1", "1"))
         self.assertEqual((result["audio_seconds"], result["peak_gpu_gb"]), (2.5, 5.2))
         self.assertEqual(result["wav"], folder / "out" / "qwen" / "install-1.7b-voice-design.wav")
+
+    def test_on_an_amd_card_the_check_runs_on_the_card_the_lab_uses_and_a_failure_names_amds_driver(self):
+        good = self.GOOD.replace("2.12.0+cu130", "2.12.0+rocm7.14.0")
+        _result, calls, _folder = self.check(stdout=good + "\n", number=1)
+        self.assertEqual(calls[0][1]["env"]["HIP_VISIBLE_DEVICES"], "1")
+        with mock.patch.dict(os.environ):
+            os.environ.pop(amd.VARIABLE, None)
+            _result, calls, _folder = self.check(stdout=good + "\n")
+            self.assertNotIn(amd.VARIABLE, calls[0][1]["env"])
+        with self.assertRaisesRegex(iq.InstallError, r"Update the graphics driver \(AMD Software: Adrenalin Edition") as caught:
+            self.check(stderr="RuntimeError: HIP error: invalid device function", code=1, number=1)
+        self.assertNotIn("nvidia.com", str(caught.exception))
+        with self.assertRaisesRegex(iq.InstallError, "ran out of memory"):
+            self.check(stderr="torch.OutOfMemoryError: HIP out of memory.", code=1, number=0)
 
     def test_a_crash_shows_the_end_of_the_output_and_names_the_model(self):
         with self.assertRaisesRegex(
@@ -401,7 +469,8 @@ class SpeechCheckTests(unittest.TestCase):
 
 
 class RunTests(unittest.TestCase):
-    """The whole install with venv, pip, the model host, the NVIDIA checks and Qwen3-TTS replaced by stand-ins."""
+    """The whole install with venv, pip, the model host, the graphics card checks and Qwen3-TTS replaced by stand-ins. The
+    computer has an NVIDIA driver unless a test gives it AMD cards (self.graphics)."""
 
     @classmethod
     def setUpClass(cls):
@@ -418,6 +487,11 @@ class RunTests(unittest.TestCase):
         self.installed = None  # None: no .venv-fqwen yet
         self.calls = []
         self.nvidia = []
+        self.graphics = ("nvidia", [])
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(amd.VARIABLE, None)
         folder = self.base / "out" / "qwen"
         self.check = {
             "problem": None,
@@ -438,12 +512,12 @@ class RunTests(unittest.TestCase):
             python.write_bytes(b"")
             self.installed = {"pip": "25.0.1"}
 
-        def pip(root, **kwargs):
-            self.calls.append("pip")
-            self.installed.update({item["key"]: item["version"] for item in base.read_lock(root / iq.LOCK)})
+        def pip(root, *, card=None, **kwargs):
+            self.calls.append(("pip", card["chip"]) if card else "pip")
+            self.installed.update({item["key"]: item["version"] for item in iq.pinned_packages(root, card)})
 
-        def speak(root, engine, **kwargs):
-            self.calls.append(("check", engine))
+        def speak(root, engine, *, number=None, **kwargs):
+            self.calls.append(("check", engine) if number is None else ("check", engine, number))
             folder.mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -454,6 +528,8 @@ class RunTests(unittest.TestCase):
             (iq, "environment_versions", lambda root: dict(self.installed or {})),
             (iq, "install_packages", pip),
             (iq, "run_speech_check", speak),
+            (iq, "graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
+            (amd, "hip_devices", lambda root, environment: [dict(device) for device in DEVICES]),
             (iq, "nvidia_problems", lambda: list(self.nvidia)),
             (iq, "interpreter_problems", lambda root: []),
             (iq, "long_path_problems", lambda root, manifest: []),
@@ -546,9 +622,72 @@ class RunTests(unittest.TestCase):
         status, out, err = self.run_main("--model", DESIGN, "--yes")
         self.assertEqual(status, 1)
         self.assertIn("This computer cannot take the plan yet", err)
-        self.assertIn("only on an NVIDIA graphics card", " ".join(err.split()))
+        self.assertIn("only on a graphics card, an NVIDIA card or an AMD Radeon", " ".join(err.split()))
         self.assertIn("Qwen3-TTS 1.7B VoiceDesign", out)
         self.untouched()
+
+    def test_a_computer_with_neither_card_is_told_so(self):
+        self.graphics = (None, [])
+        status, _out, err = self.run_main("--model", DESIGN, "--yes")
+        self.assertEqual(status, 1)
+        self.assertIn("neither an NVIDIA driver", " ".join(err.split()))
+        self.untouched()
+
+    def test_on_an_amd_card_amds_build_goes_in_and_the_card_is_noted_for_the_lab(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        self.check = {**self.check, "torch": "2.12.0+rocm7.14.0", "device_name": "AMD Radeon AI PRO R9700"}
+        status, out, err = self.run_main("--model", DESIGN, "--yes")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["venv", ("pip", "gfx1201"), ("check", DESIGN, 1)])
+        text = " ".join(out.split())
+        self.assertIn("Qwen3-TTS 1.7B VoiceDesign on an AMD graphics card", text)
+        self.assertIn("with the code for the AMD Radeon AI PRO R9700 (gfx1201)", text)
+        self.assertIn(
+            "This computer has 2 AMD graphics cards, and the Lab uses the AMD Radeon AI PRO R9700: runtime.local.json "
+            'now says "hip_visible_devices": "1".',
+            text,
+        )
+        self.assertIn(
+            "Qwen3-TTS 1.7B VoiceDesign is installed. It loaded and warmed up in 41 s on the AMD Radeon AI PRO R9700", text
+        )
+        self.assertEqual(json.loads((self.base / "runtime.local.json").read_text("utf-8")), {"hip_visible_devices": "1"})
+        receipt = json.loads((self.base / "out" / "qwen" / "installation-1.7b-voice-design.json").read_text("utf-8"))
+        self.assertEqual((receipt["build"], receipt["torch"], receipt["packages_pinned"]), ("rocm", "2.12.0+rocm7.14.0", 9))
+        self.assertEqual(
+            receipt["gpu"],
+            {"name": "AMD Radeon AI PRO R9700", "chip": "gfx1201", "driver": "32.0.31041.1004", "hip_visible_devices": 1},
+        )
+        # A second run finds everything in place and the card already named.
+        self.calls.clear()
+        status, out, _err = self.run_main("--model", DESIGN, "--yes")
+        self.assertEqual((status, self.calls), (0, [("check", DESIGN, 1)]))
+        self.assertNotIn("now says", out)
+
+    def test_an_amd_card_amds_build_has_no_code_for_is_refused_with_no_plan_and_no_change(self):
+        self.graphics = ("amd", [RADEON_VII])
+        status, out, err = self.run_main("--model", DESIGN, "--yes")
+        self.assertEqual((status, out), (1, ""))
+        text = " ".join(err.split())
+        self.assertIn(
+            "This computer cannot take Qwen3-TTS 1.7B VoiceDesign yet: - AMD's ROCm 7.14 build of PyTorch 2.12 has "
+            "no code for the AMD Radeon VII (gfx906)",
+            text,
+        )
+        self.untouched()
+
+    def test_an_amd_card_named_by_a_setting_that_pytorch_numbers_otherwise_stops_before_the_download(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        os.environ[amd.VARIABLE] = "1"
+        with mock.patch.object(
+            amd, "hip_devices", lambda root, environment: [{**DEVICES[0], "index": 1}, {**DEVICES[1], "index": 0}]
+        ):
+            status, _out, err = self.run_main("--model", DESIGN, "--yes")
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "HIP_VISIBLE_DEVICES names card 1, the AMD Radeon 780M Graphics in PyTorch's numbering", " ".join(err.split())
+        )
+        self.assertEqual(self.calls, ["venv", ("pip", "gfx1201")])
+        self.assertFalse((self.base / "hf-cache").exists())
 
     def test_a_base_model_without_the_reference_clip_is_refused_before_any_change(self):
         (self.base / "small").mkdir()

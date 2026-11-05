@@ -47,10 +47,20 @@ ARCH_CU130 = ["sm_75", "sm_80", "sm_86", "sm_90", "sm_100", "sm_120", "compute_1
 
 
 class ServiceDeviceTests(unittest.TestCase):
-    def pick(self, want="auto", *, setting=None, nvidia=False, torch=no_torch):
+    def pick(self, want="auto", *, setting=None, nvidia=False, amd=False, torch=no_torch):
         settings = {} if setting is None else {"device": setting}
+        usable = amd if callable(amd) else (lambda: amd)
         with mock.patch.dict(common._settings, settings, clear=True), mock.patch.object(common, "torch_runtime", torch):
-            return common.pick_device(want, nvidia_present=lambda: nvidia)
+            return common.pick_device(want, nvidia_present=lambda: nvidia, amd_usable=usable)
+
+    def test_an_amd_card_that_amds_build_runs_on_means_the_graphics_card_too(self):
+        # AMD's ROCm build of PyTorch answers to "cuda" as well, and the service's .venv holds no PyTorch to ask.
+        self.assertEqual(self.pick(amd=True), "cuda")
+        self.assertEqual(self.pick(setting="cpu", amd=True), "cpu")
+        self.assertEqual(self.pick("cpu", amd=True), "cpu")
+        asked = mock.Mock(side_effect=AssertionError("asked AMD's driver"))
+        self.assertEqual(self.pick(nvidia=True, amd=asked), "cuda")  # an NVIDIA driver decides first
+        self.assertEqual(self.pick(setting="cuda", amd=asked), "cuda")
 
     def test_an_explicit_choice_is_kept(self):
         self.assertEqual(self.pick("cpu", nvidia=True), "cpu")

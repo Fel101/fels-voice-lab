@@ -228,7 +228,7 @@
                   },
                   "nvidia": {
                     "type": "boolean",
-                    "description": "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. Default false."
+                    "description": "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get the build for this computer's card, whatever this says: NVIDIA's, or AMD's ROCm build on a computer whose card is an AMD Radeon. Default false."
                   }
                 }
               }

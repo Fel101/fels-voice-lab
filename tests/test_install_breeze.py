@@ -1,10 +1,11 @@
-"""tools/install_breeze.py: Breeze TTS 2 for an NVIDIA graphics card, into its own environment, with its non-commercial licence
-said first. Nothing here reaches the real network, pip, venv, a graphics card or the real Breeze."""
+"""tools/install_breeze.py: Breeze TTS 2 for an NVIDIA or AMD graphics card, into its own environment, with its non-commercial
+licence said first. Nothing here reaches the real network, pip, venv, a graphics card or the real Breeze."""
 
 import contextlib
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,7 +19,9 @@ sys.path.insert(0, str(ROOT))
 import breeze_worker  # noqa: E402
 import engine_checks  # noqa: E402
 import engine_install  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_7600  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
+from tools import amd_build as amd  # noqa: E402
 from tools import install_breeze as ib  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 
@@ -116,6 +119,49 @@ class ProblemAndPlanTests(unittest.TestCase):
         )
         self.assertEqual(ib.nvidia_problems(present=True, cards=[RTX_4080]), [])
         self.assertEqual(ib.nvidia_problems(present=False), [ib.NO_NVIDIA_DRIVER])
+        self.assertEqual(ib.gpu_problems(None, []), [ib.NO_NVIDIA_DRIVER])
+        self.assertIn("an NVIDIA card or an AMD Radeon", " ".join(ib.NO_NVIDIA_DRIVER.split()))
+
+    def test_an_8_gb_amd_card_is_refused_and_a_32_gb_one_passes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "requirements").mkdir()
+            (Path(folder) / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
+            with mock.patch.dict(os.environ):
+                os.environ.pop(amd.VARIABLE, None)
+                self.assertEqual(ib.gpu_problems("amd", [RADEON_780M, R9700], folder), [])
+                [small] = ib.gpu_problems("amd", [RX_7600], folder)
+                [old] = ib.amd_card_problems([RADEON_VII], root=folder)
+        self.assertIn(
+            "Breeze TTS 2 needs a graphics card with at least 10 GB of memory, and the AMD Radeon RX 7600 has 8.0 GB", small
+        )
+        self.assertIn("has no code for the AMD Radeon VII (gfx906)", old)
+
+    def test_on_an_amd_card_the_plan_names_amds_build_and_the_card(self):
+        packages = ib.pinned_packages(ROOT, R9700)
+        text = " ".join(
+            ib.plan_text(
+                MANIFEST,
+                packages,
+                len(packages),
+                MANIFEST["files"],
+                environment_exists=False,
+                checkpoint_only=False,
+                card=R9700,
+                cards=[RADEON_780M, R9700],
+            ).split()
+        )
+        self.assertTrue(text.startswith("Fel's Voice Lab: Breeze TTS 2 on an AMD graphics card Licence: "))
+        self.assertIn(
+            "AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the AMD Radeon AI PRO "
+            "R9700 (gfx1201)",
+            text,
+        )
+        self.assertIn("About 1.5 GB to download and 4.7 GB on disk", text)
+        self.assertIn("requirements/breeze-nvidia.txt and requirements/amd-rocm.txt", text)
+        self.assertIn("A speech check on the AMD Radeon AI PRO R9700", text)
+        self.assertIn("This computer has 2 AMD graphics cards", text)
+        self.assertNotIn("CUDA 13.0", text)
+        text.encode("ascii")
 
     def test_the_plan_says_the_licence_first_then_what_it_installs(self):
         packages = base.read_lock(ROOT / ib.LOCK)
@@ -161,6 +207,21 @@ class SpeechCheckTests(unittest.TestCase):
             self.assertEqual(kwargs["env"]["HF_HUB_OFFLINE"], "1")
             self.assertEqual(result["peak_gpu_gb"], 7.6)
 
+    def test_on_an_amd_card_the_check_runs_on_the_card_the_lab_uses_and_a_failure_names_amds_driver(self):
+        calls = []
+
+        def runner(command, **kwargs):
+            calls.append(kwargs["env"])
+            return subprocess.CompletedProcess(command, 1, "", "RuntimeError: HIP error: invalid device function")
+
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            self.assertRaisesRegex(ib.InstallError, r"Update the graphics driver \(AMD Software: Adrenalin Edition") as caught,
+        ):
+            ib.run_speech_check(folder, number=1, runner=runner)
+        self.assertEqual(calls[0]["HIP_VISIBLE_DEVICES"], "1")
+        self.assertNotIn("nvidia.com", str(caught.exception))
+
     def test_running_out_of_graphics_memory_says_how_much_breeze_needs(self):
         def runner(command, **kwargs):
             return subprocess.CompletedProcess(command, 1, "", "torch.OutOfMemoryError: CUDA out of memory.")
@@ -176,7 +237,8 @@ class SpeechCheckTests(unittest.TestCase):
 
 
 class RunTests(unittest.TestCase):
-    """The whole install with venv, pip, the model host, the NVIDIA checks and Breeze replaced by stand-ins."""
+    """The whole install with venv, pip, the model host, the graphics card checks and Breeze replaced by stand-ins. The computer
+    has an NVIDIA driver unless a test gives it AMD cards (self.graphics)."""
 
     @classmethod
     def setUpClass(cls):
@@ -197,11 +259,17 @@ class RunTests(unittest.TestCase):
         }
         (self.base / ib.MANIFEST).write_text(json.dumps(self.manifest), "utf-8")
         (self.base / ib.LOCK).write_text(f"transformers==5.17.0 --hash=sha256:{'ab' * 32}\n", "utf-8")
+        (self.base / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
         prefix = f"/{MANIFEST['repo']}/resolve/{MANIFEST['revision']}/"
         self.server.files = {prefix + path: data for path, data in self.contents.items()}
         self.installed = None
         self.calls = []
         self.nvidia = []
+        self.graphics = ("nvidia", [])
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(amd.VARIABLE, None)
         self.check = {
             "problem": None,
             "load_seconds": 60.1,
@@ -221,12 +289,12 @@ class RunTests(unittest.TestCase):
             python.write_bytes(b"")
             self.installed = {"pip": "25.0.1"}
 
-        def pip(root, **kwargs):
-            self.calls.append("pip")
-            self.installed.update({item["key"]: item["version"] for item in base.read_lock(root / ib.LOCK)})
+        def pip(root, *, card=None, **kwargs):
+            self.calls.append(("pip", card["chip"]) if card else "pip")
+            self.installed.update({item["key"]: item["version"] for item in ib.pinned_packages(root, card)})
 
-        def speak(root, **kwargs):
-            self.calls.append("check")
+        def speak(root, *, number=None, **kwargs):
+            self.calls.append("check" if number is None else ("check", number))
             (root / ib.OUTPUT).mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -237,6 +305,8 @@ class RunTests(unittest.TestCase):
             (ib, "environment_versions", lambda root: dict(self.installed or {})),
             (ib, "install_packages", pip),
             (ib, "run_speech_check", speak),
+            (ib, "graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
+            (amd, "hip_devices", lambda root, environment: [dict(device) for device in DEVICES]),
             (ib, "nvidia_problems", lambda: list(self.nvidia)),
             (ib, "interpreter_problems", lambda root: []),
             (ib, "long_path_problems", lambda root, manifest: []),
@@ -281,6 +351,29 @@ class RunTests(unittest.TestCase):
         status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
         self.assertIn("at least 10 GB of memory", err)
+        self.assertEqual((self.calls, self.server.requests), ([], []))
+
+    def test_on_an_amd_card_amds_build_goes_in_and_the_card_is_noted_for_the_lab(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        self.check = {**self.check, "torch": "2.12.0+rocm7.14.0", "device_name": "AMD Radeon AI PRO R9700"}
+        status, out, err = self.run_main("--yes")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["venv", ("pip", "gfx1201"), ("check", 1)])
+        text = " ".join(out.split())
+        self.assertIn("Breeze TTS 2 on an AMD graphics card", text)
+        self.assertIn('runtime.local.json now says "hip_visible_devices": "1"', text)
+        self.assertIn("Breeze TTS 2 is installed. It loaded in 60 s on the AMD Radeon AI PRO R9700", text)
+        receipt = json.loads((self.base / "out" / "breeze" / "installation.json").read_text("utf-8"))
+        self.assertEqual(
+            (receipt["build"], receipt["gpu"]["chip"], receipt["gpu"]["hip_visible_devices"]), ("rocm", "gfx1201", 1)
+        )
+
+    def test_an_8_gb_amd_card_is_refused_before_any_change(self):
+        self.graphics = ("amd", [RX_7600])
+        status, out, err = self.run_main("--yes")
+        self.assertEqual(status, 1)
+        self.assertIn("Breeze TTS 2 on an AMD graphics card", out)
+        self.assertIn("at least 10 GB of memory, and the AMD Radeon RX 7600 has 8.0 GB", " ".join(err.split()))
         self.assertEqual((self.calls, self.server.requests), ([], []))
 
 

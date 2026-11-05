@@ -161,7 +161,11 @@ def read_lock(path):
         match = _LOCK_LINE.fullmatch(line)
         if match is None:
             raise InstallError(f"{Path(path).name} line {number} is not a pinned package with a SHA-256: {line[:80]}")
-        version = match["version"] or urllib.parse.unquote(match["url"].rsplit("/", 1)[-1]).split("-")[1]
+        version = match["version"]
+        if version is None:
+            # A file's version follows its name: torch-2.12.0%2Bcu130-cp312-...whl, or rocm-7.14.0.tar.gz for a source package.
+            filename = urllib.parse.unquote(match["url"].rsplit("/", 1)[-1]).removesuffix(".tar.gz").removesuffix(".zip")
+            version = filename.split("-")[1]
         packages.append({"name": match["name"], "key": canonical(match["name"]), "version": version,
                          "sha256": match["sha256"]})
     if not packages:

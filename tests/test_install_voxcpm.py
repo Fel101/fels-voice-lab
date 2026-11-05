@@ -1,10 +1,11 @@
-"""tools/install_voxcpm.py: VoxCPM2 for an NVIDIA graphics card, into its own environment, with VoxCPM's source files at the
-pinned commit. Nothing here reaches the real network, pip, venv, a graphics card or the real VoxCPM2."""
+"""tools/install_voxcpm.py: VoxCPM2 for an NVIDIA or AMD graphics card, into its own environment, with VoxCPM's source files at
+the pinned commit. Nothing here reaches the real network, pip, venv, a graphics card or the real VoxCPM2."""
 
 import contextlib
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,7 +19,9 @@ sys.path.insert(0, str(ROOT))
 import engine_checks  # noqa: E402
 import engine_install  # noqa: E402
 import voxcpm_worker  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_7600  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
+from tools import amd_build as amd  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 from tools import install_voxcpm as iv  # noqa: E402
 
@@ -38,8 +41,8 @@ def noise(length, seed=0):
 
 
 class FakeLab:
-    """A lab folder with a two-package lock, three stand-in source files (one of them empty) and small stand-ins for the model
-    files, at the real commit and revision."""
+    """A lab folder with a two-package lock, the AMD list, three stand-in source files (one of them empty) and small stand-ins
+    for the model files, at the real commit and revision."""
 
     LOCK = (
         f"# a stand-in for requirements/voxcpm-nvidia.txt\ntransformers==5.15.1 --hash=sha256:{'ab' * 32}\n"
@@ -68,6 +71,7 @@ class FakeLab:
         (self.root / iv.MANIFEST).write_text(json.dumps(self.manifest), "utf-8")
         (self.root / iv.SOURCE_MANIFEST).write_text(json.dumps(self.source), "utf-8")
         (self.root / iv.LOCK).write_text(self.LOCK, "utf-8")
+        (self.root / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
 
     def served(self):
         model = f"/{self.manifest['repo']}/resolve/{self.manifest['revision']}/"
@@ -148,7 +152,9 @@ class ShippedFilesTests(unittest.TestCase):
 class ProblemAndPlanTests(unittest.TestCase):
     def test_without_an_nvidia_card_it_stops_and_old_cards_and_drivers_are_refused(self):
         self.assertEqual(iv.nvidia_problems(present=False), [iv.NO_NVIDIA_DRIVER])
+        self.assertEqual(iv.gpu_problems(None, []), [iv.NO_NVIDIA_DRIVER])
         self.assertIn("--checkpoint-only", iv.NO_NVIDIA_DRIVER)
+        self.assertIn("an NVIDIA card or an AMD Radeon", " ".join(iv.NO_NVIDIA_DRIVER.split()))
         self.assertEqual(iv.nvidia_problems(present=True, cards=[RTX_5070]), [])
         old = iv.nvidia_problems(present=True, cards=[{**RTX_5070, "name": "GTX 1080", "capability": (6, 1)}])
         self.assertIn("cannot run on this card", old[0])
@@ -165,6 +171,51 @@ class ProblemAndPlanTests(unittest.TestCase):
         self.assertEqual(
             iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": None}]), []
         )  # unknown: the load says
+
+    def test_an_amd_card_needs_a_chip_amds_build_has_code_for_and_7_gb_of_memory(self):
+        rx_5500 = {**RX_7600, "name": "AMD Radeon RX 5500 XT", "chip": "gfx1012", "memory_mib": 4080}
+        with tempfile.TemporaryDirectory() as folder:
+            FakeLab(folder)
+            with mock.patch.dict(os.environ):
+                os.environ.pop(amd.VARIABLE, None)
+                self.assertEqual(iv.gpu_problems("amd", [RADEON_780M, R9700], folder), [])
+                self.assertEqual(iv.amd_card_problems([RX_7600], root=folder), [])  # 8 GB
+                [small] = iv.gpu_problems("amd", [rx_5500], folder)
+                [old] = iv.gpu_problems("amd", [RADEON_VII], folder)
+        self.assertIn(
+            "VoxCPM2 needs a graphics card with at least 7 GB of memory, and the AMD Radeon RX 5500 XT has 4.0 GB", small
+        )
+        self.assertIn("has no code for the AMD Radeon VII (gfx906)", old)
+
+    def test_on_an_amd_card_the_plan_names_amds_build_and_the_card(self):
+        packages = iv.pinned_packages(ROOT, R9700)
+        text = " ".join(
+            iv.plan_text(
+                MANIFEST,
+                SOURCE,
+                packages,
+                len(packages),
+                MANIFEST["files"],
+                SOURCE["files"],
+                environment_exists=False,
+                checkpoint_only=False,
+                card=R9700,
+                cards=[RADEON_780M, R9700],
+            ).split()
+        )
+        self.assertIn("Fel's Voice Lab: VoxCPM2 on an AMD graphics card", text)
+        self.assertIn(
+            "AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the AMD Radeon AI PRO "
+            "R9700 (gfx1201)",
+            text,
+        )
+        self.assertIn("About 1.6 GB to download and 5.0 GB on disk", text)
+        self.assertIn("requirements/voxcpm-nvidia.txt and requirements/amd-rocm.txt", text)
+        self.assertIn("A speech check on the AMD Radeon AI PRO R9700", text)
+        self.assertIn("at least 7 GB of memory", text)
+        self.assertIn("This computer has 2 AMD graphics cards", text)
+        self.assertNotIn("CUDA 13.0", text)
+        text.encode("ascii")
 
     def test_the_plan_names_the_source_the_model_the_memory_it_needs_and_the_licences(self):
         packages = base.read_lock(ROOT / iv.LOCK)
@@ -203,7 +254,7 @@ class SpeechCheckTests(unittest.TestCase):
         '"device": "cuda", "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU", "peak_gpu_gb": 5.6}'
     )
 
-    def check(self, stdout="", stderr="", code=0):
+    def check(self, stdout="", stderr="", code=0, number=None):
         calls = []
 
         def runner(command, **kwargs):
@@ -211,7 +262,14 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return iv.run_speech_check(folder, runner=runner), calls, Path(folder)
+            return iv.run_speech_check(folder, number=number, runner=runner), calls, Path(folder)
+
+    def test_on_an_amd_card_the_check_runs_on_the_card_the_lab_uses_and_a_failure_names_amds_driver(self):
+        _result, calls, _folder = self.check(stdout=self.GOOD + "\n", number=1)
+        self.assertEqual(calls[0][1]["env"]["HIP_VISIBLE_DEVICES"], "1")
+        with self.assertRaisesRegex(iv.InstallError, r"Update the graphics driver \(AMD Software: Adrenalin Edition") as caught:
+            self.check(stderr="RuntimeError: HIP error: invalid device function", code=1, number=1)
+        self.assertNotIn("nvidia.com", str(caught.exception))
 
     def test_the_check_runs_offline_in_its_environment_through_the_labs_worker(self):
         result, calls, folder = self.check(stdout=self.GOOD + "\n")
@@ -238,7 +296,8 @@ class SpeechCheckTests(unittest.TestCase):
 
 
 class RunTests(unittest.TestCase):
-    """The whole install with venv, pip, both hosts, the NVIDIA checks and VoxCPM2 replaced by stand-ins."""
+    """The whole install with venv, pip, both hosts, the graphics card checks and VoxCPM2 replaced by stand-ins. The computer
+    has an NVIDIA driver unless a test gives it AMD cards (self.graphics)."""
 
     @classmethod
     def setUpClass(cls):
@@ -255,6 +314,11 @@ class RunTests(unittest.TestCase):
         self.installed = None
         self.calls = []
         self.nvidia = []
+        self.graphics = ("nvidia", [])
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(amd.VARIABLE, None)
         self.check = {
             "problem": None,
             "load_seconds": 20.5,
@@ -274,12 +338,12 @@ class RunTests(unittest.TestCase):
             python.write_bytes(b"")
             self.installed = {"pip": "25.0.1"}
 
-        def pip(root, **kwargs):
-            self.calls.append("pip")
-            self.installed.update({item["key"]: item["version"] for item in base.read_lock(root / iv.LOCK)})
+        def pip(root, *, card=None, **kwargs):
+            self.calls.append(("pip", card["chip"]) if card else "pip")
+            self.installed.update({item["key"]: item["version"] for item in iv.pinned_packages(root, card)})
 
-        def speak(root, **kwargs):
-            self.calls.append("check")
+        def speak(root, *, number=None, **kwargs):
+            self.calls.append("check" if number is None else ("check", number))
             (root / iv.OUTPUT).mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -291,6 +355,8 @@ class RunTests(unittest.TestCase):
             (iv, "environment_versions", lambda root: dict(self.installed or {})),
             (iv, "install_packages", pip),
             (iv, "run_speech_check", speak),
+            (iv, "graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
+            (amd, "hip_devices", lambda root, environment: [dict(device) for device in DEVICES]),
             (iv, "nvidia_problems", lambda: list(self.nvidia)),
             (iv, "interpreter_problems", lambda root: []),
             (iv, "long_path_problems", lambda root, manifest, source: []),
@@ -354,7 +420,7 @@ class RunTests(unittest.TestCase):
         self.nvidia = [iv.NO_NVIDIA_DRIVER]
         status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
-        self.assertIn("only on an NVIDIA graphics card", " ".join(err.split()))
+        self.assertIn("only on a graphics card, an NVIDIA card or an AMD Radeon", " ".join(err.split()))
         self.assertEqual(self.calls, [])
         status, _out, err = self.run_main("--yes", "--checkpoint-only")
         self.assertEqual(status, 1)
@@ -366,6 +432,34 @@ class RunTests(unittest.TestCase):
         status, _out, err = self.run_main("--yes", "--checkpoint-only")
         self.assertEqual((status, err), (0, ""))
         self.assertEqual(self.calls, ["check"])
+
+    def test_on_an_amd_card_amds_build_goes_in_and_the_card_is_noted_for_the_lab(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        self.check = {**self.check, "torch": "2.12.0+rocm7.14.0", "device_name": "AMD Radeon AI PRO R9700"}
+        status, out, err = self.run_main("--yes")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["venv", ("pip", "gfx1201"), ("check", 1)])
+        text = " ".join(out.split())
+        self.assertIn("VoxCPM2 on an AMD graphics card", text)
+        self.assertIn('runtime.local.json now says "hip_visible_devices": "1"', text)
+        self.assertIn("VoxCPM2 is installed. It loaded in 20 s on the AMD Radeon AI PRO R9700", text)
+        receipt = json.loads((self.base / "out" / "voxcpm2" / "installation.json").read_text("utf-8"))
+        self.assertEqual(
+            (receipt["build"], receipt["gpu"]["chip"], receipt["gpu"]["hip_visible_devices"]), ("rocm", "gfx1201", 1)
+        )
+
+    def test_an_amd_card_too_small_or_without_code_is_refused_before_any_change(self):
+        self.graphics = ("amd", [{**RX_7600, "name": "AMD Radeon RX 5500 XT", "chip": "gfx1012", "memory_mib": 4080}])
+        status, out, err = self.run_main("--yes")
+        self.assertEqual(status, 1)
+        self.assertIn("VoxCPM2 on an AMD graphics card", out)  # a card AMD's build runs on: the plan, then the reason
+        self.assertIn("at least 7 GB of memory, and the AMD Radeon RX 5500 XT has 4.0 GB", " ".join(err.split()))
+        self.graphics = ("amd", [RADEON_VII])
+        status, out, err = self.run_main("--yes")
+        self.assertEqual((status, out), (1, ""))
+        self.assertIn("This computer cannot take VoxCPM2 yet", err)
+        self.assertEqual((self.calls, self.server.requests), ([], []))
+        self.assertFalse((self.base / "out").exists())
 
     def test_a_source_file_that_does_not_match_its_hash_is_not_kept(self):
         # the same length as the real file, so only its SHA-256 can tell

@@ -1,0 +1,64 @@
+# AMD's ROCm 7.14 build of PyTorch 2.12 for Windows and Python 3.12, from AMD's own index
+# (https://repo.amd.com/rocm/whl-multi-arch/), for the models the Lab runs only on a graphics card: the four Qwen3-TTS models,
+# VoxCPM2 and Breeze TTS 2. On a computer with an AMD graphics card, tools/amd_build.py takes the model's own list
+# (requirements/qwen-nvidia.txt, voxcpm-nvidia.txt or breeze-nvidia.txt), puts the torch and torchaudio below in place of its
+# NVIDIA builds, and adds the ROCm runtime they load and the code for the card's chip: torch's kernels for the chip
+# (amd-torch-device-<chip>, with amd-torch-device-gfx11 or amd-torch-device-gfx12-0 for the chips of RDNA 3 and 4) and the
+# ROCm libraries' (rocm-sdk-device-<chip>). The chips are the Radeon chips of RDNA 1 to 4 that AMD publishes Windows code for:
+# the Radeon RX 5000, 6000, 7000 and 9000 series, their Radeon PRO and AI PRO cards, and the Radeon graphics in Ryzen
+# processors. Every line pins one file by its SHA-256, because AMD's index publishes none. rocm is a small Python package AMD
+# publishes only as source: pip builds it after the wheels, with the setuptools the model's list pins (--no-build-isolation),
+# so nothing it runs is unpinned. The Lab was checked with this build on an AMD Radeon AI PRO R9700 (gfx1201); the other chips
+# have not been tried.
+# To change a pin: take each file from AMD's index for one ROCm release, write its SHA-256 here, and run the speech check in
+# each of the three installers on an AMD card.
+torch @ https://repo.amd.com/rocm/whl-multi-arch/torch-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:b2ba179797cf065580e32d38279428f6fd411552a63baf8c2f7145fec922a142
+torchaudio @ https://repo.amd.com/rocm/whl-multi-arch/torchaudio-2.11.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:5e56f78e4ca9c0dd64f61cb927efbb3dd1a42adcf723affd6ce3bdf9ec9cdd39
+rocm @ https://repo.amd.com/rocm/whl-multi-arch/rocm-7.14.0.tar.gz --hash=sha256:77c622d8eef7bf7fa1af70d410a05a621abbd2baaf53e52ab268dc6d140e15b2
+rocm-bootstrap @ https://repo.amd.com/rocm/whl-multi-arch/rocm_bootstrap-0.1.0-py3-none-any.whl --hash=sha256:33e3d4dad086b1f0e06bc049a618ca874d4fb72f758fff00676e23d2a644b652
+rocm-sdk-core @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_core-7.14.0-py3-none-win_amd64.whl --hash=sha256:e0d5650b9b6ff931496d3336eb72cb969fb3bc4e1966dc84b80b727af32a6bf0
+rocm-sdk-libraries @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_libraries-7.14.0-py3-none-win_amd64.whl --hash=sha256:d03873d2879c000ae307866cc827fe76d6e9f50846fec76b7cb293202afdee56
+# torch's kernels for the chips of RDNA 3 and 3.5 (gfx11..) and of RDNA 4 (gfx120.), which those chips need beside their own.
+amd-torch-device-gfx11 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx11-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:3ef276c03aaaefcd07b4b557bdb444268ae9249fa783540b3d45e5620f739671
+amd-torch-device-gfx12-0 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx12_0-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:0d2bc7b826658a58cb249c8b3da8180b1c2930c45c6b5ec075e981dd092333b4
+# Each chip's own code: torch's kernels and the ROCm libraries'.
+amd-torch-device-gfx1010 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1010-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:d1bd1c9078e5675a0c0ae48fd8adccb24d7e4c11dfdcebe3fa777063f2e28d8d
+rocm-sdk-device-gfx1010 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1010-7.14.0-py3-none-win_amd64.whl --hash=sha256:002117b2186c6116e0c5561334d4da62103a1460169ecc73f50dbcc630a95aa7
+amd-torch-device-gfx1011 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1011-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:5013610256cbbee0d77ac7a0907ef8a25d0ac9690b76536abb041779438435fa
+rocm-sdk-device-gfx1011 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1011-7.14.0-py3-none-win_amd64.whl --hash=sha256:e3670cc9b9bd806e3659471cd10549c21db0e5729b861104de51d9138862cb0b
+amd-torch-device-gfx1012 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1012-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:55e1fcedef1ab217f99e4db97bea87da3e45e4b15945354df5f2a4327bda4566
+rocm-sdk-device-gfx1012 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1012-7.14.0-py3-none-win_amd64.whl --hash=sha256:af2865798b572996e3b79c8b8082193be5a32b33a6138bb95ee6a8ccc96d45b0
+amd-torch-device-gfx1030 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1030-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:30529dafd701c3900ba3835ff7a6795f772a6ab049fa1bdaa2366e6e19e41b08
+rocm-sdk-device-gfx1030 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1030-7.14.0-py3-none-win_amd64.whl --hash=sha256:478c98056b958a744708493a1e84c3198a17cc996f0aa9f7f1a38482e244baf4
+amd-torch-device-gfx1031 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1031-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:a20815a4a1f7e9d257eec9ce1665e5a6569dc0df87915bc285b551731bf2627f
+rocm-sdk-device-gfx1031 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1031-7.14.0-py3-none-win_amd64.whl --hash=sha256:112e4aad46c5423491db023f8b1f0e8460e26549b4ac543311850545c18b6b07
+amd-torch-device-gfx1032 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1032-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:4837f766aee9466f4528bfcd53b2521065e7c94e7bcbc292fdb34e83049346f9
+rocm-sdk-device-gfx1032 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1032-7.14.0-py3-none-win_amd64.whl --hash=sha256:de2fe6e16db06d431e785f47c339331e6caadbb84d31f941a19c84860139ed5f
+amd-torch-device-gfx1033 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1033-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:90612b5205feb235d045d5f87fb869b89ff1f08ebb6b33e4a4693cbf3d11baf3
+rocm-sdk-device-gfx1033 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1033-7.14.0-py3-none-win_amd64.whl --hash=sha256:2c93d5e8967b2f56adb1c561c496fedf07ee7a489348f9256ecec16debd8802f
+amd-torch-device-gfx1034 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1034-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:37eee11c1ce65c09de6d75f6ff448dbf27691bbe4fb739914732ff10ca57323a
+rocm-sdk-device-gfx1034 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1034-7.14.0-py3-none-win_amd64.whl --hash=sha256:c13e7ed5e018a035399c29e82faed709cefa9f12eb457e43cbd140a2bbacf300
+amd-torch-device-gfx1035 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1035-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:3e46c4585f0dfa126f7b4ddef2ad32a5b7f4be76de31c1745e843ab13683e7de
+rocm-sdk-device-gfx1035 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1035-7.14.0-py3-none-win_amd64.whl --hash=sha256:adccaa2d78fbfa15602a38c6309144b2e4b67c67b298796069f2770f331b0c74
+amd-torch-device-gfx1036 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1036-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:cf745bb8dbfe08764f759ce9979993ce6ab93140169e9216f96b71e888910ab4
+rocm-sdk-device-gfx1036 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1036-7.14.0-py3-none-win_amd64.whl --hash=sha256:a82267fa67c7e0a7dde303d4feac3d3605576827d6c819c8693fa3a559135e8d
+amd-torch-device-gfx1100 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1100-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:b2ea259bb04fbb33a08fffa1a74e5a3fc2be77a24dd02df190a7cb973fa35c52
+rocm-sdk-device-gfx1100 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1100-7.14.0-py3-none-win_amd64.whl --hash=sha256:336775de86b441470735e7947db326be7f0c34a6a165ba0388de9505917fc233
+amd-torch-device-gfx1101 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1101-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:252bf49d47a9d99616d6d3774e0e15f747bbde5aa0f0d6d0b6bfc4517149afab
+rocm-sdk-device-gfx1101 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1101-7.14.0-py3-none-win_amd64.whl --hash=sha256:e6c3db7c575f8c3c7acc8046313dae1774a654043e7d705c20e9746ba65e9a12
+amd-torch-device-gfx1102 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1102-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:da0da842739b238f423fef2fd3d00dbe07bb942a4037ff015711741437b95a00
+rocm-sdk-device-gfx1102 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1102-7.14.0-py3-none-win_amd64.whl --hash=sha256:c56183dcdc3ca90c551623f66a0418d15b7988c9c5eab2a3c3836620f6e7865f
+amd-torch-device-gfx1103 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1103-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:1cdff2c68d8a22b54a0cb8acd96d22dbe2f84cf3f05d2a64bd59f20262fc8039
+rocm-sdk-device-gfx1103 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1103-7.14.0-py3-none-win_amd64.whl --hash=sha256:c969bababa0b11cb6c0c88843e788a06c3895314f435910826d49d6ee4dec924
+amd-torch-device-gfx1150 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1150-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:c2270ab978c7fd0f698217a63ab726e35f3ab933bdac26f3c910f506e4a7b19e
+rocm-sdk-device-gfx1150 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1150-7.14.0-py3-none-win_amd64.whl --hash=sha256:9041380077c7d0a95f2445ea7653948a3c58f89833d48894db113053401cd790
+amd-torch-device-gfx1151 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1151-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:11644fa3aa65ecead9e82ecc6a06797b21d577c6b4fd3111a071c15fafdd9bfe
+rocm-sdk-device-gfx1151 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1151-7.14.0-py3-none-win_amd64.whl --hash=sha256:7e409fbec9d02a96e2fa454b88a3c664aaf2d2150d60b128d76a9e6007d917fc
+amd-torch-device-gfx1152 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1152-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:1c9a701b327db9933b0f2d3f70e786a5df47a78be5d6198ef9bfef4a341381cb
+rocm-sdk-device-gfx1152 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1152-7.14.0-py3-none-win_amd64.whl --hash=sha256:a616f28e8feb387f6a8d0b4adc36cf3d156576b1e63546b0f1ddb039952d54f2
+amd-torch-device-gfx1153 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1153-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:0925e3047c85a99efc6ff962c42089389b7e34ec89876a8bf9140ef5d0b15b7a
+rocm-sdk-device-gfx1153 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1153-7.14.0-py3-none-win_amd64.whl --hash=sha256:a1cd06119768144fa5664ac813d074b78961b54c2e1a49ea8f8f84e36ca02445
+amd-torch-device-gfx1200 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1200-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:b7fb7543a42679d69c95c8589dfbb2396de60493e963d3ec5e40102e9a180024
+rocm-sdk-device-gfx1200 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1200-7.14.0-py3-none-win_amd64.whl --hash=sha256:e3a1f3d9cb8cc3a53cd1ecea52d826d81c23cbf8ba7dae559a91629c85d9d55c
+amd-torch-device-gfx1201 @ https://repo.amd.com/rocm/whl-multi-arch/amd_torch_device_gfx1201-2.12.0%2Brocm7.14.0-cp312-cp312-win_amd64.whl --hash=sha256:945806f23966cc95bcaa51c735009f29a2daa1b18ad4364076dea6a8825e92f7
+rocm-sdk-device-gfx1201 @ https://repo.amd.com/rocm/whl-multi-arch/rocm_sdk_device_gfx1201-7.14.0-py3-none-win_amd64.whl --hash=sha256:b89e2600cd7000154e5ee6f951daaff6b3dd69ad78137847114e1c49de8e2bd9

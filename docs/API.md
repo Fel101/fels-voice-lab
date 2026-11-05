@@ -270,7 +270,7 @@ Install an engine with its guided installer (every engine in the catalog has one
 | Request field | Type | Meaning |
 |---|---|---|
 | `dry_run` | boolean | Only read the plan: what the installer would do and whether this computer can take it. Nothing is changed. Default false, which starts the install. |
-| `nvidia` | boolean | Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. Default false. |
+| `nvidia` | boolean | Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get the build for this computer's card, whatever this says: NVIDIA's, or AMD's ROCm build on a computer whose card is an AMD Radeon. Default false. |
 
 **Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.
 

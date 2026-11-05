@@ -32,6 +32,7 @@ import worker_pool
 import worker_runtime
 from cast_store import CastStore
 from engine_install import EngineInstaller, paragraphs
+from tests.test_amd_build import R9700, RADEON_780M, RADEON_VII, RX_7600
 from worker_pool import EnginePool, WorkerBusy
 
 PLAN = """Fel's Voice Lab: Kokoro 82M on the CPU
@@ -418,18 +419,60 @@ class GpuBuildTests(unittest.TestCase):
     """Whether the app can install a GPU build here, from the installer's own card check; nvidia-smi is a stand-in."""
 
     RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)}
+    GPU_ONLY = {"qwen3-tts-1.7b-voice-design": "tools.install_qwen", "voxcpm2": "tools.install_voxcpm",
+                "breeze-tts-2": "tools.install_breeze"}
 
-    def installer(self, *, present=True, cards=(), builds=None):
-        self.asked = 0
+    def installer(self, *, present=True, cards=(), builds=None, amd=(), root=ROOT):
+        """An installer on a computer with NVIDIA cards (present and cards, as nvidia-smi gives them) or AMD cards (amd, as AMD's
+        driver gives them)."""
+        self.asked = self.amd_asked = 0
 
         def listed():
             self.asked += 1
             return [dict(card) for card in cards]
 
-        pool = mock.Mock(entries={"kokoro": {"id": "kokoro", "name": "Kokoro 82M"}, "phonon-31m-en": {"name": "Phonon"}})
-        return EngineInstaller(pool, root=ROOT, python=sys.executable, nvidia_present=lambda: present, nvidia_cards=listed,
-                               scripts={"kokoro": "tools/install_kokoro.py", "phonon-31m-en": "tools/install_phonon.py"},
+        def amd_cards():
+            self.amd_asked += 1
+            return [dict(card) for card in amd]
+
+        pool = mock.Mock(entries={"kokoro": {"id": "kokoro", "name": "Kokoro 82M"}, "phonon-31m-en": {"name": "Phonon"},
+                                  "qwen3-tts-1.7b-voice-design": {"name": "Qwen3-TTS 1.7B VoiceDesign"},
+                                  "voxcpm2": {"name": "VoxCPM2"}, "breeze-tts-2": {"name": "Breeze TTS 2"}})
+        scripts = {"kokoro": "tools/install_kokoro.py", "phonon-31m-en": "tools/install_phonon.py",
+                   **{key: module.replace(".", "/") + ".py" for key, module in self.GPU_ONLY.items()}}
+        return EngineInstaller(pool, root=root, python=sys.executable, nvidia_present=lambda: present, nvidia_cards=listed,
+                               amd_listed=lambda: [{"name": card["name"], "driver": card["driver"]} for card in amd],
+                               amd_cards=amd_cards, scripts=scripts,
                                gpu_builds={"kokoro": "tools.install_kokoro"} if builds is None else builds)
+
+    def test_with_an_amd_card_the_models_that_need_a_graphics_card_can_take_amds_build(self):
+        builds = {"kokoro": "tools.install_kokoro", **self.GPU_ONLY}
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ):
+            os.environ.pop("HIP_VISIBLE_DEVICES", None)
+            lab = Path(folder)
+            (lab / "requirements").mkdir()
+            (lab / "requirements" / "amd-rocm.txt").write_bytes((ROOT / "requirements" / "amd-rocm.txt").read_bytes())
+            installer = self.installer(present=False, amd=[RADEON_780M, R9700], builds=builds, root=lab)
+            for key in self.GPU_ONLY:
+                self.assertEqual(installer.gpu_build(key), (True, None), key)
+            self.assertEqual(self.amd_asked, 1)    # AMD's driver is asked once
+            self.assertEqual(installer.gpu_build("kokoro"),
+                             (False, engine_install.NVIDIA_ONLY.format(name="Kokoro 82M")))
+            small = self.installer(present=False, amd=[RX_7600], builds=builds, root=lab)
+            self.assertEqual(small.gpu_build("qwen3-tts-1.7b-voice-design"), (True, None))
+            ok, reason = small.gpu_build("breeze-tts-2")
+            self.assertFalse(ok)
+            self.assertIn("Breeze TTS 2 needs a graphics card with at least 10 GB of memory, and the AMD Radeon RX 7600 has "
+                          "8.0 GB", reason)
+            ok, reason = self.installer(present=False, amd=[RADEON_VII], builds=builds, root=lab).gpu_build("voxcpm2")
+            self.assertFalse(ok)
+            self.assertIn("has no code for the AMD Radeon VII (gfx906)", reason)
+        self.assertEqual(self.installer(present=False, builds=builds).gpu_build("voxcpm2"),
+                         (False, engine_install.NO_GPU.format(name="VoxCPM2")))
+        self.assertEqual(self.amd_asked, 0)
+        nvidia = self.installer(cards=[self.RTX_5070], amd=[R9700], builds=builds)
+        self.assertEqual(nvidia.gpu_build("qwen3-tts-1.7b-voice-design"), (True, None))    # an NVIDIA driver decides first
+        self.assertEqual(self.amd_asked, 0)
 
     def test_a_card_and_driver_the_build_runs_on_can_take_it(self):
         installer = self.installer(cards=[self.RTX_5070])
@@ -607,6 +650,7 @@ class InstallRoutesTests(InstallerCase):
         self.stub(DRY_RUN + "print('working', flush=True)\n")
         self.installer.gpu_builds = {"kokoro": "tools.install_kokoro"}
         self.installer.nvidia_present = lambda: False
+        self.installer.amd_listed = lambda: []
         self.assertEqual(self.call("POST", "/api/engines/kokoro/install", {"dry_run": True, "nvidia": "yes"})[0], 400)
         status, body = self.call("POST", "/api/engines/kokoro/install", {"dry_run": True, "nvidia": True})
         self.assertEqual((status, body["plan"]["nvidia"], self.argv()), (200, True, "--nvidia --dry-run"))

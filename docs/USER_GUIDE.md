@@ -24,7 +24,7 @@ navigation wraps above the workspace and sample cards stack.
    Chatterbox Turbo clones on an ordinary CPU (or run `setup-chatterbox.bat`,
    [setup](SETUP.md#chatterbox-turbo-on-the-cpu)); Chatterbox 500M and Drama 3,
    which needs 26 GB of free RAM, clone on the CPU too, and the Qwen3-TTS Base
-   models, VoxCPM2 and Breeze TTS 2 on an NVIDIA graphics card.
+   models, VoxCPM2 and Breeze TTS 2 on a graphics card, NVIDIA's or AMD's.
 2. Choose **Upload your voice — browse files**, **Record microphone**, or a saved
    reference. Uploaded WAV, FLAC, OGG, MP3 and M4A files stay on this PC. The
    file you upload is kept untouched as the source, and the reference is made from
@@ -314,9 +314,11 @@ When the service uses a graphics card, each card has a **Runs on GPU | CPU** swi
 next load, and the card's state and test are then those of that device. A model installed with the CPU build of PyTorch runs
 on the CPU; switch it to GPU and its card offers **Install GPU build**, which replaces PyTorch in that model's environment. GPU
 is greyed out, with the reason under it, for Phonon and Drama 3 (they run on the CPU) and where the graphics card or its driver
-cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)). The Qwen3-TTS models, VoxCPM2
-and Breeze TTS 2 run only on a graphics card, so their switch stays on GPU and CPU is greyed out instead. On a model that is
-not installed yet, the switch chooses which build **Install** puts in.
+cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)); on a computer with an AMD card, that
+includes Kokoro and Chatterbox, whose GPU builds are NVIDIA's only. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on
+a graphics card, so their switch stays on GPU and CPU is greyed out instead; **Install** gives them the build for this
+computer's card, NVIDIA's or [AMD's](SETUP.md#amd-radeon-cards). On a model that is not installed yet, the switch chooses
+which build **Install** puts in.
 
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
@@ -329,9 +331,10 @@ A model that is not installed shows the files it is missing, and its card has an
 what the installer will do and whether this computer can take it, and **Install now** runs it and follows it in the same
 window, with the end of its output ([setting up](SETUP.md) has a section on each installer). **Hide** closes the window and
 leaves the install running; **Show progress** on the card opens it again, and **Show output** shows the end of one that
-stopped. The cards stay where they are while it runs. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for an
-NVIDIA graphics card and driver their build runs on, and VoxCPM2 and Breeze only on a card with enough memory; on another
-computer their cards gather under **more models need manual setup** and say why the app cannot install them there.
+stopped. The cards stay where they are while it runs. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for a
+graphics card their build runs on, an NVIDIA card and driver or an AMD Radeon whose chip AMD's build has code for, and VoxCPM2
+and Breeze only on a card with enough memory; on another computer their cards gather under **more models need manual setup**
+and say why the app cannot install them there.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed

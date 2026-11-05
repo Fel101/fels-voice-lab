@@ -65,12 +65,17 @@ and tqdm are MPL-2.0. pykakasi (GPL-3.0), which `chatterbox-tts` lists for its m
 are fetched from PyPI on the user's computer, not copied into this repository. With `--original` it adds the checkpoint of
 Chatterbox 500M and Voice Conversion to that environment.
 
-`tools/install_qwen.py`, `tools/install_voxcpm.py` and `tools/install_breeze.py` install only NVIDIA builds: the CUDA 13.0
+`tools/install_qwen.py`, `tools/install_voxcpm.py` and `tools/install_breeze.py` install GPU builds only: the CUDA 13.0
 builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the files of `requirements/chatterbox-nvidia.txt`) with the packages pinned in
 `requirements/qwen-nvidia.txt` (66, into `.venv-fqwen`, among them `faster-qwen3-tts`, MIT, and `qwen-tts-hf`, Apache-2.0),
 `requirements/voxcpm-nvidia.txt` (62, into `.venv-voxcpm`) and `requirements/breeze-nvidia.txt` (41, into `.venv-breeze`).
 Nearly all are MIT, BSD or Apache. soxr (not in Breeze's list) and the libsndfile library inside SoundFile are LGPL-2.1, and
-certifi and tqdm are MPL-2.0. `tools/install_voxcpm.py` also fetches the 25 source files of
+certifi and tqdm are MPL-2.0. On a computer whose graphics card is an AMD Radeon, they take AMD's ROCm 7.14 builds of PyTorch
+and torchaudio (BSD-3-Clause, like PyTorch's own) in place of the CUDA builds, from AMD's index (repo.amd.com), with the ROCm
+runtime they load (`rocm-sdk-core`, `rocm-sdk-libraries`, `rocm` and `rocm-bootstrap`) and the code for the card's chip
+(`amd-torch-device-*` and `rocm-sdk-device-*`), all pinned in `requirements/amd-rocm.txt`. These carry AMD's ROCm runtime and
+libraries under AMD's licence terms: `rocm-bootstrap` is MIT, and the runtime's parts that include a licence file, such as the
+HIP compiler driver and the code object manager, are MIT and Apache-2.0 with LLVM exceptions. `tools/install_voxcpm.py` also fetches the 25 source files of
 [VoxCPM](https://github.com/OpenBMB/VoxCPM) (Apache-2.0, OpenBMB) that its inference imports, at a pinned commit, into
 `out/voxcpm2/source`. They are all fetched on the user's computer, not copied into this repository.
 

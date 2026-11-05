@@ -180,8 +180,9 @@ ROUTES = [
                                     "Nothing is changed. Default false, which starts the install."),
             F("nvidia", "boolean", "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). "
                                    "An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS "
-                                   "models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. "
-                                   "Default false.")),
+                                   "models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get the build "
+                                   "for this computer's card, whatever this says: NVIDIA's, or AMD's ROCm build on a computer "
+                                   "whose card is an AMD Radeon. Default false.")),
       reply="With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or "
             "numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that "
             "started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script "
