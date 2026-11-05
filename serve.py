@@ -43,6 +43,7 @@ from runtime_folders import migrate_program_folders
 
 from worker_pool import EnginePool, WorkerError
 from engine_checks import EngineCheckStore
+from engine_devices import EngineDeviceStore
 from engine_install import EngineInstaller
 from cast_store import (CastStore, DIRECTION_ENGINES, MAX_UPLOAD_BYTES,
                         PRESET_VOICE_ENGINES, generation_identity_snapshot)
@@ -212,6 +213,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                  request_log=None, engine_installer=None, update_checks=None):
     log = request_log or NullRequestLog()
     installer = engine_installer or EngineInstaller(engines)
+    # Each card's GPU/CPU switch asks whether the GPU build of its engine can be installed here.
+    engines.gpu_install = getattr(installer, "gpu_build", None)
     cast = cast_store or CastStore()
     library_root = Path(getattr(cast, "root", LAB))
     preferences = UiPreferences(library_root)
@@ -790,12 +793,18 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
     @router.post("/api/engines/{engine_id}/install")
     def engine_install(self, parsed, req, engine_id):
-        dry_run = req.get("dry_run", False)
+        dry_run, nvidia = req.get("dry_run", False), req.get("nvidia", False)
         if not isinstance(dry_run, bool):
             raise ValueError("dry_run must be true or false.")
+        if not isinstance(nvidia, bool):
+            raise ValueError("nvidia must be true or false.")
         if dry_run:
-            return self._json(200, {"plan": installer.plan(engine_id)})
-        self._json(200, {"install": installer.start(engine_id)})
+            return self._json(200, {"plan": installer.plan(engine_id, nvidia=nvidia)})
+        self._json(200, {"install": installer.start(engine_id, nvidia=nvidia)})
+
+    @router.post("/api/engines/{engine_id}/device")
+    def engine_device(self, parsed, req, engine_id):
+        self._json(200, {"device": engines.choose_device(engine_id, req.get("device"))})
 
     @router.get("/api/performance/settings")
     def performance_settings(self, parsed, req):
@@ -1748,6 +1757,7 @@ def main():
                                                   state_root / "out" / "scenes"),
                          media_guard=cast.assert_media_usable,
                          check_store=EngineCheckStore(state_root / "data" / "engines" / "checks.json"),
+                         device_store=EngineDeviceStore(state_root / "data" / "engines" / "devices.json"),
                          ram_needs=MIN_FREE_RAM_GB, ram_probe=ram_report)
     scenes = SceneStore(cast, engines.entries, root=state_root)
     evaluations = EvaluationStore(state_root / "data/evaluations/evaluations.sqlite3",

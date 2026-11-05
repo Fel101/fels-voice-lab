@@ -264,9 +264,6 @@ load make), which it then clones. A call to
 `/api/speak` that clones must name its `reference_path` unless that clip exists; with `clone` set to false it uses the built-in
 voice.
 
-Chatterbox Original (500M) and Voice Conversion run in the same `.venv-chatterbox`, so after this install they need only their own
-checkpoint, `ResembleAI/chatterbox` at revision 5bb1f6e in `hf-cache\hub`, which no installer fetches yet.
-
 Licences: the Chatterbox code (`chatterbox-tts`) and the Turbo weights are MIT (Resemble AI; the model card says so), and a few
 of its decoder files keep Apache-2.0 headers from CosyVoice. Every clip Chatterbox makes carries Resemble AI's Perth watermark, a
 mark you cannot hear that detection tools can find; the Lab does not remove it. Most of the packages are MIT, BSD or Apache. soxr
@@ -301,6 +298,35 @@ voice. In a second fresh clone, **Install** on the Turbo card ran the installer 
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again. Other
 Windows setups have not been tried.
 
+### Chatterbox 500M and Voice Conversion
+
+Chatterbox 500M (the original, larger Chatterbox, with exaggeration and pace controls and a built-in voice) and Chatterbox Voice
+Conversion (which says a recording again in the voice of another) run in the same `.venv-chatterbox` and read one checkpoint,
+`ResembleAI/chatterbox` at revision 5bb1f6e. **Install** on either card, or
+
+```powershell
+setup-chatterbox.bat --original
+```
+
+installs both: the environment and its 73 packages when Turbo is not installed yet (with `--nvidia`, the GPU build), and then the
+2.1 GB language model, the 1.1 GB speech decoder that Voice Conversion uses too, the speaker encoder, the built-in voice, the
+tokenizer and the model card, 3.2 GB in all, each checked against the SHA-256 in
+[catalog/chatterbox_snapshot.json](../catalog/chatterbox_snapshot.json). The repository's multilingual model and its copies of the
+same weights in PyTorch's pickle format, another 14 GB, are left out. Its speech check loads Chatterbox 500M without using the
+network and speaks the Models page's check sentence in the built-in voice, then Voice Conversion says that clip again, with the
+clip itself as the target voice. Both clips stay in `out\chatterbox` (`install-original.wav`, `install-vc.wav`) beside
+`installation-original.json`. The weights are MIT, like Turbo's, and its clips carry the same Perth watermark.
+
+What it did here, on the same computer with only the CPU: **Install** on the Chatterbox 500M card took 32 minutes, most of it the
+3.2 GB download (pip's cache was warm, and a stalled download resumed by itself); the installer's speech check loaded the model in
+12 seconds and spoke 1.9 seconds of audio in 31 seconds, and Voice Conversion said it again in 4 seconds. **Test** then passed:
+the load, with its warm-up line, took 41 seconds, and the check sentence 16.5 seconds. Converting a 1.9-second recording into the
+voice of a 9-second one took 13 seconds once Voice Conversion was loaded, and 31 seconds with the load. The Lab asks for 10 GB of
+free RAM before it loads either of them.
+
+To remove them, delete `hf-cache\hub\models--ResembleAI--chatterbox` and, in `out\chatterbox`, `install-original.wav`,
+`install-vc.wav` and `installation-original.json`. `.venv-chatterbox` is Turbo's too: delete it only to remove all three.
+
 ## NVIDIA graphics cards
 
 Kokoro and Chatterbox Turbo can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU one. **Nobody
@@ -312,26 +338,43 @@ setup-kokoro.bat --nvidia
 setup-chatterbox.bat --nvidia
 ```
 
-`setup.bat` offers the same when it finds an NVIDIA driver. Before anything is downloaded, each installer asks NVIDIA's own
-`nvidia-smi` which card and driver this computer has, and refuses a build that cannot run there: without a driver
-(`System32\nvcuda.dll`), on a card older or newer than the build has code for, or, for Kokoro, with a driver older than 580.
-Each then runs its speech check on the card. `setup.bat` asks once for both models and gives each the build that runs on the
-card: on an RTX 50 series card, Kokoro gets its NVIDIA build and Chatterbox Turbo its CPU build, and setup says so.
+`setup.bat` offers the same when it finds an NVIDIA driver, and so does **Install** on a model's card when its switch says GPU
+(below). Before anything is downloaded, each installer asks NVIDIA's own `nvidia-smi` which card and driver this computer has,
+and refuses a build that cannot run there: without a driver (`System32\nvcuda.dll`), on a card older than the build has code
+for, or with a driver older than 580. Each then runs its speech check on the card. `setup.bat` asks once for both models and
+gives each the build that runs on the card, and says why when one gets its CPU build.
 
 | Model | PyTorch build | Cards | Download, beyond the CPU install |
 |---|---|---|---|
 | Kokoro | 2.12.0, CUDA 13.0 ([requirements/kokoro-nvidia.txt](../requirements/kokoro-nvidia.txt)) | GeForce GTX 16 and RTX 20 series or newer, RTX 50 included, with an NVIDIA driver of version 580 or later | about 1.8 GB |
-| Chatterbox Turbo | 2.6.0 with torchaudio, CUDA 12.6 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | up to the RTX 40 series; not RTX 50 cards, which need a newer CUDA than PyTorch 2.6 has | about 2.3 GB |
+| Chatterbox Turbo | 2.12.0 and torchaudio 2.11.0, CUDA 13.0 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | the same as Kokoro | about 1.7 GB |
 
-The CUDA builds carry NVIDIA's CUDA libraries inside them, under NVIDIA's own licence terms; like the other packages they are
-installed on your computer at your request and are not part of this repository.
+Chatterbox asks for PyTorch 2.6, and PyTorch 2.6 has no build for RTX 50 series cards, so its NVIDIA build is the PyTorch 2.12
+that Kokoro's uses (one download serves both, from pip's cache) with torchaudio 2.11, the newest torchaudio. Chatterbox Turbo
+loaded, spoke and cloned a voice with those two (their CPU builds) before the list was written. The CUDA builds carry NVIDIA's
+CUDA libraries inside them, under NVIDIA's own licence terms; like the other packages they are installed on your computer at
+your request and are not part of this repository.
 
-When the service finds an NVIDIA driver it asks its workers for the card (`cuda`). A model whose own PyTorch cannot use the card
-runs on the CPU anyway, and its card on Models & features says it ran on the CPU: the CPU build (installed without `--nvidia`),
-or a CUDA build with no code for this card, such as PyTorch 2.6 on an RTX 50 series card, which reports the card as available
-and then could not run anything on it. To switch a model between the two, delete its environment folder (`.venv-kokoro` or
-`.venv-chatterbox`) and run its installer again with or without `--nvidia`; the model files in `hf-cache` stay.
-`"device": "cpu"` in `runtime.local.json` keeps every model on the CPU.
+### The GPU/CPU switch
+
+When the service finds an NVIDIA driver it asks its workers for the card (`cuda`), and every card on **Models & features** gets
+a **Runs on GPU | CPU** switch. It decides where that model runs from its next load (a loaded model is unloaded when it is
+switched), and the choice is kept in `data/engines/devices.json`. A model that was not switched uses the card when its PyTorch
+can.
+
+- **A model that is not installed** installs the build its switch shows: **Install** puts in the NVIDIA build when it says GPU,
+  and the CPU build when it says CPU. GPU is greyed out, with the reason, when the card or driver cannot run the build.
+- **A model installed with the CPU build** runs on the CPU. Switched to GPU, its card offers **Install GPU build**: its
+  installer's `--nvidia` replaces PyTorch (and torchaudio, for Chatterbox) in its environment and leaves everything else,
+  then runs the speech check on the card. The installer refuses to touch an environment holding any other package at a version
+  it does not pin.
+- **A model with a GPU build** can be kept on the CPU with the switch; a CUDA build runs on the CPU too.
+- Phonon and Drama 3 run on the CPU, so their GPU is greyed out.
+
+A model whose PyTorch cannot use the card after all (a CUDA build with no code for this card) still runs on the CPU, and its
+card says it ran on the CPU. `"device": "cpu"` in `runtime.local.json`, or `--device cpu`, keeps every model on the CPU and
+hides the switches. Going back from a GPU build to the CPU build takes deleting the environment folder (`.venv-kokoro` or
+`.venv-chatterbox`) and installing again; the model files in `hf-cache` stay.
 
 ## Model runtimes
 

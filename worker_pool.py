@@ -15,6 +15,7 @@ from phonon_support import PHONON_ENGINE_ID, check_request as check_phonon_reque
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
 from local_ownership import LocalOwnership
 import engine_checks
+import engine_devices
 
 LAB = Path(__file__).resolve().parent
 OUT = LAB / "out"
@@ -83,7 +84,8 @@ class EnginePool:
     def __init__(self, device, idle_minutes, *, worker_factory=None, resource_check=None,
                  catalog=None, worker_timeouts=None, idle_poll_seconds=30,
                  residency_lock_path=None, reference_roots=(), conversion_source_roots=(), media_guard=None,
-                 check_store=None, install_probe=None, fingerprint_probe=None, ram_needs=None, ram_probe=None):
+                 check_store=None, install_probe=None, fingerprint_probe=None, ram_needs=None, ram_probe=None,
+                 device_store=None, build_probe=None):
         self.device = device
         self.catalog = catalog or read_catalog()
         self.entries = {entry["id"]: entry for entry in self.catalog["engines"]}
@@ -107,6 +109,12 @@ class EnginePool:
         # page shows them on the cards; neither changes what a load does (resource_check does that).
         self.ram_needs = dict(ram_needs or {})
         self.ram_probe = ram_probe
+        # Each engine's GPU or CPU choice from its card (engine_devices.EngineDeviceStore), the PyTorch build its environment
+        # holds, and whether the app can install a GPU build of it here: (ok, reason). serve.py sets gpu_install to the
+        # installer's answer once both exist.
+        self.device_store = device_store
+        self.build_probe = build_probe or self._torch_build
+        self.gpu_install = None
         self._gpu_job = threading.Lock()
         self._held_for = None
         # Model residency, not just individual calls, is exclusive across local services.
@@ -143,13 +151,66 @@ class EnginePool:
                 return None
             return dict(record.get("load_result") or {})
 
+    @staticmethod
+    def _torch_build(entry):
+        try:
+            return engine_devices.torch_build(LAB, entry)
+        except (KeyError, TypeError):    # a catalog entry without a runtime, as in some tests
+            return None, None
+
+    def device_for(self, key):
+        """The device a worker for this engine is asked for: the service's, unless the engine's card keeps it on the CPU or its
+        environment holds the CPU build of PyTorch (see engine_devices). Phonon and Drama 3 keep the service's device."""
+        if self.device != "cuda" or key in engine_devices.CPU_ONLY or key in engine_devices.GPU_ONLY or key not in self.entries:
+            return self.device
+        if self.device_store is not None and self.device_store.get(key) == "cpu":
+            return "cpu"
+        build, _version = self.build_probe(self.entries[key])
+        return "cpu" if build == "cpu" else "cuda"
+
+    def device_facts(self, entry, installed):
+        """What an engine's card shows on its GPU/CPU switch: engine_devices.device_facts for this service."""
+        gpu_install = self.gpu_install(entry["id"]) if self.gpu_install else (
+            False, "The app cannot install a GPU build of this model here.")
+        build, _version = self.build_probe(entry) if installed else (None, None)
+        choice = self.device_store.get(entry["id"]) if self.device_store is not None else None
+        return engine_devices.device_facts(entry["id"], service_device=self.device, installed=installed, build=build,
+                                           choice=choice, gpu_install=gpu_install)
+
+    def choose_device(self, key, choice):
+        """Keep an engine on the CPU ("cpu") or let it use the graphics card ("gpu") from its next load, as its card's switch
+        says. A loaded model is unloaded so that the next request loads it on the new device. Raises ValueError for an engine
+        that cannot be switched, and WorkerBusy while a load, a clip, a test or an install holds the worker."""
+        self._require_api_engine(key)
+        if choice not in engine_devices.CHOICES:
+            raise ValueError("Choose gpu or cpu.")
+        if key in engine_devices.CPU_ONLY:
+            raise ValueError(engine_devices.CPU_ONLY[key])
+        if key in engine_devices.GPU_ONLY:
+            raise ValueError(engine_devices.GPU_ONLY[key])
+        if choice == "gpu" and self.device != "cuda":
+            raise ValueError(engine_devices.NO_GPU)
+        if self.device_store is None:
+            raise ValueError("This service does not keep device choices.")
+        self._acquire_job()
+        try:
+            self.device_store.set(key, choice)
+            with self._state_lock:
+                loaded = key in self.workers
+            if loaded:
+                self._unload_locked()
+                self.last_used = time.time()
+        finally:
+            self._gpu_job.release()
+        return {"engine": key, "choice": choice, "device": self.device_for(key), "unloaded": loaded}
+
     def _new_worker(self, key, entry):
         if self.worker_factory is not None:
             return self.worker_factory(entry)
         python_path = LAB / entry["runtime"]["python"]
         if not python_path.is_file():
             raise WorkerUnavailable(f"Configured Python environment is missing for {key}: {python_path}")
-        command = [str(python_path), "-u", str(LAB / "engine_worker.py"), "--engine", key, "--device", self.device]
+        command = [str(python_path), "-u", str(LAB / "engine_worker.py"), "--engine", key, "--device", self.device_for(key)]
         env = os.environ.copy()
         # Replace any inherited allowlist; only this service's configured roots apply.
         env[REFERENCE_ROOTS_ENV] = json.dumps([str(root) for root in self.reference_roots])
@@ -169,7 +230,7 @@ class EnginePool:
         total = info.get("total_s")
         if isinstance(total, bool) or not isinstance(total, (int, float)) or not samples or not sample_rate:
             return
-        self.check_store.record_clip(key, engine_checks.clip_device(info, self.device), total, samples / sample_rate)
+        self.check_store.record_clip(key, engine_checks.clip_device(info, self.device_for(key)), total, samples / sample_rate)
 
     def _require_api_engine(self, key):
         if not isinstance(key, str) or key not in self.api_entries:
@@ -312,8 +373,9 @@ class EnginePool:
         if entry.get("integration", {}).get("task_only") is True:
             raise ValueError("Voice conversion is a source-audio task with no speech check; use Voice conversion.")
         installed = self.install_probe(entry)
+        device = self.device_for(key)
         if not installed["installed"]:
-            return {"status": "not_installed", "device": self.device, "missing": installed["missing"],
+            return {"status": "not_installed", "device": device, "missing": installed["missing"],
                     "checked_at": engine_checks.utc_now()}
         fingerprint = self.fingerprint_probe(entry)  # taken before the load, so it names what the check ran against
         try:
@@ -322,25 +384,27 @@ class EnginePool:
         except WorkerBusy:
             raise
         except Exception as exc:
-            record = engine_checks.check_record(status="failed", device=self.device,
+            record = engine_checks.check_record(status="failed", device=device,
                                                 reason=engine_checks.failure_reason(exc), fingerprint=fingerprint)
         else:
             problem = engine_checks.audible(wav, sample_rate)
             record = engine_checks.check_record(
-                status="failed" if problem else "passed", device=self.device,
-                ran_on=engine_checks.clip_device(info, self.device), reason=problem,
+                status="failed" if problem else "passed", device=device,
+                ran_on=engine_checks.clip_device(info, device), reason=problem,
                 load_seconds=loaded.get("load_seconds"), total_s=info.get("total_s"),
                 audio_seconds=wav.size / sample_rate, fingerprint=fingerprint)
         if self.check_store is not None:
-            self.check_store.record_check(key, self.device, record)
+            self.check_store.record_check(key, device, record)
         return record
 
     def engine_status(self):
-        """Installed, usable and measured state for every catalog engine. Reads files and stored results only."""
+        """Installed, usable and measured state for every catalog engine, with each one's GPU/CPU switch. Reads files and
+        stored results only."""
         return engine_checks.status_payload(self.entries, device=self.device, busy=self.busy,
                                             store=self.check_store, probe=self.install_probe,
                                             fingerprint_of=self.fingerprint_probe, ram_needs=self.ram_needs,
-                                            ram=self.ram_probe() if self.ram_probe else None)
+                                            ram=self.ram_probe() if self.ram_probe else None,
+                                            device_of=self.device_facts)
 
     def phonemize(self, text, language="English"):
         """The phonemes Kokoro would speak for a text. Kokoro's language rules live in its own environment, so its worker

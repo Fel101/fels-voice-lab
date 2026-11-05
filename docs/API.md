@@ -201,6 +201,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
 | POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/device`](#post-api-engines-engine_id-device) | Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
@@ -237,7 +238,7 @@ List every engine the Lab knows, with its pinned checkpoint, capabilities and li
 
 Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.
 
-**Answer:** `200`, JSON. `device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).
+**Answer:** `200`, JSON. `device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).
 
 <a id="post-api-engines-engine_id-check"></a>
 
@@ -269,13 +270,35 @@ Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turb
 | Request field | Type | Meaning |
 |---|---|---|
 | `dry_run` | boolean | Only read the plan: what the installer would do and whether this computer can take it. Nothing is changed. Default false, which starts the install. |
+| `nvidia` | boolean | Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. Default false. |
 
-**Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.
+**Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.
 
 | Also answers | When |
 |---|---|
-| `400` | The engine is unknown, has no installer in the app, or is installed already; or `dry_run` is not true or false. |
+| `400` | The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or `dry_run` or `nvidia` is not true or false. |
 | `409` | An install is already running, or the GPU worker is busy. |
+
+<a id="post-api-engines-engine_id-device"></a>
+
+#### `POST /api/engines/{engine_id}/device`
+
+Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.
+
+| Path parameter | Meaning |
+|---|---|
+| `engine_id` | An engine id from `GET /api/catalog`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `device` (required) | string | `gpu` or `cpu`. |
+
+**Answer:** `200`, JSON. `device`: `engine`, `choice`, `device` (the one its worker is now asked for, `cuda` or `cpu`) and `unloaded` (true when the engine was loaded, so its next request loads it again). The choice is kept in `data/engines/devices.json`. An engine whose environment holds the CPU build of PyTorch runs on the CPU whatever is chosen, until its GPU build is installed.
+
+| Also answers | When |
+|---|---|
+| `400` | The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or `gpu` was asked of a service that runs on the CPU. |
+| `409` | The GPU worker is busy. |
 
 <a id="post-api-load"></a>
 
@@ -293,7 +316,7 @@ Load an engine into memory ahead of its first use.
 | Also answers | When |
 |---|---|
 | `409` | The GPU worker is busy. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion). |
 
 <a id="post-api-unload"></a>
 
@@ -395,7 +418,7 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|
 | `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion). |
 | `504` | The engine did not answer in time. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).

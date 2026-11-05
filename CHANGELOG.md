@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Models & features
+
+- **A GPU/CPU switch on every card.** On a computer whose graphics card the service uses, each model's card has a **Runs on
+  GPU | CPU** switch. The choice is kept per model in `data/engines/devices.json` and applies from the model's next load: a
+  loaded model is unloaded when it is switched. A model that is not installed yet installs the build its switch shows, so
+  **Install** puts in the NVIDIA build when GPU is chosen and the card can run it. A model installed with the CPU build of
+  PyTorch runs on the CPU until its GPU build is installed, and its card then offers **Install GPU build**, which replaces
+  PyTorch in its environment and nothing else. GPU is greyed out, with the reason under it, where it cannot work: Phonon and
+  Drama 3 run on the CPU, and a card or driver the build cannot run on is named. A service that runs everything on the CPU
+  shows no switches and says so once. Each card's tests and its state line are those of the device it runs on now. New route:
+  `POST /api/engines/{engine_id}/device`; `POST /api/engines/{engine_id}/install` takes `nvidia`.
+- **The install window.** **Install** opens the installer's plan in a window over the page, and **Install now** follows the
+  install there, with its output, until it finishes; **Hide** leaves it running and **Show progress** on the card opens it
+  again. The cards no longer widen or grow while a plan is open or an install runs, so the page stays where it is: a card's
+  text stays the same for the whole install, and its buttons sit at its foot.
+- **Chatterbox on RTX 50 cards.** `setup-chatterbox.bat --nvidia` now installs the CUDA 13.0 builds of PyTorch 2.12 (the same
+  file as Kokoro's NVIDIA build) and torchaudio 2.11 instead of PyTorch 2.6 with CUDA 12.6, which has no code for RTX 50 series
+  cards. Chatterbox Turbo was checked to load, speak and clone a voice with PyTorch 2.12 and torchaudio 2.11 (their CPU builds).
+  The build needs a GeForce GTX 16 or RTX 20 series card or newer and an NVIDIA driver of version 580 or later, as Kokoro's
+  does, so `setup.bat` now gives both models their NVIDIA builds on an RTX 50 card. The CPU build is unchanged. Neither NVIDIA
+  build has run on an NVIDIA card yet.
+
 ## 0.1.0 — 2026-11-04
 
 The first public release, for Windows 10/11 and Python 3.12. It runs from source, and model runtimes are installed

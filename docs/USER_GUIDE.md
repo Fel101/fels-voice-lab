@@ -305,9 +305,15 @@ of either and read as out of date once.
 Press **Test** on a card to run that test. The first test loads the model, which can
 take a minute or more, and other model requests are refused until it finishes. A failed test shows its
 reason. Results are saved per device in `data/engines/checks.json` under the state root, so a
-test on the GPU does not mark the CPU as usable. When the service uses a graphics card but a model's own PyTorch is a CPU
-build, that model runs on the CPU, and its card says **Speaks now on CPU** and why. Each model has a Python environment of
-its own, so installing one never marks another's test out of date.
+test on the GPU does not mark the CPU as usable. Each model has a Python environment of its own, so installing one never marks
+another's test out of date.
+
+When the service uses a graphics card, each card has a **Runs on GPU | CPU** switch. It chooses where that model runs from its
+next load, and the card's state and test are then those of that device. A model installed with the CPU build of PyTorch runs
+on the CPU; switch it to GPU and its card offers **Install GPU build**, which replaces PyTorch in that model's environment. GPU
+is greyed out, with the reason under it, for Phonon and Drama 3 (they run on the CPU) and where the graphics card or its driver
+cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)). On a model that is not installed
+yet, the switch chooses which build **Install** puts in.
 
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
@@ -317,9 +323,11 @@ measured peak with room to spare; for the others it is not a measurement of what
 computer ([hardware and state settings](SETUP.md#hardware-and-state-settings)).
 
 A model that is not installed shows the files it is missing. The Kokoro, Phonon and Chatterbox Turbo cards have an **Install**
-button: it shows what the installer will do and whether this computer can take it, and **Install now** runs it with the end of
-its output on the card (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu), [Phonon](SETUP.md#phonon-on-the-cpu) and
-[Chatterbox Turbo](SETUP.md#chatterbox-turbo-on-the-cpu)). The other cards say that the app cannot install that model yet.
+button: it opens a window with what the installer will do and whether this computer can take it, and **Install now** runs it and
+follows it in the same window, with the end of its output (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu),
+[Phonon](SETUP.md#phonon-on-the-cpu) and [Chatterbox Turbo](SETUP.md#chatterbox-turbo-on-the-cpu)). **Hide** closes the window
+and leaves the install running; **Show progress** on the card opens it again, and **Show output** shows the end of one that
+stopped. The cards stay where they are while it runs. The other cards say that the app cannot install that model yet.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed

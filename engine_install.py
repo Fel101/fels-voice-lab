@@ -8,9 +8,15 @@ a child process under the lab's own Python, as its launcher does (each installer
 keeps the end of its output for the page to show. One install runs at a time. While it runs it holds the pool's job lock, so
 tests, loads and clips are refused instead of competing with it for memory and disk. Closing the service stops the install and
 its children; the script continues where it stopped when it is run again.
+
+A card whose GPU/CPU switch says GPU installs the engine's NVIDIA build (the script's --nvidia), and an engine installed with
+the CPU build of PyTorch can get its NVIDIA build afterwards, which replaces PyTorch in its environment. gpu_build() says
+whether that can work on this computer before anything is asked of the script: an NVIDIA driver, and a card and driver the
+build runs on, from the installer's own card_problems().
 """
 
 import codecs
+import importlib
 import os
 import re
 import subprocess
@@ -20,14 +26,23 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
+import hardware
 import worker_pool
-from chatterbox_support import TURBO_ENGINE_ID
+from chatterbox_support import ORIGINAL_ENGINE_ID, TURBO_ENGINE_ID, VC_ENGINE_ID
 from phonon_support import PHONON_ENGINE_ID
 
-# Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py). tests/test_engine_install.py keeps
-# this in step with engine_checks.GUIDED_INSTALLERS and with the launchers themselves.
+# Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
+# that choose the engine's checkpoint. tests/test_engine_install.py keeps this in step with engine_checks.GUIDED_INSTALLERS and
+# with the launchers themselves.
 INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/install_phonon.py",
-              TURBO_ENGINE_ID: "tools/install_chatterbox.py"}
+              TURBO_ENGINE_ID: "tools/install_chatterbox.py",
+              ORIGINAL_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
+              VC_ENGINE_ID: ("tools/install_chatterbox.py", "--original")}
+# Engine id -> the installer module whose --nvidia puts in a GPU build of PyTorch, and whose card_problems(cards) says why that
+# build would not run on this computer's NVIDIA cards.
+GPU_BUILDS = {"kokoro": "tools.install_kokoro",
+              **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)}}
+NO_NVIDIA = "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver."
 # Every launcher runs its script with the lab's own Python, whichever environment the engine then runs in.
 LAB_PYTHON = ".venv/Scripts/python.exe"
 LOG_FOLDER = "out/install"
@@ -72,12 +87,18 @@ def _stamp(seconds):
 class EngineInstaller:
     """Plans and runs the guided installers for the Models page, one install at a time (see the note above)."""
 
-    def __init__(self, pool, *, root=None, python=None, scripts=None):
+    def __init__(self, pool, *, root=None, python=None, scripts=None, gpu_builds=None, nvidia_present=None,
+                 nvidia_cards=None):
         self.pool = pool
         self.root = Path(root or worker_pool.LAB)
         self.python = python    # None: the lab's own Python, as the launchers use
         self.scripts = dict(INSTALLERS if scripts is None else scripts)
+        self.gpu_builds = dict(GPU_BUILDS if gpu_builds is None else gpu_builds)
+        self.nvidia_present = nvidia_present or hardware.nvidia_driver_present
+        self.nvidia_cards = nvidia_cards or hardware.nvidia_cards
         self._lock = threading.Lock()
+        self._cards_lock = threading.Lock()
+        self._cards = None
         self._job = None
         self._process = None
 
@@ -91,21 +112,52 @@ class EngineInstaller:
         script = self.scripts.get(key)
         if script is None:
             raise ValueError(f"{entry.get('name', key)} cannot be installed from the app yet: docs/SETUP.md says what it needs.")
+        script, *arguments = (script,) if isinstance(script, str) else script
         python = Path(self.python) if self.python else self.root / LAB_PYTHON
         if not python.is_file():
             raise ValueError(f"The lab's Python is missing ({python}). Run setup.bat first.")
-        return entry, self.root / script, python
+        return entry, [str(python), "-u", str(self.root / script), *arguments]
 
-    def plan(self, key):
-        """What the installer would do now, from its own --dry-run: {engine, ok, paragraphs, problems}. Changes nothing."""
-        _entry, script, python = self._resolve(key)
+    def _nvidia(self):
+        """(driver present, its cards), read once: nvidia-smi takes a moment, and the card does not change while the service
+        runs."""
+        with self._cards_lock:
+            if self._cards is None:
+                present = bool(self.nvidia_present())
+                self._cards = (present, self.nvidia_cards() if present else [])
+            return self._cards
+
+    def gpu_build(self, key):
+        """(ok, reason): whether the app can install the GPU build of an engine on this computer. It needs an installer with an
+        NVIDIA build, an NVIDIA driver, and a card and driver that the build runs on, which the installer's own card_problems
+        says. reason is None when it can, and otherwise the sentence the card shows."""
+        entry = self.pool.entries.get(key) or {}
+        name = entry.get("name", key)
+        module = self.gpu_builds.get(key)
+        if module is None or key not in self.scripts:
+            return False, f"The app has no GPU build of {name} to install; it runs on the CPU."
+        present, cards = self._nvidia()
+        if not present:
+            return False, NO_NVIDIA
+        try:
+            problems = importlib.import_module(module).card_problems(cards)
+        except Exception as exc:  # noqa: BLE001 - a card that cannot be judged must not break the Models page
+            return False, f"The Lab could not check {name}'s GPU build against this card ({type(exc).__name__}: {exc})."
+        return (False, " ".join(problems)) if problems else (True, None)
+
+    def plan(self, key, *, nvidia=False):
+        """What the installer would do now, from its own --dry-run: {engine, nvidia, ok, paragraphs, problems}. Changes
+        nothing. nvidia asks for the plan of its GPU build."""
+        _entry, command = self._resolve(key)
+        if nvidia and key not in self.gpu_builds:
+            raise ValueError(f"{_entry.get('name', key)} has no GPU build the app can install.")
         with self._lock:
             if self._running():
                 raise worker_pool.WorkerBusy(f"{self._job['name']} is being installed now.")
         try:
-            done = subprocess.run([str(python), "-u", str(script), "--dry-run"], cwd=self.root, env=_environment(),
-                                  stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                  timeout=PLAN_TIMEOUT, creationflags=NO_WINDOW)
+            done = subprocess.run([*command, *(["--nvidia"] if nvidia else []), "--dry-run"], cwd=self.root,
+                                  env=_environment(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=PLAN_TIMEOUT, creationflags=NO_WINDOW)
         except subprocess.TimeoutExpired as exc:
             raise TimeoutError(f"The installer did not answer within {PLAN_TIMEOUT} seconds.") from exc
         lines = (done.stdout or "").rstrip().splitlines()
@@ -116,34 +168,41 @@ class EngineInstaller:
         if done.returncode and not problems:
             problems = [f"The installer stopped without saying why (exit code {done.returncode})."]
         problems = [text if len(text) <= 800 else "…" + text[-800:] for text in problems[:8]]
-        return {"engine": key, "ok": done.returncode == 0, "paragraphs": steps, "problems": problems}
+        return {"engine": key, "nvidia": nvidia, "ok": done.returncode == 0, "paragraphs": steps, "problems": problems}
 
-    def start(self, key):
-        """Start the installer with --yes and return the job (see snapshot). Raises ValueError when the engine has no
-        installer, is installed already or the Python is missing, and WorkerBusy when an install or a request is running."""
-        entry, script, python = self._resolve(key)
+    def start(self, key, *, nvidia=False):
+        """Start the installer with --yes (and --nvidia for the GPU build) and return the job (see snapshot). Raises ValueError
+        when the engine has no installer or no GPU build, is installed already (an engine installed with the CPU build of
+        PyTorch can still get its GPU build) or the Python is missing, and WorkerBusy when an install or a request is
+        running."""
+        entry, command = self._resolve(key)
         name = entry.get("name", key)
+        if nvidia and key not in self.gpu_builds:
+            raise ValueError(f"{name} has no GPU build the app can install.")
         with self._lock:
             if self._running():
                 raise worker_pool.WorkerBusy(f"{self._job['name']} is already being installed.")
         if self.pool.install_probe(entry)["installed"]:
-            raise ValueError(f"{name} is already installed.")
+            if not nvidia:
+                raise ValueError(f"{name} is already installed.")
+            if self.pool.build_probe(entry)[0] != "cpu":
+                raise ValueError(f"{name} is already installed, and its PyTorch is not the CPU build.")
         self.pool.hold(f"{name} is being installed")
         try:
             log_path = self._new_log(key)
             log = log_path.open("wb")
             try:
-                process = subprocess.Popen([str(python), "-u", str(script), "--yes"], cwd=self.root, env=_environment(),
-                                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                           creationflags=NO_WINDOW)
+                process = subprocess.Popen([*command, *(["--nvidia"] if nvidia else []), "--yes"], cwd=self.root,
+                                           env=_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
             except Exception:
                 log.close()
                 raise
         except Exception:
             self.pool.release_hold()
             raise
-        job = {"engine": key, "name": name, "state": "running", "started": time.time(), "ended": None, "exit_code": None,
-               "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
+        job = {"engine": key, "name": name, "nvidia": nvidia, "state": "running", "started": time.time(), "ended": None,
+               "exit_code": None, "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
                "log": f"{LOG_FOLDER}/{log_path.name}"}
         with self._lock:
             self._job, self._process = job, process
@@ -220,15 +279,17 @@ class EngineInstaller:
                 self.pool.release_hold()    # after the state is final, so a page that sees the service free sees the result
 
     def snapshot(self):
-        """The latest install, or None when none has run since the service started: engine, name, state (running, finished
-        or failed), started_at, ended_at, seconds so far, exit_code, the end of its output as lines, and its log file."""
+        """The latest install, or None when none has run since the service started: engine, name, nvidia (the GPU build),
+        state (running, finished or failed), started_at, ended_at, seconds so far, exit_code, the end of its output as lines,
+        and its log file."""
         with self._lock:
             job = self._job
             if job is None:
                 return None
             lines = list(job["lines"]) + ([job["current"]] if job["current"] else [])
             ended = job["ended"]
-            return {"engine": job["engine"], "name": job["name"], "state": job["state"], "started_at": _stamp(job["started"]),
+            return {"engine": job["engine"], "name": job["name"], "nvidia": job["nvidia"], "state": job["state"],
+                    "started_at": _stamp(job["started"]),
                     "ended_at": _stamp(ended) if ended else None, "seconds": round((ended or time.time()) - job["started"], 1),
                     "exit_code": job["exit_code"], "lines": lines[-TAIL_LINES:], "log": job["log"]}
 

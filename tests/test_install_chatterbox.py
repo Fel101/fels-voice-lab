@@ -286,7 +286,7 @@ class PlanTests(unittest.TestCase):
     def test_the_plan_says_what_is_installed_where_and_how_much_to_download(self):
         text = self.plan()
         for part in ("Chatterbox Turbo 350M on the CPU", "a Python environment of its own, .venv-chatterbox",
-                     "Chatterbox's PyTorch 2.6 could not share one with the PyTorch 2.12 that Kokoro uses",
+                     "nothing another model installs can clash with Chatterbox's packages",
                      "73 of 73 to install there", "PyTorch 2.6 for the CPU",
                      "About 400 MB to download and 2.0 GB on disk", "requirements/chatterbox-cpu.txt", "revision 749d1c1",
                      "huggingface.co/ResembleAI/chatterbox-turbo", "the 1.9 GB language model", "the 1.1 GB speech decoder",
@@ -299,31 +299,45 @@ class PlanTests(unittest.TestCase):
     def test_the_nvidia_plan_names_the_cuda_builds_the_cards_they_run_on_and_that_they_are_untried(self):
         text = self.plan(nvidia=True)
         for part in ("Chatterbox Turbo 350M on an NVIDIA graphics card",
-                     "the CUDA 12.6 builds of PyTorch 2.6 and torchaudio for NVIDIA graphics cards (not yet tried on one)",
+                     "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one)",
                      f"About {base.mb_text(ic.PACKAGES_DOWNLOAD_MB + ic.NVIDIA_EXTRA_DOWNLOAD_MB)} to download",
                      "requirements/chatterbox-cpu.txt and requirements/chatterbox-nvidia.txt", "It runs on the graphics card.",
-                     "up to the GeForce RTX 40 series", "not on RTX 50 series cards", "hardware report on GitHub"):
+                     "GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included", "driver of version 580 or later",
+                     "checked to speak and clone a voice with PyTorch 2.12", "hardware report on GitHub"):
             self.assertIn(part, text)
 
-    def test_the_cuda_12_6_build_is_refused_on_an_rtx_50_card_before_anything_is_downloaded(self):
+    def test_the_cuda_13_build_runs_on_an_rtx_50_card_and_is_refused_on_old_cards_and_drivers(self):
         rtx_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)}
-        problems = ic.nvidia_problems(present=True, cards=[rtx_5070])
-        self.assertEqual(len(problems), 1)
-        self.assertIn("Chatterbox Turbo's NVIDIA build (PyTorch 2.6 with CUDA 12.6) has no code for the NVIDIA GeForce RTX 5070 "
-                      "Laptop GPU (compute capability 12.0); it runs on cards up to the GeForce RTX 40 series. Leave out --nvidia",
-                      problems[0])
-        for fine in ({"name": "NVIDIA GeForce RTX 4090", "capability": (8, 9), "driver": (560, 94)},
-                     {"name": "NVIDIA GeForce GTX 1080", "capability": (6, 1), "driver": (472, 12)},
-                     {"name": "NVIDIA GeForce RTX 5070", "capability": None, "driver": (581, 80)}):
+        for fine in (rtx_5070, {"name": "NVIDIA GeForce RTX 2060", "capability": (7, 5), "driver": (581, 80)},
+                     {"name": "NVIDIA GeForce RTX 4090", "capability": None, "driver": None}):
             with self.subTest(card=fine["name"]):
                 self.assertEqual(ic.nvidia_problems(present=True, cards=[fine]), [])
+        old_card = ic.nvidia_problems(present=True, cards=[{"name": "NVIDIA GeForce GTX 1080", "capability": (6, 1),
+                                                            "driver": (581, 80)}])
+        self.assertEqual(len(old_card), 1)
+        self.assertIn("Chatterbox's NVIDIA build (PyTorch 2.12 with CUDA 13.0) has no code for the NVIDIA GeForce GTX 1080 "
+                      "(compute capability 6.1); it runs on GeForce GTX 16 and RTX 20 series cards and newer. Leave out --nvidia",
+                      old_card[0])
+        old_driver = ic.nvidia_problems(present=True, cards=[{**rtx_5070, "driver": (572, 83)}])
+        self.assertIn("needs NVIDIA driver 580 or later, and this computer has 572.83", old_driver[0])
         self.assertIn("no NVIDIA driver", ic.nvidia_problems(present=False)[0])
+        self.assertEqual(ic.card_problems([rtx_5070]), [])    # what setup.bat and the Models page ask
 
-    def test_a_failed_check_on_the_card_names_the_cards_the_cuda_12_6_build_runs_on(self):
+    def test_a_failed_check_on_the_card_names_the_cards_and_driver_the_build_needs(self):
         hint = base.check_failure_hint("RuntimeError: CUDA error: no kernel image is available", nvidia=True,
                                        cuda_needs=ic.CUDA_NEEDS)
-        self.assertIn("up to the GeForce RTX 40 series with a recent driver, and not on RTX 50 series cards", hint)
-        self.assertNotIn("13.0", hint)
+        self.assertIn("CUDA 13.0 needs an NVIDIA driver of version 580 or later and a GTX 16 or RTX 20 series card", hint)
+
+    def test_the_nvidia_plan_for_a_cpu_install_says_it_replaces_pytorch_and_torchaudio_only(self):
+        packages = ic.pinned_packages(ROOT, nvidia=True)
+        cpu = {item["key"]: item for item in base.read_lock(ROOT / ic.LOCK)}
+        gpu = {item["key"]: item for item in packages}
+        switching = [(gpu["torch"], cpu["torch"]["version"]), (gpu["torchaudio"], cpu["torchaudio"]["version"])]
+        text = " ".join(ic.plan_text(REAL_MANIFEST, packages, 2, [], environment_exists=True, checkpoint_only=False,
+                                     nvidia=True, switching=switching).split())
+        self.assertIn("Chatterbox is already installed in .venv-chatterbox, and its CPU build of PyTorch is replaced by the CUDA "
+                      "13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one) (torch "
+                      "2.6.0 becomes 2.12.0+cu130, torchaudio 2.6.0 becomes 2.11.0+cu130). About 1.9 GB to download", text)
 
     def test_the_plan_says_which_licence_covers_what_and_that_every_clip_is_watermarked(self):
         text = self.plan()
@@ -398,17 +412,28 @@ class InstallPackagesTests(unittest.TestCase):
             lines = [line for line in written.read_text("utf-8").splitlines() if not line.startswith("#")]
         self.assertEqual(lines, [f"chatterbox-tts==0.1.7 --hash=sha256:{HASH}", cuda])
 
-    def test_the_nvidia_list_swaps_only_torch_and_torchaudio_for_cuda_builds_of_the_same_versions(self):
+    def test_the_nvidia_list_swaps_only_torch_and_torchaudio_for_their_cuda_13_builds(self):
         cpu = {item["key"]: item for item in base.read_lock(ROOT / ic.LOCK)}
         gpu = base.read_lock(ROOT / ic.NVIDIA_LOCK)
-        self.assertEqual([item["key"] for item in gpu], ["torch", "torchaudio"])
-        for item in gpu:
-            self.assertEqual(item["version"], cpu[item["key"]]["version"] + "+cu126")
+        self.assertEqual([(item["key"], item["version"]) for item in gpu], [("torch", "2.12.0+cu130"), ("torchaudio", "2.11.0+cu130")])
         for line in base.lock_lines(ROOT / ic.NVIDIA_LOCK).values():
-            self.assertRegex(line, r"^torch(audio)? @ https://download\.pytorch\.org/whl/cu126/torch(audio)?-2\.6\.0%2Bcu126-cp312-"
-                                   r"cp312-win_amd64\.whl --hash=sha256:[0-9a-f]{64}$")
+            self.assertRegex(line, r"^torch(audio)? @ https://download\.pytorch\.org/whl/cu130/torch(audio)?-2\.1[12]\.0%2Bcu130-"
+                                   r"cp312-cp312-win_amd64\.whl --hash=sha256:[0-9a-f]{64}$")
+        # The same PyTorch file as Kokoro's NVIDIA build, so pip's cache serves both.
+        self.assertEqual(base.lock_lines(ROOT / ic.NVIDIA_LOCK)["torch"], base.lock_lines(ROOT / base.NVIDIA_LOCK)["torch"])
         swapped = ic.pinned_packages(ROOT, nvidia=True)
         self.assertEqual([item["key"] for item in swapped], list(cpu))
+
+    def test_only_a_cpu_build_of_the_swapped_packages_is_replaced(self):
+        cpu = base.read_lock(ROOT / ic.LOCK)
+        gpu = base.read_lock(ROOT / ic.NVIDIA_LOCK)
+        packages = ic.pinned_packages(ROOT, nvidia=True)
+        installed = {item["key"]: item["version"] for item in cpu}
+        _missing, different = base.package_state(packages, installed)
+        self.assertEqual(sorted(item["key"] for item, _have in base.build_switch(different, cpu, gpu)), ["torch", "torchaudio"])
+        installed.update({"torch": "2.6.0+rocm6.4", "numpy": "2.0.0"})    # someone's own PyTorch, and another numpy
+        _missing, different = base.package_state(packages, installed)
+        self.assertEqual([item["key"] for item, _have in base.build_switch(different, cpu, gpu)], ["torchaudio"])
 
     def test_a_pip_failure_says_to_fix_it_and_run_again(self):
         with self.assertRaisesRegex(ic.InstallError, "pip stopped with exit code 3.*run the installer again"):
@@ -785,6 +810,158 @@ class RunTests(unittest.TestCase):
             status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 130)
         self.assertIn("Run the installer again to continue", err)
+
+
+ORIGINAL_MANIFEST = json.loads((ROOT / ic.ORIGINAL_MANIFEST).read_text("utf-8"))
+
+
+class OriginalTests(unittest.TestCase):
+    """--original: Chatterbox 500M and Chatterbox Voice Conversion, from the ResembleAI/chatterbox checkpoint."""
+
+    def test_the_file_list_pins_the_revision_both_engines_use_and_holds_what_they_load(self):
+        for engine in ("orig", "chatterbox-vc"):
+            self.assertEqual((ORIGINAL_MANIFEST["repo"], ORIGINAL_MANIFEST["revision"]),
+                             (CATALOG[engine]["checkpoint"], CATALOG[engine]["local_revision"]))
+        self.assertEqual(chatterbox_support.original_snapshot_dir(ROOT), base.snapshot_dir(ROOT, ORIGINAL_MANIFEST))
+        paths = [item["path"] for item in ORIGINAL_MANIFEST["files"]]
+        self.assertEqual(sorted(paths), sorted([*chatterbox_support.ORIGINAL_FILES, "README.md"]))
+        self.assertLessEqual(set(chatterbox_support.VC_FILES), set(chatterbox_support.ORIGINAL_FILES))
+        for item in ORIGINAL_MANIFEST["files"]:
+            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$", item["path"])
+        self.assertFalse({item["path"] for item in ORIGINAL_MANIFEST["not_fetched"]} & set(paths))
+        self.assertTrue(all(item["why"] for item in ORIGINAL_MANIFEST["not_fetched"]))
+        self.assertTrue(3.1e9 < sum(item["size"] for item in ORIGINAL_MANIFEST["files"]) < 3.3e9)
+        self.assertEqual(ORIGINAL_MANIFEST["license"], "MIT")
+        # The speaker encoder is the same file as Turbo's.
+        turbo = {item["path"]: item for item in REAL_MANIFEST["files"]}
+        original = {item["path"]: item for item in ORIGINAL_MANIFEST["files"]}
+        self.assertEqual(original["ve.safetensors"]["sha256"], turbo["ve.safetensors"]["sha256"])
+
+    def test_the_plan_names_both_models_their_files_and_licence(self):
+        packages = ic.pinned_packages(ROOT)
+        text = " ".join(ic.plan_text(ORIGINAL_MANIFEST, packages, 0, ORIGINAL_MANIFEST["files"], environment_exists=True,
+                                     checkpoint_only=False, original=True).split())
+        for part in ("Chatterbox 500M and Voice Conversion on the CPU", "share .venv-chatterbox with Chatterbox Turbo",
+                     "all 73 are already installed in .venv-chatterbox", "revision 5bb1f6e",
+                     "huggingface.co/ResembleAI/chatterbox:", "the 2.1 GB language model",
+                     "the 1.1 GB speech decoder that Voice Conversion uses too", "3.2 GB to download",
+                     "catalog/chatterbox_snapshot.json", "then Voice Conversion says that clip again",
+                     "Chatterbox 500M weights are MIT", "Perth watermark"):
+            self.assertIn(part, text)
+        self.assertNotIn("voice match", text)
+
+    def test_the_check_script_speaks_then_converts_the_clip_with_itself_as_the_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lab = Path(folder) / "lab"
+            (lab / "chatterbox").mkdir(parents=True)
+            (lab / "torch.py").write_text("__version__ = '2.6.0+cpu'\n", "utf-8")
+            (lab / "common.py").write_text("import numpy as np\ndef to_numpy(audio):\n    return np.asarray(audio, 'float32').reshape(-1)\n",
+                                           "utf-8")
+            (lab / "chatterbox_support.py").write_text("def original_snapshot_dir(root):\n    return root / 'snapshot'\n", "utf-8")
+            (lab / "chatterbox" / "__init__.py").write_text("", "utf-8")
+            (lab / "chatterbox" / "vc.py").write_text(
+                "import numpy as np\nimport soundfile\n"
+                "class ChatterboxVC:\n"
+                "    sr = 24000\n"
+                "    @classmethod\n"
+                "    def from_local(cls, folder, device):\n"
+                "        assert folder.name == 'snapshot' and device == 'cpu'\n"
+                "        return cls()\n"
+                "    def generate(self, audio, target_voice_path=None):\n"
+                "        assert audio == target_voice_path\n"
+                "        data, rate = soundfile.read(audio, dtype='float32')\n"
+                "        return data[None, :]\n", "utf-8")
+            (lab / "engines.py").write_text(
+                "import numpy as np\n"
+                "class ChatterboxOriginal:\n"
+                "    def __init__(self, device):\n"
+                "        assert device == 'cpu'\n"
+                "    def speak(self, text):\n"
+                "        t = np.arange(24000 * 3) / 24000\n"
+                "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 1.5}\n", "utf-8")
+            (lab / "engine_checks.py").write_text(
+                "def smoke_request(engine):\n    assert engine == 'orig'\n    return {'engine': engine, 'text': 'check'}\n"
+                "def audible(samples, rate):\n    return None\n", "utf-8")
+            wav, converted = Path(folder) / "original.wav", Path(folder) / "vc.wav"
+            done = subprocess.run([sys.executable, "-c", ic.ORIGINAL_CHECK, str(lab), str(wav), str(converted), "cpu"],
+                                  capture_output=True, text=True, timeout=120)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            result = base.last_json_line(done.stdout)
+            self.assertEqual((result["problem"], result["total_seconds"], result["torch"]), (None, 1.5, "2.6.0+cpu"))
+            self.assertAlmostEqual(result["audio_seconds"], 3.0)
+            self.assertAlmostEqual(result["vc_audio_seconds"], 3.0)
+            self.assertEqual(sf.info(str(converted)).frames, 3 * 24000)
+        import engines
+        from chatterbox_support import original_snapshot_dir    # the names the script imports exist in the lab
+        self.assertTrue(hasattr(engines, "ChatterboxOriginal") and callable(original_snapshot_dir))
+        compile(ic.ORIGINAL_CHECK, "<original check>", "exec")
+
+    def test_a_failed_check_names_both_models(self):
+        runner = lambda command, **kwargs: subprocess.CompletedProcess(command, 1, "", "boom")  # noqa: E731
+        with tempfile.TemporaryDirectory() as folder, \
+                self.assertRaisesRegex(ic.InstallError, "Chatterbox 500M or Voice Conversion did not load or speak"):
+            ic.run_original_check(folder, runner=runner)
+
+    def test_the_whole_install_fetches_the_original_files_and_writes_its_own_receipt(self):
+        server = FileServer()
+        self.addCleanup(server.close)
+        with tempfile.TemporaryDirectory(prefix="voice-lab-chatterbox-") as folder:
+            root = Path(folder)
+            contents = {name: noise(1_500 + index * 41, index + 50) for index, name in enumerate(chatterbox_support.ORIGINAL_FILES)}
+            contents["README.md"] = b"---\nlicense: mit\n---\n"
+            manifest = {**{key: ORIGINAL_MANIFEST[key] for key in ("schema", "repo", "revision", "license", "license_source")},
+                        "files": [{"path": path, "size": len(data), "sha256": sha(data)} for path, data in contents.items()]}
+            (root / "catalog").mkdir()
+            (root / "requirements").mkdir()
+            (root / ic.ORIGINAL_MANIFEST).write_text(json.dumps(manifest), "utf-8")
+            (root / ic.LOCK).write_text(FakeLab.LOCK, "utf-8")
+            prefix = f"/{manifest['repo']}/resolve/{manifest['revision']}/"
+            server.files = {prefix + path: data for path, data in contents.items()}
+            installed = {"pip": "25.0.1", **{item["key"]: item["version"] for item in base.read_lock(root / ic.LOCK)}}
+            python = ic.environment_python(root)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"")
+            out_dir = root / "out" / "chatterbox"
+            check = {"problem": None, "load_seconds": 20.0, "total_seconds": 7.5, "audio_seconds": 2.5, "vc_load_seconds": 4.0,
+                     "vc_seconds": 3.0, "vc_audio_seconds": 2.5, "torch": "2.6.0+cpu",
+                     "wav": out_dir / "install-original.wav", "converted": out_dir / "install-vc.wav"}
+            calls = []
+
+            def original_check(root, **kwargs):
+                calls.append(("original", kwargs))
+                out_dir.mkdir(parents=True, exist_ok=True)
+                return check
+
+            patches = ((ic, "ROOT", root), (base, "HOST", server.address), (ic, "environment_versions", lambda root: installed),
+                       (ic, "run_original_check", original_check),
+                       (ic, "run_speech_check", lambda *a, **k: self.fail("Turbo's check ran")),
+                       (ic, "interpreter_problems", lambda root: []), (ic, "long_path_problems", lambda root, manifest: []),
+                       (base, "space_problems", lambda root, need: []))
+            with contextlib.ExitStack() as stack:
+                for owner, name, value in patches:
+                    stack.enter_context(mock.patch.object(owner, name, value))
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    status = ic.main(["--original", "--yes"])
+            self.assertEqual((status, err.getvalue()), (0, ""))
+            text = out.getvalue()
+            self.assertIn("Chatterbox 500M and Voice Conversion on the CPU", text)
+            self.assertIn("Chatterbox 500M and Voice Conversion are installed. Chatterbox 500M loaded in 20 s and spoke 2.5 s in "
+                          "its built-in voice in 7.5 s; Voice Conversion said it again in 3.0 s.", text)
+            self.assertIn("out\\chatterbox\\install-original.wav and out\\chatterbox\\install-vc.wav", text)
+            self.assertEqual(calls, [("original", {"device": "cpu"})])
+            snapshot = base.snapshot_dir(root, manifest)
+            self.assertEqual((snapshot / "t3_cfg.safetensors").read_bytes(), contents["t3_cfg.safetensors"])
+            receipt = json.loads((out_dir / "installation-original.json").read_text("utf-8"))
+            self.assertEqual((receipt["repo"], receipt["revision"]), (manifest["repo"], manifest["revision"]))
+            self.assertEqual(receipt["speech_check"], {key: check[key] for key in (
+                "load_seconds", "total_seconds", "audio_seconds", "vc_load_seconds", "vc_seconds", "vc_audio_seconds")})
+            self.assertNotIn("voice_match", receipt)
+            self.assertFalse((out_dir / "installation.json").exists())    # Turbo's receipt is not touched
+            (root / ".venv-chatterbox" / "Lib" / "site-packages" / "chatterbox_tts-0.1.7.dist-info").mkdir(parents=True)
+            for engine in ("orig", "chatterbox-vc"):
+                with self.subTest(engine=engine):
+                    self.assertEqual(engine_checks.installation(CATALOG[engine], root)["missing"], [])
 
 
 class ManifestTests(unittest.TestCase):

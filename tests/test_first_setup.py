@@ -192,21 +192,26 @@ class FirstSetupTests(unittest.TestCase):
 
     RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 80)}
 
-    def test_on_an_rtx_50_card_kokoro_is_offered_the_card_and_chatterbox_gets_its_cpu_build(self):
+    def test_on_an_rtx_50_card_kokoro_and_chatterbox_are_both_offered_the_card(self):
         self.answers = ["2", "yes", "yes"]
         status, out = self.run_setup(nvidia=True, cards=[self.RTX_5070])
         self.assertEqual(status, 0)
-        self.assertIn("Kokoro can run on the graphics card", out)
-        self.assertIn("(about 2 GB)", out)
-        self.assertIn("has no code for the NVIDIA GeForce RTX 5070 Laptop GPU (compute capability 12.0)", out)
-        self.assertIn("So setup installs Chatterbox Turbo's CPU build, which runs on the processor.", out)
-        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_kokoro.py"])
+        self.assertIn("Kokoro and Chatterbox Turbo can run on the graphics card", out)
+        self.assertIn("(about 2 GB each)", out)
+        self.assertNotIn("has no code for", out)
+        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_chatterbox.py", "install_kokoro.py"])
         self.assertEqual(self.installers.runs("--yes"), ["install_kokoro.py", "install_phonon.py", "install_chatterbox.py"])
 
     def test_the_nvidia_option_gives_each_model_the_build_that_runs_on_this_card(self):
         self.run_setup("--models", "all", "--yes", "--nvidia", cards=[self.RTX_5070])
-        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_kokoro.py"])
+        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_chatterbox.py", "install_kokoro.py"])
         self.assertEqual(self.questions, [])
+        self.installers.commands.clear()
+        gtx_1080 = {"name": "NVIDIA GeForce GTX 1080", "capability": (6, 1), "driver": (581, 80)}
+        status, out = self.run_setup("--models", "all", "--yes", "--nvidia", cards=[gtx_1080])
+        self.assertEqual(self.installers.runs("--nvidia"), [])
+        self.assertIn("has no code for the NVIDIA GeForce GTX 1080 (compute capability 6.1)", out)
+        self.assertIn("So setup installs Chatterbox Turbo's CPU build, which runs on the processor.", out)
 
     def test_a_driver_too_old_for_any_nvidia_build_asks_nothing_and_says_how_to_switch_later(self):
         old_driver = {**self.RTX_5070, "driver": (572, 83)}
@@ -251,7 +256,9 @@ class FirstSetupTests(unittest.TestCase):
             with self.subTest(model=name):
                 self.assertEqual(engine_install.INSTALLERS[model["engine"]], model["script"])
                 self.assertIn(model["engine"], engine_checks.GUIDED_INSTALLERS)
-        self.assertEqual({model["engine"] for model in fs.MODELS.values()}, set(engine_checks.GUIDED_INSTALLERS))
+        # setup.bat offers the starter models; every model it offers has a guided installer, and the others are installed
+        # from their cards on Models & features.
+        self.assertLessEqual({model["engine"] for model in fs.MODELS.values()}, set(engine_checks.GUIDED_INSTALLERS))
 
 
 class SetupBatchTests(unittest.TestCase):

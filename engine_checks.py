@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from chatterbox_support import TURBO_ENGINE_ID, TURBO_FILES
+from chatterbox_support import ORIGINAL_ENGINE_ID, ORIGINAL_FILES, TURBO_ENGINE_ID, TURBO_FILES, VC_ENGINE_ID, VC_FILES
 from kokoro_support import discover_kokoro_voices
 from phonon_support import PHONON_ENGINE_ID, VOICE_CATALOG, default_voice, voice_names
 
@@ -31,15 +31,17 @@ TOP_LEVEL_CACHE = {"voxcpm2"}
 # Source and overlay directories that the VoxCPM2 worker adds to its import path.
 EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src", ".venv-fqwen/Lib/site-packages")}
 DRAMA_RECEIPT = "out/drama3/installation.json"
-# A launcher in the lab folder that puts an engine's files in place. installation() names it while files are missing.
-GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat"}
+# A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
+# installation() names it while files are missing.
+GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
+                     ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), and the three Chatterbox engines share
 # .venv-chatterbox; each installer makes its environment before it installs anything into it.
 REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
-                     **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, "orig", "chatterbox-vc")}}
-# Files an engine's snapshot must hold, beyond having a weight file: Turbo cannot load with any of these missing.
-REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES}
+                     **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)}}
+# Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
+REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
@@ -334,13 +336,27 @@ def _state(integrated, installed, task_only, current, outdated=False):
     return "usable" if current.get("status") == "passed" else "check_failed"
 
 
-def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine_fingerprint, ram_needs=None, ram=None):
+def current_check(checks, device):
+    """The stored check for the device an engine runs on now. A check asked of the graphics card that ran on the CPU (a CPU
+    build of PyTorch falls back so) is a check on the CPU, as the ones made before each model had its own switch were."""
+    current = checks.get(device)
+    if current is None and device == "cpu":
+        fallen = checks.get("cuda")
+        if fallen is not None and fallen.get("ran_on") == "cpu":
+            return fallen
+    return current
+
+
+def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine_fingerprint, ram_needs=None, ram=None,
+                   device_of=None):
     """One row per catalog engine: integrated, installed and usable on this device, plus the speed table.
 
     A stored check counts only while its fingerprint matches the engine's current one. Checks made before fingerprints
     were recorded have none, so they read as out of date until the engine is checked again. `ram_needs` maps an engine to the
     free RAM in GB the Lab wants before it loads it, and `ram` is this computer's total and free RAM; the Models page sets one
-    beside the other."""
+    beside the other. `device_of(entry, installed)` gives an engine's GPU/CPU switch (engine_devices.device_facts): the row's
+    `device` is then the one its worker is asked for, and its check is the one made there; without it every engine runs on
+    the service's device."""
     ram_needs = ram_needs or {}
     rows = []
     for entry in entries.values():
@@ -350,15 +366,20 @@ def status_payload(entries, *, device, busy, store, probe, fingerprint_of=engine
         install = probe(entry) if integrated else {"installed": False, "missing": [],
                                                     "environment": entry.get("runtime", {}).get("python"),
                                                     "checkpoint": None}
+        facts = device_of(entry, install["installed"]) if device_of is not None and integrated else None
+        engine_device = facts["device"] if facts else device
         checks = store.checks_for(entry["id"]) if store is not None else {}
-        current = checks.get(device)
+        current = current_check(checks, engine_device)
         outdated = (current is not None and integrated and install["installed"] and not task_only
                     and current.get("fingerprint") != fingerprint_of(entry))
-        rows.append({"id": entry["id"], "name": entry.get("name", entry["id"]), "integrated": integrated,
-                     "task_only": task_only, "installation": install,
-                     "state": _state(integrated, install["installed"], task_only, current, outdated),
-                     "check": current, "check_outdated": outdated, "checks": checks,
-                     "min_free_ram_gb": ram_needs.get(entry["id"])})
+        row = {"id": entry["id"], "name": entry.get("name", entry["id"]), "integrated": integrated,
+               "task_only": task_only, "installation": install,
+               "state": _state(integrated, install["installed"], task_only, current, outdated),
+               "check": current, "check_outdated": outdated, "checks": checks,
+               "min_free_ram_gb": ram_needs.get(entry["id"]), "device": engine_device}
+        if facts:
+            row.update(switch=facts["switch"], device_choice=facts["choice"], gpu=facts["gpu"])
+        rows.append(row)
     return {"device": device, "busy": bool(busy), "engines": rows, "ram": ram,
             "speed": store.speed_rows() if store is not None else [],
             "store_error": store.write_error if store is not None else None}

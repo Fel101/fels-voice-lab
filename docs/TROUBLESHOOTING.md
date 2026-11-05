@@ -88,19 +88,18 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 an NVIDIA driver, or run `setup-kokoro.bat --nvidia` and `setup-chatterbox.bat --nvidia`. Nobody has tried this on an NVIDIA
 card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome.
 
-- Kokoro's build is CUDA 13.0: a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an NVIDIA driver of version
-  580 or later.
-- Chatterbox's is CUDA 12.6, the newest that the PyTorch 2.6 it needs comes in: cards up to the RTX 40 series. It does not run
-  on RTX 50 cards, so on one `setup.bat` gives Chatterbox its CPU build and Kokoro its NVIDIA build, and
-  `setup-chatterbox.bat --nvidia` refuses before it downloads anything.
-- **"needs NVIDIA driver 580 or later".** Kokoro's CUDA 13.0 build needs a 2025 driver. Update it from nvidia.com or the
-  NVIDIA app, then run `setup-kokoro.bat --nvidia` (delete `.venv-kokoro` first if Kokoro is already installed on the CPU).
-  The installers read the card and the driver with NVIDIA's `nvidia-smi`; when it cannot say, they go by the driver version
-  Windows lists.
-- To switch a model between its CPU and GPU builds, delete its folder (`.venv-kokoro` or `.venv-chatterbox`) and run its
-  installer with or without `--nvidia`. The model files stay.
-- The service uses the card when it finds an NVIDIA driver. A model whose own PyTorch is the CPU build still runs, on the CPU,
-  and its card on Models & features says so. To keep everything on the CPU, put `{"device": "cpu"}` in `runtime.local.json`.
+- Both builds are CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an NVIDIA
+  driver of version 580 or later. On an older card, setup gives the models their CPU builds.
+- **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
+  build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
+- **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA
+  app, restart the Lab, and press **Install GPU build** on the model's card (or run its launcher with `--nvidia`, which
+  replaces a CPU build of PyTorch in place). The installers read the card and the driver with NVIDIA's `nvidia-smi`; when it
+  cannot say, they go by the driver version Windows lists.
+- Going back from a GPU build to the CPU build takes deleting the model's folder (`.venv-kokoro` or `.venv-chatterbox`) and
+  installing it again; the model files stay. The switch alone keeps a GPU build on the CPU.
+- The service uses the card when it finds an NVIDIA driver. To keep everything on the CPU, put `{"device": "cpu"}` in
+  `runtime.local.json`.
 
 **AMD.** The Lab was built on an AMD card with ROCm builds of PyTorch, installed by hand into the models' environments; there is
 no guided installer for them. If the service does not pick the card by itself, put `{"device": "cuda"}` in

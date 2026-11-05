@@ -97,15 +97,26 @@ pre { white-space:pre-wrap; }
 .scene-line .row { margin-bottom:0; }
 .scene-line textarea { background:var(--card); }
 .model-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:14px; margin:22px 0; }
-.model-card { min-width:0; overflow-wrap:anywhere; border:1px solid var(--line); border-radius:10px; padding:18px; }
+.model-card { min-width:0; overflow-wrap:anywhere; border:1px solid var(--line); border-radius:10px; padding:18px; display:flex; flex-direction:column; }
 .model-card h3 { margin:0 0 10px; }
 .model-card p { margin:8px 0; }
 .engine-state { font-weight:600; }
-.model-card.wide { grid-column:1 / -1; }
-.model-card .warn, #engineHint { color:var(--err); }
-.install-box p { max-width:80ch; }
-.install-box { margin:10px 0; } .install-box button { margin:4px 8px 4px 0; }
-.install-log { margin:10px 0; padding:8px 10px; max-height:12em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
+.model-card .warn, #engineHint, .install-dialog .warn { color:var(--err); }
+/* The buttons sit at the foot of every card, so a card in a taller row keeps them in line with its neighbours. */
+.model-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:8px; }
+.device-switch { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:10px 0 2px; }
+.device-choices { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+.device-choices label { position:relative; padding:3px 14px; font-size:.85rem; font-weight:600; cursor:pointer; color:var(--muted); }
+.device-choices label + label { border-left:1px solid var(--line); }
+.device-choices input { position:absolute; inset:0; margin:0; opacity:0; cursor:pointer; }
+.device-choices label.on { background:var(--accent); color:var(--bg); }
+.device-choices label.off { opacity:.45; } .device-choices label.off input { cursor:not-allowed; }
+.device-choices label:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
+.install-dialog { width:min(760px,calc(100vw - 32px)); max-height:calc(100vh - 48px); padding:22px 24px; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--fg); }
+.install-dialog::backdrop { background:rgba(0,0,0,.45); }
+.install-dialog h3 { margin:0 0 8px; font-size:1.1rem; }
+.install-plan { max-height:min(55vh,520px); overflow:auto; } .install-plan p { max-width:80ch; }
+.install-log { margin:12px 0; padding:8px 10px; height:16em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
 .table-wrap { overflow-x:auto; margin:12px 0; }
 .facts { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 18px; margin:14px 0; }
 .facts dt { color:var(--muted); } .facts dd { margin:0; overflow-wrap:anywhere; }
@@ -537,7 +548,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
 <section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Each card is a voice model. Press Install on a model the app can install itself, and Test to check that an installed model speaks on this computer: the test loads it and speaks one short sentence. Models the app cannot install yet are listed under More models, with what each one needs.</p>
 <details><summary>What these words mean</summary><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device. An integrated model does not mean every upstream feature has been exposed or tested. The RAM on a card is the free memory the Lab wants before it loads that model.</p></details>
-<p class="meta" id="modelsRam"></p><div id="modelOverview" class="model-grid"></div>
+<p class="meta" id="modelsRam"></p><p class="meta" id="modelsDevice"></p><div id="modelOverview" class="model-grid"></div>
+<dialog id="installDialog" class="install-dialog" aria-labelledby="installTitle"><h3 id="installTitle"></h3><p class="meta" id="installState" aria-live="polite"></p><div id="installPlan" class="install-plan"></div><pre id="installLog" class="install-log" hidden></pre><div class="cast-actions"><button id="installGo" type="button" class="go" hidden>Install now</button><button id="installClose" type="button">Cancel</button></div></dialog>
 <details id="modelsMoreBox" hidden><summary id="modelsMoreSummary">More models</summary><p class="meta">The app cannot install these yet. docs/SETUP.md (Model runtimes) says what each one needs.</p><div id="modelMore" class="model-grid"></div></details>
 <h3>Measured speed on this service</h3><p class="meta">Real-time factor is seconds to generate divided by seconds of audio, so below 1 is faster than real time. Rows come from the clips and checks this service ran on each device. Precision is not measured; this table records speed only.</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Device</th><th scope="col">Clips</th><th scope="col">Median real-time factor</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>

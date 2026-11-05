@@ -131,10 +131,10 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
               "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
               "a take retires its edits, and purging it deletes them.")
 
-ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer (Kokoro, "
-                        "Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & "
-                        "features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the "
-                        "lab folder.")
+ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer, `error` begins "
+                        "by saying where to install it: Install on its Models & features card, or its launcher in the lab "
+                        "folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or "
+                        "`setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion).")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
@@ -150,15 +150,20 @@ ROUTES = [
             "`integration.service_api` is true answer them."),
     R("GET", "/api/engines/status", "Service",
       "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
-      reply="`device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, "
-            "`check`, `check_outdated`, `min_free_ram_gb`), `ram`, `install`, `speed` and `store_error`. `installation` holds "
-            "`installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an "
-            "engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. "
-            "`min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and "
-            "`ram` is this computer's `total_gb` and `free_gb`. `install` is the latest install started from the Models page, "
-            "or `null` when none has run since the service started: `engine`, `name`, `state` (`running`, `finished` or "
-            "`failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of "
-            "it, a path under the lab folder)."),
+      reply="`device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: "
+            "`id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, "
+            "for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. "
+            "`installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files "
+            "are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs "
+            "it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), "
+            "and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, "
+            "and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), "
+            "`device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU "
+            "can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or "
+            "`null`) and `install` (Install puts in its GPU build). `install` is the latest install started from the Models "
+            "page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), "
+            "`state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end "
+            "of its output) and `log` (all of it, a path under the lab folder)."),
     R("POST", "/api/engines/{engine_id}/check", "Service",
       "Check that one engine can speak now: confirm its files, load it and speak one short clip.",
       body_kind="none",
@@ -170,14 +175,26 @@ ROUTES = [
       "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the "
       "installer.",
       body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
-                                    "Nothing is changed. Default false, which starts the install."),),
-      reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) "
-            "and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in "
-            "`GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's "
-            "launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
-      errors=((400, "The engine is unknown, has no installer in the app, or is installed already; or `dry_run` is not true "
-                    "or false."),
+                                    "Nothing is changed. Default false, which starts the install."),
+            F("nvidia", "boolean", "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). "
+                                   "An engine installed with the CPU build of PyTorch can get it afterwards. Default false.")),
+      reply="With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or "
+            "numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that "
+            "started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script "
+            "the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
+      errors=((400, "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or "
+                    "`dry_run` or `nvidia` is not true or false."),
               (409, "An install is already running, or the GPU worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/device", "Service",
+      "Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.",
+      body=(F("device", "string", "`gpu` or `cpu`.", required=True),),
+      reply="`device`: `engine`, `choice`, `device` (the one its worker is now asked for, `cuda` or `cpu`) and `unloaded` "
+            "(true when the engine was loaded, so its next request loads it again). The choice is kept in "
+            "`data/engines/devices.json`. An engine whose environment holds the CPU build of PyTorch runs on the CPU whatever "
+            "is chosen, until its GPU build is installed.",
+      errors=((400, "The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or "
+                    "`gpu` was asked of a service that runs on the CPU."),
+              (409, "The GPU worker is busy."))),
     R("POST", "/api/load", "Service", "Load an engine into memory ahead of its first use.",
       body=(F("engine", "string", "An engine id. Default `kokoro`."),
             F("profile", "string", "Breeze only: its decode profile. Default `eager`.")),

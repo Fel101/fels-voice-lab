@@ -196,11 +196,12 @@ class InstallationTests(TempTree):
                     self.assertNotIn("installer", installation(entry, self.root))
 
     def test_every_launcher_named_is_in_the_lab_folder_and_belongs_to_an_integrated_engine(self):
-        self.assertEqual(set(engine_checks.GUIDED_INSTALLERS), {"kokoro", "phonon-31m-en", "turbo"})
+        self.assertLessEqual({"kokoro", "phonon-31m-en", "turbo"}, set(engine_checks.GUIDED_INSTALLERS))
         for engine, launcher in engine_checks.GUIDED_INSTALLERS.items():
             with self.subTest(engine=engine):
                 self.assertIs(CATALOG[engine]["integration"].get("service_api"), True)
-                self.assertTrue((ROOT / launcher).is_file(), f"{launcher} is not in the lab folder")
+                command = launcher.split()[0]    # a launcher may take the arguments that choose a checkpoint
+                self.assertTrue((ROOT / command).is_file(), f"{command} is not in the lab folder")
 
     def test_voxcpm_reads_the_top_level_cache_and_needs_its_source_and_overlay(self):
         self.environment("voxcpm2")
@@ -491,7 +492,11 @@ class StatusPayloadTests(unittest.TestCase):
         self.assertEqual(rows["kokoro"]["installation"]["installer"], "setup-kokoro.bat")
         self.assertEqual(rows["turbo"]["installation"]["installer"], "setup-chatterbox.bat")
         self.assertEqual(rows["orig"]["state"], "not_installed")
-        self.assertNotIn("installer", rows["orig"]["installation"])
+        self.assertEqual(rows["orig"]["installation"]["installer"], "setup-chatterbox.bat --original")
+        self.assertEqual(rows["chatterbox-vc"]["installation"]["installer"], "setup-chatterbox.bat --original")
+        with mock.patch.dict(engine_checks.GUIDED_INSTALLERS, {"kokoro": "setup-kokoro.bat"}, clear=True):
+            rows, _ = self.rows("cpu", probe=lambda entry: installation(entry, empty_lab))
+        self.assertNotIn("installer", rows["orig"]["installation"])    # an engine without a launcher names none
 
     def test_conversion_is_reported_as_a_task_not_a_speech_check(self):
         rows, _ = self.rows("cpu")
@@ -709,6 +714,11 @@ class FailedLoadTests(TempTree):
 
     def test_an_engine_without_a_launcher_leads_with_the_setup_guide_until_it_is_installed(self):
         error = WorkerRequestError("Worker load failed: ModuleNotFoundError: No module named 'chatterbox'. Log: orig.log")
+        # Every engine has a launcher now; one that has none is told about the setup guide instead.
+        without = {key: value for key, value in engine_checks.GUIDED_INSTALLERS.items() if key != "orig"}
+        patcher = mock.patch.dict(engine_checks.GUIDED_INSTALLERS, without, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         with self.assertRaises(WorkerRequestError) as raised:
             self.failing_pool(error).load("orig")
         self.assertEqual(str(raised.exception), f"{engine_checks.install_pointer(CATALOG['orig'], missing_probe)} {error}")

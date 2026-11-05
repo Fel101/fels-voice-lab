@@ -686,6 +686,24 @@ class PlanTests(unittest.TestCase):
         self.assertIn("and 1 English voice.", self.flat(self.plan(["bm_george"])))
         self.assertIn("and 1 voice.", self.flat(self.plan(["ef_dora"])))
 
+    def test_the_nvidia_plan_for_a_cpu_install_replaces_pytorch_and_nothing_else(self):
+        files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, ["supported"]))
+        packages = ik.pinned_packages(ROOT, nvidia=True)
+        cpu = ik.read_lock(ROOT / ik.LOCK)
+        installed = {item["key"]: item["version"] for item in cpu}
+        _missing, different = ik.package_state(packages, installed)
+        switching = ik.build_switch(different, cpu, ik.read_lock(ROOT / ik.NVIDIA_LOCK))
+        self.assertEqual([(item["key"], have) for item, have in switching], [("torch", "2.12.0")])
+        text = self.flat(ik.plan_text(REAL_MANIFEST, packages, 1, files, [], checkpoint_only=False, environment_exists=True,
+                                      nvidia=True, switching=switching))
+        self.assertIn("Kokoro is already installed in .venv-kokoro, and its CPU build of PyTorch is replaced by the CUDA 13.0 build "
+                      "of PyTorch for NVIDIA graphics cards (not yet tried on one) (torch 2.12.0 becomes 2.12.0+cu130). About "
+                      f"{ik.mb_text(ik.NVIDIA_EXTRA_DOWNLOAD_MB)} to download", text)
+        installed["spacy"] = "3.0.0"    # a package of someone's own: it still stops the installer
+        _missing, different = ik.package_state(packages, installed)
+        conflicts = [pair for pair in different if pair not in ik.build_switch(different, cpu, ik.read_lock(ROOT / ik.NVIDIA_LOCK))]
+        self.assertEqual([item["key"] for item, _have in conflicts], ["spacy"])
+
     def test_the_nvidia_plan_names_the_cuda_build_its_size_and_that_it_is_untried(self):
         text = self.flat(self.plan(nvidia=True))
         for part in ("Kokoro 82M on an NVIDIA graphics card", "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)",

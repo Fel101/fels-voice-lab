@@ -136,7 +136,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`device`, `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).",
+            "description": "`device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).",
             "content": {
               "application/json": {
                 "schema": {
@@ -225,6 +225,10 @@
                   "dry_run": {
                     "type": "boolean",
                     "description": "Only read the plan: what the installer would do and whether this computer can take it. Nothing is changed. Default false, which starts the install."
+                  },
+                  "nvidia": {
+                    "type": "boolean",
+                    "description": "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. Default false."
                   }
                 }
               }
@@ -246,7 +250,7 @@
         ],
         "responses": {
           "200": {
-            "description": "With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
+            "description": "With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
             "content": {
               "application/json": {
                 "schema": {
@@ -256,7 +260,7 @@
             }
           },
           "400": {
-            "description": "The engine is unknown, has no installer in the app, or is installed already; or `dry_run` is not true or false.",
+            "description": "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or `dry_run` or `nvidia` is not true or false.",
             "content": {
               "application/json": {
                 "schema": {
@@ -267,6 +271,82 @@
           },
           "409": {
             "description": "An install is already running, or the GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/engines/{engine_id}/device": {
+      "post": {
+        "operationId": "post_api_engines_engine_id_device",
+        "summary": "Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.",
+        "tags": [
+          "Service"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "device": {
+                    "type": "string",
+                    "description": "`gpu` or `cpu`."
+                  }
+                },
+                "required": [
+                  "device"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "engine_id",
+            "in": "path",
+            "required": true,
+            "description": "An engine id from `GET /api/catalog`.",
+            "example": "kokoro",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,80}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`device`: `engine`, `choice`, `device` (the one its worker is now asked for, `cuda` or `cpu`) and `unloaded` (true when the engine was loaded, so its next request loads it again). The choice is kept in `data/engines/devices.json`. An engine whose environment holds the CPU build of PyTorch runs on the CPU whatever is chosen, until its GPU build is installed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or `gpu` was asked of a service that runs on the CPU.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The GPU worker is busy.",
             "content": {
               "application/json": {
                 "schema": {
@@ -330,7 +410,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion).",
             "content": {
               "application/json": {
                 "schema": {
@@ -663,7 +743,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer (Kokoro, Phonon or Chatterbox Turbo), `error` begins by saying where to install it: Install on its Models & features card, or its launcher (`setup-kokoro.bat`, `setup-phonon.bat` or `setup-chatterbox.bat`) in the lab folder.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo) or `setup-chatterbox.bat --original` (Chatterbox 500M and Voice Conversion).",
             "content": {
               "application/json": {
                 "schema": {

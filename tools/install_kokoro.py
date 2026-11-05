@@ -397,6 +397,21 @@ def write_swapped_lock(root, lock, replacement_lock, destination):
     return destination
 
 
+def build_switch(different, cpu_packages, replacements):
+    """The (package, installed version) pairs that --nvidia replaces in an environment that holds the CPU build: the packages
+    the GPU list swaps, installed at the CPU list's version. Any other package at another version still stops the installer,
+    so an environment someone filled with their own packages is never changed."""
+    swapped = {item["key"] for item in replacements}
+    cpu = {item["key"]: item["version"] for item in cpu_packages}
+    return [(item, have) for item, have in different if item["key"] in swapped and have == cpu.get(item["key"])]
+
+
+def switch_text(switching, build):
+    """The plan's sentence for an environment whose CPU build of PyTorch is replaced by a GPU build."""
+    names = ", ".join(f"{item['name']} {have} becomes {item['version']}" for item, have in switching)
+    return f"its CPU build of PyTorch is replaced by {build} ({names})"
+
+
 def package_state(packages, installed):
     """The packages that are not installed, and (package, installed version) pairs for those at another version."""
     missing = [item for item in packages if item["key"] not in installed]
@@ -461,7 +476,8 @@ def packages_disk_mb(nvidia):
     return PACKAGES_DISK_MB + (NVIDIA_EXTRA_DISK_MB if nvidia else 0)
 
 
-def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, environment_exists=False, nvidia=False):
+def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, environment_exists=False, nvidia=False,
+              switching=()):
     """What the installer is about to do, written for the person who ran it."""
     voices = [item for item in files if item["path"].startswith("voices/")]
     checkpoint = max(files, key=lambda item: item["size"])
@@ -478,6 +494,10 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
         first = f"Python packages: the ones in {ENVIRONMENT} are left alone (--checkpoint-only)."
     elif not todo:
         first = f"Python packages: all {len(packages)} are already installed in {ENVIRONMENT}."
+    elif switching and todo == len(switching):
+        first = (f"Python packages: Kokoro is already installed in {ENVIRONMENT}, and {switch_text(switching, build)}. "
+                 f"About {mb_text(NVIDIA_EXTRA_DOWNLOAD_MB)} to download and {mb_text(NVIDIA_EXTRA_DISK_MB)} more on disk. pip "
+                 f"checks every file against a SHA-256 written in {lists}.")
     else:
         made = (f"{ENVIRONMENT} is already here." if environment_exists else
                 f"First a Python environment of its own, {ENVIRONMENT}, made from the same Python 3.12 as .venv, so that "
@@ -697,9 +717,14 @@ def run(args, *, say=say_now, ask=input, interactive=None):
     exists = environment_python(root).is_file()
     installed = environment_versions(root) if exists else {}
     missing, different = package_state(packages, installed)
+    # --nvidia on a Kokoro installed for the CPU replaces its PyTorch; any other difference still stops the installer.
+    switching = build_switch(different, read_lock(root / LOCK), read_lock(root / NVIDIA_LOCK)) if nvidia else []
+    conflicts = [pair for pair in different if pair not in switching]
     pending = pending_files(root, manifest, files)
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     packages_need = (packages_download_mb(nvidia) + packages_disk_mb(nvidia)) * 10**6 if todo else 0
+    if switching and todo == len(switching):
+        packages_need = (NVIDIA_EXTRA_DOWNLOAD_MB + NVIDIA_EXTRA_DISK_MB) * 10**6
     need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if nvidia:
@@ -707,10 +732,10 @@ def run(args, *, say=say_now, ask=input, interactive=None):
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root, installed)
     elif todo:
-        problems += package_problems(different, has_pip=not exists or "pip" in installed) + long_path_problems(root)
+        problems += package_problems(conflicts, has_pip=not exists or "pip" in installed) + long_path_problems(root)
     problems += space_problems(root, need)
     say(plan_text(manifest, packages, todo, files, pending, checkpoint_only=args.checkpoint_only, environment_exists=exists,
-                  nvidia=nvidia))
+                  nvidia=nvidia, switching=switching))
     if problems:
         raise InstallError("This computer cannot take the plan yet:\n" + "\n".join(
             textwrap.fill(problem, width=110, break_on_hyphens=False, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
@@ -727,9 +752,13 @@ def run(args, *, say=say_now, ask=input, interactive=None):
             make_environment(root)
         say(f"Installing the Python packages into {ENVIRONMENT} (pip prints its own progress):")
         install_packages(root, nvidia=nvidia)
-        still, _ = package_state(packages, environment_versions(root))
-        if still:
-            raise InstallError(f"pip finished but {len(still)} packages are still missing, for example {still[0]['name']}.")
+        still_missing, still_different = package_state(packages, environment_versions(root))
+        if still_missing:
+            raise InstallError(f"pip finished but {len(still_missing)} packages are still missing, for example "
+                               f"{still_missing[0]['name']}.")
+        if switching and still_different:
+            item, have = still_different[0]
+            raise InstallError(f"pip finished but {item['name']} is still {have}, not {item['version']}.")
     say("Fetching the Kokoro model files:")
     download_checkpoint(root, manifest, files, say=say)
     say("Checking that Kokoro speaks (the first load is slow):")

@@ -190,13 +190,22 @@ class ChatterboxTurbo:
 
 class ChatterboxOriginal:
     """Original Chatterbox (500M): built-in default voice or a reference clip, plus the
-    exaggeration and cfg_weight controls (higher exaggeration = more dramatic, lower cfg = slower pace)."""
+    exaggeration and cfg_weight controls (higher exaggeration = more dramatic, lower cfg = slower pace).
+
+    Like Turbo it loads the files of the pinned snapshot directly (from_local), so no Hub lookup can happen."""
     label = "Chatterbox"
 
     def __init__(self, device):
         from chatterbox.tts import ChatterboxTTS
+        from chatterbox_support import ORIGINAL_FILES, original_snapshot_dir
+
         self.device = device
-        self.model = ChatterboxTTS.from_pretrained(device=device)
+        snapshot = original_snapshot_dir()
+        missing = [name for name in ORIGINAL_FILES if not (snapshot / name).is_file()]
+        if missing:
+            raise RuntimeError(f"Chatterbox 500M local files are incomplete: {', '.join(missing)} is missing from {snapshot}. "
+                               "Run setup-chatterbox.bat --original to put them back.")
+        self.model = ChatterboxTTS.from_local(snapshot, device)
         self.sr = self.model.sr
         self._builtin = self.model.conds
         self._ref = None

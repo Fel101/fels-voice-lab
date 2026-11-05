@@ -1,8 +1,9 @@
 # Chatterbox on an NVIDIA graphics card: `tools/install_chatterbox.py --nvidia` installs requirements/chatterbox-cpu.txt with
-# these two in place of the CPU builds. They are the CUDA 12.6 builds of the same PyTorch 2.6.0 and torchaudio 2.6.0, from
-# PyTorch's own index, pinned by their SHA-256 (2.5 GB). The Windows CUDA wheels carry their CUDA libraries inside them.
-# chatterbox-tts 0.1.7 asks for PyTorch 2.6, whose newest CUDA build is 12.6: it runs on cards up to the GeForce RTX 40 series
-# with a recent NVIDIA driver, and not on RTX 50 series cards, which need CUDA 12.8 or later. The Lab has not been tried on an
-# NVIDIA card yet.
-torch @ https://download.pytorch.org/whl/cu126/torch-2.6.0%2Bcu126-cp312-cp312-win_amd64.whl --hash=sha256:b10c39c83e5d1afd639b5c9f5683b351e97e41390a93f59c59187004a9949924
-torchaudio @ https://download.pytorch.org/whl/cu126/torchaudio-2.6.0%2Bcu126-cp312-cp312-win_amd64.whl --hash=sha256:144b286d2f6195ba8d75ed1a568bddd718d032d54d1bf94940d47730c6321a0b
+# these two in place of the CPU builds: the CUDA 13.0 builds of PyTorch 2.12.0 (the same file as Kokoro's NVIDIA build) and of
+# torchaudio 2.11.0, the newest torchaudio, from PyTorch's own index, pinned by their SHA-256 (1.9 GB). The Windows CUDA wheels
+# carry their CUDA libraries inside them. chatterbox-tts 0.1.7 asks for PyTorch 2.6, whose newest CUDA build (12.6) has no
+# code for GeForce RTX 50 series cards; Chatterbox Turbo loaded, spoke and cloned a voice with PyTorch 2.12 and torchaudio 2.11
+# (their CPU builds) before this list was written. CUDA 13.0 needs a card from the GeForce GTX 16 or RTX 20 series or newer
+# (RTX 50 included) and an NVIDIA driver of version 580 or later. The Lab has not been tried on an NVIDIA card yet.
+torch @ https://download.pytorch.org/whl/cu130/torch-2.12.0%2Bcu130-cp312-cp312-win_amd64.whl --hash=sha256:24e75a0c3ea4243067d7560955f2eef6466e9365de7dd4a3a4b8693c9ac4bccf
+torchaudio @ https://download.pytorch.org/whl/cu130/torchaudio-2.11.0%2Bcu130-cp312-cp312-win_amd64.whl --hash=sha256:f74949f9ace1e4a6cf9468bdb3211b9cfa0af6ea348125471ac71c8621d6c77d

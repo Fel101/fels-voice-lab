@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "repo": "ResembleAI/chatterbox",
+  "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
+  "license": "MIT",
+  "license_source": "the model card, README.md, at this revision: its metadata says license: mit, and the repository has no other licence file",
+  "files": [
+    {"path": "README.md", "size": 10081, "sha256": "6ac86d5ec7e85a9cf6566a34c6aae60ac1d50a6fceccade4c2aa57cfa6f590b4"},
+    {"path": "conds.pt", "size": 107374, "sha256": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e"},
+    {"path": "s3gen.safetensors", "size": 1056484620, "sha256": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e"},
+    {"path": "t3_cfg.safetensors", "size": 2129653744, "sha256": "914cb1696f47527fe8852ca8f1fe1fa63cb34f76f9c715e84e067b744dd0da81"},
+    {"path": "tokenizer.json", "size": 25470, "sha256": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5"},
+    {"path": "ve.safetensors", "size": 5695784, "sha256": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"}
+  ],
+  "not_fetched": [
+    {"path": ".gitattributes", "why": "repository housekeeping"},
+    {"path": "Cangjie5_TC.json", "size": 1920163, "why": "Chinese text rules of the multilingual model, which the Lab does not offer"},
+    {"path": "grapheme_mtl_merged_expanded_v1.json", "size": 69989, "why": "the multilingual model's tokenizer"},
+    {"path": "mtl_tokenizer.json", "size": 68125, "why": "the multilingual model's tokenizer"},
+    {"path": "s3gen.pt", "size": 1057165844, "why": "the same decoder as s3gen.safetensors, in PyTorch's pickle format"},
+    {"path": "s3gen_v3.pt", "size": 1056903694, "why": "the multilingual model's decoder"},
+    {"path": "s3gen_v3.safetensors", "size": 1056381804, "why": "the multilingual model's decoder"},
+    {"path": "t3_23lang.safetensors", "size": 2143154168, "why": "the multilingual model"},
+    {"path": "t3_cfg.pt", "size": 1064892246, "why": "an older copy of the language model in PyTorch's pickle format"},
+    {"path": "t3_mtl23ls_v2.safetensors", "size": 2143989752, "why": "the multilingual model"},
+    {"path": "t3_mtl23ls_v3.safetensors", "size": 2143989928, "why": "the multilingual model"},
+    {"path": "ve.pt", "size": 5698626, "why": "the same speaker encoder as ve.safetensors, in PyTorch's pickle format"}
+  ]
+}

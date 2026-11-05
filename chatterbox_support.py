@@ -1,4 +1,4 @@
-"""Validated, checkpoint-specific controls for the installed Chatterbox TTS APIs, and where Turbo's pinned files are."""
+"""Validated, checkpoint-specific controls for the installed Chatterbox TTS APIs, and where their pinned files are."""
 
 import json
 import math
@@ -6,18 +6,35 @@ from pathlib import Path
 
 LAB = Path(__file__).resolve().parent
 TURBO_ENGINE_ID = "turbo"
+ORIGINAL_ENGINE_ID = "orig"
+VC_ENGINE_ID = "chatterbox-vc"
 # What ChatterboxTurboTTS.from_local reads from the snapshot. catalog/chatterbox_turbo_snapshot.json lists the same files with
 # their checksums (plus the model card) for tools/install_chatterbox.py, and tests/test_install_chatterbox.py keeps them in step.
 TURBO_FILES = ("added_tokens.json", "conds.pt", "merges.txt", "s3gen_meanflow.safetensors", "special_tokens_map.json",
                "t3_turbo_v1.safetensors", "tokenizer_config.json", "ve.safetensors", "vocab.json")
+# What ChatterboxTTS.from_local (Chatterbox 500M) and ChatterboxVC.from_local read from the pinned ResembleAI/chatterbox
+# snapshot, which catalog/chatterbox_snapshot.json lists with their checksums for install_chatterbox.py --original.
+ORIGINAL_FILES = ("conds.pt", "s3gen.safetensors", "t3_cfg.safetensors", "tokenizer.json", "ve.safetensors")
+VC_FILES = ("conds.pt", "s3gen.safetensors")
+
+
+def snapshot_dir(engine_id, root=LAB):
+    """The pinned hf-cache snapshot of a Chatterbox engine, at the revision catalog/engines.json names. Reads only the
+    catalog."""
+    catalog = json.loads((Path(root) / "catalog" / "engines.json").read_text(encoding="utf-8"))
+    entry = next(item for item in catalog["engines"] if item["id"] == engine_id)
+    return (Path(root) / "hf-cache" / "hub" / f"models--{entry['checkpoint'].replace('/', '--')}" / "snapshots"
+            / entry["local_revision"])
 
 
 def turbo_snapshot_dir(root=LAB):
-    """The pinned hf-cache snapshot of Chatterbox Turbo, at the revision catalog/engines.json names. Reads only the catalog."""
-    catalog = json.loads((Path(root) / "catalog" / "engines.json").read_text(encoding="utf-8"))
-    entry = next(item for item in catalog["engines"] if item["id"] == TURBO_ENGINE_ID)
-    return (Path(root) / "hf-cache" / "hub" / f"models--{entry['checkpoint'].replace('/', '--')}" / "snapshots"
-            / entry["local_revision"])
+    """The pinned hf-cache snapshot of Chatterbox Turbo."""
+    return snapshot_dir(TURBO_ENGINE_ID, root)
+
+
+def original_snapshot_dir(root=LAB):
+    """The pinned hf-cache snapshot of ResembleAI/chatterbox, which Chatterbox 500M and Chatterbox VC load."""
+    return snapshot_dir(ORIGINAL_ENGINE_ID, root)
 
 
 CHATTERBOX_SAMPLING_FIELDS = {

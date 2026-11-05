@@ -1,4 +1,5 @@
-// Run with node --test tests/engine_status.test.cjs. Exercises the Models page engine tests and installs in serve.html.
+// Run with node --test tests/engine_status.test.cjs. Exercises the Models page cards, their GPU/CPU switch, engine tests and the
+// install window in serve.html.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -15,12 +16,14 @@ function sourceBetween(start, end) {
 
 function element(tag) {
   const item = {tag, children: [], className: '', disabled: false, hidden: false, colSpan: 0, handlers: {}, parentNode: null,
+    attributes: {},
     appendChild(child) {    // as the DOM does: a node that is added somewhere else leaves where it was
       if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(other => other !== child);
       child.parentNode = this;
       this.children.push(child);
       return child;
     },
+    setAttribute(name, value) { this.attributes[name] = String(value); },
     addEventListener(type, handler) { this.handlers[type] = handler; }};
   let text = '';
   Object.defineProperty(item, 'textContent', {
@@ -30,8 +33,14 @@ function element(tag) {
   return item;
 }
 
+function dialog() {
+  return Object.assign(element('installDialog'), {open: false,
+    showModal() { this.open = true; },
+    close() { this.open = false; if (this.handlers.close) this.handlers.close(); }});
+}
+
 function harness(responses = {}) {
-  const fields = {}, calls = [], timers = [];
+  const fields = {installDialog: dialog()}, calls = [], timers = [];
   const context = {
     document: {createElement: element},
     $: id => fields[id] || (fields[id] = element(id)),
@@ -39,21 +48,24 @@ function harness(responses = {}) {
     fetchJson(url, body) {
       calls.push({url, body, turboDisabledNow: context.modelCards && context.modelCards.turbo
         ? context.modelCards.turbo.button.disabled : null});
-      const value = responses[url] ?? {};
+      const value = typeof responses[url] === 'function' ? responses[url](body) : responses[url] ?? {};
       return value instanceof Error ? Promise.reject(value) : Promise.resolve(value);
     },
   };
   vm.createContext(context);
   vm.runInContext(sourceBetween('var modelCards={};', 'var castCharacters = [];'), context);
+  context.wireInstallDialog();
   return {context, fields, calls, timers};
 }
 
 function card(name) {
-  const view = {name, card: element('card'), state: element('state'), details: element('details'), ram: element('ram'),
-    button: {disabled: false, hidden: false, textContent: ''}, box: element('box'), plan: element('plan'),
-    go: element('go'), stop: element('stop'), log: element('log'), action: 'test', planOpen: false};
-  view.box.hidden = view.log.hidden = true;    // as renderModelOverview makes them
-  return view;
+  const radios = {gpu: Object.assign(element('input'), {type: 'radio', value: 'gpu', checked: false}),
+    cpu: Object.assign(element('input'), {type: 'radio', value: 'cpu', checked: false})};
+  const devices = element('devices');
+  for (const value of ['gpu', 'cpu']) element('label').appendChild(radios[value]);
+  return {name, card: element('card'), state: element('state'), details: element('details'), ram: element('ram'), devices, radios,
+    note: element('note'), button: element('button'), extraButton: element('button'), action: 'test', extra: null,
+    installGpu: false, pendingDevice: false, deviceError: ''};
 }
 
 const KOKORO_FILES = ['.venv/Scripts/python.exe', 'hf-cache/snapshot'];
@@ -62,8 +74,8 @@ const missingKokoro = {id: 'kokoro', state: 'not_installed', check: null, min_fr
 const readyKokoro = {id: 'kokoro', state: 'not_checked', check: null, min_free_ram_gb: 8, installation: {installed: true, missing: []}};
 
 function job(extra = {}) {
-  return {engine: 'kokoro', name: 'Kokoro 82M', state: 'running', started_at: '2026-10-29T10:00:00+00:00', ended_at: null,
-    seconds: 65, exit_code: null, lines: ['one', 'two'], log: 'out/install/kokoro-1.log', ...extra};
+  return {engine: 'kokoro', name: 'Kokoro 82M', nvidia: false, state: 'running', started_at: '2026-10-29T10:00:00+00:00',
+    ended_at: null, seconds: 65, exit_code: null, lines: ['one', 'two'], log: 'out/install/kokoro-1.log', ...extra};
 }
 
 test('state text names the device and keeps install and conversion states apart', () => {
@@ -77,6 +89,7 @@ test('state text names the device and keeps install and conversion states apart'
   assert.equal(c.engineStateText({state: 'conversion_task'}, 'cpu'), 'Conversion task');
   assert.equal(c.engineStateText({state: 'not_integrated'}, 'cpu'), 'Not integrated');
   assert.equal(c.engineStateText({state: 'not_installed'}, 'cpu', job()), 'Installing…');
+  assert.equal(c.engineStateText({state: 'usable'}, 'cpu', job({nvidia: true})), 'Installing the GPU build…');
 });
 
 test('a model whose PyTorch cannot use the graphics card is said to speak on the CPU, and why', () => {
@@ -90,6 +103,7 @@ test('a model whose PyTorch cannot use the graphics card is said to speak on the
   assert.equal(c.engineStateText(onCard, 'cuda'), 'Speaks now on GPU');
   assert.equal(c.engineDetailText(onCard, 'cuda'), 'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio.');
   assert.equal(c.engineStateText({...fellBack, state: 'check_failed'}, 'cuda'), 'Test failed on CPU');
+  assert.equal(c.engineDetailText(fellBack, 'cpu'), 'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio.');
 });
 
 test('detail text lists what is missing and what the last test measured', () => {
@@ -114,25 +128,26 @@ test('a missing engine with an installer is told to press Install, and one witho
   const {context: c} = harness();
   const missing = ['hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff'];
   assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing, installer: 'setup-kokoro.bat'}}, 'cpu'),
-    'Missing: hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff. Press Install to add it to this folder, or run '
-    + 'setup-kokoro.bat in the lab folder. docs/SETUP.md says what it installs.');
+    'Missing: hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff. Install adds it to this folder, as does '
+    + 'setup-kokoro.bat in the lab folder; docs/SETUP.md says what it installs.');
   assert.match(c.engineDetailText({state: 'not_installed', installation: {missing}}, 'cpu'),
     /^The app cannot install this model yet: .* Missing: hf-cache\/hub\/models--hexgrad--Kokoro-82M\/snapshots\/f3ff\.$/);
   assert.doesNotMatch(c.engineDetailText({state: 'not_checked', check: null, installation: {missing: [], installer: 'setup-kokoro.bat'}}, 'cpu'),
     /setup-kokoro|Install/);
 });
 
-test('an install in progress and a failed one are described with their time, exit code and log', () => {
+test('a running install leaves the text of its card as it was, and a failed one says where its output went', () => {
   const {context: c} = harness();
   const row = {state: 'not_installed', installation: {missing: ['x'], installer: 'setup-kokoro.bat'}};
   assert.equal(c.elapsedText(0), '0 s');
   assert.equal(c.elapsedText(45.4), '45 s');
   assert.equal(c.elapsedText(60), '1 min 0 s');
-  assert.equal(c.engineDetailText(row, 'cpu', job()),
-    'Installing for 1 min 5 s. Nothing else can run until it finishes, and downloads and packages can take several minutes. '
-    + 'The end of its output is below.');
+  assert.equal(c.engineDetailText(row, 'cpu', job()), c.engineDetailText(row, 'cpu', null));
+  assert.equal(c.engineDetailText(row, 'cpu', job({seconds: 900})), c.engineDetailText(row, 'cpu', job()));
+  const usable = {state: 'usable', check: {status: 'passed', checked_at: 't', total_s: 1, audio_seconds: 2, ran_on: 'cpu'}};
+  assert.equal(c.engineDetailText(usable, 'cpu', job({nvidia: true})), c.engineDetailText(usable, 'cpu', null));
   assert.equal(c.engineDetailText(row, 'cpu', job({state: 'failed', exit_code: 1, seconds: 123})),
-    'Missing: x. The install stopped (exit code 1) after 2 min 3 s. The end of its output is below, and all of it is in '
+    'Missing: x. The install stopped (exit code 1) after 2 min 3 s. Show output has the end of it, and all of it is in '
     + 'out/install/kokoro-1.log. Press Install to try again: it continues where it stopped.');
 });
 
@@ -172,7 +187,7 @@ test('a missing Kokoro card offers Install, and a missing card without an instal
     missingKokoro, {id: 'breeze', state: 'not_installed', check: null, installation: {installed: false, missing: ['x']}}]});
   assert.equal(c.modelCards.kokoro.state.textContent, 'Not installed');
   assert.match(c.modelCards.kokoro.details.textContent,
-    /^Missing: \.venv\/Scripts\/python\.exe; hf-cache\/snapshot\. Press Install to add it to this folder, or run setup-kokoro\.bat/);
+    /^Missing: \.venv\/Scripts\/python\.exe; hf-cache\/snapshot\. Install adds it to this folder, as does setup-kokoro\.bat/);
   assert.equal(c.modelCards.kokoro.action, 'install');
   assert.equal(c.modelCards.kokoro.button.textContent, 'Install');
   assert.equal(c.modelCards.kokoro.button.hidden, false);
@@ -232,126 +247,122 @@ test('speed table shows an empty message, then one row per device with its real-
     ['turbo', 'GPU', '1', '—', '1.23 s for 4.00 s of audio']);
 });
 
-test('model cards keep integration apart from the test button, and conversion has none', () => {
+test('model cards keep integration apart from their buttons, and every card has its switch and buttons from the start', () => {
   const {context: c, fields} = harness();
   c.renderModelOverview({engines: [
     {id: 'kokoro', name: 'Kokoro 82M', integration: {service_api: true}, capabilities: {voice_selection: {status: 'supported'}}},
     {id: 'chatterbox-vc', name: 'Chatterbox VC', integration: {service_api: true, task_only: true}, capabilities: {}}]});
   const [kokoro, conversion] = fields.modelOverview.children;
   assert.equal(kokoro.children[1].textContent, 'Integrated');
-  const button = kokoro.children.find(child => child.tag === 'button');
-  assert.equal(button.textContent, 'Test');
-  assert.equal(kokoro.children.filter(child => child.tag === 'button').length, 1);
-  assert.equal(c.modelCards.kokoro.box.hidden, true);
-  assert.equal(c.modelCards.kokoro.log.hidden, true);
-  assert.equal(c.modelCards.kokoro.go.textContent, 'Install now');
-  assert.equal(c.modelCards.kokoro.stop.textContent, 'Cancel');
+  const actions = kokoro.children.find(child => child.className === 'model-actions');
+  assert.deepEqual(actions.children.map(child => [child.tag, child.textContent, child.hidden]),
+    [['button', 'Test', false], ['button', '', true]]);
+  const devices = kokoro.children.find(child => child.className === 'device-switch');
+  assert.equal(devices.attributes.role, 'radiogroup');
+  assert.equal(devices.hidden, true);    // until the status says whether the service has a graphics card
+  assert.deepEqual(['gpu', 'cpu'].map(value => [c.modelCards.kokoro.radios[value].type, c.modelCards.kokoro.radios[value].name]),
+    [['radio', 'device-kokoro'], ['radio', 'device-kokoro']]);
   assert.equal(conversion.children[1].textContent, 'Integrated · conversion');
-  assert.equal(conversion.children.some(child => child.tag === 'button'), false);
+  // A conversion task has no test, but it has an Install button for when it is missing.
+  assert.ok(conversion.children.find(child => child.className === 'model-actions').children.some(child => child.tag === 'button'));
+  assert.equal(page.includes('model-card wide'), false);
 });
 
-test('a test posts once, holds the other cards while it runs, then refreshes the status', async () => {
-  const status = {device: 'cpu', busy: false, speed: [], engines: [
-    {id: 'kokoro', state: 'usable', installation: {missing: []},
-      check: {status: 'passed', checked_at: 't', total_s: 0.5, audio_seconds: 2, ran_on: 'cpu'}},
-    {id: 'turbo', state: 'not_checked', installation: {missing: []}, check: null}]};
-  const {context: c, calls} = harness({'/api/engines/kokoro/check': {check: {status: 'passed'}},
-    '/api/engines/status': status});
-  c.modelCards = {kokoro: card('Kokoro'), turbo: card('Turbo')};
-  await c.checkEngine('kokoro');
-  assert.deepEqual(calls.map(call => call.url), ['/api/engines/kokoro/check', '/api/engines/status']);
-  assert.equal(JSON.stringify(calls[0].body), '{}');
-  assert.equal(calls[0].turboDisabledNow, true);
-  assert.equal(c.modelCards.kokoro.button.textContent, 'Test again');
-  assert.equal(c.modelCards.turbo.button.disabled, false);
-});
+const plan = {engine: 'kokoro', nvidia: false, ok: true, paragraphs: ['Kokoro 82M on the CPU', '1. Python packages: 89 to install.'],
+  problems: []};
 
-test('a failed test reports its error and still refreshes the status', async () => {
-  const status = {device: 'cpu', busy: false, speed: [], engines: [
-    {id: 'kokoro', state: 'check_failed', installation: {missing: []},
-      check: {status: 'failed', checked_at: 't', reason: 'worker exited'}}]};
-  const {context: c, fields, calls} = harness({'/api/engines/kokoro/check': new Error('worker exited'),
-    '/api/engines/status': status});
-  c.modelCards = {kokoro: card('Kokoro')};
-  await c.checkEngine('kokoro');
-  assert.equal(fields.err.textContent, 'Test did not finish: worker exited');
-  assert.equal(calls[calls.length - 1].url, '/api/engines/status');
-  assert.equal(c.modelCards.kokoro.state.textContent, 'Test failed on CPU');
-});
-
-test('Install reads the plan first, shows its paragraphs and problems, and keeps the button out of the way', async () => {
-  const plan = {engine: 'kokoro', ok: true, paragraphs: ['Kokoro 82M on the CPU', '1. Python packages: 89 to install.'], problems: []};
+test('Install opens the install window with the plan, and the card itself does not change size', async () => {
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};
-  const {context: c, calls} = harness({'/api/engines/kokoro/install': {plan}, '/api/engines/status': status});
+  const {context: c, calls, fields} = harness({'/api/engines/kokoro/install': {plan}, '/api/engines/status': status});
   c.modelCards = {kokoro: card('Kokoro')};
   c.renderEngineStatus(status);
-  await c.planInstall('kokoro');
+  const before = c.modelCards.kokoro.card.className;
+  await c.planInstall('kokoro', false);
   assert.deepEqual(calls.map(call => [call.url, JSON.stringify(call.body)]),
-    [['/api/engines/kokoro/install', '{"dry_run":true}'], ['/api/engines/status', undefined]]);
+    [['/api/engines/kokoro/install', '{"dry_run":true,"nvidia":false}'], ['/api/engines/status', undefined]]);
+  assert.equal(fields.installDialog.open, true);
+  assert.equal(fields.installTitle.textContent, 'Install Kokoro');
+  assert.equal(fields.installState.textContent, 'This is what it will do. Nothing has changed yet.');
+  assert.deepEqual(fields.installPlan.children.map(child => child.textContent), plan.paragraphs);
+  assert.equal(fields.installGo.hidden, false);
+  assert.equal(fields.installClose.textContent, 'Cancel');
   const view = c.modelCards.kokoro;
-  assert.deepEqual(view.plan.children.map(child => child.textContent), plan.paragraphs);
-  assert.equal(view.box.hidden, false);
-  assert.equal(view.go.hidden, false);
-  assert.equal(view.stop.textContent, 'Cancel');
-  assert.equal(view.button.hidden, true);
-  assert.equal(view.card.className, 'model-card wide');
-  await c.closePlan('kokoro');
-  assert.equal(view.box.hidden, true);
+  assert.equal(view.card.className, before);
   assert.equal(view.button.hidden, false);
   assert.equal(view.button.textContent, 'Install');
-  assert.equal(view.card.className, 'model-card');
+  fields.installClose.handlers.click();
+  assert.equal(fields.installDialog.open, false);
 });
 
 test('a plan that cannot go ahead shows why and offers only to close', async () => {
-  const plan = {engine: 'kokoro', ok: false, paragraphs: ['Kokoro 82M on the CPU'],
+  const refused = {engine: 'kokoro', ok: false, paragraphs: ['Kokoro 82M on the CPU'],
     problems: ['This computer cannot take the plan yet:', '- About 3 GB of free disk space is needed here.']};
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};
-  const {context: c} = harness({'/api/engines/kokoro/install': {plan}, '/api/engines/status': status});
+  const {context: c, fields} = harness({'/api/engines/kokoro/install': {plan: refused}, '/api/engines/status': status});
   c.modelCards = {kokoro: card('Kokoro')};
-  await c.planInstall('kokoro');
-  const view = c.modelCards.kokoro;
-  assert.equal(view.go.hidden, true);
-  assert.equal(view.stop.textContent, 'Close');
-  assert.deepEqual(view.plan.children.map(child => [child.className, child.textContent]),
+  await c.planInstall('kokoro', false);
+  assert.equal(fields.installGo.hidden, true);
+  assert.equal(fields.installClose.textContent, 'Close');
+  assert.equal(fields.installState.textContent, 'This computer cannot take the plan yet.');
+  assert.deepEqual(fields.installPlan.children.map(child => [child.className, child.textContent]),
     [['meta', 'Kokoro 82M on the CPU'], ['meta warn', 'This computer cannot take the plan yet:'],
       ['meta warn', '- About 3 GB of free disk space is needed here.']]);
 });
 
-test('a plan that could not be read says so', async () => {
+test('a plan that could not be read says so in the install window', async () => {
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};
   const {context: c, fields} = harness({'/api/engines/kokoro/install': new Error('The lab\'s Python is missing'), '/api/engines/status': status});
   c.modelCards = {kokoro: card('Kokoro')};
-  await c.planInstall('kokoro');
-  assert.equal(fields.err.textContent, "Could not read the install plan: The lab's Python is missing");
-  assert.equal(c.modelCards.kokoro.box.hidden, true);
+  await c.planInstall('kokoro', false);
+  assert.equal(fields.installState.textContent, "Could not read the install plan: The lab's Python is missing");
+  assert.equal(fields.installGo.hidden, true);
+  assert.equal(fields.installClose.textContent, 'Close');
 });
 
-test('Install now posts once and then shows the running install with the end of its output', async () => {
-  const running = {device: 'cpu', busy: true, speed: [], install: job({lines: Array.from({length: 20}, (_, index) => `line ${index + 1}`)}),
-    engines: [missingKokoro]};
-  const {context: c, calls, timers} = harness({'/api/engines/kokoro/install': {install: running.install}, '/api/engines/status': running});
+test('Install now posts once, then the window follows the install while the card keeps the same text', async () => {
+  const lines = Array.from({length: 40}, (_, index) => `line ${index + 1}`);
+  const running = {device: 'cpu', busy: true, speed: [], install: job({lines}), engines: [missingKokoro]};
+  const {context: c, calls, fields, timers} = harness({'/api/engines/kokoro/install': body => body.dry_run ? {plan} : {install: running.install},
+    '/api/engines/status': running});
   c.modelCards = {kokoro: card('Kokoro')};
-  c.modelCards.kokoro.planOpen = true;
-  c.modelCards.kokoro.box.hidden = false;
-  await c.startInstall('kokoro');
-  assert.deepEqual(calls.map(call => [call.url, JSON.stringify(call.body)]),
-    [['/api/engines/kokoro/install', '{}'], ['/api/engines/status', undefined]]);
+  await c.planInstall('kokoro', false);
+  await c.startInstall();
+  assert.deepEqual(calls.filter(call => !call.url.endsWith('status')).map(call => JSON.stringify(call.body)),
+    ['{"dry_run":true,"nvidia":false}', '{"nvidia":false}']);
+  assert.equal(fields.installTitle.textContent, 'Installing Kokoro 82M');
+  assert.match(fields.installState.textContent, /^Running for 1 min 5 s\./);
+  assert.equal(fields.installLog.hidden, false);
+  assert.equal(fields.installLog.textContent, lines.join('\n'));
+  assert.equal(fields.installClose.textContent, 'Hide');
   const view = c.modelCards.kokoro;
-  assert.equal(view.state.textContent, 'Installing…');
-  assert.match(view.details.textContent, /^Installing for 1 min 5 s\./);
-  assert.equal(view.button.hidden, true);
-  assert.equal(view.box.hidden, true);
-  assert.equal(view.log.hidden, false);
-  assert.equal(view.log.textContent, Array.from({length: 12}, (_, index) => `line ${index + 9}`).join('\n'));
-  assert.equal(view.card.className, 'model-card wide');
+  const shown = () => [view.state.textContent, view.details.textContent, view.button.textContent, view.button.hidden,
+    view.button.disabled, view.extraButton.hidden, view.card.className];
+  const first = shown();
+  assert.deepEqual(first, ['Installing…', c.engineDetailText(missingKokoro, 'cpu', null), 'Show progress', false, false, true, '']);
+  c.renderEngineStatus({...running, install: job({seconds: 125, lines: [...lines, 'line 41']})});
+  assert.deepEqual(shown(), first);    // a poll moves the window's text, never the card's
+  assert.match(fields.installState.textContent, /^Running for 2 min 5 s\./);
   assert.equal(timers.length, 1);
   assert.equal(timers[0].delay, 1500);
 });
 
-test('the install output follows its newest line unless the reader has scrolled up', () => {
-  const {context: c} = harness();
+test('Show progress reopens the window for an install that is running', async () => {
+  const running = {device: 'cpu', busy: true, speed: [], install: job(), engines: [missingKokoro]};
+  const {context: c, fields} = harness({'/api/engines/status': running});
   c.modelCards = {kokoro: card('Kokoro')};
-  const log = c.modelCards.kokoro.log;
+  c.renderEngineStatus(running);
+  assert.equal(c.modelCards.kokoro.action, 'progress');
+  await c.showProgress('kokoro');
+  assert.equal(fields.installDialog.open, true);
+  assert.equal(fields.installLog.textContent, 'one\ntwo');
+  assert.match(fields.installState.textContent, /^Running for 1 min 5 s/);
+});
+
+test('the install output follows its newest line unless the reader has scrolled up', async () => {
+  const {context: c, fields} = harness({'/api/engines/status': {device: 'cpu', busy: true, speed: [], install: job(), engines: [missingKokoro]}});
+  c.modelCards = {kokoro: card('Kokoro')};
+  await c.showProgress('kokoro');
+  const log = fields.installLog;
   Object.defineProperty(log, 'scrollHeight', {get() {
     const text = this.textContent;
     return Math.max(100, text ? 20 * text.split('\n').length : 0);
@@ -371,43 +382,44 @@ test('the install output follows its newest line unless the reader has scrolled 
   assert.equal(log.scrollTop, log.scrollHeight);
 });
 
-test('a running install is polled again, once at a time, until it ends', async () => {
+test('a running install is polled again, once at a time, and the window says when it has finished', async () => {
   const running = {device: 'cpu', busy: true, speed: [], install: job(), engines: [missingKokoro]};
-  const done = {device: 'cpu', busy: false, speed: [], install: job({state: 'finished', exit_code: 0, ended_at: 'x'}),
+  const done = {device: 'cpu', busy: false, speed: [], install: job({state: 'finished', exit_code: 0, ended_at: 'x', seconds: 200}),
     engines: [readyKokoro]};
-  const {context: c, calls, timers} = harness({'/api/engines/status': running});
+  const {context: c, calls, timers, fields} = harness({'/api/engines/status': running});
   c.modelCards = {kokoro: card('Kokoro')};
-  c.renderEngineStatus(running);
+  await c.showProgress('kokoro');
   c.renderEngineStatus(running);
   assert.equal(timers.length, 1);
   await timers[0].handler();
-  assert.equal(calls.filter(call => call.url === '/api/engines/status').length, 1);
+  assert.equal(calls.filter(call => call.url === '/api/engines/status').length, 2);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(timers.length, 2);
   c.renderEngineStatus(done);
   assert.equal(timers.length, 2);
   assert.equal(c.modelCards.kokoro.state.textContent, 'Installed, not tested on CPU');
-  assert.equal(c.modelCards.kokoro.log.hidden, true);
-  assert.equal(c.modelCards.kokoro.log.textContent, '');    // so a log shown later starts empty and follows its newest line
-  assert.equal(c.modelCards.kokoro.card.className, 'model-card');
   assert.equal(c.modelCards.kokoro.button.textContent, 'Test');
   assert.equal(c.modelCards.kokoro.button.hidden, false);
+  assert.equal(fields.installTitle.textContent, 'Kokoro 82M is installed');
+  assert.equal(fields.installState.textContent, 'It finished in 3 min 20 s. Press Test on its card to hear it.');
+  assert.equal(fields.installClose.textContent, 'Close');
 });
 
-test('a failed install keeps the end of its output on the card and offers Install again', () => {
-  const {context: c} = harness();
+test('a failed install offers Install again and Show output, which opens the end of its output', async () => {
+  const failed = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro],
+    install: job({state: 'failed', exit_code: 1, seconds: 123, lines: ['error: pip stopped with exit code 1.']})};
+  const {context: c, fields} = harness({'/api/engines/status': failed});
   c.modelCards = {kokoro: card('Kokoro')};
-  c.renderEngineStatus({device: 'cpu', busy: false, speed: [], engines: [missingKokoro],
-    install: job({state: 'failed', exit_code: 1, seconds: 123, lines: ['error: pip stopped with exit code 1.']})});
+  c.renderEngineStatus(failed);
   const view = c.modelCards.kokoro;
   assert.equal(view.state.textContent, 'Not installed');
   assert.match(view.details.textContent, /The install stopped \(exit code 1\) after 2 min 3 s\./);
-  assert.equal(view.log.hidden, false);
-  assert.equal(view.log.textContent, 'error: pip stopped with exit code 1.');
-  assert.equal(view.card.className, 'model-card wide');
-  assert.equal(view.button.textContent, 'Install');
-  assert.equal(view.button.hidden, false);
-  assert.equal(view.button.disabled, false);
+  assert.deepEqual([view.button.textContent, view.button.hidden, view.button.disabled], ['Install', false, false]);
+  assert.deepEqual([view.extra, view.extraButton.textContent, view.extraButton.hidden], ['output', 'Show output', false]);
+  await c.showProgress('kokoro');
+  assert.equal(fields.installTitle.textContent, 'Kokoro 82M did not install');
+  assert.equal(fields.installLog.textContent, 'error: pip stopped with exit code 1.');
+  assert.match(fields.installState.textContent, /all of it is in out\/install\/kokoro-1\.log/);
 });
 
 test('another card is held while an install runs, and shows nothing of it', () => {
@@ -417,20 +429,148 @@ test('another card is held while an install runs, and shows nothing of it', () =
     missingKokoro, {id: 'turbo', state: 'not_checked', installation: {missing: []}, check: null, min_free_ram_gb: 10}]});
   assert.equal(c.modelCards.turbo.state.textContent, 'Installed, not tested on CPU');
   assert.equal(c.modelCards.turbo.button.disabled, true);
-  assert.equal(c.modelCards.turbo.log.hidden, true);
-  assert.equal(c.modelCards.turbo.log.textContent, '');
-  assert.equal(c.modelCards.turbo.card.className, 'model-card');
+  assert.equal(c.modelCards.turbo.extraButton.hidden, true);
 });
 
-test('an install that could not start says so and still refreshes the status', async () => {
+test('an install that could not start says so in the window and still refreshes the status', async () => {
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};
-  const {context: c, fields, calls} = harness({'/api/engines/kokoro/install': new Error('The GPU worker is busy while a clip is made.'),
-    '/api/engines/status': status});
+  const {context: c, fields, calls} = harness({'/api/engines/kokoro/install': body => body.dry_run ? {plan}
+    : new Error('The GPU worker is busy while a clip is made.'), '/api/engines/status': status});
   c.modelCards = {kokoro: card('Kokoro')};
-  await c.startInstall('kokoro');
-  assert.equal(fields.err.textContent, 'The install did not start: The GPU worker is busy while a clip is made.');
+  await c.planInstall('kokoro', false);
+  await c.startInstall();
+  assert.equal(fields.installState.textContent, 'The install did not start: The GPU worker is busy while a clip is made.');
   assert.equal(calls[calls.length - 1].url, '/api/engines/status');
-  assert.equal(c.modelCards.kokoro.go.disabled, false);
+  assert.equal(fields.installGo.disabled, false);
+  assert.equal(fields.installGo.hidden, true);
+});
+
+// The GPU/CPU switch on each card.
+function realCard(c) {    // a card made the way the page makes it, with its handlers
+  c.renderModelOverview({engines: [{id: 'kokoro', name: 'Kokoro 82M', integration: {service_api: true}, capabilities: {}}]});
+  return c.modelCards.kokoro;
+}
+const gpuService = (engines, extra = {}) => ({device: 'cuda', busy: false, speed: [], engines, ...extra});
+const onCard = (switchTo, gpu, extra = {}) => ({id: 'kokoro', name: 'Kokoro 82M', integrated: true, state: 'usable', min_free_ram_gb: 8,
+  installation: {installed: true, missing: []}, device: switchTo === 'gpu' && gpu.build !== 'cpu' ? 'cuda' : 'cpu',
+  switch: switchTo, device_choice: null, gpu, check: {status: 'passed', checked_at: 't', total_s: 0.5, audio_seconds: 2,
+    ran_on: switchTo === 'gpu' && gpu.build !== 'cpu' ? 'cuda' : 'cpu'}, ...extra});
+
+test('the switch shows where each model runs, and the state line names that device', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(gpuService([onCard('gpu', {choosable: true, reason: null, build: 'cuda', install: false})]));
+  const view = c.modelCards.kokoro;
+  assert.equal(view.devices.hidden, false);
+  assert.deepEqual([view.radios.gpu.checked, view.radios.cpu.checked], [true, false]);
+  assert.deepEqual([view.radios.gpu.disabled, view.radios.cpu.disabled], [false, false]);
+  assert.equal(view.radios.gpu.parentNode.className, 'on');
+  assert.equal(view.state.textContent, 'Speaks now on GPU');
+  assert.equal(view.note.hidden, true);
+  assert.match(fields.modelsDevice.textContent, /switch says whether that model runs on the graphics card/);
+  c.renderEngineStatus(gpuService([onCard('cpu', {choosable: true, reason: null, build: 'cuda', install: false},
+    {device_choice: 'cpu'})]));
+  assert.deepEqual([view.radios.gpu.checked, view.radios.cpu.checked], [false, true]);
+  assert.equal(view.state.textContent, 'Speaks now on CPU');
+});
+
+test('a model that cannot use the card has GPU switched off, with the reason under it', () => {
+  const {context: c} = harness();
+  c.modelCards = {phonon: card('Phonon')};
+  c.renderEngineStatus(gpuService([{id: 'phonon', name: 'Phonon', integrated: true, state: 'usable', device: 'cuda', switch: 'cpu',
+    installation: {installed: true, missing: []}, gpu: {choosable: false, reason: 'Phonon runs only on the CPU.', build: null, install: false},
+    check: {status: 'passed', checked_at: 't', total_s: 0.2, audio_seconds: 2, ran_on: 'cpu'}}]));
+  const view = c.modelCards.phonon;
+  assert.deepEqual([view.radios.gpu.disabled, view.radios.cpu.checked], [true, true]);
+  assert.equal(view.radios.gpu.parentNode.className, ' off');
+  assert.deepEqual([view.note.hidden, view.note.textContent], [false, 'Phonon runs only on the CPU.']);
+});
+
+test('a service without a graphics card hides every switch and says so once', () => {
+  const {context: c, fields} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus({device: 'cpu', busy: false, speed: [], engines: [onCard('cpu', {choosable: false,
+    reason: 'This service runs every model on the CPU.', build: 'cpu', install: false})]});
+  assert.equal(c.modelCards.kokoro.devices.hidden, true);
+  assert.equal(c.modelCards.kokoro.note.hidden, true);
+  assert.match(fields.modelsDevice.textContent, /^Every model runs on the CPU here/);
+});
+
+test('a model installed for the CPU and switched to GPU offers its GPU build, and Install of a new one follows the switch', async () => {
+  const cpuBuild = onCard('gpu', {choosable: true, reason: null, build: 'cpu', install: true});
+  const status = gpuService([cpuBuild]);
+  const {context: c, calls, fields} = harness({'/api/engines/kokoro/install': {plan: {...plan, nvidia: true}},
+    '/api/engines/status': status});
+  const view = realCard(c);
+  c.renderEngineStatus(status);
+  assert.equal(view.state.textContent, 'Speaks now on CPU');
+  assert.equal(view.note.textContent,
+    'Installed with the CPU build of PyTorch, so it runs on the CPU until its GPU build is installed.');
+  assert.deepEqual([view.extra, view.extraButton.textContent, view.extraButton.hidden], ['gpu', 'Install GPU build', false]);
+  await view.extraButton.handlers.click();
+  assert.equal(JSON.stringify(calls[0].body), '{"dry_run":true,"nvidia":true}');
+  assert.equal(fields.installTitle.textContent, 'Install the GPU build of Kokoro 82M');
+  // A model that is not installed yet: Install puts in the build the switch shows.
+  const fresh = {...missingKokoro, name: 'Kokoro 82M', integrated: true, device: 'cpu', switch: 'gpu', device_choice: null,
+    gpu: {choosable: true, reason: null, build: null, install: true}};
+  c.renderEngineStatus(gpuService([fresh]));
+  assert.equal(view.note.textContent, 'Install puts in its GPU build, for the graphics card.');
+  assert.equal(view.extraButton.hidden, true);
+  await view.button.handlers.click();
+  assert.equal(JSON.stringify(calls.filter(call => call.url.endsWith('/install')).pop().body), '{"dry_run":true,"nvidia":true}');
+  c.renderEngineStatus(gpuService([{...fresh, switch: 'cpu', device_choice: 'cpu', gpu: {...fresh.gpu, install: false}}]));
+  assert.equal(view.note.textContent, 'Install puts in its CPU build.');
+  await view.button.handlers.click();
+  assert.equal(JSON.stringify(calls.filter(call => call.url.endsWith('/install')).pop().body), '{"dry_run":true,"nvidia":false}');
+});
+
+test('choosing a device posts it, holds the switch while it saves, and shows a refusal on the card', async () => {
+  const before = gpuService([onCard('gpu', {choosable: true, reason: null, build: 'cuda', install: false})]);
+  let answer = {device: {engine: 'kokoro', choice: 'cpu', device: 'cpu', unloaded: true}};
+  const {context: c, calls} = harness({'/api/engines/kokoro/device': () => answer, '/api/engines/status': before});
+  const view = realCard(c);
+  c.renderEngineStatus(before);
+  view.radios.cpu.checked = true;
+  const saving = view.radios.cpu.handlers.change();
+  assert.equal(view.pendingDevice, true);
+  await saving;
+  assert.deepEqual(calls.slice(0, 2).map(call => [call.url, JSON.stringify(call.body)]),
+    [['/api/engines/kokoro/device', '{"device":"cpu"}'], ['/api/engines/status', undefined]]);
+  assert.equal(view.pendingDevice, false);
+  answer = new Error('The GPU worker is busy with another load or generation request.');
+  view.radios.cpu.checked = true;
+  await view.radios.cpu.handlers.change();
+  assert.equal(view.note.textContent, 'Could not switch it: The GPU worker is busy with another load or generation request.');
+  assert.equal(view.note.className, 'meta device-note warn');
+  assert.deepEqual([view.radios.gpu.checked, view.radios.cpu.checked], [true, false]);    // the status puts it back
+});
+
+test('a model that runs only on the graphics card has CPU switched off, and says so even on a service without one', () => {
+  const {context: c} = harness();
+  c.modelCards = {qwen: card('Qwen3-TTS 1.7B Base')};
+  const only = 'Qwen3-TTS runs only on a graphics card in the Lab: its fast decoder records CUDA graphs.';
+  const qwen = {id: 'qwen', name: 'Qwen3-TTS 1.7B Base', integrated: true, state: 'not_installed', device: 'cuda', switch: 'gpu',
+    installation: {installed: false, missing: ['x'], installer: 'setup-qwen.bat'}, check: null,
+    gpu: {choosable: true, reason: null, build: null, install: true, cpu: only}};
+  c.renderEngineStatus(gpuService([qwen]));
+  const view = c.modelCards.qwen;
+  assert.deepEqual([view.radios.gpu.checked, view.radios.gpu.disabled, view.radios.cpu.disabled], [true, false, true]);
+  assert.equal(view.note.textContent, only);
+  assert.equal(view.installGpu, true);
+  c.renderEngineStatus(gpuService([{...qwen, gpu: {...qwen.gpu, choosable: false, install: false,
+    reason: 'The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver.'}}]));
+  assert.equal(view.radios.gpu.disabled, true);
+  assert.match(view.note.textContent, /^The app installs GPU builds for NVIDIA graphics cards only.* Qwen3-TTS runs only on a graphics card/);
+  c.renderEngineStatus({device: 'cpu', busy: false, speed: [], engines: [{...qwen, device: 'cpu', gpu: {...qwen.gpu, choosable: false}}]});
+  assert.equal(view.devices.hidden, true);
+  assert.deepEqual([view.note.hidden, view.note.textContent], [false, only]);
+});
+
+test('a busy service holds every switch', () => {
+  const {context: c} = harness();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(gpuService([onCard('gpu', {choosable: true, reason: null, build: 'cuda', install: false})], {busy: true}));
+  assert.deepEqual([c.modelCards.kokoro.radios.gpu.disabled, c.modelCards.kokoro.radios.cpu.disabled], [true, true]);
 });
 
 const NAMED = {name: 'Kokoro 82M', integrated: true};

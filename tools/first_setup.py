@@ -266,8 +266,8 @@ def run(
     offer = bool(gpu_models) and not args.nvidia and args.models is None and interactive and nvidia_present()
     gpu = []
     if gpu_models and (args.nvidia or offer):
-        # Each model's installer says whether its NVIDIA build runs on this card: Chatterbox's has no code for an RTX 50
-        # series card, and Kokoro's needs a 2025 driver. Those models get their CPU builds and the rest can use the card.
+        # Each model's installer says whether its NVIDIA build runs on this card: both need a GTX 16 or RTX 20 series card or
+        # newer and a 2025 driver. A model whose build cannot run here gets its CPU build, and the rest can use the card.
         able, refused = gpu_choice(gpu_models, cards())
         if offer and able:
             names = " and ".join(GPU_MODELS[name][0] for name in able)
