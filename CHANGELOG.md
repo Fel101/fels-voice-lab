@@ -47,6 +47,13 @@
 - **Graphics memory checked before a download.** The installers now read each NVIDIA card's memory from `nvidia-smi`, and
   VoxCPM2's and Breeze's refuse a card with less than 7 and 10 GB before they download anything. Breeze used up to 7.5 GB, so
   an 8 GB card is too small for it.
+- **VoxCPM2 takes that run on.** VoxCPM2 sometimes keeps going after its text ends, up to a length cap of about a second a
+  text token, and the voice description in front of the text raised that cap: the Models page's check sentence with seed 42
+  ran on to 20.8 s on the R9700. The Lab now caps a take by the spoken text alone and makes a take that reaches the cap again
+  from a seed derived from the requested one, up to three tries, rather than from the next seed, which Perform gives its next
+  take. The take's generation details record the seed its audio came from and every try; when all three run on, the
+  generation fails instead of saving a take that ran on. Checked on the R9700: seed 42 ran on in its first try, stopped at
+  11.2 s, and gave a 4.6 s take at its second; seeds 7 and 1234 were unchanged.
 
 ## 0.1.0 — 2026-11-04
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
 
 import numpy as np
@@ -63,11 +64,61 @@ def check_gpu_memory(device_name, total_bytes):
                            "Choose another GPU (see Hardware and state settings in docs/SETUP.md) or use another engine.")
 
 
+# A take that runs on. VoxCPM2 sometimes keeps generating after the text ends, until it reaches its length cap: six audio
+# patches of 0.16 s for each text token it was given, plus ten (VoxCPM's retry_badcase_ratio_threshold is the six). The Lab
+# puts a voice description or a direction in front of the text, and VoxCPM counts those tokens too, so they raised the cap:
+# the Models page's check sentence with seed 42 ran on to 20.8 s on an AMD Radeon AI PRO R9700, which is 130 patches, the
+# cap for its 20 tokens with the description. The Lab gives VoxCPM a ratio that makes the cap that of the spoken text alone,
+# treats a take of six patches a spoken token or more as one that ran on (VoxCPM's own rule for retry_badcase), and tries
+# again from a seed derived from the requested one: three tries in all, as VoxCPM's retry_badcase_max_times. VoxCPM's own
+# retry stays off because it tries the next seed, the one Perform gives its next take.
+RUN_ON_PATCHES_PER_TOKEN = 6.0
+RUN_ON_TRIES = 3
+
+
+def token_count(tokenizer, text):
+    """How many text tokens VoxCPM counts for `text`, after the whitespace clean-up its generate does first."""
+    return max(1, len(tokenizer(re.sub(r"\s+", " ", text.replace("\n", " ")))))
+
+
+def run_on_ratio(model_tokens, spoken_tokens):
+    """The retry_badcase_ratio_threshold that turns VoxCPM's length cap, int(model_tokens * ratio + 10) patches, into the
+    cap of the spoken tokens alone."""
+    return RUN_ON_PATCHES_PER_TOKEN * spoken_tokens / model_tokens
+
+
+def retry_seed(seed, attempt):
+    """The seed of try `attempt`, where try 0 is the requested seed. The others are derived from it, so the same request
+    makes the same tries, and are not seed + 1, which Perform gives its next take."""
+    if attempt == 0:
+        return seed
+    digest = hashlib.sha256(f"voxcpm2-run-on:{seed}:{attempt}".encode("ascii")).digest()
+    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
+
+
+def generate_until_it_ends(generate_once, seed, limit_seconds, sample_rate):
+    """Make a take with generate_once(seed) -> waveform, and make it again from a derived seed while a take runs on, which
+    is reaching limit_seconds. Returns (waveform, the seed it came from, the tries as {seed, seconds}). When all
+    RUN_ON_TRIES takes run on it raises instead: a take that ran on past its text is not a finished take."""
+    tries = []
+    for attempt in range(RUN_ON_TRIES):
+        attempt_seed = retry_seed(seed, attempt)
+        waveform = generate_once(attempt_seed)
+        seconds = waveform.size / sample_rate
+        tries.append({"seed": attempt_seed, "seconds": round(seconds, 3)})
+        if seconds < limit_seconds:
+            return waveform, attempt_seed, tries
+    seeds = ", ".join(str(item["seed"]) for item in tries)
+    raise RuntimeError(f"VoxCPM2 kept going past the end of the text in all {RUN_ON_TRIES} tries (seeds {seeds}), so there "
+                       "is no take. Try another seed or other wording.")
+
+
 class VoxCPMWorker:
     def __init__(self, device):
         self.device = device
         self.model = None
         self.sample_rate = None
+        self.patch_seconds = None
         self.runtime_identity = None
 
     @staticmethod
@@ -121,7 +172,10 @@ class VoxCPMWorker:
             str(MODEL), load_denoiser=False, optimize=False,
             device="cuda", local_files_only=True,
         )
-        self.sample_rate = int(self.model.tts_model.sample_rate)
+        tts = self.model.tts_model
+        self.sample_rate = int(tts.sample_rate)
+        # One patch is patch_size latent frames, each one encoder hop of audio: 4 x 640 samples at 16 kHz, 0.16 s.
+        self.patch_seconds = tts.patch_size * tts.audio_vae.chunk_size / tts.audio_vae.sample_rate
         self.runtime_identity = self._identity(torch)
         info = self._load_info(already_loaded=False)
         info.update({
@@ -238,16 +292,26 @@ class VoxCPMWorker:
                 "prompt_text": prompt_text.strip(),
             })
 
+        # Cap the take by the spoken text, without the description or direction in front of it (see RUN_ON_TRIES).
+        tts = self.model.tts_model
+        spoken_tokens = token_count(tts.text_tokenizer, text)
+        call["retry_badcase_ratio_threshold"] = run_on_ratio(token_count(tts.text_tokenizer, call["text"]), spoken_tokens)
+        limit_seconds = spoken_tokens * RUN_ON_PATCHES_PER_TOKEN * self.patch_seconds
+
+        def generate_once(attempt_seed):
+            waveform = np.asarray(self.model.generate(**{**call, "seed": attempt_seed}), dtype=np.float32).reshape(-1)
+            if waveform.size == 0 or not np.isfinite(waveform).all():
+                raise RuntimeError("VoxCPM2 produced empty or non-finite audio.")
+            actual_seed = getattr(tts, "last_successful_seed", None)
+            if actual_seed != attempt_seed:
+                raise RuntimeError(f"VoxCPM2 used seed {actual_seed!r}; requested seed was {attempt_seed}.")
+            return waveform
+
         import torch
         torch.cuda.reset_peak_memory_stats()
         started = time.perf_counter()
-        waveform = np.asarray(self.model.generate(**call), dtype=np.float32).reshape(-1)
+        waveform, used_seed, tries = generate_until_it_ends(generate_once, seed, limit_seconds, self.sample_rate)
         elapsed = time.perf_counter() - started
-        if waveform.size == 0 or not np.isfinite(waveform).all():
-            raise RuntimeError("VoxCPM2 produced empty or non-finite audio.")
-        actual_seed = getattr(self.model.tts_model, "last_successful_seed", None)
-        if actual_seed != seed:
-            raise RuntimeError(f"VoxCPM2 used seed {actual_seed!r}; requested seed was {seed}.")
         info = {
             "total_s": elapsed, "first_chunk_s": None, "engine": "voxcpm2",
             "mode": mode, "backend": "voxcpm2-local-source", "backend_version": SOURCE_COMMIT,
@@ -264,10 +328,14 @@ class VoxCPMWorker:
             "prompt_path": str(prompt_path) if prompt_path else None,
             "prompt_text": prompt_text,
             "effective_controls": {
-                "seed": actual_seed, "cfg_value": cfg_value,
+                "seed": used_seed, "cfg_value": cfg_value,
                 "inference_timesteps": steps, "retry_badcase": False,
                 "normalize": False,
             },
+            # The seed asked for, the longest a take of this text may be before it counts as running on, and each try:
+            # a take that ran on was made again from a derived seed, which effective_controls names.
+            "requested_seed": seed,
+            "run_on": {"limit_seconds": round(limit_seconds, 3), "tries": tries},
             "peak_vram_bytes": int(torch.cuda.max_memory_allocated()),
         }
         return waveform, self.sample_rate, info
@@ -276,6 +344,7 @@ class VoxCPMWorker:
         import torch
         self.model = None
         self.sample_rate = None
+        self.patch_seconds = None
         self.runtime_identity = None
         import gc
         gc.collect()

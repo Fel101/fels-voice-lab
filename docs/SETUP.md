@@ -476,9 +476,19 @@ cannot run on. **Nobody has tried VoxCPM2 on an NVIDIA card in the Lab yet.** On
 run with `--checkpoint-only` and an empty `.venv-voxcpm` that borrows the Qwen environment's ROCm packages (below), it fetched
 the 25 source files from GitHub, loaded in 27 seconds and used at most 6.3 GB of graphics memory. The check sentence, with the
 Models page's fixed seed 42, ran on to 20.8 seconds of audio there, most of it after the sentence ended; the same sentence with
-seeds 7 and 1234 took 3.5 and 2.7 seconds, made in 4.6 and 3.3 seconds. If a take keeps going after its text, generate it
-again with another seed. In a clean environment from the same package list (with PyTorch's CPU build in place of the CUDA
-one), VoxCPM2 loaded and spoke a sentence on the CPU, which checks that the list holds everything its inference imports.
+seeds 7 and 1234 took 3.5 and 2.7 seconds, made in 4.6 and 3.3 seconds. The Lab now catches such a take (below). In a clean
+environment from the same package list (with PyTorch's CPU build in place of the CUDA one), VoxCPM2 loaded and spoke a
+sentence on the CPU, which checks that the list holds everything its inference imports.
+
+**A take that runs on.** VoxCPM2 sometimes keeps going after its text has ended, until it reaches a length cap of about a
+second for each text token: six audio patches of 0.16 seconds a token, plus ten, which is VoxCPM's own rule. VoxCPM counted the
+voice description or direction the Lab puts in front of the text too, and that raised the cap: it is how the check sentence
+reached 20.8 seconds. The Lab now sets the cap by the spoken text alone, and makes a take that reaches it again from a seed
+derived from the one asked for, up to three tries; not the next seed, which **Perform** gives its next take. The take keeps
+the seed asked for in its settings, and its saved generation details (`backend_result`) name the seed its audio came from and
+each try. When all three tries run on, the generation fails rather than save a take that ran on. Checked again on the R9700,
+the check sentence with seed 42 ran on in its first try and stopped at 11.2 seconds, and the second try made a 4.6-second
+take, the last 2.2 seconds of it quiet; seeds 7 and 1234 made the same 3.5 and 2.7 seconds as before, at their first try.
 
 For another graphics card, make `.venv-voxcpm` yourself with a GPU build of PyTorch and the packages above and run the launcher
 with `--checkpoint-only`, which fetches the source and model files and leaves the packages alone. A `.venv-voxcpm` with no
