@@ -491,7 +491,7 @@ class CatalogTests(unittest.TestCase):
         names = {entry["id"]: entry["name"] for entry in worker_pool.read_catalog()["engines"]}
         expected = {"Phonon 31M English": ["phonon-31m-en"], "Kokoro 82M": ["kokoro"],
                     "Chatterbox Turbo 350M (cloning)": ["turbo"], "Chatterbox 500M and Voice Conversion": ["orig", "chatterbox-vc"],
-                    "Qwen3-TTS (four checkpoints)": [key for key in names if key.startswith("qwen3-tts")],
+                    "Qwen3-TTS (four models)": [key for key in names if key.startswith("qwen3-tts")],
                     "VoxCPM2 2B": ["voxcpm2"], "Breeze TTS 2": ["breeze-tts-2"], "Drama 3 (35B, Q4)": ["drama-3"]}
         self.assertEqual(set(rows), set(expected))
         self.assertEqual(sorted(key for keys in expected.values() for key in keys), sorted(ram_needs.DEFAULT_MIN_FREE_RAM_GB))

@@ -200,7 +200,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
-| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer. |
 | POST | [`/api/engines/{engine_id}/device`](#post-api-engines-engine_id-device) | Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
@@ -261,7 +261,7 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 
 #### `POST /api/engines/{engine_id}/install`
 
-Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.
+Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer.
 
 | Path parameter | Meaning |
 |---|---|
@@ -270,7 +270,7 @@ Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turb
 | Request field | Type | Meaning |
 |---|---|---|
 | `dry_run` | boolean | Only read the plan: what the installer would do and whether this computer can take it. Nothing is changed. Default false, which starts the install. |
-| `nvidia` | boolean | Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. Default false. |
+| `nvidia` | boolean | Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. Default false. |
 
 **Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.
 
@@ -316,7 +316,7 @@ Load an engine into memory ahead of its first use.
 | Also answers | When |
 |---|---|
 | `409` | The GPU worker is busy. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat` or `setup-breeze.bat`. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 
 <a id="post-api-unload"></a>
 
@@ -418,7 +418,7 @@ Speak text with one engine and answer with the finished WAV file.
 |---|---|
 | `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat` or `setup-breeze.bat`. |
+| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).

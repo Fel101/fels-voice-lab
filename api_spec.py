@@ -135,7 +135,8 @@ ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not instal
                         "by saying where to install it: Install on its Models & features card, or its launcher in the lab "
                         "folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, "
                         "`setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), "
-                        "`setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat` or `setup-breeze.bat`.")
+                        "`setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or "
+                        "`setup-drama3.bat`.")
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
@@ -173,12 +174,14 @@ ROUTES = [
             "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
       errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The GPU worker is busy."))),
     R("POST", "/api/engines/{engine_id}/install", "Service",
-      "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the "
+      "Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the "
       "installer.",
       body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
                                     "Nothing is changed. Default false, which starts the install."),
             F("nvidia", "boolean", "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). "
-                                   "An engine installed with the CPU build of PyTorch can get it afterwards. Default false.")),
+                                   "An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS "
+                                   "models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. "
+                                   "Default false.")),
       reply="With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or "
             "numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that "
             "started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script "

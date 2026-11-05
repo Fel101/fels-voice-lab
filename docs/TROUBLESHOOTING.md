@@ -14,16 +14,19 @@ than the computer has in all, more with a browser full of tabs open.
 | Phonon 31M English | 2 GB | Yes | Yes | Yes | 0.3 GB | `setup-phonon.bat` |
 | Kokoro 82M | 3 GB | Yes | Yes | Yes | 1.7 GB | `setup-kokoro.bat` |
 | Chatterbox Turbo 350M (cloning) | 8 GB | No | With little else open | Yes | 5 GB | `setup-chatterbox.bat` |
-| Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | not measured | by hand |
-| Qwen3-TTS (four checkpoints) | 10 GB | No | Only just | Yes | not measured | by hand |
-| VoxCPM2 2B | 10 GB, and a graphics card with 8 GB | No | Only just | Yes | not measured | by hand |
-| Breeze TTS 2 | 12 GB | No | No | Yes | not measured | by hand |
-| Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `tools\install_drama3.py` |
+| Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | 3.2 GB, and Turbo's environment | `setup-chatterbox.bat --original` |
+| Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `setup-qwen.bat --model` (NVIDIA) |
+| VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `setup-voxcpm.bat` (NVIDIA) |
+| Breeze TTS 2 | 12 GB, and a graphics card with 10 GB | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA) |
+| Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `setup-drama3.bat` |
+
+The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, and the app installs them only for an NVIDIA one
+([graphics cards](#graphics-cards)).
 
 The RAM numbers are the Lab's own rule, a measured peak with room to spare where one was measured; they live in
 [ram_needs.py](../ram_needs.py). Only one model is loaded at a time, so the largest one you use is what counts.
 
-How fast, measured on one computer on its CPU (an AMD Ryzen 7 PRO 8845HS laptop): Phonon makes a second of speech in about
+How fast, measured on one computer on its CPU (an AMD Ryzen 7 PRO 8845HS mini PC): Phonon makes a second of speech in about
 0.2 s and Kokoro in about 0.3 s, so both are faster than real time. Chatterbox Turbo takes 2.5 to 3 s for each second of
 speech. A graphics card makes the PyTorch models much faster; see [graphics cards](#graphics-cards).
 
@@ -74,8 +77,10 @@ cards). The model files already in `hf-cache` are kept, so only the packages dow
 other AI tools), then try again. The Lab unloads one model before it loads the next, so you never need to close it. See the
 table above for what fits your computer, and `min_free_ram_gb` to change a need.
 
-**"not installed".** The card on **Models & features** lists the files that are missing. Kokoro, Phonon and Chatterbox Turbo
-have an **Install** button; the other models are set up by hand ([Model runtimes](SETUP.md#model-runtimes)).
+**"not installed".** The card on **Models & features** lists the files that are missing, and its **Install** button installs
+them. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for an NVIDIA graphics card and driver their build runs on
+(VoxCPM2 needs a card with 7 GB of memory, Breeze one with 10 GB); on another computer their card says why it has no
+**Install** ([Model runtimes](SETUP.md#model-runtimes)).
 
 **"Installed, test out of date".** A package or a checkpoint changed since the last test. Press **Test**.
 
@@ -84,12 +89,16 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 
 ## Graphics cards
 
-**NVIDIA.** Kokoro and Chatterbox Turbo can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it finds
-an NVIDIA driver, or run `setup-kokoro.bat --nvidia` and `setup-chatterbox.bat --nvidia`. Nobody has tried this on an NVIDIA
-card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome.
+**NVIDIA.** Kokoro and the Chatterbox models can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it
+finds an NVIDIA driver, or run `setup-kokoro.bat --nvidia` and `setup-chatterbox.bat --nvidia`. The Qwen3-TTS models, VoxCPM2
+and Breeze TTS 2 run only on a graphics card and have only an NVIDIA build, which **Install** on their cards puts in. Nobody
+has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome.
 
-- Both builds are CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an NVIDIA
-  driver of version 580 or later. On an older card, setup gives the models their CPU builds.
+- Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
+  NVIDIA driver of version 580 or later. On an older card, setup gives Kokoro and Chatterbox their CPU builds.
+- **"needs a graphics card with at least 10 GB of memory".** VoxCPM2 needs 7 GB of graphics memory and Breeze TTS 2 10 GB, so
+  their installers refuse a smaller card before they download anything. Breeze used 7.5 GB at most, too much for an 8 GB card
+  once Windows and other programs have taken their share.
 - **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
   build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
 - **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA
@@ -102,7 +111,9 @@ card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome
   `runtime.local.json`.
 
 **AMD.** The Lab was built on an AMD card with ROCm builds of PyTorch, installed by hand into the models' environments; there is
-no guided installer for them. If the service does not pick the card by itself, put `{"device": "cuda"}` in
+no guided installer for them. Make a model's environment with a ROCm build of PyTorch yourself, then run its launcher with
+`--checkpoint-only`, which fetches the model files, leaves the packages alone and runs the speech check ([Setup](SETUP.md)
+lists each model's packages). If the service does not pick the card by itself, put `{"device": "cuda"}` in
 `runtime.local.json` (ROCm answers to that name too).
 
 ## Export and audio

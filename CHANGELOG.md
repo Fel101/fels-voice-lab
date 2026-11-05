@@ -23,6 +23,30 @@
   The build needs a GeForce GTX 16 or RTX 20 series card or newer and an NVIDIA driver of version 580 or later, as Kokoro's
   does, so `setup.bat` now gives both models their NVIDIA builds on an RTX 50 card. The CPU build is unchanged. Neither NVIDIA
   build has run on an NVIDIA card yet.
+- **Every model installs from its card.** The nine models that had no **Install** button have one now, and a launcher in the
+  lab folder; each installer prints its plan and asks first, pins every package and file by its SHA-256, continues an
+  interrupted download, and ends with a speech check.
+  - **Chatterbox 500M and Voice Conversion:** `setup-chatterbox.bat --original` adds their 3.2 GB checkpoint to Chatterbox
+    Turbo's environment, for the CPU or, with `--nvidia`, an NVIDIA card. On one 8-core CPU the 500M loaded in 41 s and spoke
+    1.9 s of audio in 16.5 s.
+  - **The four Qwen3-TTS models:** `setup-qwen.bat --model <model>` installs 66 packages into `.venv-fqwen`, which the four
+    share, and one model's checkpoint. The Base models' check clones the clip Kokoro's installer makes.
+  - **VoxCPM2:** `setup-voxcpm.bat` makes `.venv-voxcpm` with 62 packages and fetches the checkpoint and the 25 source files
+    of VoxCPM its inference imports, at a pinned commit. Its worker no longer needs the Qwen environment's packages; a
+    `.venv-voxcpm` without PyTorch still borrows them.
+  - **Breeze TTS 2:** `setup-breeze.bat` installs 41 packages and the 7.7 GB BF16 checkpoint. Its plan says first that the
+    weights are for research and non-commercial use only.
+  - **Drama 3:** `setup-drama3.bat` replaces running `tools/install_drama3.py` by hand. Its plan states the Fish Audio
+    Community License first, it refuses a computer with less than 26 GB of RAM, it fetches the 20.8 GB model in 32 MB pieces
+    six at a time, and it ends with a speech check on the CPU (on one 8-core CPU: loaded in 28 s, 2.3 s of audio in 9 s).
+
+  The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, so they have only an NVIDIA build, the CUDA 13.0
+  builds of PyTorch 2.12 and torchaudio 2.11 that Chatterbox's NVIDIA build uses. On a computer whose card or driver that
+  build cannot run on, their card has no **Install** and says why. None of the three has run on an NVIDIA card yet: each was
+  checked on an AMD Radeon AI PRO R9700 with `--checkpoint-only` and ROCm builds of the same packages.
+- **Graphics memory checked before a download.** The installers now read each NVIDIA card's memory from `nvidia-smi`, and
+  VoxCPM2's and Breeze's refuse a card with less than 7 and 10 GB before they download anything. Breeze used up to 7.5 GB, so
+  an 8 GB card is too small for it.
 
 ## 0.1.0 — 2026-11-04
 

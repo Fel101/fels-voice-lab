@@ -211,7 +211,7 @@
     "/api/engines/{engine_id}/install": {
       "post": {
         "operationId": "post_api_engines_engine_id_install",
-        "summary": "Install an engine that has a guided installer (Kokoro, Phonon or Chatterbox Turbo): read its plan, or run the installer.",
+        "summary": "Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer.",
         "tags": [
           "Service"
         ],
@@ -228,7 +228,7 @@
                   },
                   "nvidia": {
                     "type": "boolean",
-                    "description": "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. Default false."
+                    "description": "Install the engine's GPU build for an NVIDIA graphics card (its installer's `--nvidia`). An engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get that build. Default false."
                   }
                 }
               }
@@ -410,7 +410,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat` or `setup-breeze.bat`.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -743,7 +743,7 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat` or `setup-breeze.bat`.",
+            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {

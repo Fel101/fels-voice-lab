@@ -76,6 +76,8 @@ appearance before the page paints.
 - **An engine:** an entry in `catalog/engines.json` with its own environment, its case in `worker_runtime.py`, a RAM need in
   `ram_needs.py`, and a speech check in `engine_checks.smoke_request`. A guided installer follows
   [tools/install_phonon.py](../tools/install_phonon.py), the smallest one; the shared pieces are in `tools/install_kokoro.py`.
+  Its launcher goes in `engine_checks.GUIDED_INSTALLERS` and its script in `engine_install.INSTALLERS`, which give the engine's
+  card its **Install** button.
 - **A setting for one computer:** a key in `runtime.local.json`, read with `common.runtime_setting`, and a line in
   [Setup](SETUP.md#hardware-and-state-settings).
 

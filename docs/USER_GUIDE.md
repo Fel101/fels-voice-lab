@@ -20,9 +20,11 @@ navigation wraps above the workspace and sample cards stack.
 ## Clone your own voice
 
 1. Open **Voice cloning**, name the voice/character and choose a cloning model.
-   Chatterbox Turbo is the cloning model the Lab can install from its own page:
-   press **Install** on its card in **Models & features**, or run
-   `setup-chatterbox.bat` ([setup](SETUP.md#chatterbox-turbo-on-the-cpu)).
+   Press **Install** on a model's card in **Models & features** to add one.
+   Chatterbox Turbo clones on an ordinary CPU (or run `setup-chatterbox.bat`,
+   [setup](SETUP.md#chatterbox-turbo-on-the-cpu)); Chatterbox 500M and Drama 3,
+   which needs 26 GB of free RAM, clone on the CPU too, and the Qwen3-TTS Base
+   models, VoxCPM2 and Breeze TTS 2 on an NVIDIA graphics card.
 2. Choose **Upload your voice — browse files**, **Record microphone**, or a saved
    reference. Uploaded WAV, FLAC, OGG, MP3 and M4A files stay on this PC. The
    file you upload is kept untouched as the source, and the reference is made from
@@ -312,8 +314,9 @@ When the service uses a graphics card, each card has a **Runs on GPU | CPU** swi
 next load, and the card's state and test are then those of that device. A model installed with the CPU build of PyTorch runs
 on the CPU; switch it to GPU and its card offers **Install GPU build**, which replaces PyTorch in that model's environment. GPU
 is greyed out, with the reason under it, for Phonon and Drama 3 (they run on the CPU) and where the graphics card or its driver
-cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)). On a model that is not installed
-yet, the switch chooses which build **Install** puts in.
+cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)). The Qwen3-TTS models, VoxCPM2
+and Breeze TTS 2 run only on a graphics card, so their switch stays on GPU and CPU is greyed out instead. On a model that is
+not installed yet, the switch chooses which build **Install** puts in.
 
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns
@@ -322,12 +325,13 @@ then press **Test**. The figure is the Lab's own rule for loading. For Kokoro, P
 measured peak with room to spare; for the others it is not a measurement of what the model uses. `runtime.local.json` can change it for one
 computer ([hardware and state settings](SETUP.md#hardware-and-state-settings)).
 
-A model that is not installed shows the files it is missing. The Kokoro, Phonon and Chatterbox Turbo cards have an **Install**
-button: it opens a window with what the installer will do and whether this computer can take it, and **Install now** runs it and
-follows it in the same window, with the end of its output (more in setting up, for [Kokoro](SETUP.md#kokoro-on-the-cpu),
-[Phonon](SETUP.md#phonon-on-the-cpu) and [Chatterbox Turbo](SETUP.md#chatterbox-turbo-on-the-cpu)). **Hide** closes the window
-and leaves the install running; **Show progress** on the card opens it again, and **Show output** shows the end of one that
-stopped. The cards stay where they are while it runs. The other cards say that the app cannot install that model yet.
+A model that is not installed shows the files it is missing, and its card has an **Install** button: it opens a window with
+what the installer will do and whether this computer can take it, and **Install now** runs it and follows it in the same
+window, with the end of its output ([setting up](SETUP.md) has a section on each installer). **Hide** closes the window and
+leaves the install running; **Show progress** on the card opens it again, and **Show output** shows the end of one that
+stopped. The cards stay where they are while it runs. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for an
+NVIDIA graphics card and driver their build runs on, and VoxCPM2 and Breeze only on a card with enough memory; on another
+computer their cards gather under **more models need manual setup** and say why the app cannot install them there.
 
 The speed table lists the median real-time factor (seconds to generate divided by seconds of
 audio) for each engine and device, from clips and checks this service generated. It records speed

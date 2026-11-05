@@ -18,13 +18,16 @@ The official model has a 35B-parameter MoE backbone with approximately 3B active
 
 Weights, portable executable/DLLs, license, NOTICE and installation receipt live under ignored `out/drama3/`. Preserve that directory when moving/backing up the installation.
 
-To install or resume an interrupted download from the Fel's Voice Lab directory:
+To install, or to resume an interrupted download, press **Install** on its card in **Models & features**, or run this in the
+Fel's Voice Lab folder ([SETUP.md](SETUP.md#drama-3-on-the-cpu) says what it does):
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 tools/install_drama3.py
+setup-drama3.bat
 ```
 
-The installer verifies the runtime archive and complete model hashes before writing `out/drama3/installation.json`. Downloads resume through completed byte ranges. Partial download files never count as an installed model. The runtime also verifies the complete model hash before first load in each worker; cold start includes this disk read. Inference uses explicit local paths with update checks disabled.
+The installer states the licence and its plan and asks first. It verifies the runtime archive and complete model hashes before
+writing `out/drama3/installation.json`, then speaks a check sentence on the CPU. Downloads resume through the 32 MB pieces
+already done. Partial download files never count as an installed model. The runtime also verifies the complete model hash before first load in each worker; cold start includes this disk read. Inference uses explicit local paths with update checks disabled.
 
 ## GPU stability policy (2026-10-18)
 

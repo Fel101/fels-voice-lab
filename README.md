@@ -106,7 +106,8 @@ Integrated families are Kokoro, Phonon 31M English, Chatterbox Original/Turbo/VC
 VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means the adapter and the
 interface exist. The **Models & features** page says whether a family is *installed* (its
 environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
-spoke one sentence), shows how much free RAM each family needs, and can install Kokoro, Phonon or Chatterbox Turbo for you.
+spoke one sentence), shows how much free RAM each family needs, and can install every one of them for you (the Qwen3-TTS
+models, VoxCPM2 and Breeze TTS 2 only on a computer with an NVIDIA graphics card).
 Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
 
@@ -135,8 +136,9 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
    GPU builds too, each where it runs on the card.
 3. Use the **Fel's Voice Lab** desktop icon. Its dedicated window runs without a console; closing it stops its backend.
 
-To add a model later, press **Install** on its card in **Models & features**, or run `setup-kokoro.bat`, `setup-phonon.bat`
-or `setup-chatterbox.bat`. The core alone opens the studio and manages its stores, but it cannot speak without a model.
+To add a model later, press **Install** on its card in **Models & features**, or run its launcher, such as `setup-kokoro.bat`,
+`setup-phonon.bat` or `setup-chatterbox.bat`. Every model has one; the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only
+for an NVIDIA graphics card. The core alone opens the studio and manages its stores, but it cannot speak without a model.
 [Setup](docs/SETUP.md) covers every installer and the other models, and [troubleshooting](docs/TROUBLESHOOTING.md) says what
 runs on an 8, 16 or 32 GB computer and what to do when something stops.
 

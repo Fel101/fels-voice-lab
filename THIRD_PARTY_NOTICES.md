@@ -1,7 +1,8 @@
 # Third-party notices
 
-Reviewed 20 October 2026, with Phonon added on 30 October 2026 and Chatterbox Turbo's installer and speaker encoder on
-3 November 2026. The root MIT license covers the project's original code.
+Reviewed 20 October 2026, with Phonon added on 30 October 2026, Chatterbox Turbo's installer and speaker encoder on
+3 November 2026, and the installers of Chatterbox 500M, Qwen3-TTS, VoxCPM2, Breeze TTS 2 and Drama 3 on 5 November 2026.
+The root MIT license covers the project's original code.
 It does not replace the licenses below or grant rights to model weights, voices,
 recordings, trademarks, scripts or generated outputs.
 
@@ -61,7 +62,20 @@ its own, `.venv-chatterbox`: `chatterbox-tts` (MIT, Resemble AI, with S3Gen deco
 CosyVoice), its Perth watermarker `resemble-perth` (MIT), PyTorch 2.6 for the CPU, Transformers, librosa and their
 dependencies. Nearly all are MIT, BSD or Apache. soxr and the libsndfile library inside SoundFile are LGPL-2.1, and certifi
 and tqdm are MPL-2.0. pykakasi (GPL-3.0), which `chatterbox-tts` lists for its multilingual model, is not installed. They
-are fetched from PyPI on the user's computer, not copied into this repository.
+are fetched from PyPI on the user's computer, not copied into this repository. With `--original` it adds the checkpoint of
+Chatterbox 500M and Voice Conversion to that environment.
+
+`tools/install_qwen.py`, `tools/install_voxcpm.py` and `tools/install_breeze.py` install only NVIDIA builds: the CUDA 13.0
+builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the files of `requirements/chatterbox-nvidia.txt`) with the packages pinned in
+`requirements/qwen-nvidia.txt` (66, into `.venv-fqwen`, among them `faster-qwen3-tts`, MIT, and `qwen-tts-hf`, Apache-2.0),
+`requirements/voxcpm-nvidia.txt` (62, into `.venv-voxcpm`) and `requirements/breeze-nvidia.txt` (41, into `.venv-breeze`).
+Nearly all are MIT, BSD or Apache. soxr (not in Breeze's list) and the libsndfile library inside SoundFile are LGPL-2.1, and
+certifi and tqdm are MPL-2.0. `tools/install_voxcpm.py` also fetches the 25 source files of
+[VoxCPM](https://github.com/OpenBMB/VoxCPM) (Apache-2.0, OpenBMB) that its inference imports, at a pinned commit, into
+`out/voxcpm2/source`. They are all fetched on the user's computer, not copied into this repository.
+
+`tools/install_drama3.py` installs no Python packages. It fetches the Windows build of
+[speech.cpp](https://github.com/nyosegawa/speech.cpp) 0.8.10 (MIT) from its GitHub release into `out/drama3/runtime`.
 
 FFmpeg is an optional external tool. Its obligations depend on its exact build
 and enabled components; do not bundle an arbitrary executable with this project.
@@ -72,7 +86,7 @@ and enabled components; do not bundle an arbitrary executable with this project.
 |---|---|
 | Kokoro 82M | [Apache-2.0 model](https://huggingface.co/hexgrad/Kokoro-82M). Preserve model/voice notices when redistributing weights. |
 | Phonon 31M English | [Apache-2.0 model card](https://huggingface.co/gradium/phonon-31m-en) for the weights, tokenizer and default voice. The 37 preset voices come from [gradium/phonon-voices](https://huggingface.co/gradium/phonon-voices), which states **no** licence (no model card and no LICENSE file), so nothing establishes what audio made with them may be used for: ask Gradium before you publish it. The card asks that Phonon not be used to impersonate a real person or to deceive listeners about who is speaking, and that listeners be told when speech is synthetic where that matters to them. Gradium's larger 40M models are CC BY-NC 4.0 and are not integrated. |
-| Qwen3-TTS | [Apache-2.0 checkpoints](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base). faster-Qwen is a separately installed runtime. |
+| Qwen3-TTS | [Apache-2.0 checkpoints](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base). `faster-qwen3-tts` (MIT) is the runtime `tools/install_qwen.py` installs. |
 | Chatterbox Original/Turbo/VC | [MIT upstream](https://github.com/resemble-ai/chatterbox). The Turbo weights are MIT by [their model card](https://huggingface.co/ResembleAI/chatterbox-turbo/blob/749d1c1a46eb10492095d68fbcf55691ccf137cd/README.md) at the pinned revision, which asks that the model not be used to do harm. Every clip carries Resemble AI's Perth watermark: keep the native behavior; no removal is implemented. |
 | VoxCPM2 | [Apache-2.0 checkpoint](https://huggingface.co/openbmb/VoxCPM2). Runtime source and audio frontend components remain separate installations. |
 | Breeze TTS 2 and derived checkpoints | [BreezeBlue Research and Non-Commercial License 1.1](https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE), including self-hosted output restrictions. Its Apache source license does **not** make the weights or those outputs commercially unrestricted. |
@@ -83,8 +97,9 @@ repository. The one generated sample, `docs/demo/kokoro-demo.mp3`, was spoken by
 preset voices (Apache-2.0); `docs/demo/kokoro-demo.json` records how it was made. The Drama installer obtains the pinned
 third-party runtime, model and their notices separately after explicit invocation, and
 the Kokoro installer does the same for the pinned Kokoro checkpoint, its model card and its voices, the Phonon installer
-for the pinned Phonon model and the 37 preset voices with their catalog, and the Chatterbox installer for the pinned
-Chatterbox Turbo checkpoint and its model card.
+for the pinned Phonon model and the 37 preset voices with their catalog, the Chatterbox installer for the pinned
+Chatterbox Turbo and Chatterbox 500M checkpoints and their model cards, and the Qwen3-TTS, VoxCPM2 and Breeze TTS 2
+installers for their pinned checkpoints and model cards.
 The complete upstream license governs; this table is a practical inventory.
 Reference consent, copyright, privacy and publicity rights still need review for
 each voice and intended use. Converting a restricted voice through another model

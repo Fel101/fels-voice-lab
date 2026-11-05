@@ -85,7 +85,7 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
                     main = next(node for node in entrypoint.body if isinstance(node, ast.FunctionDef) and node.name == 'main')
                     setup = next(node for node in main.body if isinstance(node, ast.If)
                                  and ast.unparse(node.test) == "args.engine == 'voxcpm2'")
-                    bootstrap = ("import os, sys\nfrom pathlib import Path\nfrom types import SimpleNamespace\n"
+                    bootstrap = ("import importlib.util, os, sys\nfrom pathlib import Path\nfrom types import SimpleNamespace\n"
                                  "root=Path.cwd(); args=SimpleNamespace(engine='voxcpm2')\n" + ast.unparse(setup) + "\n")
                 script = bootstrap + imports + "\nimport sys\nfor value in sys.argv[1:3]: assert str(guard(value))==value\n" \
                     "for value in sys.argv[3:]:\n try: guard(value)\n except ValueError: pass\n else: raise AssertionError('accepted unrelated audio: '+value)\n"

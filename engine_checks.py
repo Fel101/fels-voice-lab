@@ -40,7 +40,7 @@ DRAMA_RECEIPT = "out/drama3/installation.json"
 GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
                      ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original",
                      **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()},
-                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat"}
+                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything

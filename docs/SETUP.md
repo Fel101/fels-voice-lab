@@ -2,11 +2,15 @@
 
 This is an early Windows release that runs from source, not a bundled
 installer with every model. Python 3.12 x64 is the supported starting point.
-`setup.bat` sets up the core, the desktop window and the speech models you choose, in one go. Three models have guided
-installers, [Kokoro](#kokoro-on-the-cpu), [Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu),
-and all three speak on an ordinary CPU; Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher
-of its own too (`setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat`) for adding it later. A core installation
-without a model opens the studio and its stores, but cannot speak until one is installed.
+`setup.bat` sets up the core, the desktop window and the speech models you choose, in one go: [Kokoro](#kokoro-on-the-cpu),
+[Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu), which all speak on an ordinary CPU;
+Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher of its own too (`setup-kokoro.bat`,
+`setup-phonon.bat`, `setup-chatterbox.bat`) for adding it later. Every other model has a guided installer and a launcher as
+well, and **Install** on its card in **Models & features** runs it:
+[Chatterbox 500M and Voice Conversion](#chatterbox-500m-and-voice-conversion) and [Drama 3](#drama-3-on-the-cpu) on the CPU,
+and the four [Qwen3-TTS](#qwen3-tts-on-an-nvidia-graphics-card) models, [VoxCPM2](#voxcpm2-on-an-nvidia-graphics-card) and
+[Breeze TTS 2](#breeze-tts-2-on-an-nvidia-graphics-card) on an NVIDIA graphics card only. A core installation without a model
+opens the studio and its stores, but cannot speak until one is installed.
 
 Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and so on), apart from
 the service's `.venv`, so no installer can change the packages another model or the service depends on.
@@ -329,7 +333,8 @@ To remove them, delete `hf-cache\hub\models--ResembleAI--chatterbox` and, in `ou
 
 ## NVIDIA graphics cards
 
-Kokoro and Chatterbox Turbo can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU one. **Nobody
+Kokoro and the three Chatterbox models can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU
+one, and the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card (their sections follow this one). **Nobody
 has tried this on an NVIDIA card yet**: the builds are pinned by their SHA-256 and the installers check them, but whether they
 load and speak on your card is what a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) would tell the next person.
 
@@ -347,7 +352,11 @@ gives each the build that runs on the card, and says why when one gets its CPU b
 | Model | PyTorch build | Cards | Download, beyond the CPU install |
 |---|---|---|---|
 | Kokoro | 2.12.0, CUDA 13.0 ([requirements/kokoro-nvidia.txt](../requirements/kokoro-nvidia.txt)) | GeForce GTX 16 and RTX 20 series or newer, RTX 50 included, with an NVIDIA driver of version 580 or later | about 1.8 GB |
-| Chatterbox Turbo | 2.12.0 and torchaudio 2.11.0, CUDA 13.0 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | the same as Kokoro | about 1.7 GB |
+| Chatterbox Turbo, 500M and VC | 2.12.0 and torchaudio 2.11.0, CUDA 13.0 ([requirements/chatterbox-nvidia.txt](../requirements/chatterbox-nvidia.txt)) | the same as Kokoro | about 1.7 GB |
+
+The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 have only an NVIDIA build, of the same PyTorch and torchaudio files, and their
+installers make the same checks. VoxCPM2's and Breeze's also refuse a card with less graphics memory than the model needs, 7
+and 10 GB, which `nvidia-smi` reports too.
 
 Chatterbox asks for PyTorch 2.6, and PyTorch 2.6 has no build for RTX 50 series cards, so its NVIDIA build is the PyTorch 2.12
 that Kokoro's uses (one download serves both, from pip's cache) with torchaudio 2.11, the newest torchaudio. Chatterbox Turbo
@@ -370,6 +379,9 @@ can.
   it does not pin.
 - **A model with a GPU build** can be kept on the CPU with the switch; a CUDA build runs on the CPU too.
 - Phonon and Drama 3 run on the CPU, so their GPU is greyed out.
+- The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on the card, so their switch stays on GPU and CPU is greyed out.
+  Where the app cannot install their NVIDIA build (no NVIDIA driver, an older card or driver, or too little graphics memory),
+  their card has no **Install** and says why.
 
 A model whose PyTorch cannot use the card after all (a CUDA build with no code for this card) still runs on the CPU, and its
 card says it ran on the CPU. `"device": "cpu"` in `runtime.local.json`, or `--device cpu`, keeps every model on the CPU and
@@ -517,7 +529,7 @@ delete `.venv-breeze`, `breeze\models` and `out\breeze`.
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and
 interpreter paths used by the adapters. A catalog entry means integration exists,
-not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). A model without a guided installer that is missing files says so when it is asked to speak, and points here.
+not that the corresponding package, model, language frontend or hardware is present. After installing a family, open **Models & features**: it shows whether the environment and checkpoint files are present, and **Test** loads the model and speaks one sentence on the service device. Each card also says how much free RAM the Lab wants before it loads that model, and it refuses to load the model when less is free ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). A model that is missing files says so when it is asked to speak, and points to **Install** on its card and to its launcher.
 
 Two packages are optional and not part of the core install: `misaki` (English phoneme rules for the lip-sync
 tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the exporter asks Kokoro's environment for them) and
@@ -527,29 +539,47 @@ tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the export
 |---|---|---|
 | Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
 | Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
-| Chatterbox Original/Turbo/VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned CPU runtime and Turbo's checkpoint ([above](#chatterbox-turbo-on-the-cpu)). Original and VC use the same environment and need the `ResembleAI/chatterbox` checkpoint, which no installer fetches yet. A GPU build of PyTorch is yours to install there. |
-| Breeze | `.venv-breeze/Scripts/python.exe` | Separate environment, BF16 standalone wrapper. Needs the pinned checkpoint and text/audio tokenizer files. Review its non-commercial model license first. |
-| faster-Qwen | `.venv-fqwen/Scripts/python.exe` | Separate environment; faster-qwen3-tts 0.4.0, qwen-tts-hf 0.1.1.post1, Transformers 5.15.1 were tested locally. Needs exact catalog snapshots. Stock qwen-tts is a different comparison runtime. |
-| VoxCPM2 | Dedicated catalog environment and pinned source/ROCm overlay | Needs a GPU with at least 8 GB of memory (it peaked at 5.6 GB). Tested only on one AMD Radeon AI PRO R9700 with ROCm. It reads pinned source under `out/voxcpm2/source/src` and the Qwen environment's packages, so it is not a portable automatic installation. |
-| Drama 3 | Core environment plus separate speech.cpp | Pinned native download installer below; studio and cloning use CPU. |
+| Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
+| Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned NVIDIA runtime and one model's checkpoint ([above](#qwen3-tts-on-an-nvidia-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
+| VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned NVIDIA runtime, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-an-nvidia-graphics-card)); needs a card with 7 GB of memory. |
+| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned NVIDIA runtime and the BF16 checkpoint ([above](#breeze-tts-2-on-an-nvidia-graphics-card)); needs a card with 10 GB of memory. Its weights are for research and non-commercial use only. |
+| Drama 3 | Core environment plus speech.cpp | `setup-drama3.bat` installs the pinned native runtime and the Q4_K model ([below](#drama-3-on-the-cpu)); runs on the CPU with 26 GB of free RAM. |
 
 Do not install a model's dependencies into the core environment. Runtime dependency conflicts are why every model has an
 environment of its own and the workers are separate processes. This release does not claim Linux or macOS support, tested NVIDIA
-support (the `--nvidia` builds are untried) or reproducible builds of all optional model environments. Public installer recipes
-for the other families are not written yet.
+support (the NVIDIA builds are untried) or reproducible builds of the environments you make by hand for another graphics card.
+Every model in the catalog now has a guided installer; **Install** on its card in **Models & features** runs it.
 
-For Drama, first read its [model license](https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE),
-then explicitly run:
+### Drama 3 on the CPU
+
+Fish Audio Drama 3 (35B mixture-of-experts, about 3B active) designs voices and clones them from a recording and its exact
+transcript. It is under the
+[Fish Audio Community License 1.0](https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE):
+free for research and non-commercial use; commercial use is allowed only while your annual revenue is under USD 500,000, a
+hosted service needs a separate licence from Fish Audio, and anything you publish that uses it must say "Built with Fish
+Audio". Read it before you install; the plan says this first, and installing it means accepting it. **Install** on its card, or:
 
 ```powershell
-.venv\Scripts\python.exe tools/install_drama3.py
+setup-drama3.bat
 ```
 
-This downloads a 20.8 GB Q4 model and portable speech.cpp 0.8.10 runtime, verifies
-hashes, and retains license/derivative notices under `out/drama3`. Allow additional
-space for the runtime archive and temporary/resumable download. Studio inference
-needs at least 26 GB free RAM and may take several minutes. No model download
-occurs during ordinary generation. Keep the installer receipt with the model.
+It prints its plan and asks first, and installs into `out\drama3`, with nothing installed by pip: the Lab runs Drama 3 through
+speech.cpp, a native program (MIT), from the Lab's own `.venv`.
+
+1. **speech.cpp 0.8.10 for Windows x64**, its Vulkan build, which runs on the CPU too, from its GitHub release: a 29 MB archive,
+   checked against its SHA-256 and unpacked into `out\drama3\runtime`.
+2. **The Q4_K conversion** `sakasegawa/drama-3-GGUF` of `fishaudio/drama-3`, at the pinned revisions: the 20.8 GB model with its
+   licence, notice and model card, into `out\drama3\models`, every file checked against a SHA-256. The model comes in 32 MB
+   pieces, six at a time, and an interrupted download continues from the pieces already done.
+3. **A speech check on the CPU**, after it writes `out\drama3\installation.json`, the receipt the Lab finds the model and the
+   runtime through: the Lab's Drama worker loads the model and speaks the Models page's check sentence in a voice made from a
+   description. The clip stays in `out\drama3\install-check.wav`.
+
+Drama 3 needs 26 GB of free RAM to load, so the installer stops on a computer with less RAM than that in all, and the studio
+refuses to load it while less is free. Allow 22 GB of disk. On the development computer (an 8-core AMD Ryzen 7 PRO 8845HS with
+64 GB of RAM), with the model already on disk, the installer fetched speech.cpp and the model's small files, checked them, and
+its speech check loaded the model in 28 seconds and spoke 2.3 seconds in 9 seconds, all on the CPU. `--runtime-only` installs
+speech.cpp alone. To remove Drama 3, delete `out\drama3`; [DRAMA3.md](DRAMA3.md) says more about how the Lab runs it.
 
 ## Hardware and state settings
 
