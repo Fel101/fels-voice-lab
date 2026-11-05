@@ -203,15 +203,30 @@ class InstallationTests(TempTree):
                 command = launcher.split()[0]    # a launcher may take the arguments that choose a checkpoint
                 self.assertTrue((ROOT / command).is_file(), f"{command} is not in the lab folder")
 
-    def test_voxcpm_reads_the_top_level_cache_and_needs_its_source_and_overlay(self):
+    def test_voxcpm_reads_the_top_level_cache_and_needs_its_source_and_packages(self):
         self.environment("voxcpm2")
-        self.write(f"{self.hf_snapshot('voxcpm2')}/model.safetensors")
+        for name in ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json"):
+            self.write(f"{self.hf_snapshot('voxcpm2')}/{name}")
         result = installation(CATALOG["voxcpm2"], self.root)
-        self.assertIn("out/voxcpm2/source/src", result["missing"])
-        self.assertIn(".venv-fqwen/Lib/site-packages", result["missing"])
+        self.assertEqual(result["missing"], ["torch (Python package)", "transformers (Python package)",
+                                             "librosa (Python package)", "out/voxcpm2/source/src"])
+        self.assertEqual(result["installer"], "setup-voxcpm.bat")
         (self.root / "out/voxcpm2/source/src").mkdir(parents=True)
-        (self.root / ".venv-fqwen/Lib/site-packages").mkdir(parents=True)
+        self.environment("voxcpm2", "torch-2.12.0+cu130", "transformers-5.15.1", "librosa-1.0.0")
         self.assertTrue(installation(CATALOG["voxcpm2"], self.root)["installed"])
+
+    def test_a_voxcpm_environment_without_pytorch_may_borrow_the_qwen_environments_packages(self):
+        # The setup the Lab first ran VoxCPM2 with, on an AMD card: an empty .venv-voxcpm and .venv-fqwen's packages.
+        self.environment("voxcpm2")
+        for name in ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json"):
+            self.write(f"{self.hf_snapshot('voxcpm2')}/{name}")
+        (self.root / "out/voxcpm2/source/src").mkdir(parents=True)
+        self.environment("qwen3-tts-0.6b-base", "torch-2.12.0+rocm7.14.0", "transformers-5.15.1", "librosa-1.0.0")
+        self.assertTrue(installation(CATALOG["voxcpm2"], self.root)["installed"])
+        # A .venv-voxcpm with a PyTorch of its own borrows nothing: what it lacks is missing.
+        self.environment("voxcpm2", "torch-2.12.0+cu130")
+        self.assertEqual(installation(CATALOG["voxcpm2"], self.root)["missing"],
+                         ["transformers (Python package)", "librosa (Python package)"])
 
     def test_drama_needs_the_receipt_and_the_files_it_names(self):
         self.environment("drama-3")

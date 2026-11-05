@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import importlib.util
 import os
 import sys
 import traceback
@@ -22,9 +23,11 @@ def main():
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     if args.engine == "voxcpm2":
-        # VoxCPM2 has its own clean Python entrypoint but shares the existing
-        # read-only ROCm wheels. Keep those packages invisible to other workers.
-        sys.path.append(str(root / ".venv-fqwen" / "Lib" / "site-packages"))
+        # VoxCPM2 runs from its pinned source with the packages of its own .venv-voxcpm. A .venv-voxcpm made by hand without
+        # PyTorch borrows .venv-fqwen's packages instead, read-only (the setup it was first checked with, on an AMD card); only
+        # this worker sees them.
+        if importlib.util.find_spec("torch") is None:
+            sys.path.append(str(root / ".venv-fqwen" / "Lib" / "site-packages"))
         sys.path.insert(0, str(root / "out" / "voxcpm2" / "source" / "src"))
         for name in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE", "MODELSCOPE_OFFLINE"):
             os.environ[name] = "1"

@@ -193,6 +193,10 @@ def checkpoint_files(manifest, voices):
 
 
 def snapshot_dir(root, manifest):
+    """Where a checkpoint's files go: hf-cache/hub/models--<repo>/snapshots/<revision>, the Hugging Face cache, unless the file
+    list's "cache" names another folder (VoxCPM2's worker reads its files from the top of hf-cache)."""
+    if "cache" in manifest:
+        return Path(root) / manifest["cache"] / f"models--{manifest['repo'].replace('/', '--')}" / "snapshots" / manifest["revision"]
     return Path(root) / SNAPSHOT.format(repo=manifest["repo"].replace("/", "--"), revision=manifest["revision"])
 
 

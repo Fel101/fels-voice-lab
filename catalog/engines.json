@@ -283,7 +283,7 @@
       "parameters": "2B",
       "backend": {"name": "voxcpm2-local-source", "source_commit": "f772e498a45fbb5fb8e13fbf9b9c48be9fe33e69"},
       "runtime": {"environment": ".venv-voxcpm", "python": ".venv-voxcpm/Scripts/python.exe", "python_version": "3.12.10",
-                  "rocm_packages": "read-only site-packages overlay from .venv-fqwen; existing torch 2.12.0+rocm7.14.0; worker-only"},
+                  "note": "tools/install_voxcpm.py installs requirements/voxcpm-nvidia.txt there (the CUDA 13.0 build of PyTorch 2.12) and VoxCPM's source files at the pinned commit into out/voxcpm2/source. A .venv-voxcpm without PyTorch borrows .venv-fqwen's packages read-only, as the Lab first ran it on an AMD card (torch 2.12.0+rocm7.14.0)."},
       "precision": {"status": "worker_verified", "value": "bfloat16", "attention": "upstream default; optimize=false"},
       "integration": {"status": "integrated", "service_api": true},
       "license": "Apache-2.0",
@@ -298,8 +298,8 @@
         "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
       },
       "limitations": ["ROCm inference worked on the local R9700 but upstream only documents CUDA/MPS; AMD support is not promised.",
-                      "Generation is slower than real time in the initial design smoke.",
-                      "The current worker uses the existing ROCm wheels through an isolated read-only Python path overlay."]
+                      "The NVIDIA build that tools/install_voxcpm.py installs has not been tried on an NVIDIA card.",
+                      "With seed 42 the Models page's check sentence ran on to 20.8 s on the R9700; seeds 7 and 1234 gave 3.5 s and 2.7 s."]
     },
     {
       "id": "drama-3",

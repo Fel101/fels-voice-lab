@@ -433,6 +433,49 @@ installed on your computer at your request and are not part of this repository.
 To remove one model, delete its folder in `hf-cache\hub` (`models--Qwen--Qwen3-TTS-12Hz-0.6B-Base`, say) and its two files in
 `out\qwen`; delete `.venv-fqwen` only when removing all four.
 
+## VoxCPM2 on an NVIDIA graphics card
+
+VoxCPM2 (OpenBMB, 2B) makes a voice from a written description or clones one from a recording, and speaks at 48 kHz. The Lab
+runs it only on a graphics card with at least 7 GB of memory. **Install** on its card (it appears when the computer has an
+NVIDIA card and driver the build runs on), or:
+
+```powershell
+setup-voxcpm.bat
+```
+
+It prints its plan and asks first, and installs into this folder, in `.venv-voxcpm`, `hf-cache` and `out\voxcpm2`:
+
+1. **62 pinned Python packages** from [requirements/voxcpm-nvidia.txt](../requirements/voxcpm-nvidia.txt) into `.venv-voxcpm`:
+   the CUDA 13.0 builds of PyTorch 2.12.0 and torchaudio 2.11.0 (the same files as the other NVIDIA builds), Transformers
+   5.15.1, librosa, einops, pydantic, safetensors and tqdm, at the versions the Lab ran VoxCPM2 with. About 2.1 GB to download
+   and 5.1 GB installed.
+2. **VoxCPM's source files**: the 25 files its inference imports, from github.com/OpenBMB/VoxCPM at the commit the Lab was
+   checked with (f772e49), into `out\voxcpm2\source`, where the Lab's worker reads them, each checked against the SHA-256 in
+   [catalog/voxcpm2_source.json](../catalog/voxcpm2_source.json). VoxCPM is not installed as a package, so the long list of
+   packages its own package asks for (a Gradio demo, the ModelScope denoiser, fine-tuning, text normalization) is never needed.
+3. **The checkpoint** `openbmb/VoxCPM2` at the pinned revision: the 4.6 GB model, the 0.4 GB audio decoder, the tokenizer,
+   settings and model card, 5.0 GB in all, into the top of `hf-cache` (where the worker has always read it), each checked against
+   the SHA-256 in [catalog/voxcpm2_snapshot.json](../catalog/voxcpm2_snapshot.json).
+4. **A speech check on the card**: the Lab's VoxCPM2 worker loads the model without using the network and speaks the Models
+   page's check sentence in a voice made from a description. The clip and a receipt stay in `out\voxcpm2`.
+
+It stops before anything is downloaded on a computer without an NVIDIA driver, or with a card or driver the CUDA 13.0 build
+cannot run on. **Nobody has tried VoxCPM2 on an NVIDIA card in the Lab yet.** On one computer with an AMD Radeon AI PRO R9700,
+run with `--checkpoint-only` and an empty `.venv-voxcpm` that borrows the Qwen environment's ROCm packages (below), it fetched
+the 25 source files from GitHub, loaded in 27 seconds and used at most 6.3 GB of graphics memory. The check sentence, with the
+Models page's fixed seed 42, ran on to 20.8 seconds of audio there, most of it after the sentence ended; the same sentence with
+seeds 7 and 1234 took 3.5 and 2.7 seconds, made in 4.6 and 3.3 seconds. If a take keeps going after its text, generate it
+again with another seed. In a clean environment from the same package list (with PyTorch's CPU build in place of the CUDA
+one), VoxCPM2 loaded and spoke a sentence on the CPU, which checks that the list holds everything its inference imports.
+
+For another graphics card, make `.venv-voxcpm` yourself with a GPU build of PyTorch and the packages above and run the launcher
+with `--checkpoint-only`, which fetches the source and model files and leaves the packages alone. A `.venv-voxcpm` with no
+PyTorch at all borrows the packages of `.venv-fqwen` instead, read-only and in VoxCPM2's worker only: that is how the Lab first
+ran it, with a ROCm build of PyTorch for an AMD card in `.venv-fqwen`.
+
+Licences: the VoxCPM2 weights and VoxCPM's code are Apache-2.0 (OpenBMB). The packages keep their own licences, as for
+Qwen3-TTS above. To remove VoxCPM2, delete `.venv-voxcpm`, `out\voxcpm2` and `hf-cache\models--openbmb--VoxCPM2`.
+
 ## Model runtimes
 
 The [catalog](../catalog/engines.json) records exact checkpoint revisions and

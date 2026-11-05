@@ -29,24 +29,30 @@ STORE_SCHEMA = 1
 WEIGHT_SUFFIXES = (".safetensors", ".pth", ".pt", ".bin", ".gguf")
 # VoxCPM2 reads its pinned snapshot from the top of hf-cache; the other Hugging Face engines use hf-cache/hub.
 TOP_LEVEL_CACHE = {"voxcpm2"}
-# Source and overlay directories that the VoxCPM2 worker adds to its import path.
-EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src", ".venv-fqwen/Lib/site-packages")}
+# Source directories that a worker adds to its import path: VoxCPM2's pinned source files, which tools/install_voxcpm.py fetches.
+EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src",)}
+# Environments whose packages an engine may borrow when its own lacks them: a .venv-voxcpm made by hand without PyTorch reads
+# .venv-fqwen's, read-only (engine_worker.py adds them to its import path), as the Lab first ran VoxCPM2 on an AMD card.
+BORROWED_PACKAGES = {"voxcpm2": ".venv-fqwen/Scripts/python.exe"}
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
 GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
                      ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original",
-                     **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()}}
+                     **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()},
+                     "voxcpm2": "setup-voxcpm.bat"}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
 # into it.
 REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
                      **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
-                     **{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS}}
+                     **{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS},
+                     "voxcpm2": ("torch", "transformers", "librosa")}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
 REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES,
-                  **{engine: QWEN_FILES for engine in QWEN_MODELS}}
+                  **{engine: QWEN_FILES for engine in QWEN_MODELS},
+                  "voxcpm2": ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json")}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
 CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
@@ -98,8 +104,11 @@ def installation(entry, root=LAB):
     environment = entry["runtime"]["python"]
     missing = [] if (root / environment).is_file() else [environment]
     if not missing:
+        borrowed = BORROWED_PACKAGES.get(engine)
         missing.extend(f"{package} (Python package)" for package in REQUIRED_PACKAGES.get(engine, ())
-                       if not _has_package(root, environment, package))
+                       if not _has_package(root, environment, package)
+                       and not (borrowed and not _has_package(root, environment, "torch")
+                                and _has_package(root, borrowed, package)))
     if engine == "drama-3":
         checkpoint = "out/drama3"
         missing.extend(_drama_missing(root))
@@ -162,7 +171,7 @@ def _dist_infos(site_packages):
 
 def engine_fingerprint(entry, root=LAB):
     """What a stored check is a statement about: the catalog's pin for the engine, and the packages installed in the
-    environment it runs in (plus the overlay folders it adds to its import path).
+    environment it runs in (plus the packages it borrows from another environment: BORROWED_PACKAGES).
 
     A check says the engine spoke when it was made. After a dependency pin, a package or a checkpoint snapshot changes,
     that result no longer describes the engine, so the Models page asks for a new check instead of repeating the old one.
@@ -174,9 +183,10 @@ def engine_fingerprint(entry, root=LAB):
     packages = _dist_infos(environment / "Lib" / "site-packages")
     for site in sorted(environment.glob("lib/python*/site-packages")):
         packages += _dist_infos(site)
-    for directory in EXTRA_DIRECTORIES.get(entry["id"], ()):
-        if directory.endswith("site-packages"):
-            packages += _dist_infos(root / directory)
+    borrowed = BORROWED_PACKAGES.get(entry["id"])
+    if borrowed and not _has_package(root, entry["runtime"]["python"], "torch"):
+        # The engine imports the borrowed packages, so a change there changes it too.
+        packages += _dist_infos((root / borrowed).parent.parent / "Lib" / "site-packages")
     payload = json.dumps({"pinned": pinned, "packages": packages}, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 

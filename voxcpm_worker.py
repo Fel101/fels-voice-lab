@@ -15,6 +15,8 @@ from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
 SOURCE = LAB / "out" / "voxcpm2" / "source" / "src"
+# A .venv-voxcpm made by hand without PyTorch borrows these packages, read-only (engine_worker.py adds them to its import path):
+# the setup the Lab was first checked with, on an AMD card. tools/install_voxcpm.py gives .venv-voxcpm packages of its own.
 BASE_SITE = LAB / ".venv-fqwen" / "Lib" / "site-packages"
 MODEL = LAB / "hf-cache" / "models--openbmb--VoxCPM2" / "snapshots" / "32279effe8c19989596f05d353d1447f51d9e915"
 SOURCE_COMMIT = "f772e498a45fbb5fb8e13fbf9b9c48be9fe33e69"
@@ -49,7 +51,8 @@ def _integer(params, name, default, low, high):
     return converted
 
 
-MIN_GPU_GIB = 8  # bfloat16 weights and activations peaked at 5.6 GiB allocated when this was measured
+# bfloat16 weights and activations peaked at 5.6 GiB allocated when this was measured; an 8 GB card reports a little under 8 GiB.
+MIN_GPU_GIB = 7
 
 
 def check_gpu_memory(device_name, total_bytes):
@@ -91,15 +94,14 @@ class VoxCPMWorker:
             raise RuntimeError("VoxCPM2 runs only on a GPU, and this service is using the CPU. "
                                "Start it without --device cpu, or use another engine.")
         require_ram(MIN_FREE_RAM_GB["voxcpm2"], "VoxCPM2")
-        if not SOURCE.is_dir() or not MODEL.is_dir() or not BASE_SITE.is_dir():
-            raise RuntimeError("Pinned VoxCPM2 source, snapshot, or shared ROCm runtime is missing; see docs/SETUP.md.")
+        if not SOURCE.is_dir() or not MODEL.is_dir():
+            raise RuntimeError("VoxCPM2's pinned source or model files are missing. Install it with Install on its card in "
+                               "Models & features, or setup-voxcpm.bat; docs/SETUP.md says more.")
 
-        # Only this dedicated worker process sees the pinned source and existing
-        # read-only ROCm packages. The .venv-fqwen environment is not modified.
+        # Only this dedicated worker process sees the pinned source (and, for a .venv-voxcpm without PyTorch, the packages it
+        # borrows, which engine_worker.py added).
         if str(SOURCE) not in os.sys.path:
             os.sys.path.insert(0, str(SOURCE))
-        if str(BASE_SITE) not in os.sys.path:
-            os.sys.path.append(str(BASE_SITE))
         for name in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE", "MODELSCOPE_OFFLINE"):
             os.environ[name] = "1"
 
@@ -107,11 +109,13 @@ class VoxCPMWorker:
         from voxcpm import VoxCPM
 
         if not torch.cuda.is_available():
-            raise RuntimeError("The configured ROCm torch runtime reports no HIP/CUDA device.")
+            raise RuntimeError(f"VoxCPM2 runs only on a graphics card, and this environment's PyTorch ({torch.__version__}) "
+                               "sees none it can use.")
         properties = torch.cuda.get_device_properties(0)
         device_name = properties.name
         check_gpu_memory(device_name, properties.total_memory)
-        torch.backends.cudnn.enabled = False
+        if torch.version.hip:
+            torch.backends.cudnn.enabled = False    # MIOpen, which ROCm puts behind this switch, failed on the AMD card it was checked on
         started = time.perf_counter()
         self.model = VoxCPM.from_pretrained(
             str(MODEL), load_denoiser=False, optimize=False,
