@@ -68,6 +68,12 @@
   377 s, Chatterbox Turbo switched from its CPU build in 174 s and cloned a voice in its speech check (2.5 s of audio in 2.0 s),
   Chatterbox 500M and Voice Conversion passed theirs, and **Test** passed for Kokoro (2.7 s in 0.5 s), Turbo (2.1 s in 1.8 s)
   and 500M (2.6 s in 6.6 s).
+- **MIOpen off for Qwen3-TTS and Breeze TTS 2 on AMD's build too.** Measured on the R9700 with each model's Lab worker:
+  Qwen3-TTS's first take after a load took 18 to 25 s with MIOpen and 3 s without it, and its later takes were 15 to 30%
+  slower with it even once its kernels were cached; Breeze took 35 to 150% longer over each take of a new length with MIOpen
+  and allocated the same graphics memory (9.5 GB at most for a 29 s take). Breeze now loads in about 30 s instead of 45 to 60,
+  and its **Test** spoke the check sentence, 3.0 s, in 9.3 s, where its install check had taken 14.5. VoxCPM2 already ran
+  without MIOpen.
 - **Graphics memory checked before a download.** The installers now read each NVIDIA card's memory from `nvidia-smi`, and
   VoxCPM2's and Breeze's refuse a card with less than 7 and 10 GB before they download anything. Breeze used up to 7.5 GB, so
   an 8 GB card is too small for it.

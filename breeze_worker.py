@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 
-from common import LAB, require_ram
+from common import LAB, require_ram, skip_miopen
 from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
@@ -77,6 +77,8 @@ class BreezeWorker:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         started = time.perf_counter()
+        # On AMD's build, MIOpen made each take of a new length 35 to 150% slower on the R9700, and it needed no less memory.
+        skip_miopen(self.device)
         import breeze_gen
 
         self.module = breeze_gen

@@ -17,7 +17,7 @@ import time
 import soundfile as sf
 import torch
 
-import common  # noqa: F401  (sets HIP_VISIBLE_DEVICES, disables cudnn, points HF_HOME at hf-cache)
+import common  # noqa: F401  (sets HIP_VISIBLE_DEVICES and points HF_HOME at hf-cache; breeze_worker switches MIOpen off)
 
 from breeze import loader, native, runtime
 

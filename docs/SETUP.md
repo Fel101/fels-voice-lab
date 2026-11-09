@@ -447,10 +447,12 @@ setting up by hand beyond AMD's graphics driver (AMD Software: Adrenalin Edition
   plan gives its model's total.
 - **One package built from source.** `rocm`, a small part of the runtime, is published by AMD only as source: pip builds it after
   the wheels are in, with the setuptools the model's own list pins, so pip runs nothing the lists do not pin.
-- **MIOpen stays off.** Kokoro, the Chatterbox models and VoxCPM2 run their convolutions and LSTMs on an AMD card with PyTorch's
-  own kernels rather than AMD's MIOpen library, which tunes its kernels for every new length of input: on the R9700, Kokoro took
-  11 to 53 seconds over each sentence of a new length with MIOpen, and 0.6 to 0.9 seconds without it. The first sentence after a
-  load still takes 10 to 20 seconds while the card's kernels load; the Models page's load speaks a warm-up line for that.
+- **MIOpen stays off.** On an AMD card every model runs its convolutions and LSTMs with PyTorch's own kernels rather than AMD's
+  MIOpen library, which tunes its kernels for every new length of input. On the R9700, with MIOpen, Kokoro took 11 to 53 seconds
+  over each sentence of a new length (0.6 to 0.9 seconds without it), Qwen3-TTS's first take after a load took 18 to 25 seconds
+  (3 without), and Breeze took 35 to 150% longer over each take of a new length, while allocating the same graphics memory at
+  most. The first sentence after a load still takes 10 to 20 seconds while the card's kernels load; the Models page's load
+  speaks a warm-up line for that.
 
 AMD's packages carry the ROCm runtime and libraries under AMD's own licence terms; like the other packages they are installed on
 your computer at your request and are not part of this repository.
@@ -507,7 +509,9 @@ than the GeForce GTX 16 and RTX 20 series or a driver older than 580, or with an
 for. Each model wants 10 GB of free RAM before it loads. **Nobody has tried Qwen3-TTS on an NVIDIA card in the Lab yet.** What
 it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), installed with AMD's build: the 1.7B VoiceDesign loaded and
 warmed up in 50 seconds, spoke 1.9 seconds in 1.3 seconds and used at most 4.5 GB of graphics memory, and the 1.7B CustomVoice
-spoke 2.7 seconds in 3.9 seconds with at most 4.6 GB. Earlier, in an environment made by hand from ROCm builds of the same
+spoke 2.7 seconds in 3.9 seconds with at most 4.6 GB. With MIOpen switched off ([AMD Radeon cards](#amd-radeon-cards)),
+**Test** passed for both, after loads of 15 and 17 seconds, and once loaded the CustomVoice spoke sentences of 1 to 8 seconds
+about twice as fast as real time (7.8 seconds in 3.7). Earlier, in an environment made by hand from ROCm builds of the same
 packages, the 0.6B Base loaded in 40 seconds, used at most 2.8 GB, and its **Test** made 2.2 seconds of speech in 3.8 seconds.
 An 8 GB card should therefore hold one 1.7B model, with other programs' use of the card on top; close games and other models if
 a load runs out of graphics memory.
@@ -619,7 +623,10 @@ It prints its plan and asks first, and installs into this folder, in `.venv-bree
 It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, or with a card, driver or
 amount of graphics memory the build cannot run with. **Nobody has tried Breeze on an NVIDIA card in the Lab yet.** Installed
 with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61 seconds, spoke 3.0 seconds in 14.5
-seconds and used at most 7.5 GB of graphics memory. It wants 12 GB of free RAM before it loads. For a graphics card neither
+seconds and used at most 7.5 GB of graphics memory. With MIOpen switched off ([AMD Radeon cards](#amd-radeon-cards)), **Test**
+there loaded it in 31 seconds and spoke the check sentence, 3.0 seconds, in 9.3: Breeze takes about three times as long as the
+speech it makes. A 29-second take of 400 characters took 93 seconds and allocated up to 9.5 GB of graphics memory, so on a card
+with 10 or 12 GB keep lines short. It wants 12 GB of free RAM before it loads. For a graphics card neither
 build runs on, make `.venv-breeze` yourself with a GPU build of PyTorch and the packages above, then run the launcher with
 `--checkpoint-only`. To remove Breeze, delete `.venv-breeze`, `breeze\models` and `out\breeze`.
 

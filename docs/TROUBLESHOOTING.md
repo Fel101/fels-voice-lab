@@ -98,8 +98,9 @@ how it went is welcome.
 - Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
   NVIDIA driver of version 580 or later. On an older card, setup gives Kokoro and Chatterbox their CPU builds.
 - **"needs a graphics card with at least 10 GB of memory".** VoxCPM2 needs 7 GB of graphics memory and Breeze TTS 2 10 GB, so
-  their installers refuse a smaller card before they download anything. Breeze used 7.5 GB at most, too much for an 8 GB card
-  once Windows and other programs have taken their share.
+  their installers refuse a smaller card before they download anything. Breeze used 7.5 GB at most for the check sentence, too
+  much for an 8 GB card once Windows and other programs have taken their share, and a 29-second take allocated 9.5 GB: on a
+  card with 10 or 12 GB, keep Breeze's lines short.
 - **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
   build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
 - **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA

@@ -10,7 +10,7 @@ import os
 import time
 from collections import OrderedDict
 
-from common import LAB, require_ram
+from common import LAB, require_ram, skip_miopen
 from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
@@ -111,13 +111,15 @@ class QwenWorker:
         # faster implementation; it fixes the Transformers 5.x codec RoPE config.
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
-        import common  # noqa: F401 - enforces HIP selection and MIOpen workaround first
+        import common  # noqa: F401 - names the AMD card the Lab uses (HIP_VISIBLE_DEVICES) before PyTorch starts
         import fqwen_compat  # noqa: F401
         import torch
         import transformers
         from faster_qwen3_tts import FasterQwen3TTS
         from huggingface_hub import snapshot_download
 
+        # On AMD's build, MIOpen made every take slower on the R9700 (a first take of 18 to 25 s, against 3 s without it).
+        skip_miopen(self.device)
         started = time.perf_counter()
         snapshot = snapshot_download(
             repo_id=self.spec["repo_id"],

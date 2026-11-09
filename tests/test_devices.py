@@ -149,6 +149,20 @@ class WorkerDeviceTests(unittest.TestCase):
         self.assertEqual((runtime.device, health["device"]), ("cpu", "cpu"))
         self.assertIn("cannot use a graphics card", health["device_note"])
 
+    def test_miopen_is_switched_off_only_for_amds_build_on_the_card(self):
+        def switched(device, *, hip):
+            torch = types.SimpleNamespace(
+                version=types.SimpleNamespace(hip=hip),
+                backends=types.SimpleNamespace(cudnn=types.SimpleNamespace(enabled=True)),
+            )
+            with mock.patch.object(common, "torch_runtime", lambda: torch):
+                common.skip_miopen(device)
+            return torch.backends.cudnn.enabled
+
+        self.assertFalse(switched("cuda", hip="7.14.60850"))  # MIOpen sits behind the cuDNN switch on ROCm
+        self.assertTrue(switched("cuda", hip=None))  # NVIDIA's cuDNN stays on
+        self.assertTrue(switched("cpu", hip="7.14.60850"))
+
 
 class HardwareTests(unittest.TestCase):
     def test_the_nvidia_driver_is_found_by_its_dll_in_system32(self):
