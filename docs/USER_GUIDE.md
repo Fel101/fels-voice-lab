@@ -312,13 +312,12 @@ another's test out of date.
 
 When the service uses a graphics card, each card has a **Runs on GPU | CPU** switch. It chooses where that model runs from its
 next load, and the card's state and test are then those of that device. A model installed with the CPU build of PyTorch runs
-on the CPU; switch it to GPU and its card offers **Install GPU build**, which replaces PyTorch in that model's environment. GPU
+on the CPU; switch it to GPU and its card offers **Install GPU build**, which replaces PyTorch in that model's environment with
+the GPU build for this computer's card, [NVIDIA's](SETUP.md#nvidia-graphics-cards) or [AMD's](SETUP.md#amd-radeon-cards). GPU
 is greyed out, with the reason under it, for Phonon and Drama 3 (they run on the CPU) and where the graphics card or its driver
-cannot run the model's GPU build ([NVIDIA graphics cards](SETUP.md#nvidia-graphics-cards)); on a computer with an AMD card, that
-includes Kokoro and Chatterbox, whose GPU builds are NVIDIA's only. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on
-a graphics card, so their switch stays on GPU and CPU is greyed out instead; **Install** gives them the build for this
-computer's card, NVIDIA's or [AMD's](SETUP.md#amd-radeon-cards). On a model that is not installed yet, the switch chooses
-which build **Install** puts in.
+cannot run the model's GPU build. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, so their switch
+stays on GPU and CPU is greyed out instead; **Install** always gives them the GPU build for this computer's card. On a model
+that is not installed yet, the switch chooses which build **Install** puts in.
 
 Every card says how much free RAM the Lab wants before it loads that model, and the top of the section says how much RAM
 this computer has and how much is free right now. The Lab refuses to load a model when less than that is free. A card turns

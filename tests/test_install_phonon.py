@@ -193,7 +193,7 @@ class ShippedFilesTests(unittest.TestCase):
     def test_the_first_setup_offers_the_installer(self):
         from tools import first_setup
         self.assertEqual(first_setup.MODELS["phonon"],
-                         {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "nvidia": False})
+                         {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "gpu": False})
         self.assertIn("setup-phonon.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):

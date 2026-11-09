@@ -11,12 +11,12 @@ its model's own environment), and keeps the end of its output for the page to sh
 it holds the pool's job lock, so tests, loads and clips are refused instead of competing with it for memory and disk. Closing
 the service stops the install and its children; the script continues where it stopped when it is run again.
 
-A card whose GPU/CPU switch says GPU installs the engine's NVIDIA build (the script's --nvidia), and an engine installed with
-the CPU build of PyTorch can get its NVIDIA build afterwards, which replaces PyTorch in its environment. The models that run
-only on a graphics card (Qwen3-TTS, VoxCPM2, Breeze TTS 2) get the build for this computer's card, NVIDIA's or AMD's, whatever
-the switch says. gpu_build() says whether that can work on this computer before anything is asked of the script: an NVIDIA
-driver, and a card and driver the build runs on, from the installer's own card_problems(); or, for those models, an AMD card
-whose chip AMD's ROCm build has code for, from the installer's amd_card_problems().
+A card whose GPU/CPU switch says GPU installs the engine's GPU build for this computer's graphics card (the script's --gpu):
+NVIDIA's CUDA build, or AMD's ROCm build on a computer whose card is an AMD Radeon. An engine installed with the CPU build of
+PyTorch can get its GPU build afterwards, which replaces PyTorch in its environment. The models that run only on a graphics
+card (Qwen3-TTS, VoxCPM2, Breeze TTS 2) always get the GPU build, whatever the switch says. gpu_build() says whether that can
+work on this computer before anything is asked of the script: an NVIDIA driver, and a card and driver the build runs on, from
+the installer's own card_problems(); or an AMD card whose chip AMD's ROCm build has code for, from its amd_card_problems().
 """
 
 import codecs
@@ -46,19 +46,18 @@ INSTALLERS = {"kokoro": "tools/install_kokoro.py", PHONON_ENGINE_ID: "tools/inst
               **{engine: (QWEN_INSTALLER, "--model", model) for engine, model in QWEN_MODELS.items()},
               "voxcpm2": "tools/install_voxcpm.py", "breeze-tts-2": "tools/install_breeze.py",
               "drama-3": "tools/install_drama3.py"}
-# Engine id -> the installer module whose --nvidia puts in a GPU build of PyTorch, and whose card_problems(cards) says why that
-# build would not run on this computer's NVIDIA cards.
-# Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so their installers always put in a GPU build: NVIDIA's, or on a
-# computer whose card is an AMD Radeon, AMD's ROCm build, which their amd_card_problems(cards) judges.
+# Engine id -> the installer module whose --gpu puts in the GPU build of PyTorch for this computer's card: NVIDIA's, whose
+# card_problems(cards) says why it would not run on this computer's NVIDIA cards, or on a computer whose card is an AMD Radeon,
+# AMD's ROCm build, which its amd_card_problems(cards) judges. Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so
+# their installers always put in the GPU build.
 GPU_BUILDS = {"kokoro": "tools.install_kokoro",
               **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
               **{engine: "tools.install_qwen" for engine in QWEN_MODELS},
               "voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze"}
-NO_NVIDIA = "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver."
-NO_GPU = ("The app installs {name} for an NVIDIA graphics card or an AMD Radeon, and this computer has neither an NVIDIA driver "
-          "nor an AMD card that Windows lists.")
-NVIDIA_ONLY = ("The app installs {name}'s GPU build for NVIDIA graphics cards only, so on this computer's AMD card it runs on the "
-               "CPU.")
+NO_GPU = ("The app installs the GPU build of {name} for an NVIDIA graphics card or an AMD Radeon, and this computer has neither "
+          "an NVIDIA driver nor an AMD card that Windows lists.")
+# What the installers take for their GPU build.
+GPU_OPTION = "--gpu"
 # Every launcher runs its script with the lab's own Python, whichever environment the engine then runs in.
 LAB_PYTHON = ".venv/Scripts/python.exe"
 LOG_FOLDER = "out/install"
@@ -154,10 +153,10 @@ class EngineInstaller:
             return self._amd
 
     def gpu_build(self, key):
-        """(ok, reason): whether the app can install the GPU build of an engine on this computer. It needs an installer with an
-        NVIDIA build, an NVIDIA driver, and a card and driver that the build runs on, which the installer's own card_problems
-        says; or, for a model that runs only on a graphics card, an AMD card that AMD's build has code for, which the
-        installer's amd_card_problems says. reason is None when it can, and otherwise the sentence the card shows."""
+        """(ok, reason): whether the app can install the GPU build of an engine on this computer. It needs an installer with a
+        GPU build, and either an NVIDIA driver with a card and driver that NVIDIA's build runs on, which the installer's own
+        card_problems says, or an AMD card that AMD's build has code for, which its amd_card_problems says. reason is None when
+        it can, and otherwise the sentence the card shows."""
         entry = self.pool.entries.get(key) or {}
         name = entry.get("name", key)
         module = self.gpu_builds.get(key)
@@ -169,18 +168,16 @@ class EngineInstaller:
             if present:
                 problems = installer.card_problems(cards)
             elif not self.amd_listed():
-                return False, NO_GPU.format(name=name) if hasattr(installer, "amd_card_problems") else NO_NVIDIA
-            elif hasattr(installer, "amd_card_problems"):
-                problems = installer.amd_card_problems(self._amd_cards(), root=self.root)
+                return False, NO_GPU.format(name=name)
             else:
-                return False, NVIDIA_ONLY.format(name=name)
+                problems = installer.amd_card_problems(self._amd_cards(), root=self.root)
         except Exception as exc:  # noqa: BLE001 - a card that cannot be judged must not break the Models page
             return False, f"The Lab could not check {name}'s GPU build against this card ({type(exc).__name__}: {exc})."
         return (False, " ".join(problems)) if problems else (True, None)
 
     def plan(self, key, *, nvidia=False):
         """What the installer would do now, from its own --dry-run: {engine, nvidia, ok, paragraphs, problems}. Changes
-        nothing. nvidia asks for the plan of its GPU build."""
+        nothing. nvidia asks for the plan of its GPU build (the installer's --gpu), NVIDIA's or AMD's."""
         _entry, command = self._resolve(key)
         if nvidia and key not in self.gpu_builds:
             raise ValueError(f"{_entry.get('name', key)} has no GPU build the app can install.")
@@ -188,7 +185,7 @@ class EngineInstaller:
             if self._running():
                 raise worker_pool.WorkerBusy(f"{self._job['name']} is being installed now.")
         try:
-            done = subprocess.run([*command, *(["--nvidia"] if nvidia else []), "--dry-run"], cwd=self.root,
+            done = subprocess.run([*command, *([GPU_OPTION] if nvidia else []), "--dry-run"], cwd=self.root,
                                   env=_environment(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
                                   encoding="utf-8", errors="replace", timeout=PLAN_TIMEOUT, creationflags=NO_WINDOW)
         except subprocess.TimeoutExpired as exc:
@@ -204,7 +201,7 @@ class EngineInstaller:
         return {"engine": key, "nvidia": nvidia, "ok": done.returncode == 0, "paragraphs": steps, "problems": problems}
 
     def start(self, key, *, nvidia=False):
-        """Start the installer with --yes (and --nvidia for the GPU build) and return the job (see snapshot). Raises ValueError
+        """Start the installer with --yes (and --gpu for the GPU build) and return the job (see snapshot). Raises ValueError
         when the engine has no installer or no GPU build, is installed already (an engine installed with the CPU build of
         PyTorch can still get its GPU build) or the Python is missing, and WorkerBusy when an install or a request is
         running."""
@@ -225,7 +222,7 @@ class EngineInstaller:
             log_path = self._new_log(key)
             log = log_path.open("wb")
             try:
-                process = subprocess.Popen([*command, *(["--nvidia"] if nvidia else []), "--yes"], cwd=self.root,
+                process = subprocess.Popen([*command, *([GPU_OPTION] if nvidia else []), "--yes"], cwd=self.root,
                                            env=_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                            stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
             except Exception:

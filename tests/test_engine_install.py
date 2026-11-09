@@ -3,6 +3,7 @@
 Every install here runs a stand-in script in a private folder. Nothing is downloaded, nothing is installed, and no model is loaded.
 """
 
+import importlib
 import json
 import re
 import os
@@ -200,14 +201,22 @@ class PlanTests(InstallerCase):
         with self.assertRaisesRegex(ValueError, "Run setup.bat first"):
             installer.plan("kokoro")
 
-    def test_the_gpu_build_is_asked_of_the_script_with_nvidia(self):
+    def test_the_gpu_build_is_asked_of_the_script_with_gpu(self):
+        # --gpu: the installer puts in the GPU build for this computer's card, NVIDIA's or AMD's.
         self.stub(DRY_RUN + "print('working', flush=True)\n")
         self.installer.gpu_builds = {"kokoro": "tools.install_kokoro"}
         plan = self.installer.plan("kokoro", nvidia=True)
-        self.assertEqual((plan["ok"], plan["nvidia"], self.argv()), (True, True, "--nvidia --dry-run"))
+        self.assertEqual((plan["ok"], plan["nvidia"], self.argv()), (True, True, "--gpu --dry-run"))
         self.assertTrue(self.installer.start("kokoro", nvidia=True)["nvidia"])
         self.assertEqual(self.wait_until(self.finished, "the install to end")["state"], "finished")
-        self.assertEqual(self.argv(), "--nvidia --yes")
+        self.assertEqual(self.argv(), "--gpu --yes")
+
+    def test_every_installer_with_a_gpu_build_takes_gpu(self):
+        for module in sorted(set(engine_install.GPU_BUILDS.values())):
+            with self.subTest(installer=module):
+                parser = importlib.import_module(module).build_parser()
+                required = ["--model", "0.6b-base"] if module == "tools.install_qwen" else []
+                self.assertTrue(parser.parse_args([*required, engine_install.GPU_OPTION]).gpu)
 
     def test_an_installed_engine_can_get_its_gpu_build_only_from_the_cpu_build(self):
         self.stub(DRY_RUN + "print('working', flush=True)\n")
@@ -220,7 +229,7 @@ class PlanTests(InstallerCase):
         with mock.patch.object(self.pool, "build_probe", return_value=("cpu", "2.12.0")):
             self.installer.start("kokoro", nvidia=True)
         self.wait_until(self.finished, "the install to end")
-        self.assertEqual(self.argv(), "--nvidia --yes")
+        self.assertEqual(self.argv(), "--gpu --yes")
 
     def test_an_engine_without_a_gpu_build_is_refused_one(self):
         self.stub(DRY_RUN)
@@ -445,7 +454,7 @@ class GpuBuildTests(unittest.TestCase):
                                amd_cards=amd_cards, scripts=scripts,
                                gpu_builds={"kokoro": "tools.install_kokoro"} if builds is None else builds)
 
-    def test_with_an_amd_card_the_models_that_need_a_graphics_card_can_take_amds_build(self):
+    def test_with_an_amd_card_every_model_with_a_gpu_build_can_take_amds_build(self):
         builds = {"kokoro": "tools.install_kokoro", **self.GPU_ONLY}
         with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ):
             os.environ.pop("HIP_VISIBLE_DEVICES", None)
@@ -453,11 +462,12 @@ class GpuBuildTests(unittest.TestCase):
             (lab / "requirements").mkdir()
             (lab / "requirements" / "amd-rocm.txt").write_bytes((ROOT / "requirements" / "amd-rocm.txt").read_bytes())
             installer = self.installer(present=False, amd=[RADEON_780M, R9700], builds=builds, root=lab)
-            for key in self.GPU_ONLY:
+            for key in (*self.GPU_ONLY, "kokoro"):
                 self.assertEqual(installer.gpu_build(key), (True, None), key)
             self.assertEqual(self.amd_asked, 1)    # AMD's driver is asked once
-            self.assertEqual(installer.gpu_build("kokoro"),
-                             (False, engine_install.NVIDIA_ONLY.format(name="Kokoro 82M")))
+            ok, reason = self.installer(present=False, amd=[RADEON_VII], builds=builds, root=lab).gpu_build("kokoro")
+            self.assertFalse(ok)
+            self.assertIn("has no code for the AMD Radeon VII (gfx906)", reason)
             small = self.installer(present=False, amd=[RX_7600], builds=builds, root=lab)
             self.assertEqual(small.gpu_build("qwen3-tts-1.7b-voice-design"), (True, None))
             ok, reason = small.gpu_build("breeze-tts-2")
@@ -481,7 +491,8 @@ class GpuBuildTests(unittest.TestCase):
         self.assertEqual(self.asked, 1)    # nvidia-smi is asked once
 
     def test_the_reasons_a_gpu_build_cannot_be_installed(self):
-        self.assertEqual(self.installer(present=False).gpu_build("kokoro"), (False, engine_install.NO_NVIDIA))
+        self.assertEqual(self.installer(present=False).gpu_build("kokoro"),
+                         (False, engine_install.NO_GPU.format(name="Kokoro 82M")))
         self.assertEqual(self.asked, 0)
         ok, reason = self.installer(cards=[{"name": "NVIDIA GeForce GTX 1080", "capability": (6, 1), "driver": (581, 80)}]).gpu_build("kokoro")
         self.assertFalse(ok)
@@ -653,7 +664,7 @@ class InstallRoutesTests(InstallerCase):
         self.installer.amd_listed = lambda: []
         self.assertEqual(self.call("POST", "/api/engines/kokoro/install", {"dry_run": True, "nvidia": "yes"})[0], 400)
         status, body = self.call("POST", "/api/engines/kokoro/install", {"dry_run": True, "nvidia": True})
-        self.assertEqual((status, body["plan"]["nvidia"], self.argv()), (200, True, "--nvidia --dry-run"))
+        self.assertEqual((status, body["plan"]["nvidia"], self.argv()), (200, True, "--gpu --dry-run"))
         status, body = self.call("POST", "/api/engines/kokoro/device", {"device": "gpu"})
         self.assertEqual(status, 400)    # this pool runs on the CPU
         self.assertIn("runs every model on the CPU", body["error"])
@@ -664,7 +675,8 @@ class InstallRoutesTests(InstallerCase):
         self.assertEqual((status, body["device"]["choice"], body["device"]["device"]), (200, "cpu", "cpu"))
         rows = {row["id"]: row for row in self.call("GET", "/api/engines/status")[1]["engines"]}
         self.assertEqual((rows["kokoro"]["switch"], rows["kokoro"]["device_choice"], rows["kokoro"]["device"]), ("cpu", "cpu", "cpu"))
-        self.assertEqual(rows["kokoro"]["gpu"]["reason"], engine_install.NO_NVIDIA)    # not installed, and no NVIDIA driver here
+        self.assertEqual(rows["kokoro"]["gpu"]["reason"],    # not installed, and neither an NVIDIA driver nor an AMD card here
+                         engine_install.NO_GPU.format(name="Kokoro 82M"))
         self.assertEqual(rows["turbo"]["gpu"]["reason"],    # this installer has no script for Turbo
                          "The app has no GPU build of Chatterbox Turbo 350M to install; it runs on the CPU.")
         self.pool.hold("a clip is made")

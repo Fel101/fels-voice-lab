@@ -7,7 +7,7 @@ Each engine's speak() returns (wav float32 numpy, sample_rate, info dict). info 
 
 import time
 
-from common import LAB, REFERENCE_TEXT, Timer, sync, to_numpy
+from common import LAB, REFERENCE_TEXT, Timer, skip_miopen, sync, to_numpy
 import synthetic_label
 
 import numpy as np
@@ -23,6 +23,7 @@ class Kokoro:
         from kokoro_support import KOKORO_REPO, kokoro_snapshot_dir
 
         self.device = device
+        skip_miopen(device)
         self.snapshot = kokoro_snapshot_dir()
         config_path = self.snapshot / "config.json"
         weights_path = self.snapshot / "kokoro-v1_0.pth"
@@ -151,6 +152,7 @@ class ChatterboxTurbo:
         from chatterbox_support import TURBO_FILES, turbo_snapshot_dir
 
         self.device = device
+        skip_miopen(device)
         snapshot = turbo_snapshot_dir()
         missing = [name for name in TURBO_FILES if not (snapshot / name).is_file()]
         if missing:
@@ -200,6 +202,7 @@ class ChatterboxOriginal:
         from chatterbox_support import ORIGINAL_FILES, original_snapshot_dir
 
         self.device = device
+        skip_miopen(device)
         snapshot = original_snapshot_dir()
         missing = [name for name in ORIGINAL_FILES if not (snapshot / name).is_file()]
         if missing:

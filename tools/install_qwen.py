@@ -16,12 +16,12 @@ installed at another version. The Lab runs Qwen3-TTS only on a graphics card, be
 records CUDA graphs, so there is no CPU build. On a computer with an NVIDIA driver the list's CUDA 13.0 build of PyTorch 2.12
 goes in, and the installer stops for a card or driver that build cannot run on; nobody has tried it on an NVIDIA card yet. On a
 computer whose graphics card is an AMD Radeon, AMD's ROCm 7.14 build of PyTorch 2.12 takes its place, with the code for the
-card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how); it was checked on an AMD Radeon AI PRO R9700. --nvidia
-is accepted and changes nothing. The model's files, listed in catalog/qwen3_tts_<model>_snapshot.json, come from Hugging Face at
-the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again installs only
-what is missing. --checkpoint-only fetches the model files and leaves the packages alone, for a .venv-fqwen you made yourself
-with another GPU build of PyTorch: the speech check then runs on that card. The environment, download, hash and pip helpers are
-the ones install_kokoro.py uses, so a fix there reaches this installer too.
+card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how); it was checked on an AMD Radeon AI PRO R9700. --gpu and
+--nvidia are taken and change nothing. The model's files, listed in catalog/qwen3_tts_<model>_snapshot.json, come from Hugging
+Face at the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again
+installs only what is missing. --checkpoint-only fetches the model files and leaves the packages alone, for a .venv-fqwen you
+made yourself with another GPU build of PyTorch: the speech check then runs on that card. The environment, download, hash and
+pip helpers are the ones install_kokoro.py uses, so a fix there reaches this installer too.
 """
 
 import argparse
@@ -40,9 +40,11 @@ try:
     from tools import amd_build as amd
     from tools import install_kokoro as base
 except ImportError:  # run as a script, which puts tools\ first on the path and not the lab folder
-    import install_kokoro as base
-
-    import amd_build as amd
+    # The lab folder goes on the path instead, so that this script and tools/amd_build.py share one install_kokoro and
+    # its InstallError.
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from tools import amd_build as amd
+    from tools import install_kokoro as base
 
 InstallError = base.InstallError
 ROOT = Path(__file__).resolve().parents[1]
@@ -542,10 +544,11 @@ def build_parser():
     parser.add_argument("--yes", action="store_true", help="accept the plan without asking")
     parser.add_argument("--dry-run", action="store_true", help="show the plan and run the checks; change nothing")
     parser.add_argument(
+        "--gpu",
         "--nvidia",
         action="store_true",
-        help="accepted for the Models page and the other installers; Qwen3-TTS always gets the build for this computer's "
-        "graphics card",
+        help="accepted for the Models page and the other installers; Qwen3-TTS always gets the GPU build for this "
+        "computer's graphics card",
     )
     parser.add_argument(
         "--checkpoint-only",

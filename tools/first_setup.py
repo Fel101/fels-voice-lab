@@ -2,7 +2,7 @@
 
     .venv\\Scripts\\python.exe tools\\first_setup.py
     .venv\\Scripts\\python.exe tools\\first_setup.py --models recommended --yes
-    .venv\\Scripts\\python.exe tools\\first_setup.py --models kokoro chatterbox --nvidia
+    .venv\\Scripts\\python.exe tools\\first_setup.py --models kokoro chatterbox --gpu
     .venv\\Scripts\\python.exe tools\\first_setup.py --models none --no-desktop
 
 setup.bat runs it with whatever was typed after setup.bat. It installs the desktop window and its shortcut (what
@@ -12,6 +12,10 @@ is about to install (each installer's own --dry-run), asks once, and then runs t
 model that is already installed is left alone, and running setup.bat again after an interruption continues where it stopped.
 setup-kokoro.bat, setup-phonon.bat and setup-chatterbox.bat stay for adding a model later, and so does the Install button on
 Models & features.
+
+On a computer with an NVIDIA driver, or one whose graphics card is an AMD Radeon, it offers Kokoro and Chatterbox Turbo the GPU
+build of PyTorch for that card (NVIDIA's CUDA build, or AMD's ROCm build) where each installer says it runs there; --gpu takes
+them without asking, and --nvidia asks for NVIDIA's alone.
 """
 
 import argparse
@@ -31,12 +35,12 @@ import engine_checks  # noqa: E402
 
 # What each model is called here, its catalog id and installer, and whether a GPU build of PyTorch exists for it.
 MODELS = {
-    "kokoro": {"engine": "kokoro", "script": "tools/install_kokoro.py", "nvidia": True},
-    "phonon": {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "nvidia": False},
-    "chatterbox": {"engine": "turbo", "script": "tools/install_chatterbox.py", "nvidia": True},
+    "kokoro": {"engine": "kokoro", "script": "tools/install_kokoro.py", "gpu": True},
+    "phonon": {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "gpu": False},
+    "chatterbox": {"engine": "turbo", "script": "tools/install_chatterbox.py", "gpu": True},
 }
 CHOICES = {"recommended": ("kokoro", "phonon"), "all": ("kokoro", "phonon", "chatterbox"), "none": ()}
-# For the models with an NVIDIA build: the name setup gives them, and their environment and launcher, for switching one to the
+# For the models with a GPU build: the name setup gives them, and their environment and launcher, for switching one to the
 # graphics card later.
 GPU_MODELS = {
     "kokoro": ("Kokoro", ".venv-kokoro", "setup-kokoro.bat"),
@@ -46,6 +50,8 @@ GPU_MODELS = {
 CLONING_TOTAL_RAM_GB = 15
 DRY_RUN_DONE = "Checks passed."
 WIDTH = 110
+# What each installer takes for the GPU build of each maker's cards: --gpu puts in the build for this computer's card.
+GPU_OPTIONS = {"nvidia": "--nvidia", "amd": "--gpu"}
 
 
 class SetupStopped(Exception):
@@ -154,18 +160,24 @@ def ask_yes(question, *, ask=input):
         return False
 
 
-def card_problems(name, cards):
-    """Why a model's NVIDIA build would not run on these NVIDIA cards, from its own installer's check; [] when it would."""
+def installers():
     from tools import install_chatterbox as ic, install_kokoro as ik
 
-    return {"kokoro": ik, "chatterbox": ic}[name].card_problems(cards)
+    return {"kokoro": ik, "chatterbox": ic}
 
 
-def gpu_choice(gpu_models, cards):
-    """(models whose NVIDIA build runs on these cards, {model: the paragraph that says why another gets its CPU build})."""
+def card_problems(name, cards, build="nvidia"):
+    """Why a model's GPU build would not run on these cards, from its own installer's check; [] when it would. build says whose
+    cards they are: "nvidia" (hardware.nvidia_cards) or "amd" (hardware.amd_cards)."""
+    installer = installers()[name]
+    return installer.amd_card_problems(cards, root=ROOT) if build == "amd" else installer.card_problems(cards)
+
+
+def gpu_choice(gpu_models, cards, build="nvidia"):
+    """(models whose GPU build runs on these cards, {model: the paragraph that says why another gets its CPU build})."""
     able, refused = [], {}
     for name in gpu_models:
-        problems = card_problems(name, cards)
+        problems = card_problems(name, cards, build)
         if not problems:
             able.append(name)
             continue
@@ -180,17 +192,45 @@ def gpu_choice(gpu_models, cards):
     return able, refused
 
 
-def installer_command(name, *options, python=sys.executable, nvidia=False):
+def amd_cards():
+    """This computer's AMD graphics cards as AMD's driver gives them (hardware.amd_cards, which can be []), or None when Windows
+    lists no AMD card."""
+    return hardware.amd_cards() if hardware.amd_listed() else None
+
+
+def offer_text(build, able, cards):
+    """The paragraph that offers the GPU builds of the models in able: NVIDIA's, or AMD's for the card the Lab would use."""
+    names = " and ".join(GPU_MODELS[name][0] for name in able)
+    each = " each" if len(able) > 1 else ""
+    if build == "nvidia":
+        return (
+            f"This computer has an NVIDIA graphics driver. {names} can run on the graphics card with an NVIDIA build of "
+            f"PyTorch instead of the CPU one: a larger download (about 2 GB{each}), and the Lab has not been tried on an "
+            "NVIDIA card yet, so a report of how it went is welcome."
+        )
+    from tools import amd_build
+
+    card = amd_build.chosen_card(cards, ROOT)
+    more = max(installer.packages_mb(card=card)[0] - installer.PACKAGES_DOWNLOAD_MB for installer in installers().values())
+    return (
+        f"This computer's graphics card is an {card['name']}. {names} can run on it with AMD's ROCm build of PyTorch "
+        f"instead of the CPU one: a larger download (about {more / 1000:.1f} GB more{each}). The Lab was checked with it on "
+        "an AMD Radeon AI PRO R9700."
+    )
+
+
+def installer_command(name, *options, python=sys.executable, build=None):
+    """The command that runs a model's installer, with the option for its GPU build when build names one ("nvidia" or "amd")."""
     command = [str(python), str(ROOT / MODELS[name]["script"]), *options]
-    if nvidia and MODELS[name]["nvidia"]:
-        command.append("--nvidia")
+    if build and MODELS[name]["gpu"]:
+        command.append(GPU_OPTIONS[build])
     return command
 
 
-def show_plan(name, *, nvidia, runner=subprocess.run):
+def show_plan(name, *, build=None, runner=subprocess.run):
     """Print one installer's plan (its --dry-run). Raises SetupStopped when the installer says this computer cannot take it."""
     done = runner(
-        installer_command(name, "--dry-run", nvidia=nvidia),
+        installer_command(name, "--dry-run", build=build),
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -207,9 +247,9 @@ def show_plan(name, *, nvidia, runner=subprocess.run):
         )
 
 
-def run_installer(name, *, nvidia, runner=subprocess.run):
+def run_installer(name, *, build=None, runner=subprocess.run):
     say(f"=== Installing {name} ===")
-    if runner(installer_command(name, "--yes", nvidia=nvidia), cwd=ROOT).returncode:
+    if runner(installer_command(name, "--yes", build=build), cwd=ROOT).returncode:
         raise SetupStopped(
             f"The {name} installer stopped; its message is above. Run setup.bat again to continue: what is "
             "already installed or downloaded is kept."
@@ -244,6 +284,7 @@ def run(
     ram=common.ram_report,
     nvidia_present=hardware.nvidia_driver_present,
     cards=hardware.nvidia_cards,
+    amd=amd_cards,
     desktop=set_up_desktop,
 ):
     interactive = sys.stdin.isatty() if interactive is None else interactive
@@ -262,34 +303,41 @@ def run(
     for name in already:
         say(f"{name} is already installed; setup leaves it as it is.")
     todo = [name for name in chosen if name not in already]
-    gpu_models = [name for name in todo if MODELS[name]["nvidia"]]
-    offer = bool(gpu_models) and not args.nvidia and args.models is None and interactive and nvidia_present()
+    gpu_models = [name for name in todo if MODELS[name]["gpu"]]
+    # Whose GPU build this computer could take: NVIDIA's with an NVIDIA driver (or when --nvidia asks for it, and the installers
+    # then say what is missing), else AMD's when Windows lists an AMD card.
+    build, found = None, []
+    if gpu_models:
+        if args.nvidia or nvidia_present():
+            build, found = "nvidia", cards()
+        elif (listed := amd()) is not None:
+            build, found = "amd", listed
+    wanted = args.gpu or args.nvidia
+    offer = bool(gpu_models) and not wanted and args.models is None and interactive and build is not None
     gpu = []
-    if gpu_models and (args.nvidia or offer):
-        # Each model's installer says whether its NVIDIA build runs on this card: both need a GTX 16 or RTX 20 series card or
-        # newer and a 2025 driver. A model whose build cannot run here gets its CPU build, and the rest can use the card.
-        able, refused = gpu_choice(gpu_models, cards())
+    if gpu_models and wanted and build is None:
+        paragraph(
+            "--gpu asks for the GPU builds, and this computer has neither an NVIDIA driver nor an AMD graphics card that "
+            "Windows lists. So setup installs the CPU builds, which run on the processor."
+        )
+    elif gpu_models and (wanted or offer):
+        # Each model's installer says whether its GPU build runs on this card: NVIDIA's needs a GTX 16 or RTX 20 series card
+        # or newer and a 2025 driver, and AMD's a chip it has code for. A model whose build cannot run here gets its CPU build,
+        # and the rest can use the card.
+        able, refused = gpu_choice(gpu_models, found, build)
         if offer and able:
-            names = " and ".join(GPU_MODELS[name][0] for name in able)
-            paragraph(
-                f"This computer has an NVIDIA graphics driver. {names} can run on the graphics card with an NVIDIA build of "
-                f"PyTorch instead of the CPU one: a larger download (about 2 GB{' each' if len(able) > 1 else ''}), and the "
-                "Lab has not been tried on an NVIDIA card yet, so a report of how it went is welcome."
-            )
+            paragraph(offer_text(build, able, found))
         for text in refused.values():
             paragraph(text)
-        if args.nvidia:
+        question = "Install the NVIDIA builds?" if build == "nvidia" else "Install AMD's builds?"
+        if wanted:
             gpu = able
-        elif (
-            offer
-            and able
-            and ask_yes("Install the NVIDIA builds? Type yes for them, or press Enter for the CPU builds: ", ask=ask)
-        ):
+        elif offer and able and ask_yes(f"{question} Type yes for them, or press Enter for the CPU builds: ", ask=ask):
             gpu = able
     if todo:
         say("")
         for name in todo:
-            show_plan(name, nvidia=name in gpu, runner=runner)
+            show_plan(name, build=build if name in gpu else None, runner=runner)
         if not args.yes:
             if not interactive:
                 raise SetupStopped(
@@ -302,7 +350,7 @@ def run(
                 say("No model was installed. Install them later from Models & features, or run setup.bat again.")
                 todo = []
         for name in todo:
-            run_installer(name, nvidia=name in gpu, runner=runner)
+            run_installer(name, build=build if name in gpu else None, runner=runner)
     say("Setup is done.")
     if desktop_ready:
         say("Start the Lab with the Fel's Voice Lab icon on your Desktop.")
@@ -322,6 +370,12 @@ def build_parser():
         help="recommended (Kokoro and Phonon), all (adds Chatterbox Turbo), none, or names: kokoro phonon chatterbox",
     )
     parser.add_argument("--yes", action="store_true", help="install the chosen models without asking")
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        help="install the GPU build of PyTorch for Kokoro and Chatterbox, each where it runs on this computer's graphics card: "
+        "NVIDIA's CUDA build (untested by the Lab), or AMD's ROCm build for an AMD Radeon",
+    )
     parser.add_argument(
         "--nvidia",
         action="store_true",

@@ -5,6 +5,7 @@ import hashlib
 import http.server
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -21,6 +22,8 @@ sys.path.insert(0, str(ROOT))
 import engine_checks  # noqa: E402
 import kokoro_support  # noqa: E402
 import soundfile as sf  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
+from tools import amd_build as amd  # noqa: E402
 from tools import install_kokoro as ik  # noqa: E402
 
 REAL_MANIFEST = json.loads((ROOT / ik.MANIFEST).read_text("utf-8"))
@@ -99,7 +102,8 @@ class ServerCase(unittest.TestCase):
 
 
 class FakeLab:
-    """A lab folder holding a three-package lock, its GPU swap and a small stand-in for the model files, at the real revision."""
+    """A lab folder holding a three-package lock, its GPU swap, the shipped AMD list and a small stand-in for the model files, at
+    the real revision."""
     CONTENTS = {"config.json": b'{"n_token": 178}', "kokoro-v1_0.pth": noise(40_000, 1), "README.md": b"---\nlicense: apache-2.0\n---\n",
                 "voices/af_heart.pt": noise(5_000, 2), "voices/bm_george.pt": noise(5_001, 3), "voices/ef_dora.pt": noise(5_002, 4),
                 "voices/jf_alpha.pt": noise(5_003, 5), "voices/zf_xiaoxiao.pt": noise(5_004, 6)}
@@ -118,6 +122,7 @@ class FakeLab:
         (self.root / ik.MANIFEST).write_text(json.dumps(manifest), "utf-8")
         (self.root / ik.LOCK).write_text(self.LOCK, "utf-8")
         (self.root / ik.NVIDIA_LOCK).write_text(self.NVIDIA_LOCK, "utf-8")
+        (self.root / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
         self.manifest = manifest
 
     def served(self):
@@ -215,6 +220,18 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertEqual([item["key"] for item in swapped], [item["key"] for item in cpu])
         self.assertEqual([item for item in swapped if item["key"] != "torch"], [item for item in cpu if item["key"] != "torch"])
 
+    def test_amds_build_swaps_only_torch_and_adds_its_runtime_and_the_code_for_the_cards_chip(self):
+        cpu = ik.read_lock(ROOT / ik.LOCK)
+        packages = ik.pinned_packages(ROOT, card=R9700)
+        self.assertEqual([item["key"] for item in packages[:len(cpu)]], [item["key"] for item in cpu])
+        torch = next(item for item in packages if item["key"] == "torch")
+        self.assertEqual(torch["version"], "2.12.0+rocm7.14.0")
+        self.assertEqual([item for item in packages[:len(cpu)] if item["key"] != "torch"], [item for item in cpu if item["key"] != "torch"])
+        self.assertEqual(sorted(item["key"] for item in packages[len(cpu):]),
+                         ["amd-torch-device-gfx12-0", "amd-torch-device-gfx1201", "rocm", "rocm-bootstrap", "rocm-sdk-core",
+                          "rocm-sdk-device-gfx1201", "rocm-sdk-libraries"])
+        self.assertNotIn("torchaudio", {item["key"] for item in packages}, "Kokoro needs no torchaudio")
+
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
         data = (ROOT / "setup-kokoro.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
@@ -230,7 +247,7 @@ class ShippedFilesTests(unittest.TestCase):
 
     def test_the_first_setup_offers_the_installer(self):
         from tools import first_setup
-        self.assertEqual(first_setup.MODELS["kokoro"], {"engine": "kokoro", "script": "tools/install_kokoro.py", "nvidia": True})
+        self.assertEqual(first_setup.MODELS["kokoro"], {"engine": "kokoro", "script": "tools/install_kokoro.py", "gpu": True})
         self.assertIn("setup-kokoro.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
@@ -256,10 +273,11 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertTrue((ROOT / "tools" / "install_kokoro.py").read_bytes().isascii())
         packages = ik.read_lock(ROOT / ik.LOCK)
         files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, ["all"]))
-        for todo, only, exists, nvidia in ((len(packages), False, False, False), (3, False, True, False), (0, False, True, False),
-                                           (0, True, True, False), (len(packages), False, False, True)):
+        for todo, only, exists, nvidia, card in ((len(packages), False, False, False, None), (3, False, True, False, None),
+                                                 (0, False, True, False, None), (0, True, True, False, None),
+                                                 (len(packages), False, False, True, None), (len(packages), False, False, False, R9700)):
             text = ik.plan_text(REAL_MANIFEST, packages, todo, files, files, checkpoint_only=only, environment_exists=exists,
-                                nvidia=nvidia)
+                                nvidia=nvidia, card=card, cards=[RADEON_780M, R9700])
             self.assertTrue(text.isascii())
             self.assertLessEqual(max(len(line) for line in text.splitlines()), 110)
 
@@ -455,6 +473,44 @@ class EnvironmentTests(unittest.TestCase):
         self.assertIn("needs NVIDIA driver 580 or later, and this computer has 572.83. Update the driver", old_driver[0])
         # Without nvidia-smi the generation is unknown and only the driver Windows lists is checked.
         self.assertEqual(ik.card_problems([card("NVIDIA GeForce GTX 1080", None, (581, 80))]), [])
+
+    def test_gpu_asks_for_the_build_of_this_computers_graphics_card_and_nvidia_for_nvidias_alone(self):
+        def build(graphics=("amd", [R9700]), **options):
+            args = argparse.Namespace(**{"gpu": False, "nvidia": False, **options})
+            with mock.patch.object(ik, "graphics", lambda: graphics):
+                return ik.requested_build(args)
+
+        self.assertEqual(build(), (None, []))
+        self.assertEqual(build(gpu=True), ("amd", [R9700]))
+        self.assertEqual(build(gpu=True, graphics=("nvidia", [])), ("nvidia", []))
+        self.assertEqual(build(nvidia=True), ("nvidia", []))
+        self.assertEqual(build(gpu=True, nvidia=True), ("nvidia", []))
+        with self.assertRaisesRegex(ik.InstallError, "neither an NVIDIA driver .* nor an AMD graphics card"):
+            build(gpu=True, graphics=(None, []))
+        self.assertIn("For an AMD Radeon card, use --gpu instead", ik.nvidia_problems(present=False)[0])
+
+    def test_amds_build_runs_on_a_card_whose_chip_it_has_code_for(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            self.assertEqual(ik.amd_card_problems([RADEON_780M, R9700], root=lab.root, environ={}), [])
+            [problem] = ik.amd_card_problems([RADEON_VII], root=lab.root, environ={})
+        self.assertIn("AMD's ROCm 7.14 build of PyTorch 2.12 has no code for the AMD Radeon VII (gfx906)", problem)
+        refusal = " ".join(ik.amd_refusal("Kokoro's GPU build", [problem]).split())
+        self.assertTrue(refusal.startswith("This computer cannot take Kokoro's GPU build yet: - AMD's ROCm 7.14 build"), refusal)
+        self.assertIn("- Leave out --gpu to install the CPU build, which runs on the processor.", refusal)
+
+    def test_a_gpu_build_replaces_only_the_cpu_builds_pytorch_in_an_install_that_has_it(self):
+        cpu = ik.read_lock(ROOT / ik.LOCK)
+        installed = {item["key"]: item["version"] for item in cpu}
+        for packages in (ik.pinned_packages(ROOT, card=R9700), ik.pinned_packages(ROOT, nvidia=True)):
+            switching, conflicts, switch_only = ik.gpu_switch(packages, cpu, installed)
+            self.assertEqual([(item["key"], have) for item, have in switching], [("torch", "2.12.0")])
+            self.assertEqual((conflicts, switch_only), ([], True))
+        # A package of someone's own still stops the installer, and an environment without Kokoro is not a switch.
+        switching, conflicts, switch_only = ik.gpu_switch(ik.pinned_packages(ROOT, card=R9700), cpu, {**installed, "spacy": "3.0.0"})
+        self.assertEqual(([item["key"] for item, _have in conflicts], switch_only), (["spacy"], False))
+        switching, conflicts, switch_only = ik.gpu_switch(ik.pinned_packages(ROOT, card=R9700), cpu, {"torch": "2.12.0"})
+        self.assertEqual((len(switching), conflicts, switch_only), (1, [], False))
 
     def test_a_gpu_list_may_only_swap_packages_the_cpu_list_pins(self):
         cpu = [{"name": "torch", "key": "torch", "version": "2.12.0", "sha256": HASH}]
@@ -697,7 +753,7 @@ class PlanTests(unittest.TestCase):
         text = self.flat(ik.plan_text(REAL_MANIFEST, packages, 1, files, [], checkpoint_only=False, environment_exists=True,
                                       nvidia=True, switching=switching))
         self.assertIn("Kokoro is already installed in .venv-kokoro, and its CPU build of PyTorch is replaced by the CUDA 13.0 build "
-                      "of PyTorch for NVIDIA graphics cards (not yet tried on one) (torch 2.12.0 becomes 2.12.0+cu130). About "
+                      "of PyTorch for NVIDIA graphics cards (not yet tried on one): torch 2.12.0 becomes 2.12.0+cu130. About "
                       f"{ik.mb_text(ik.NVIDIA_EXTRA_DOWNLOAD_MB)} to download", text)
         installed["spacy"] = "3.0.0"    # a package of someone's own: it still stops the installer
         _missing, different = ik.package_state(packages, installed)
@@ -712,6 +768,40 @@ class PlanTests(unittest.TestCase):
                      "afterwards, on the graphics card.", "GTX 16 or RTX 20 series card or newer", "driver of version 580",
                      "hardware report on GitHub"):
             self.assertIn(part, text)
+
+    def test_the_amd_plan_names_the_card_its_chip_amds_list_and_which_card_the_lab_uses(self):
+        files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, ["supported"]))
+        packages = ik.pinned_packages(ROOT, card=R9700)
+        text = self.flat(ik.plan_text(REAL_MANIFEST, packages, len(packages), files, files, checkpoint_only=False,
+                                      card=R9700, cards=[RADEON_780M, R9700]))
+        download, disk = ik.packages_mb(card=R9700)
+        self.assertEqual((download, disk), amd.sizes_mb("gfx1201", ik.OTHER_DOWNLOAD_MB, ik.OTHER_DISK_MB))
+        for part in ("Kokoro 82M on an AMD graphics card", f"{len(packages)} of {len(packages)} to install there",
+                     "AMD's ROCm 7.14 build of PyTorch 2.12 with the code for the AMD Radeon AI PRO R9700 (gfx1201)",
+                     f"About {ik.mb_text(download)} to download and {ik.mb_text(disk)} on disk",
+                     "requirements/kokoro-cpu.txt and requirements/amd-rocm.txt",
+                     "speaks one sentence, which you can play afterwards, on the AMD Radeon AI PRO R9700.",
+                     "AMD Software: Adrenalin Edition", "under AMD's own licence terms", "hardware report on GitHub",
+                     "This computer has 2 AMD graphics cards", 'runtime.local.json ("hip_visible_devices")'):
+            self.assertIn(part, text)
+        self.assertNotIn("NVIDIA", text)
+
+    def test_the_amd_plan_for_a_cpu_install_replaces_pytorch_and_adds_amds_runtime(self):
+        files = ik.checkpoint_files(REAL_MANIFEST, ik.choose_voices(REAL_MANIFEST, ["supported"]))
+        cpu = ik.read_lock(ROOT / ik.LOCK)
+        packages = ik.pinned_packages(ROOT, card=R9700)
+        installed = {item["key"]: item["version"] for item in cpu}
+        missing, different = ik.package_state(packages, installed)
+        switching, _conflicts, switch_only = ik.gpu_switch(packages, cpu, installed)
+        text = self.flat(ik.plan_text(REAL_MANIFEST, packages, len(missing) + len(different), files, [], checkpoint_only=False,
+                                      environment_exists=True, switching=switching, switch_only=switch_only, card=R9700,
+                                      cards=[R9700]))
+        download, disk = ik.switch_mb(card=R9700)
+        self.assertEqual(disk, amd.sizes_mb("gfx1201", 0, 0)[1] - (ik.PACKAGES_DISK_MB - ik.OTHER_DISK_MB))
+        self.assertIn("Kokoro is already installed in .venv-kokoro, and its CPU build of PyTorch is replaced by AMD's ROCm 7.14 "
+                      "build of PyTorch 2.12 with the code for the AMD Radeon AI PRO R9700 (gfx1201): torch 2.12.0 becomes "
+                      f"2.12.0+rocm7.14.0. About {ik.mb_text(download)} to download and {ik.mb_text(disk)} more on disk.", text)
+        self.assertNotIn("This computer has", text, "one card: nothing to say about which one the Lab uses")
 
     def test_the_plan_names_the_packages_with_licences_other_than_mit_bsd_or_apache(self):
         text = self.flat(self.plan())
@@ -761,13 +851,31 @@ class InstallPackagesTests(unittest.TestCase):
         self.assertEqual(lines, [f"alpha==1.0 --hash=sha256:{HASH}", FakeLab.NVIDIA_LOCK.splitlines()[1],
                                  f"en_core_web_sm @ https://example.invalid/en_core_web_sm-3.8.0-py3-none-any.whl --hash=sha256:{HASH}"])
 
+    def test_for_an_amd_card_pip_gets_the_wheels_then_builds_amds_source_package(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            ik.install_packages(lab.root, card=R9700,
+                                runner=lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0))
+            wheels, source = (Path(command[command.index("-r") + 1]) for command in calls)
+            self.assertEqual((wheels, source), (lab.root / "out" / "kokoro" / amd.WHEELS, lab.root / "out" / "kokoro" / amd.SOURCE))
+            lines = [line for line in wheels.read_text("utf-8").splitlines() if not line.startswith("#")]
+            source_lines = [line for line in source.read_text("utf-8").splitlines() if not line.startswith("#")]
+        self.assertEqual(lines[0], f"alpha==1.0 --hash=sha256:{HASH}")
+        self.assertTrue(lines[1].startswith("torch @ https://repo.amd.com/rocm/whl-multi-arch/"), lines[1])
+        self.assertIn("rocm-sdk-device-gfx1201", " ".join(lines))
+        self.assertNotIn("gfx1100", " ".join(lines), "only the code for the card's chip")
+        self.assertEqual([line.split()[0] for line in source_lines], ["rocm"])
+        self.assertIn("--only-binary=:all:", calls[0])
+        self.assertIn("--no-build-isolation", calls[1])
+
     def test_a_pip_failure_says_to_fix_it_and_run_again(self):
         with self.assertRaisesRegex(ik.InstallError, "pip stopped with exit code 2.*run the installer again"):
             ik.install_packages(ROOT, runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 2))
 
 
 class SpeechCheckTests(unittest.TestCase):
-    def check(self, stdout="", stderr="", code=0, error=None, device="cpu"):
+    def check(self, stdout="", stderr="", code=0, error=None, device="cpu", **options):
         calls = []
 
         def runner(command, **kwargs):
@@ -777,7 +885,7 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return ik.run_speech_check(folder, device=device, runner=runner), calls, Path(folder)
+            return ik.run_speech_check(folder, device=device, runner=runner, **options), calls, Path(folder)
 
     GOOD = ('{"voice": "af_heart", "problem": null, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, '
             '"torch": "2.12.0+cpu", "device": "cpu"}')
@@ -795,8 +903,20 @@ class SpeechCheckTests(unittest.TestCase):
     def test_on_the_graphics_card_the_check_asks_for_cuda_and_a_cuda_failure_points_at_the_driver(self):
         _result, calls, _folder = self.check(stdout=self.GOOD, device="cuda")
         self.assertEqual(calls[0][0][-1], "cuda")
-        with self.assertRaisesRegex(ik.InstallError, r"(?s)CUDA driver version is insufficient.*version 580 or later.*without --nvidia"):
+        with self.assertRaisesRegex(ik.InstallError, r"(?s)CUDA driver version is insufficient.*version 580 or later.*"
+                                                     r"without --gpu or --nvidia"):
             self.check(stderr="RuntimeError: CUDA driver version is insufficient for CUDA runtime version", code=1, device="cuda")
+
+    def test_on_an_amd_card_the_check_is_given_its_number_and_a_failure_points_at_amds_driver(self):
+        with mock.patch.dict("os.environ", {"HIP_VISIBLE_DEVICES": "0"}):
+            _result, calls, _folder = self.check(stdout=self.GOOD, device="cuda", amd_card=True, number=1)
+            self.assertEqual((calls[0][0][-1], calls[0][1]["env"]["HIP_VISIBLE_DEVICES"]), ("cuda", "1"))
+            _result, calls, _folder = self.check(stdout=self.GOOD, device="cuda", amd_card=True)
+            self.assertEqual(calls[0][1]["env"]["HIP_VISIBLE_DEVICES"], "0", "no number: the setting stands")
+        with self.assertRaises(ik.InstallError) as caught:
+            self.check(stderr="RuntimeError: HIP error: invalid device function", code=1, device="cuda", amd_card=True)
+        self.assertIn("Update the graphics driver (AMD Software: Adrenalin Edition", str(caught.exception))
+        self.assertNotIn("nvidia.com", str(caught.exception))
 
     def test_a_crash_shows_the_end_of_the_output(self):
         with self.assertRaisesRegex(ik.InstallError, r"in place, but Kokoro did not load or speak:\n(.*\n)*last line"):
@@ -878,6 +998,21 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["speech_check"], {"voice": "af_heart", "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6})
         self.assertRegex(receipt["installed_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
         self.assertNotIn(folder, json.dumps(receipt), "no folder names of the person's computer in the receipt")
+        self.assertNotIn("build", receipt)
+
+    def test_an_amd_install_records_the_build_amds_list_and_the_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            (lab.root / "out" / "kokoro").mkdir(parents=True)
+            files = ik.checkpoint_files(lab.manifest, ik.choose_voices(lab.manifest, ["bm_george"]))
+            check = {"voice": "af_heart", "problem": None, "load_seconds": 6.9, "total_seconds": 0.8, "audio_seconds": 5.3,
+                     "torch": "2.12.0+rocm7.14.0", "device": "cuda"}
+            receipt = json.loads(ik.write_receipt(lab.root, lab.manifest, ik.pinned_packages(lab.root, card=R9700), files, check,
+                                                  card=R9700, number=1).read_text("utf-8"))
+            self.assertEqual(receipt["amd_lock_sha256"], sha((lab.root / amd.LOCK).read_bytes()))
+        self.assertEqual((receipt["build"], receipt["torch"], receipt["packages_pinned"]), ("rocm", "2.12.0+rocm7.14.0", 10))
+        self.assertEqual(receipt["gpu"], {"name": "AMD Radeon AI PRO R9700", "chip": "gfx1201", "driver": "32.0.31041.1004",
+                                          "hip_visible_devices": 1})
 
 
 class RunTests(ServerCase):
@@ -892,21 +1027,29 @@ class RunTests(ServerCase):
         self.calls = []
         self.pip_options = []
         self.check_devices = []
+        self.check_options = []
+        self.graphics = ("nvidia", [])
+        self.nvidia = []
         wav = self.base / "out" / "kokoro" / "install-check.wav"
         self.check = {"voice": "af_heart", "problem": None, "load_seconds": 4.2, "total_seconds": 1.1, "audio_seconds": 2.6, "wav": wav}
+        environment = mock.patch.dict("os.environ")
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(amd.VARIABLE, None)
 
         def venv(root, **kwargs):
             self.calls.append("venv")
             self.make_environment({"pip": "26.2.2"})
 
-        def pip(root, **kwargs):
+        def pip(root, *, nvidia=False, card=None, **kwargs):
             self.calls.append("pip")
-            self.pip_options.append(kwargs)
-            self.installed.update(self.LOCKED)
+            self.pip_options.append({"nvidia": nvidia, "card": card["chip"] if card else None})
+            self.installed.update({item["key"]: item["version"] for item in ik.pinned_packages(root, nvidia=nvidia, card=card)})
 
         def speak(root, **kwargs):
             self.calls.append("check")
             self.check_devices.append(kwargs.get("device"))
+            self.check_options.append({key: value for key, value in kwargs.items() if key != "device"})
             wav.parent.mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -917,12 +1060,16 @@ class RunTests(ServerCase):
         for name, replacement in (("environment_versions", lambda root, **kwargs: dict(self.installed)),
                                   ("make_environment", venv), ("install_packages", pip), ("run_speech_check", speak),
                                   ("interpreter_problems", lambda root: []), ("long_path_problems", lambda root: []),
-                                  ("space_problems", lambda root, need: []), ("nvidia_problems", lambda: []),
+                                  ("space_problems", lambda root, need: []), ("nvidia_problems", lambda: list(self.nvidia)),
+                                  ("graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
                                   ("package_problems", lambda different, **kwargs: [f"{item['name']} is {have}"
                                                                                     for item, have in different])):
             patch = mock.patch.object(ik, name, replacement)
             patch.start()
             self.addCleanup(patch.stop)
+        patch = mock.patch.object(amd, "hip_devices", lambda root, environment: [dict(device) for device in DEVICES])
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def make_environment(self, packages):
         python = self.base / ".venv-kokoro" / "Scripts" / "python.exe"
@@ -979,7 +1126,7 @@ class RunTests(ServerCase):
         status, out, err = self.run_main("--yes")
         self.assertEqual((status, err), (0, ""))
         self.assertEqual(self.calls, ["venv", "pip", "check"])
-        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": False}], ["cpu"]))
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": False, "card": None}], ["cpu"]))
         self.assertIn("Making .venv-kokoro:", out)
         self.assertIn("Installing the Python packages into .venv-kokoro", out)
         self.assertIn("[1/6] config.json", out)
@@ -995,7 +1142,7 @@ class RunTests(ServerCase):
     def test_on_request_the_cuda_build_is_installed_and_checked_on_the_graphics_card(self):
         status, out, err = self.run_main("--yes", "--nvidia")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": True}], ["cuda"]))
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": True, "card": None}], ["cuda"]))
         self.assertIn("Kokoro 82M on an NVIDIA graphics card", out)
         self.assertIn("spoke a test sentence on the graphics card", out)
 
@@ -1005,6 +1152,93 @@ class RunTests(ServerCase):
         self.assertEqual(status, 1)
         self.assertIn("no NVIDIA driver here", err)
         self.untouched()
+
+    def test_gpu_on_a_computer_with_an_nvidia_driver_is_the_cuda_build(self):
+        status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": True, "card": None}], ["cuda"]))
+        self.assertIn("Kokoro 82M on an NVIDIA graphics card", out)
+
+    def test_gpu_on_an_amd_card_installs_amds_build_and_checks_it_on_that_card(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        self.check = {**self.check, "torch": "2.12.0+rocm7.14.0", "device": "cuda"}
+        status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["venv", "pip", "check"])
+        self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": False, "card": "gfx1201"}], ["cuda"]))
+        self.assertEqual(self.check_options, [{"amd_card": True, "number": 1}])
+        text = " ".join(out.split())
+        self.assertIn("Kokoro 82M on an AMD graphics card", text)
+        self.assertIn("with the code for the AMD Radeon AI PRO R9700 (gfx1201)", text)
+        self.assertIn('This computer has 2 AMD graphics cards, and the Lab uses the AMD Radeon AI PRO R9700: runtime.local.json now '
+                      'says "hip_visible_devices": "1".', text)
+        self.assertIn("Kokoro is installed and spoke a test sentence on the AMD Radeon AI PRO R9700 (2.6 s of audio", text)
+        self.assertEqual(json.loads((self.base / "runtime.local.json").read_text("utf-8")), {"hip_visible_devices": "1"})
+        receipt = json.loads((self.base / "out" / "kokoro" / "installation.json").read_text("utf-8"))
+        self.assertEqual((receipt["build"], receipt["gpu"]["hip_visible_devices"]), ("rocm", 1))
+        # A second run finds everything in place and the card already named.
+        self.calls.clear()
+        status, out, _err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, self.calls), (0, ["check"]))
+        self.assertNotIn("now says", out)
+
+    def test_gpu_on_a_cpu_install_replaces_its_pytorch_with_amds_build(self):
+        self.make_environment({item["key"]: item["version"] for item in ik.read_lock(self.base / ik.LOCK)})
+        self.graphics = ("amd", [R9700])
+        with mock.patch.object(amd, "hip_devices", lambda root, environment: [{**DEVICES[1], "index": 0}]):
+            status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["pip", "check"])
+        self.assertIn("Kokoro is already installed in .venv-kokoro, and its CPU build of PyTorch is replaced by AMD's ROCm 7.14 "
+                      "build of PyTorch 2.12 with the code for the AMD Radeon AI PRO R9700 (gfx1201): torch 2.12.0 becomes "
+                      "2.12.0+rocm7.14.0.", " ".join(out.split()))
+        self.assertEqual(self.installed["torch"], "2.12.0+rocm7.14.0")
+        self.assertFalse((self.base / "runtime.local.json").exists(), "one card: nothing to note")
+
+    def test_gpu_on_an_amd_card_the_build_has_no_code_for_is_refused_before_any_change(self):
+        self.graphics = ("amd", [RADEON_VII])
+        status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, out), (1, ""))
+        text = " ".join(err.split())
+        self.assertIn("This computer cannot take Kokoro's GPU build yet: - AMD's ROCm 7.14 build of PyTorch 2.12 has no code for "
+                      "the AMD Radeon VII (gfx906)", text)
+        self.assertIn("Leave out --gpu to install the CPU build", text)
+        self.untouched()
+
+    def test_gpu_on_a_computer_with_neither_card_is_refused_before_any_change(self):
+        self.graphics = (None, [])
+        status, _out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual(status, 1)
+        self.assertIn("neither an NVIDIA driver", " ".join(err.split()))
+        self.untouched()
+
+    def test_a_card_a_setting_names_that_pytorch_numbers_otherwise_stops_before_the_download(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        os.environ[amd.VARIABLE] = "1"
+        swapped = [{**DEVICES[0], "index": 1}, {**DEVICES[1], "index": 0}]
+        with mock.patch.object(amd, "hip_devices", lambda root, environment: swapped):
+            status, _out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual(status, 1)
+        self.assertIn("error: HIP_VISIBLE_DEVICES names card 1, the AMD Radeon 780M Graphics in PyTorch's numbering",
+                      " ".join(err.split()))
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(self.calls, ["venv", "pip"])
+        self.assertFalse((self.base / "hf-cache").exists())
+
+    def test_run_as_a_script_it_runs_the_module_the_other_installers_and_amd_build_import(self):
+        # Their InstallError is then the one main() catches, so an error from AMD's build ends in an error line.
+        code = ("import runpy, sys\n"
+                f"sys.path.insert(0, {str(ROOT / 'tools')!r})\n"
+                "sys.argv = ['install_kokoro.py', '--help']\n"
+                "try:\n"
+                f"    runpy.run_path({str(ROOT / 'tools' / 'install_kokoro.py')!r}, run_name='__main__')\n"
+                "except SystemExit:\n"
+                "    pass\n"
+                "print('ran', 'tools.install_kokoro' in sys.modules)\n")
+        done = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("--gpu", done.stdout)
+        self.assertEqual(done.stdout.strip().splitlines()[-1], "ran True")
 
     def test_packages_that_are_already_installed_are_left_alone(self):
         self.make_environment(self.LOCKED)

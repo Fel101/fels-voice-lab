@@ -7,7 +7,7 @@ import platform
 from pathlib import Path
 import time
 
-from common import LAB, to_numpy
+from common import LAB, skip_miopen, to_numpy
 from reference_paths import configured_worker_roots, CONVERSION_SOURCE_ROOTS_ENV
 
 
@@ -57,6 +57,7 @@ class ChatterboxVCWorker:
         from chatterbox.vc import ChatterboxVC
         import torch
 
+        skip_miopen(self.device)
         started = time.perf_counter()
         self.model = ChatterboxVC.from_local(str(SNAPSHOT), self.device)
         self.sample_rate = int(self.model.sr)

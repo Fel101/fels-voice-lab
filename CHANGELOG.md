@@ -27,7 +27,7 @@
   lab folder; each installer prints its plan and asks first, pins every package and file by its SHA-256, continues an
   interrupted download, and ends with a speech check.
   - **Chatterbox 500M and Voice Conversion:** `setup-chatterbox.bat --original` adds their 3.2 GB checkpoint to Chatterbox
-    Turbo's environment, for the CPU or, with `--nvidia`, an NVIDIA card. On one 8-core CPU the 500M loaded in 41 s and spoke
+    Turbo's environment, for the CPU or, with `--gpu`, a graphics card. On one 8-core CPU the 500M loaded in 41 s and spoke
     1.9 s of audio in 16.5 s.
   - **The four Qwen3-TTS models:** `setup-qwen.bat --model <model>` installs 66 packages into `.venv-fqwen`, which the four
     share, and one model's checkpoint. The Base models' check clones the clip Kokoro's installer makes.
@@ -56,8 +56,18 @@
   workers read before PyTorch starts. The service now uses the graphics card on such a computer without being told. Checked on
   an AMD mini PC with a Radeon AI PRO R9700 beside the Ryzen 7 PRO 8845HS's Radeon 780M: every installer chose the R9700 and
   passed its speech check there (Qwen3-TTS 1.7B VoiceDesign spoke 1.9 s in 1.3 s, VoxCPM2 4.6 s in 36 s on its first take,
-  Breeze 3.0 s in 14.5 s), and Qwen3-TTS 1.7B CustomVoice installed from its card and passed **Test** on the R9700. Kokoro and
-  Chatterbox have NVIDIA builds only, so on an AMD card they run on the CPU.
+  Breeze 3.0 s in 14.5 s), and Qwen3-TTS 1.7B CustomVoice installed from its card and passed **Test** on the R9700.
+- **Kokoro and Chatterbox run on an AMD Radeon too.** Their GPU build is now the one for this computer's card. On a computer
+  without an NVIDIA driver whose card is an AMD Radeon, **Install** or **Install GPU build** with the switch on GPU, the question
+  `setup.bat` asks, and the new `--gpu` of `setup-kokoro.bat` and `setup-chatterbox.bat` put in AMD's ROCm builds of PyTorch
+  2.12 (and torchaudio 2.11 for Chatterbox) in place of the CPU builds, with the ROCm runtime and the code for the card's chip.
+  In an environment that holds the CPU build only those packages change. `--nvidia` still asks for NVIDIA's build alone, and
+  the Models page now asks every installer for its GPU build with `--gpu`. On AMD's build, Kokoro, the Chatterbox models and
+  Voice Conversion leave AMD's MIOpen library off: it tuned its kernels for every new length of sentence, which took Kokoro 11
+  to 53 s a sentence on the R9700, against 0.6 to 0.9 s without it. Checked on the R9700: Kokoro installed from its card in
+  377 s, Chatterbox Turbo switched from its CPU build in 174 s and cloned a voice in its speech check (2.5 s of audio in 2.0 s),
+  Chatterbox 500M and Voice Conversion passed theirs, and **Test** passed for Kokoro (2.7 s in 0.5 s), Turbo (2.1 s in 1.8 s)
+  and 500M (2.6 s in 6.6 s).
 - **Graphics memory checked before a download.** The installers now read each NVIDIA card's memory from `nvidia-smi`, and
   VoxCPM2's and Breeze's refuse a card with less than 7 and 10 GB before they download anything. Breeze used up to 7.5 GB, so
   an 8 GB card is too small for it.

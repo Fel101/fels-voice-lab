@@ -32,6 +32,17 @@ def torch_runtime():
     return torch
 
 
+def skip_miopen(device):
+    """On AMD's ROCm build of PyTorch, run convolutions and LSTMs with PyTorch's own kernels instead of MIOpen's, which ROCm
+    puts behind torch.backends.cudnn. MIOpen tunes its kernels for every input length it has not met before: on a Radeon AI
+    PRO R9700, Kokoro took 11 to 53 s over each sentence of a new length with it, and 0.6 to 0.9 s without it. Nothing changes
+    on the CPU or on an NVIDIA build."""
+    if device == "cuda":
+        torch = torch_runtime()
+        if getattr(torch.version, "hip", None):
+            torch.backends.cudnn.enabled = False
+
+
 def runtime_setting(name, default=None):
     return _settings.get(name, default)
 

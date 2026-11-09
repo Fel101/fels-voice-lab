@@ -20,6 +20,8 @@ sys.path.insert(0, str(ROOT))
 import chatterbox_support  # noqa: E402
 import engine_checks  # noqa: E402
 import soundfile as sf  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
+from tools import amd_build as amd  # noqa: E402
 from tools import install_chatterbox as ic  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
@@ -48,7 +50,8 @@ def core_pins():
 
 
 class FakeLab:
-    """A lab folder holding a two-package lock and small stand-ins for the Turbo files, at the real revision."""
+    """A lab folder holding a two-package lock, the shipped AMD list and small stand-ins for the Turbo files, at the real
+    revision."""
     CONTENTS = {name: noise(2_000 + index * 37, index) for index, name in enumerate(chatterbox_support.TURBO_FILES)}
     CONTENTS["README.md"] = b"---\nlicense: mit\n---\n"
     LOCK = (f"# a stand-in for requirements/chatterbox-cpu.txt\nchatterbox-tts==0.1.7 --hash=sha256:{HASH}\n"
@@ -62,6 +65,7 @@ class FakeLab:
                          "files": [{"path": path, "size": len(data), "sha256": sha(data)} for path, data in self.CONTENTS.items()]}
         (self.root / ic.MANIFEST).write_text(json.dumps(self.manifest), "utf-8")
         (self.root / ic.LOCK).write_text(self.LOCK, "utf-8")
+        (self.root / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
 
     def served(self):
         prefix = f"/{self.manifest['repo']}/resolve/{self.manifest['revision']}/"
@@ -159,7 +163,7 @@ class ShippedFilesTests(unittest.TestCase):
     def test_the_first_setup_offers_the_installer(self):
         from tools import first_setup
         self.assertEqual(first_setup.MODELS["chatterbox"],
-                         {"engine": "turbo", "script": "tools/install_chatterbox.py", "nvidia": True})
+                         {"engine": "turbo", "script": "tools/install_chatterbox.py", "gpu": True})
         self.assertIn("setup-chatterbox.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
@@ -189,11 +193,28 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertTrue((ROOT / "tools" / "install_chatterbox.py").read_bytes().isascii())
         packages = base.read_lock(ROOT / ic.LOCK)
         files = REAL_MANIFEST["files"]
-        for todo, pending, exists, only in ((len(packages), files, False, False), (3, files, True, False), (0, [], True, False),
-                                            (0, files, True, True)):
-            text = ic.plan_text(REAL_MANIFEST, packages, todo, pending, environment_exists=exists, checkpoint_only=only)
+        for todo, pending, exists, only, card in ((len(packages), files, False, False, None), (3, files, True, False, None),
+                                                  (0, [], True, False, None), (0, files, True, True, None),
+                                                  (len(packages), files, False, False, R9700)):
+            text = ic.plan_text(REAL_MANIFEST, packages, todo, pending, environment_exists=exists, checkpoint_only=only, card=card,
+                                cards=[RADEON_780M, R9700])
             self.assertTrue(text.isascii())
             self.assertLessEqual(max(len(line) for line in text.splitlines()), 110)
+
+    def test_amds_build_swaps_torch_and_torchaudio_and_adds_its_runtime_and_the_code_for_the_cards_chip(self):
+        cpu = base.read_lock(ROOT / ic.LOCK)
+        packages = ic.pinned_packages(ROOT, card=R9700)
+        builds = {item["key"]: item["version"] for item in packages if item["key"] in ("torch", "torchaudio")}
+        self.assertEqual(builds, {"torch": "2.12.0+rocm7.14.0", "torchaudio": "2.11.0+rocm7.14.0"})
+        self.assertEqual([item for item in packages[:len(cpu)] if item["key"] not in builds],
+                         [item for item in cpu if item["key"] not in builds])
+        self.assertEqual(sorted(item["key"] for item in packages[len(cpu):]),
+                         ["amd-torch-device-gfx12-0", "amd-torch-device-gfx1201", "rocm", "rocm-bootstrap", "rocm-sdk-core",
+                          "rocm-sdk-device-gfx1201", "rocm-sdk-libraries"])
+        # The same torch and torchaudio as the NVIDIA build, PyTorch 2.12 and torchaudio 2.11, in AMD's ROCm build.
+        nvidia = {item["key"]: item["version"] for item in ic.pinned_packages(ROOT, nvidia=True) if item["key"] in builds}
+        self.assertEqual({key: version.split("+")[0] for key, version in nvidia.items()},
+                         {key: version.split("+")[0] for key, version in builds.items()})
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -336,8 +357,50 @@ class PlanTests(unittest.TestCase):
         text = " ".join(ic.plan_text(REAL_MANIFEST, packages, 2, [], environment_exists=True, checkpoint_only=False,
                                      nvidia=True, switching=switching).split())
         self.assertIn("Chatterbox is already installed in .venv-chatterbox, and its CPU build of PyTorch is replaced by the CUDA "
-                      "13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one) (torch "
-                      "2.6.0 becomes 2.12.0+cu130, torchaudio 2.6.0 becomes 2.11.0+cu130). About 1.9 GB to download", text)
+                      "13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one): torch "
+                      "2.6.0 becomes 2.12.0+cu130, torchaudio 2.6.0 becomes 2.11.0+cu130. About 1.9 GB to download", text)
+
+    def test_the_amd_plan_names_the_card_its_chip_amds_list_and_which_card_the_lab_uses(self):
+        packages = ic.pinned_packages(ROOT, card=R9700)
+        text = " ".join(ic.plan_text(REAL_MANIFEST, packages, len(packages), REAL_MANIFEST["files"], environment_exists=False,
+                                     checkpoint_only=False, card=R9700, cards=[RADEON_780M, R9700]).split())
+        download, disk = ic.packages_mb(card=R9700)
+        self.assertEqual((download, disk), amd.sizes_mb("gfx1201", ic.OTHER_DOWNLOAD_MB, ic.OTHER_DISK_MB))
+        for part in ("Chatterbox Turbo 350M on an AMD graphics card",
+                     "AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the AMD Radeon AI PRO R9700 "
+                     "(gfx1201)", f"About {base.mb_text(download)} to download and {base.mb_text(disk)} on disk",
+                     "requirements/chatterbox-cpu.txt and requirements/amd-rocm.txt", "It runs on the AMD Radeon AI PRO R9700.",
+                     "AMD Software: Adrenalin Edition", "This computer has 2 AMD graphics cards"):
+            self.assertIn(part, text)
+        self.assertNotIn("NVIDIA", text)
+        self.assertNotIn("On a CPU", text)
+
+    def test_the_amd_plan_for_a_cpu_install_replaces_pytorch_and_torchaudio_and_adds_amds_runtime(self):
+        cpu = base.read_lock(ROOT / ic.LOCK)
+        packages = ic.pinned_packages(ROOT, card=R9700)
+        installed = {item["key"]: item["version"] for item in cpu}
+        missing, different = base.package_state(packages, installed)
+        switching, conflicts, switch_only = base.gpu_switch(packages, cpu, installed)
+        self.assertEqual(sorted(item["key"] for item, _have in switching), ["torch", "torchaudio"])
+        self.assertEqual((conflicts, switch_only), ([], True))
+        text = " ".join(ic.plan_text(ORIGINAL_MANIFEST, packages, len(missing) + len(different), [], environment_exists=True,
+                                     checkpoint_only=False, switching=switching, switch_only=switch_only, original=True,
+                                     card=R9700, cards=[R9700]).split())
+        download, disk = ic.switch_mb(card=R9700)
+        self.assertIn("Chatterbox is already installed in .venv-chatterbox, and its CPU build of PyTorch is replaced by AMD's ROCm "
+                      "7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the AMD Radeon AI PRO R9700 (gfx1201): "
+                      "torch 2.6.0 becomes 2.12.0+rocm7.14.0, torchaudio 2.6.0 becomes 2.11.0+rocm7.14.0. About "
+                      f"{base.mb_text(download)} to download and {base.mb_text(disk)} more on disk.", text)
+        self.assertIn("Chatterbox 500M and Voice Conversion on an AMD graphics card", text)
+        self.assertIn("then Voice Conversion says that clip again, which you can play afterwards. It runs on the AMD Radeon AI PRO "
+                      "R9700.", text)
+
+    def test_amds_build_runs_on_a_card_whose_chip_it_has_code_for(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            self.assertEqual(ic.amd_card_problems([RADEON_780M, R9700], root=lab.root, environ={}), [])
+            [problem] = ic.amd_card_problems([RADEON_VII], root=lab.root, environ={})
+        self.assertIn("has no code for the AMD Radeon VII (gfx906)", problem)
 
     def test_the_plan_says_which_licence_covers_what_and_that_every_clip_is_watermarked(self):
         text = self.plan()
@@ -435,6 +498,21 @@ class InstallPackagesTests(unittest.TestCase):
         _missing, different = base.package_state(packages, installed)
         self.assertEqual([item["key"] for item, _have in base.build_switch(different, cpu, gpu)], ["torchaudio"])
 
+    def test_for_an_amd_card_pip_gets_the_wheels_then_builds_amds_source_package(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            ic.install_packages(lab.root, card=R9700,
+                                runner=lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0))
+            wheels, source = (Path(command[command.index("-r") + 1]) for command in calls)
+            self.assertEqual((wheels, source), (lab.root / "out" / "chatterbox" / amd.WHEELS,
+                                                lab.root / "out" / "chatterbox" / amd.SOURCE))
+            lines = [line for line in wheels.read_text("utf-8").splitlines() if not line.startswith("#")]
+        self.assertEqual(lines[0], f"chatterbox-tts==0.1.7 --hash=sha256:{HASH}")
+        self.assertTrue(lines[1].startswith("torch @ https://repo.amd.com/rocm/whl-multi-arch/"), lines[1])
+        self.assertIn("amd-torch-device-gfx1201", " ".join(lines))
+        self.assertIn("--no-build-isolation", calls[1])
+
     def test_a_pip_failure_says_to_fix_it_and_run_again(self):
         with self.assertRaisesRegex(ic.InstallError, "pip stopped with exit code 3.*run the installer again"):
             ic.install_packages(ROOT, runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 3))
@@ -444,7 +522,7 @@ class SpeechCheckTests(unittest.TestCase):
     GOOD = ('{"problem": null, "load_seconds": 9.9, "reference_seconds": 12.7, "reference_total_seconds": 31.0, '
             '"prepare_seconds": 1.0, "total_seconds": 6.0, "audio_seconds": 2.2, "torch": "2.6.0+cpu"}')
 
-    def check(self, stdout="", stderr="", code=0, error=None, device="cpu"):
+    def check(self, stdout="", stderr="", code=0, error=None, device="cpu", **options):
         calls = []
 
         def runner(command, **kwargs):
@@ -454,7 +532,24 @@ class SpeechCheckTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, code, stdout, stderr)
 
         with tempfile.TemporaryDirectory() as folder:
-            return ic.run_speech_check(folder, device=device, runner=runner), calls, Path(folder)
+            return ic.run_speech_check(folder, device=device, runner=runner, **options), calls, Path(folder)
+
+    def test_on_an_amd_card_both_checks_are_given_its_number_and_a_failure_points_at_amds_driver(self):
+        _result, calls, _folder = self.check(stdout=self.GOOD, device="cuda", amd_card=True, number=1)
+        self.assertEqual((calls[0][0][-1], calls[0][1]["env"]["HIP_VISIBLE_DEVICES"]), ("cuda", "1"))
+        with self.assertRaises(ic.InstallError) as caught:
+            self.check(stderr="RuntimeError: HIP error: invalid device function", code=1, device="cuda", amd_card=True)
+        self.assertIn("Update the graphics driver (AMD Software: Adrenalin Edition", str(caught.exception))
+        self.assertNotIn("nvidia.com", str(caught.exception))
+        seen = []
+
+        def runner(command, **kwargs):
+            seen.append(kwargs["env"].get("HIP_VISIBLE_DEVICES"))
+            return subprocess.CompletedProcess(command, 1, "", "RuntimeError: HIP error: invalid device function")
+
+        with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(ic.InstallError, "AMD Software: Adrenalin Edition"):
+            ic.run_original_check(folder, device="cuda", amd_card=True, number=1, runner=runner)
+        self.assertEqual(seen, ["1"])
 
     def test_the_clips_are_made_offline_by_the_new_environment_and_their_numbers_come_back(self):
         result, calls, folder = self.check(stdout="loaded PerthNet\n" + self.GOOD + "\n", stderr="a warning\n")
@@ -569,6 +664,18 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["voice_match"], {"score": 0.9, "band": "likely_same"})
         self.assertRegex(receipt["installed_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
         self.assertNotIn(folder, json.dumps(receipt), "no folder names of the person's computer in the receipt")
+        self.assertNotIn("build", receipt)
+
+    def test_an_amd_install_records_the_build_amds_list_and_the_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            lab = FakeLab(folder)
+            (lab.root / "out" / "chatterbox").mkdir(parents=True)
+            check = {"problem": None, "load_seconds": 39.0, "total_seconds": 2.0, "audio_seconds": 2.5, "vc_load_seconds": 4.0,
+                     "vc_seconds": 1.0, "vc_audio_seconds": 2.5, "torch": "2.12.0+rocm7.14.0", "device": "cuda"}
+            receipt = json.loads(ic.write_receipt(lab.root, lab.manifest, ic.pinned_packages(lab.root, card=R9700), check,
+                                                  original=True, card=R9700, number=1).read_text("utf-8"))
+        self.assertEqual((receipt["build"], receipt["device"], receipt["packages_pinned"]), ("rocm", "cuda", 9))
+        self.assertEqual(receipt["gpu"]["hip_visible_devices"], 1)
 
 
 class RunTests(unittest.TestCase):
@@ -588,11 +695,17 @@ class RunTests(unittest.TestCase):
         self.server.files = self.lab.served()
         self.installed = None    # None: no .venv-chatterbox yet
         self.calls = []
+        self.check_options = []
+        self.graphics = ("nvidia", [])
         self.match = {"score": 0.9, "band": "likely_same"}
         folder = self.base / "out" / "chatterbox"
         self.check = {"problem": None, "load_seconds": 9.9, "reference_seconds": 12.7, "reference_total_seconds": 31.0,
                       "prepare_seconds": 1.0, "total_seconds": 6.0, "audio_seconds": 2.2, "torch": "2.6.0+cpu",
                       "reference": folder / "install-reference.wav", "wav": folder / "install-check.wav"}
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(amd.VARIABLE, None)
 
         def make(root, **kwargs):
             self.calls.append("venv")
@@ -601,12 +714,13 @@ class RunTests(unittest.TestCase):
             python.write_bytes(b"")
             self.installed = {"pip": "25.0.1"}
 
-        def pip(root, **kwargs):
-            self.calls.append("pip")
-            self.installed.update({item["key"]: item["version"] for item in base.read_lock(root / ic.LOCK)})
+        def pip(root, *, nvidia=False, card=None, **kwargs):
+            self.calls.append(("pip", card["chip"]) if card else "pip")
+            self.installed.update({item["key"]: item["version"] for item in ic.pinned_packages(root, nvidia=nvidia, card=card)})
 
         def speak(root, **kwargs):
             self.calls.append("check")
+            self.check_options.append(kwargs)
             folder.mkdir(parents=True, exist_ok=True)
             return self.check
 
@@ -615,6 +729,9 @@ class RunTests(unittest.TestCase):
                                    (ic, "install_packages", pip), (ic, "run_speech_check", speak),
                                    (ic, "voice_match", lambda check: self.match), (ic, "interpreter_problems", lambda root: []),
                                    (ic, "long_path_problems", lambda root, manifest: []),
+                                   (ic, "nvidia_problems", lambda: []),
+                                   (base, "graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
+                                   (amd, "hip_devices", lambda root, environment: [dict(device) for device in DEVICES]),
                                    (base, "space_problems", lambda root, need: [])):
             patch = mock.patch.object(owner, name, value)
             patch.start()
@@ -680,6 +797,45 @@ class RunTests(unittest.TestCase):
         self.assertEqual((receipt["torch"], receipt["voice_match"]), ("2.6.0+cpu", self.match))
         self.assertEqual((self.lab.snapshot().parent.parent / "refs" / "main").read_text("utf-8"), REAL_MANIFEST["revision"])
         self.assertEqual((self.lab.snapshot() / "ve.safetensors").read_bytes(), FakeLab.CONTENTS["ve.safetensors"])
+        self.assertEqual(self.check_options, [{"device": "cpu", "amd_card": False, "number": None}])
+
+    def test_gpu_on_an_amd_card_installs_amds_builds_and_checks_turbo_on_that_card(self):
+        self.graphics = ("amd", [RADEON_780M, R9700])
+        self.check = {**self.check, "torch": "2.12.0+rocm7.14.0", "device": "cuda"}
+        status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, ["venv", ("pip", "gfx1201"), "check"])
+        self.assertEqual(self.check_options, [{"device": "cuda", "amd_card": True, "number": 1}])
+        text = " ".join(out.split())
+        self.assertIn("Chatterbox Turbo 350M on an AMD graphics card", text)
+        self.assertIn('runtime.local.json now says "hip_visible_devices": "1".', text)
+        self.assertIn("Checking that Chatterbox Turbo speaks and clones a voice on the AMD Radeon AI PRO R9700:", text)
+        receipt = json.loads((self.base / "out" / "chatterbox" / "installation.json").read_text("utf-8"))
+        self.assertEqual((receipt["build"], receipt["gpu"]["name"]), ("rocm", "AMD Radeon AI PRO R9700"))
+
+    def test_gpu_on_a_cpu_install_replaces_pytorch_and_torchaudio_with_amds_builds(self):
+        self.own_environment({"pip": "25.0.1", **{item["key"]: item["version"] for item in base.read_lock(self.base / ic.LOCK)}})
+        self.graphics = ("amd", [R9700])
+        with mock.patch.object(amd, "hip_devices", lambda root, environment: [{**DEVICES[1], "index": 0}]):
+            status, out, err = self.run_main("--yes", "--gpu")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(self.calls, [("pip", "gfx1201"), "check"])
+        self.assertIn("Chatterbox is already installed in .venv-chatterbox, and its CPU build of PyTorch is replaced by AMD's ROCm "
+                      "7.14 builds", " ".join(out.split()))
+        self.assertEqual(self.installed["torch"], "2.12.0+rocm7.14.0")
+
+    def test_gpu_on_an_amd_card_the_build_has_no_code_for_is_refused_before_any_change(self):
+        self.graphics = ("amd", [RADEON_VII])
+        for argv, name in ((["--yes", "--gpu"], "Chatterbox Turbo"), (["--yes", "--gpu", "--original"],
+                                                                      "Chatterbox 500M and Voice Conversion")):
+            with self.subTest(name=name):
+                status, out, err = self.run_main(*argv)
+                self.assertEqual((status, out), (1, ""))
+                text = " ".join(err.split())
+                self.assertIn(f"This computer cannot take the GPU build of {name} yet: - AMD's ROCm 7.14 build of PyTorch 2.12 "
+                              "has no code for the AMD Radeon VII (gfx906)", text)
+                self.assertIn("Leave out --gpu to install the CPU build", text)
+                self.untouched()
 
     def test_the_lab_counts_turbo_as_installed_afterwards(self):
         self.run_main("--yes")
@@ -949,7 +1105,7 @@ class OriginalTests(unittest.TestCase):
             self.assertIn("Chatterbox 500M and Voice Conversion are installed. Chatterbox 500M loaded in 20 s and spoke 2.5 s in "
                           "its built-in voice in 7.5 s; Voice Conversion said it again in 3.0 s.", text)
             self.assertIn("out\\chatterbox\\install-original.wav and out\\chatterbox\\install-vc.wav", text)
-            self.assertEqual(calls, [("original", {"device": "cpu"})])
+            self.assertEqual(calls, [("original", {"device": "cpu", "amd_card": False, "number": None})])
             snapshot = base.snapshot_dir(root, manifest)
             self.assertEqual((snapshot / "t3_cfg.safetensors").read_bytes(), contents["t3_cfg.safetensors"])
             receipt = json.loads((out_dir / "installation-original.json").read_text("utf-8"))

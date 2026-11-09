@@ -439,6 +439,25 @@ class ReceiptAndHintTests(unittest.TestCase):
         self.assertEqual(amd.failure_hint("ValueError: the text is empty"), "")
 
 
+class ScriptTests(unittest.TestCase):
+    def test_an_installer_run_as_a_script_raises_and_catches_the_same_installerror_as_this_module(self):
+        # Run as tools\install_qwen.py, Python puts tools\ first on the path; an installer that then imported install_kokoro
+        # under that name while this module imports tools.install_kokoro would hold two InstallErrors, and an error raised here
+        # would end in a traceback instead of the installer's error line.
+        for name in ("install_qwen", "install_voxcpm", "install_breeze", "install_chatterbox"):
+            with self.subTest(installer=name):
+                code = (
+                    "import importlib, sys\n"
+                    f"sys.path.insert(0, {str(ROOT / 'tools')!r})\n"
+                    f"installer = importlib.import_module({name!r})\n"
+                    "from tools import amd_build\n"
+                    "print(installer.InstallError is amd_build.InstallError)\n"
+                )
+                done = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True, text=True, timeout=120)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertEqual(done.stdout.strip(), "True")
+
+
 class HardwareTests(unittest.TestCase):
     LISTED = [
         {"name": "AMD Radeon 780M Graphics", "driver": "32.0.31041.1004"},

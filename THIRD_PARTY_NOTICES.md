@@ -52,10 +52,13 @@ on the user's computer, not copied into this repository.
 `.venv-phonon`: the `ptts` runtime (MIT OR Apache-2.0), a Rust extension that needs only NumPy, and the core packages. They are
 fetched from PyPI on the user's computer, not copied into this repository.
 
-With `--nvidia`, `tools/install_kokoro.py` and `tools/install_chatterbox.py` take the CUDA builds of PyTorch (and, for
-Chatterbox, torchaudio) pinned in `requirements/kokoro-nvidia.txt` and `requirements/chatterbox-nvidia.txt` from PyTorch's own
-index instead of the CPU builds. Those wheels carry NVIDIA's CUDA libraries, which come under NVIDIA's licence terms. Like the
-other packages they are fetched on the user's computer at their request and are not part of this repository.
+With `--gpu` (or `--nvidia`) on a computer with an NVIDIA driver, `tools/install_kokoro.py` and `tools/install_chatterbox.py`
+take the CUDA builds of PyTorch (and, for Chatterbox, torchaudio) pinned in `requirements/kokoro-nvidia.txt` and
+`requirements/chatterbox-nvidia.txt` from PyTorch's own index instead of the CPU builds. Those wheels carry NVIDIA's CUDA
+libraries, which come under NVIDIA's licence terms. With `--gpu` on a computer whose graphics card is an AMD Radeon, they take
+AMD's ROCm builds instead, with the ROCm runtime and the code for the card's chip, the packages pinned in
+`requirements/amd-rocm.txt` that the GPU-only installers below take there too. Like the other packages they are fetched on the
+user's computer at their request and are not part of this repository.
 
 `tools/install_chatterbox.py` installs the 73 packages pinned in `requirements/chatterbox-cpu.txt` into an environment of
 its own, `.venv-chatterbox`: `chatterbox-tts` (MIT, Resemble AI, with S3Gen decoder files that keep Apache-2.0 headers from

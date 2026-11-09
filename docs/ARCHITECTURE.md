@@ -68,7 +68,8 @@ appearance before the page paints.
 | What label does a clip carry inside its file? | [synthetic_label.py](../synthetic_label.py) |
 | What does the copied report say? | [system_report.py](../system_report.py) and [hardware.py](../hardware.py) |
 | Which NVIDIA build runs on this card? | `card_problems` in each installer, from [hardware.py](../hardware.py)'s `nvidia_cards`; `worker_runtime.usable_device` at run time |
-| Which AMD card, and which chip's code? | [tools/amd_build.py](../tools/amd_build.py) (`card_problems`, `chosen_card`, `settle_number`), from [hardware.py](../hardware.py)'s `amd_cards` and [requirements/amd-rocm.txt](../requirements/amd-rocm.txt) |
+| Which AMD card, and which chip's code? | [tools/amd_build.py](../tools/amd_build.py) (`card_problems`, `chosen_card`, `settle_number`), from [hardware.py](../hardware.py)'s `amd_cards` and [requirements/amd-rocm.txt](../requirements/amd-rocm.txt); each installer's `amd_card_problems` |
+| Which GPU build does `--gpu` put in? | `requested_build` in [tools/install_kokoro.py](../tools/install_kokoro.py) (Kokoro and Chatterbox), `graphics` in the installers of the models that run only on a graphics card |
 | Is there a newer release, and how does a folder get it? | [updates.py](../updates.py) (the check) and [tools/update.py](../tools/update.py) (`update.bat`) |
 
 ## Adding

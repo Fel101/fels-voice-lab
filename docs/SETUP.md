@@ -40,11 +40,13 @@ Run `setup.bat`. It does three things, in order:
 3. **The speech models you choose.** It asks: Kokoro and Phonon (recommended: about 0.8 GB to download and 2 GB on disk), those
    and Chatterbox Turbo (about 4 GB to download and 7 GB on disk; Turbo wants a computer with 16 GB of RAM or more), or none for
    now. It prints the plan of every model it is about to install, the installers' own `--dry-run`, asks once, and then runs
-   them one after another. On a computer with an NVIDIA driver it also offers the [GPU builds](#nvidia-graphics-cards).
+   them one after another. On a computer with an NVIDIA driver, or one whose graphics card is an AMD Radeon, it also offers
+   Kokoro and Chatterbox Turbo the GPU build for that card ([NVIDIA graphics cards](#nvidia-graphics-cards),
+   [AMD Radeon cards](#amd-radeon-cards)).
 
 Typed after `setup.bat`, `--models recommended` (or `all`, `none`, or names such as `kokoro chatterbox`) chooses without the
-question, `--yes` accepts the plans, `--nvidia` takes the GPU builds and `--no-desktop` skips the window; `--help` lists them. A
-model that is already installed is left as it is.
+question, `--yes` accepts the plans, `--gpu` takes the GPU builds for this computer's card (`--nvidia` asks for NVIDIA's alone)
+and `--no-desktop` skips the window; `--help` lists them. A model that is already installed is left as it is.
 
 If `setup.bat` is interrupted, run it again: it finishes the job. An existing `.venv` that it did not leave unfinished is checked
 and preserved rather than repaired or upgraded automatically. If its import check fails, inspect the error and restore its
@@ -88,8 +90,9 @@ setup-kokoro.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_kokoro.py`. It prints its plan and asks before it changes anything.
-`--dry-run` shows the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--nvidia`
-takes the [GPU build](#nvidia-graphics-cards) of PyTorch.
+`--dry-run` shows the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--gpu`
+takes the GPU build of PyTorch for this computer's graphics card, [NVIDIA's](#nvidia-graphics-cards) or
+[AMD's](#amd-radeon-cards) (`--nvidia` asks for NVIDIA's alone).
 
 The studio can run the same installer for you. Until it has run, the Kokoro card on the **Models & features** page reads
 *Not installed*, lists the files that are missing and has an **Install** button. **Install** shows the installer's own plan,
@@ -154,6 +157,12 @@ the environment and installed the 96 packages in 309 seconds (pip's cache was wa
 showed phonemes through Kokoro's worker. If the speech check fails with a message about a missing DLL, install the
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64) and run the installer again.
 Other Windows setups have not been tried.
+
+On a computer with an AMD Radeon AI PRO R9700 beside the Radeon 780M of its Ryzen processor, **Install** on the Kokoro card with
+its switch on GPU put in [AMD's build](#amd-radeon-cards) for the R9700: 103 packages, 4.9 GB installed, in 377 seconds with
+pip's cache warm. **Test** then passed on the R9700: the load, with its warm-up line, took 20 seconds, and the check sentence
+2.7 seconds of audio in 0.5 seconds. Once loaded, Kokoro spoke each sentence there in 0.6 to 0.9 seconds, six to ten times faster
+than real time.
 
 ## Phonon on the CPU
 
@@ -229,9 +238,10 @@ setup-chatterbox.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_chatterbox.py`. It prints its plan and asks before it changes anything. `--dry-run` shows
-the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--nvidia` takes the
-[GPU builds](#nvidia-graphics-cards) of PyTorch and torchaudio. The **Install** button on the Chatterbox Turbo card of
-**Models & features** runs the same installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
+the plan and runs the checks without changing anything, `--yes` accepts the plan without asking, and `--gpu` takes GPU builds
+of PyTorch and torchaudio for this computer's graphics card, [NVIDIA's](#nvidia-graphics-cards) or [AMD's](#amd-radeon-cards)
+(`--nvidia` asks for NVIDIA's alone). The **Install** button on the Chatterbox Turbo card of **Models & features** runs the same
+installer, and works the way [Kokoro's does](#kokoro-on-the-cpu).
 
 Chatterbox gets a Python environment of its own, `.venv-chatterbox`, as every model does: it needs PyTorch 2.6, and Kokoro's
 `.venv-kokoro` has PyTorch 2.12, so the two could not share one. The installer makes it from the same Python 3.12 that `setup.bat`
@@ -257,9 +267,10 @@ Run it again to continue after an interruption or to repair a damaged file: it i
 changes anything when it is not run with this folder's own Python, when a package it pins is already in `.venv-chatterbox` at
 another version, when this folder's path is too long for Windows' 259-character limit (move the lab to a path such as
 `C:\voice-lab`, or switch on long paths in Windows), or when the disk is too full: a first install needs about 6 GB free. To run
-Chatterbox on an NVIDIA card, use `--nvidia` (see [NVIDIA graphics cards](#nvidia-graphics-cards)); for any other GPU build, make
-`.venv-chatterbox` yourself with PyTorch and `chatterbox-tts`, then run the installer with `--checkpoint-only`: it fetches the
-model files and leaves your packages alone. Only the CPU recipe has been tried.
+Chatterbox on a graphics card, use `--gpu` (see [NVIDIA graphics cards](#nvidia-graphics-cards) and
+[AMD Radeon cards](#amd-radeon-cards)); for any other GPU build, make `.venv-chatterbox` yourself with PyTorch and
+`chatterbox-tts`, then run the installer with `--checkpoint-only`: it fetches the model files and leaves your packages alone. The
+CPU recipe and AMD's build have been tried; NVIDIA's has not.
 
 To clone a voice, open **Voice cloning**, choose Chatterbox Turbo, record or choose a recording longer than five seconds, write
 down its words, where it came from and what it may be used for, and press **Save voice and generate test**. **Test** on the Models
@@ -283,6 +294,13 @@ before they are copied into the model), and held 5.0 GB after speaking a line of
 RAM before it loads it ([`min_free_ram_gb`](#hardware-and-state-settings) changes that for one computer). Keep lines to a few
 sentences: given 1,200 characters, it stopped after 30 to 36 seconds of audio, and the
 take's checks flag audio much shorter than its text.
+
+On an AMD Radeon AI PRO R9700, `setup-chatterbox.bat --gpu` switched a `.venv-chatterbox` that held the CPU build to
+[AMD's build](#amd-radeon-cards) in 174 seconds with the model files in place: pip replaced PyTorch 2.6 and torchaudio 2.6 with
+AMD's PyTorch 2.12 and torchaudio 2.11 and added the ROCm runtime and the R9700's code, 4.9 GB installed in all. Its speech check
+cloned the built-in voice and spoke 2.5 seconds of audio in 2.0 seconds, and the voice match scored the clone 0.86 against its
+reference. **Test** passed on the card: the load took 32 seconds and the check sentence 2.1 seconds of audio in 1.8 seconds.
+Once loaded, Turbo took about as long as the speech it made.
 
 To remove Chatterbox, delete `.venv-chatterbox`, `hf-cache\hub\models--ResembleAI--chatterbox-turbo` and `out\chatterbox`. The voice
 match then says it is not installed.
@@ -312,7 +330,7 @@ Conversion (which says a recording again in the voice of another) run in the sam
 setup-chatterbox.bat --original
 ```
 
-installs both: the environment and its 73 packages when Turbo is not installed yet (with `--nvidia`, the GPU build), and then the
+installs both: the environment and its 73 packages when Turbo is not installed yet (with `--gpu`, the GPU build), and then the
 2.1 GB language model, the 1.1 GB speech decoder that Voice Conversion uses too, the speaker encoder, the built-in voice, the
 tokenizer and the model card, 3.2 GB in all, each checked against the SHA-256 in
 [catalog/chatterbox_snapshot.json](../catalog/chatterbox_snapshot.json). The repository's multilingual model and its copies of the
@@ -328,6 +346,11 @@ the load, with its warm-up line, took 41 seconds, and the check sentence 16.5 se
 voice of a 9-second one took 13 seconds once Voice Conversion was loaded, and 31 seconds with the load. The Lab asks for 10 GB of
 free RAM before it loads either of them.
 
+With AMD's build on the R9700, **Test** on the Chatterbox 500M card passed: the load took 36 seconds and the check sentence 2.6
+seconds of audio in 6.6 seconds. Once loaded, it took about twice as long as the speech it made. Voice Conversion, loaded on the
+card, said a 2-second clip again in the voice of an 8-second one in 2.0 seconds; its first conversion after the load took 20
+seconds.
+
 To remove them, delete `hf-cache\hub\models--ResembleAI--chatterbox` and, in `out\chatterbox`, `install-original.wav`,
 `install-vc.wav` and `installation-original.json`. `.venv-chatterbox` is Turbo's too: delete it only to remove all three.
 
@@ -339,12 +362,13 @@ one, and the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics c
 load and speak on your card is what a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) would tell the next person.
 
 ```powershell
-setup-kokoro.bat --nvidia
-setup-chatterbox.bat --nvidia
+setup-kokoro.bat --gpu
+setup-chatterbox.bat --gpu
 ```
 
-`setup.bat` offers the same when it finds an NVIDIA driver, and so does **Install** on a model's card when its switch says GPU
-(below). Before anything is downloaded, each installer asks NVIDIA's own `nvidia-smi` which card and driver this computer has,
+`--gpu` takes the GPU build for this computer's card, which is NVIDIA's when there is an NVIDIA driver; `--nvidia` asks for
+NVIDIA's alone. `setup.bat` offers the same when it finds an NVIDIA driver, and so does **Install** on a model's card when its
+switch says GPU (below). Before anything is downloaded, each installer asks NVIDIA's own `nvidia-smi` which card and driver this computer has,
 and refuses a build that cannot run there: without a driver (`System32\nvcuda.dll`), on a card older than the build has code
 for, or with a driver older than 580. Each then runs its speech check on the card. `setup.bat` asks once for both models and
 gives each the build that runs on the card, and says why when one gets its CPU build.
@@ -373,19 +397,19 @@ CPU** switch. It decides where that model runs from its next load (a loaded mode
 switched), and the choice is kept in `data/engines/devices.json`. A model that was not switched uses the card when its PyTorch
 can.
 
-- **A model that is not installed** installs the build its switch shows: **Install** puts in the NVIDIA build when it says GPU,
-  and the CPU build when it says CPU. GPU is greyed out, with the reason, when the card or driver cannot run the build.
+- **A model that is not installed** installs the build its switch shows: **Install** puts in the GPU build for this computer's
+  card when it says GPU (NVIDIA's, or [AMD's](#amd-radeon-cards) on a computer with an AMD Radeon), and the CPU build when it
+  says CPU. GPU is greyed out, with the reason, when the card or driver cannot run the build.
 - **A model installed with the CPU build** runs on the CPU. Switched to GPU, its card offers **Install GPU build**: its
-  installer's `--nvidia` replaces PyTorch (and torchaudio, for Chatterbox) in its environment and leaves everything else,
-  then runs the speech check on the card. The installer refuses to touch an environment holding any other package at a version
-  it does not pin.
-- **A model with a GPU build** can be kept on the CPU with the switch; a CUDA build runs on the CPU too.
+  installer's `--gpu` replaces PyTorch (and torchaudio, for Chatterbox) in its environment, adds AMD's runtime and the code for
+  the card's chip on an AMD card, and leaves everything else, then runs the speech check on the card. The installer refuses to
+  touch an environment holding any other package at a version it does not pin.
+- **A model with a GPU build** can be kept on the CPU with the switch; a CUDA or ROCm build runs on the CPU too.
 - Phonon and Drama 3 run on the CPU, so their GPU is greyed out.
 - The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on the card, so their switch stays on GPU and CPU is greyed out.
-  Their **Install** puts in the build for this computer's card: NVIDIA's, or AMD's on a computer with an AMD Radeon. Where the
-  app can install neither (no NVIDIA driver or AMD card, a card or driver the build cannot run on, or too little graphics
-  memory), their card has no **Install** and says why.
-- Kokoro and Chatterbox have NVIDIA builds only, so on a computer with an AMD card their GPU is greyed out and says so.
+  Their **Install** always puts in the GPU build for this computer's card. Where the app can install neither build (no NVIDIA
+  driver or AMD card, a card or driver the build cannot run on, or too little graphics memory), their card has no **Install**
+  and says why.
 
 A model whose PyTorch cannot use the card after all (a CUDA build with no code for this card) still runs on the CPU, and its
 card says it ran on the CPU. `"device": "cpu"` in `runtime.local.json`, or `--device cpu`, keeps every model on the CPU and
@@ -394,10 +418,18 @@ hides the switches. Going back from a GPU build to the CPU build takes deleting 
 
 ## AMD Radeon cards
 
-The four Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run on an AMD Radeon card too. On a computer without an NVIDIA driver, their
-installers (and **Install** on their cards) put in AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11, from AMD's own
-index, in place of the CUDA builds, and leave the rest of the model's list as it is. Nothing needs setting up by hand beyond
-AMD's graphics driver (AMD Software: Adrenalin Edition, or PRO Edition for a workstation card).
+Every model that runs on a graphics card in the Lab runs on an AMD Radeon card too. On a computer without an NVIDIA driver, the
+installers of the four Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 (and **Install** on their cards) put in AMD's ROCm 7.14 builds
+of PyTorch 2.12 and torchaudio 2.11, from AMD's own index, in place of the CUDA builds, and leave the rest of the model's list as
+it is. Kokoro and the three Chatterbox models take the same builds in place of their CPU ones when asked for their GPU build:
+
+```powershell
+setup-kokoro.bat --gpu
+setup-chatterbox.bat --gpu
+```
+
+or **Install** (or **Install GPU build**) on their cards with the switch on GPU, or the question `setup.bat` asks. Nothing needs
+setting up by hand beyond AMD's graphics driver (AMD Software: Adrenalin Edition, or PRO Edition for a workstation card).
 
 - **The card's chip.** Before anything is downloaded, the installer asks AMD's OpenCL driver, which comes with every AMD graphics
   driver for Windows, which cards this computer has and which chip each one is: gfx1201 for a Radeon AI PRO R9700 or RX 9070,
@@ -415,14 +447,20 @@ AMD's graphics driver (AMD Software: Adrenalin Edition, or PRO Edition for a wor
   plan gives its model's total.
 - **One package built from source.** `rocm`, a small part of the runtime, is published by AMD only as source: pip builds it after
   the wheels are in, with the setuptools the model's own list pins, so pip runs nothing the lists do not pin.
+- **MIOpen stays off.** Kokoro, the Chatterbox models and VoxCPM2 run their convolutions and LSTMs on an AMD card with PyTorch's
+  own kernels rather than AMD's MIOpen library, which tunes its kernels for every new length of input: on the R9700, Kokoro took
+  11 to 53 seconds over each sentence of a new length with MIOpen, and 0.6 to 0.9 seconds without it. The first sentence after a
+  load still takes 10 to 20 seconds while the card's kernels load; the Models page's load speaks a warm-up line for that.
 
 AMD's packages carry the ROCm runtime and libraries under AMD's own licence terms; like the other packages they are installed on
 your computer at your request and are not part of this repository.
 
 What it did on the development computer, an AMD mini PC with a Radeon AI PRO R9700 (32 GB) beside the Radeon 780M in its Ryzen 7
 PRO 8845HS: each installer chose the R9700 (the first wrote `"hip_visible_devices": "1"`, and the others found it there) and
-passed its speech check on it (each model's section has the numbers). Qwen3-TTS 1.7B CustomVoice was installed from its card on the Models page, and its **Test** passed on
-the R9700. **No other AMD chip has been tried yet**: if it works, or does not, a
+passed its speech check on it (each model's section has the numbers). Qwen3-TTS 1.7B CustomVoice and Kokoro were installed from
+their cards on the Models page, a `.venv-chatterbox` that held the CPU build was switched with `setup-chatterbox.bat --gpu`, and
+**Test** passed on the R9700 for Qwen3-TTS 1.7B CustomVoice, Kokoro, Chatterbox Turbo and Chatterbox 500M. **No other AMD chip
+has been tried yet**: if it works, or does not, a
 [hardware report](TROUBLESHOOTING.md#reporting-a-problem) helps the next person.
 
 ## Qwen3-TTS on a graphics card
@@ -597,9 +635,9 @@ tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the export
 
 | Family | Runtime path | Setup status |
 |---|---|---|
-| Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
+| Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
 | Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
-| Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--nvidia`, an NVIDIA card. |
+| Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
 | Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned runtime for this computer's NVIDIA or AMD card and one model's checkpoint ([above](#qwen3-tts-on-a-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
 | VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned runtime for this computer's NVIDIA or AMD card, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-a-graphics-card)); needs a card with 7 GB of memory. |
 | Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 10 GB of memory. Its weights are for research and non-commercial use only. |

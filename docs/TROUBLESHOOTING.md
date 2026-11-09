@@ -90,9 +90,10 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 ## Graphics cards
 
 **NVIDIA.** Kokoro and the Chatterbox models can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it
-finds an NVIDIA driver, or run `setup-kokoro.bat --nvidia` and `setup-chatterbox.bat --nvidia`. The Qwen3-TTS models, VoxCPM2
-and Breeze TTS 2 run only on a graphics card; on an NVIDIA one, **Install** on their cards puts in their NVIDIA build. Nobody
-has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a-problem) of how it went is welcome.
+finds an NVIDIA driver, or run `setup-kokoro.bat --gpu` and `setup-chatterbox.bat --gpu` (`--nvidia` asks for NVIDIA's build
+alone). The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card; on an NVIDIA one, **Install** on their cards
+puts in their NVIDIA build. Nobody has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a-problem) of
+how it went is welcome.
 
 - Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
   NVIDIA driver of version 580 or later. On an older card, setup gives Kokoro and Chatterbox their CPU builds.
@@ -102,7 +103,7 @@ has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a
 - **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
   build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
 - **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA
-  app, restart the Lab, and press **Install GPU build** on the model's card (or run its launcher with `--nvidia`, which
+  app, restart the Lab, and press **Install GPU build** on the model's card (or run its launcher with `--gpu`, which
   replaces a CPU build of PyTorch in place). The installers read the card and the driver with NVIDIA's `nvidia-smi`; when it
   cannot say, they go by the driver version Windows lists.
 - Going back from a GPU build to the CPU build takes deleting the model's folder (`.venv-kokoro` or `.venv-chatterbox`) and
@@ -110,14 +111,19 @@ has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a
 - The service uses the card when it finds an NVIDIA driver. To keep everything on the CPU, put `{"device": "cpu"}` in
   `runtime.local.json`.
 
-**AMD.** The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run on an AMD Radeon card with AMD's ROCm build of PyTorch, which
-**Install** on their cards (or their launchers) put in on a computer without an NVIDIA driver; [Setup](SETUP.md#amd-radeon-cards)
-says what it installs. Kokoro and Chatterbox have no AMD build and run on the CPU there. The Lab was checked on a Radeon AI PRO
-R9700, so a [hardware report](#reporting-a-problem) from another AMD card is welcome.
+**AMD.** Every model that runs on a graphics card in the Lab runs on an AMD Radeon card with AMD's ROCm build of PyTorch. On a
+computer without an NVIDIA driver, **Install** on the cards of the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 (or their
+launchers) puts it in; Kokoro and the Chatterbox models get it from **Install** or **Install GPU build** with their switch on
+GPU, from the question `setup.bat` asks, or from `setup-kokoro.bat --gpu` and `setup-chatterbox.bat --gpu`.
+[Setup](SETUP.md#amd-radeon-cards) says what it installs. The Lab was checked on a Radeon AI PRO R9700, so a
+[hardware report](#reporting-a-problem) from another AMD card is welcome.
 
 - **"has no code for the ...".** AMD's build has code for the chips of the Radeon RX 5000, 6000, 7000 and 9000 series, the
   Radeon PRO and AI PRO cards built on them, and the Radeon graphics in Ryzen processors. An older card (a Radeon RX 500 or
-  Vega, say) cannot run it, so these models have no **Install** there.
+  Vega, say) cannot run it, so the models that need a graphics card have no **Install** there, and Kokoro and Chatterbox keep
+  their CPU builds.
+- **The first sentence after a load is slow.** On an AMD card, the first sentence a model speaks after it loads takes 10 to 20
+  seconds while the card's kernels load; the next ones are quick. The Models page's load speaks a warm-up line for that.
 - **"AMD's driver did not say which chip it has".** The installers ask AMD's OpenCL driver, which comes with the graphics
   driver. Install or update AMD Software: Adrenalin Edition (PRO Edition for a workstation card) from amd.com, restart the Lab
   and try again. The same goes for a speech check that fails with a HIP error.

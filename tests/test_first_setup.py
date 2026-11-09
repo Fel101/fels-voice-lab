@@ -3,14 +3,19 @@ The installers, the desktop setup and the questions are stand-ins, so nothing is
 
 import contextlib
 import io
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from tests.test_amd_build import R9700, RADEON_780M, RADEON_VII  # noqa: E402
+from tools import amd_build  # noqa: E402
 from tools import first_setup as fs  # noqa: E402
 
 
@@ -55,10 +60,19 @@ class FirstSetupTests(unittest.TestCase):
             raise EOFError
         return self.answers.pop(0)
 
-    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0, cards=()):
+    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0, cards=(), amd=None):
+        """Run setup on a computer with an NVIDIA driver (nvidia) and its cards, or with the AMD cards amd (None: Windows lists
+        no AMD card). The AMD cards are judged against the shipped AMD list in a lab folder with no runtime.local.json."""
         args = fs.build_parser().parse_args(list(argv))
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
+        with contextlib.ExitStack() as stack:
+            lab = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            (lab / "requirements").mkdir()
+            (lab / amd_build.LOCK).write_bytes((ROOT / amd_build.LOCK).read_bytes())
+            stack.enter_context(mock.patch.object(fs, "ROOT", lab))
+            stack.enter_context(mock.patch.dict(os.environ))
+            os.environ.pop(amd_build.VARIABLE, None)
+            stack.enter_context(contextlib.redirect_stdout(out))
             status = fs.run(
                 args,
                 ask=self.ask,
@@ -68,6 +82,7 @@ class FirstSetupTests(unittest.TestCase):
                 ram=lambda: {"total_gb": total_ram, "free_gb": total_ram / 2},
                 nvidia_present=lambda: nvidia,
                 cards=lambda: list(cards),
+                amd=lambda: None if amd is None else [dict(card) for card in amd],
                 desktop=self.desktop,
             )
         return status, " ".join(out.getvalue().split())
@@ -225,6 +240,52 @@ class FirstSetupTests(unittest.TestCase):
         self.assertIn("delete the .venv-kokoro folder and run setup-kokoro.bat --nvidia", out)
         self.assertIn("So setup installs Chatterbox Turbo's CPU build", out)
         self.assertEqual(self.installers.runs("--nvidia"), [])
+
+    def test_an_amd_computer_is_offered_amds_builds_for_the_models_that_have_them(self):
+        self.answers = ["2", "yes", "yes"]
+        status, out = self.run_setup(amd=[RADEON_780M, R9700])
+        self.assertEqual(status, 0)
+        self.assertIn(
+            "This computer's graphics card is an AMD Radeon AI PRO R9700. Kokoro and Chatterbox Turbo can run on it with AMD's "
+            "ROCm build of PyTorch instead of the CPU one",
+            out,
+        )
+        self.assertIn("Install AMD's builds?", " ".join(self.questions))
+        self.assertEqual(sorted(set(self.installers.runs("--gpu"))), ["install_chatterbox.py", "install_kokoro.py"])
+        self.assertEqual(self.installers.runs("--nvidia"), [])
+        self.assertNotIn("--gpu", next(command for command in self.installers.commands if command[0] == "install_phonon.py"))
+
+    def test_declining_amds_builds_installs_the_cpu_builds(self):
+        self.answers = ["2", "", "yes"]
+        status, _out = self.run_setup(amd=[R9700])
+        self.assertEqual(status, 0)
+        self.assertEqual(self.installers.runs("--gpu"), [])
+        self.assertEqual(self.installers.runs("--yes"), ["install_kokoro.py", "install_phonon.py", "install_chatterbox.py"])
+
+    def test_an_amd_card_the_build_has_no_code_for_gets_the_cpu_builds_and_no_question(self):
+        self.answers = ["2", "yes"]
+        status, out = self.run_setup(amd=[RADEON_VII])
+        self.assertEqual(status, 0)
+        self.assertNotIn("Install AMD's builds?", " ".join(self.questions))
+        self.assertIn("has no code for the AMD Radeon VII (gfx906)", out)
+        self.assertIn("So setup installs Kokoro's CPU build, which runs on the processor.", out)
+        self.assertEqual(self.installers.runs("--gpu"), [])
+
+    def test_the_gpu_option_takes_the_build_for_this_computers_card_without_asking(self):
+        self.run_setup("--models", "all", "--yes", "--gpu", amd=[R9700])
+        self.assertEqual(sorted(set(self.installers.runs("--gpu"))), ["install_chatterbox.py", "install_kokoro.py"])
+        self.assertEqual(self.questions, [])
+        self.installers.commands.clear()
+        self.run_setup("--models", "all", "--yes", "--gpu", nvidia=True, cards=[self.RTX_5070], amd=[R9700])
+        self.assertEqual(sorted(set(self.installers.runs("--nvidia"))), ["install_chatterbox.py", "install_kokoro.py"])
+        self.assertEqual(self.installers.runs("--gpu"), [], "an NVIDIA driver decides first")
+        self.installers.commands.clear()
+        status, out = self.run_setup("--models", "kokoro", "--yes", "--gpu")
+        self.assertEqual(status, 0)
+        self.assertIn(
+            "--gpu asks for the GPU builds, and this computer has neither an NVIDIA driver nor an AMD graphics card", out
+        )
+        self.assertEqual((self.installers.runs("--gpu"), self.installers.runs("--yes")), ([], ["install_kokoro.py"]))
 
     def test_a_desktop_window_that_cannot_be_set_up_does_not_stop_the_models(self):
         self.desktop_ok = False

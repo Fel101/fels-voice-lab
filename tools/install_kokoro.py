@@ -3,19 +3,23 @@
     .venv\\Scripts\\python.exe tools\\install_kokoro.py
     .venv\\Scripts\\python.exe tools\\install_kokoro.py --dry-run
     .venv\\Scripts\\python.exe tools\\install_kokoro.py --yes --voices all
-    .venv\\Scripts\\python.exe tools\\install_kokoro.py --nvidia
+    .venv\\Scripts\\python.exe tools\\install_kokoro.py --gpu
     .venv\\Scripts\\python.exe tools\\install_kokoro.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
 the lab's own Python, which setup.bat creates; setup-kokoro.bat does that for you. Kokoro gets an environment of its own,
 .venv-kokoro, made from the same Python 3.12 as .venv, so nothing another model installs can clash with its packages. pip
 installs requirements/kokoro-cpu.txt there with every file's SHA-256 checked, and the script refuses to replace a package that
-is already installed at another version, so an environment that has its own PyTorch keeps it. --nvidia takes the CUDA build of
-PyTorch in requirements/kokoro-nvidia.txt instead of the CPU one; the Lab has not been tried on an NVIDIA card yet. The
-checkpoint files in catalog/kokoro_snapshot.json come from Hugging Face at the pinned revision, resume after an interruption,
-and are kept only when their SHA-256 matches. Running it again installs only what is missing. --checkpoint-only fetches the
-model files and leaves the packages alone, for a .venv-kokoro you made yourself. --voices takes supported (the default: every
-voice that works with the packages it installs), english, all, or voice IDs such as bm_george.
+is already installed at another version, so an environment that has its own PyTorch keeps it. --gpu takes the GPU build of
+PyTorch for this computer's graphics card instead of the CPU one: on a computer with an NVIDIA driver the CUDA build in
+requirements/kokoro-nvidia.txt, which the Lab has not been tried with yet, and on one whose graphics card is an AMD Radeon,
+AMD's ROCm build with the code for the card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how), which was
+checked on an AMD Radeon AI PRO R9700. --nvidia asks for the CUDA build alone. In a .venv-kokoro that holds the CPU build, the
+GPU build replaces PyTorch and changes nothing else. The checkpoint files in catalog/kokoro_snapshot.json come from Hugging Face
+at the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again installs
+only what is missing. --checkpoint-only fetches the model files and leaves the packages alone, for a .venv-kokoro you made
+yourself. --voices takes supported (the default: every voice that works with the packages it installs), english, all, or voice
+IDs such as bm_george.
 
 The helpers for an engine's own environment, the downloads, the hashes and pip live here and install_phonon.py and
 install_chatterbox.py use them, so a fix here reaches every installer.
@@ -73,6 +77,10 @@ PACKAGES_DOWNLOAD_MB = 275
 PACKAGES_DISK_MB = 1330
 NVIDIA_EXTRA_DOWNLOAD_MB = 1800
 NVIDIA_EXTRA_DISK_MB = 4000
+# The packages other than PyTorch, to which AMD's build adds its own (amd_build.sizes_mb): the CPU build of PyTorch is 123 MB of
+# the wheels, and in a .venv-kokoro installed with AMD's build for the R9700 the other packages took 0.71 GB of the 4.9 GB.
+OTHER_DOWNLOAD_MB = 155
+OTHER_DISK_MB = 720
 LONGEST_PACKAGE_PATH = 130
 SPACE_MARGIN_MB = 500
 MAX_PATH = 260
@@ -336,7 +344,11 @@ def env_long_path_problems(root, environment, longest_package_path, extra_length
 
 
 NO_NVIDIA_DRIVER = ("--nvidia asks for the CUDA build of PyTorch, and this computer has no NVIDIA driver (System32\\nvcuda.dll "
-                    "is missing). Install the driver from nvidia.com first, or leave out --nvidia for the CPU build.")
+                    "is missing). Install the driver from nvidia.com first, or leave out --nvidia for the CPU build. For an AMD "
+                    "Radeon card, use --gpu instead: it installs AMD's build.")
+NO_GPU = ("--gpu asks for the GPU build of PyTorch, and this computer has neither an NVIDIA driver (System32\\nvcuda.dll is "
+          "missing) nor an AMD graphics card that Windows lists. Install the card's driver first: from nvidia.com, or AMD "
+          "Software: Adrenalin Edition from amd.com. Or leave out --gpu for the CPU build.")
 
 
 def nvidia_card_problems(cards, *, build, cards_text, lowest=None, newest_major=None, driver=None, memory_gb=None):
@@ -384,6 +396,59 @@ def nvidia_problems(*, present=None, cards=None, check=card_problems):
     return [nvidia_advice(problem) for problem in check(nvidia_cards() if cards is None else cards)]
 
 
+def amd_build():
+    """tools/amd_build.py, AMD's ROCm build of PyTorch. It imports this module, so it is imported when it is first needed (the
+    lab folder is on the path by then: see the imports at the top)."""
+    from tools import amd_build as module
+
+    return module
+
+
+def graphics():
+    """Which GPU build --gpu puts in: ("nvidia", []) with an NVIDIA driver, ("amd", cards) for AMD cards (hardware.amd_cards),
+    and (None, []) with neither."""
+    return amd_build().graphics()
+
+
+def amd_card_problems(cards, *, root=None, environ=None):
+    """Why Kokoro's GPU build would not run on this computer's AMD cards: no card with a chip AMD's build has code for, or a
+    setting that names a card that is not there. tools/first_setup.py and the Models page ask this too."""
+    return amd_build().card_problems(cards, model="Kokoro", root=ROOT if root is None else root, environ=environ)
+
+
+def amd_refusal(model, problems):
+    """What an installer says when --gpu finds AMD cards that AMD's build cannot run on: the reasons, and the CPU build."""
+    return amd_build().no_card_text(model, [*problems, "Leave out --gpu to install the CPU build, which runs on the processor."])
+
+
+def requested_build(args):
+    """The build of PyTorch the arguments ask for: None for the CPU build, "nvidia" for --nvidia, and for --gpu the one for this
+    computer's graphics card ("nvidia" or "amd"), as (build, AMD cards). Raises InstallError for --gpu on a computer with
+    neither card."""
+    if getattr(args, "nvidia", False):
+        return "nvidia", []
+    if not getattr(args, "gpu", False):
+        return None, []
+    build, cards = graphics()
+    if build is None:
+        raise InstallError(NO_GPU)
+    return build, cards
+
+
+def gpu_switch(packages, cpu_packages, installed):
+    """For a GPU build in an environment that may hold the CPU build: (switching, conflicts, switch_only). switching pairs the
+    packages the GPU build replaces (installed at the CPU list's version) with their installed version; conflicts are the
+    other packages installed at another version, which stop the installer; switch_only says the environment holds the whole
+    CPU build, so that the GPU build only replaces PyTorch and adds what it brings (AMD's runtime and the chip's code)."""
+    cpu = {item["key"]: item for item in cpu_packages}
+    missing, different = package_state(packages, installed)
+    replacements = [item for item in packages if item["key"] in cpu and item["version"] != cpu[item["key"]]["version"]]
+    switching = build_switch(different, cpu_packages, replacements)
+    conflicts = [pair for pair in different if pair not in switching]
+    switch_only = bool(switching) and not conflicts and all(item["key"] not in cpu for item in missing)
+    return switching, conflicts, switch_only
+
+
 def swap_packages(packages, replacements):
     """A pinned list with some packages swapped for other builds of them, such as torch for its CUDA build."""
     swapped = {item["key"]: item for item in replacements}
@@ -426,7 +491,7 @@ def build_switch(different, cpu_packages, replacements):
 def switch_text(switching, build):
     """The plan's sentence for an environment whose CPU build of PyTorch is replaced by a GPU build."""
     names = ", ".join(f"{item['name']} {have} becomes {item['version']}" for item, have in switching)
-    return f"its CPU build of PyTorch is replaced by {build} ({names})"
+    return f"its CPU build of PyTorch is replaced by {build}: {names}"
 
 
 def package_state(packages, installed):
@@ -493,9 +558,29 @@ def packages_disk_mb(nvidia):
     return PACKAGES_DISK_MB + (NVIDIA_EXTRA_DISK_MB if nvidia else 0)
 
 
+def packages_mb(*, nvidia=False, card=None):
+    """(download, disk) in MB for Kokoro's packages: with the CPU build of PyTorch, NVIDIA's build, or for an AMD card (None
+    for the others) AMD's build with the code for its chip."""
+    if card:
+        return amd_build().sizes_mb(card["chip"], OTHER_DOWNLOAD_MB, OTHER_DISK_MB)
+    return packages_download_mb(nvidia), packages_disk_mb(nvidia)
+
+
+def switch_mb(*, card=None):
+    """(download, more on disk) in MB for a GPU build that takes the place of the CPU build's PyTorch: NVIDIA's, or for an AMD
+    card AMD's build with the code for its chip, less the CPU build it replaces."""
+    if card:
+        download, disk = amd_build().sizes_mb(card["chip"], 0, 0)
+        return download, disk - (PACKAGES_DISK_MB - OTHER_DISK_MB)
+    return NVIDIA_EXTRA_DOWNLOAD_MB, NVIDIA_EXTRA_DISK_MB
+
+
 def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, environment_exists=False, nvidia=False,
-              switching=()):
-    """What the installer is about to do, written for the person who ran it."""
+              switching=(), switch_only=None, card=None, cards=()):
+    """What the installer is about to do, written for the person who ran it. nvidia is the NVIDIA build, card the AMD card the
+    AMD build is for, among cards, every AMD card this computer has. switch_only says the GPU build replaces the CPU build of
+    PyTorch in a working install (switching names those packages); by default, when every package to install is one of
+    them."""
     voices = [item for item in files if item["path"].startswith("voices/")]
     checkpoint = max(files, key=lambda item: item["size"])
     languages = sorted({EXTRA_PACKAGES[Path(item["path"]).stem[0]] for item in voices
@@ -504,25 +589,32 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
     def step(number, text):
         return textwrap.fill(f"{number}. {text}", width=110, break_on_hyphens=False, initial_indent="  ", subsequent_indent="     ")
 
-    build = ("the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)" if nvidia
-             else "PyTorch for the CPU")
-    lists = f"{LOCK} and {NVIDIA_LOCK}" if nvidia else LOCK
+    if card:
+        build = f"AMD's ROCm 7.14 build of PyTorch 2.12 with the code for the {amd_build().card_text(card)}"
+        lists = f"{LOCK} and {amd_build().LOCK}"
+    elif nvidia:
+        build, lists = "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)", f"{LOCK} and {NVIDIA_LOCK}"
+    else:
+        build, lists = "PyTorch for the CPU", LOCK
+    if switch_only is None:
+        switch_only = bool(switching) and todo == len(switching)
     if checkpoint_only:
         first = f"Python packages: the ones in {ENVIRONMENT} are left alone (--checkpoint-only)."
     elif not todo:
         first = f"Python packages: all {len(packages)} are already installed in {ENVIRONMENT}."
-    elif switching and todo == len(switching):
+    elif switching and switch_only:
+        download, disk = switch_mb(card=card)
         first = (f"Python packages: Kokoro is already installed in {ENVIRONMENT}, and {switch_text(switching, build)}. "
-                 f"About {mb_text(NVIDIA_EXTRA_DOWNLOAD_MB)} to download and {mb_text(NVIDIA_EXTRA_DISK_MB)} more on disk. pip "
-                 f"checks every file against a SHA-256 written in {lists}.")
+                 f"About {mb_text(download)} to download and {mb_text(disk)} more on disk. pip checks every file against a "
+                 f"SHA-256 written in {lists}.")
     else:
         made = (f"{ENVIRONMENT} is already here." if environment_exists else
                 f"First a Python environment of its own, {ENVIRONMENT}, made from the same Python 3.12 as .venv, so that "
                 "nothing another model installs can clash with Kokoro's packages.")
+        download, disk = packages_mb(nvidia=nvidia, card=card)
         first = (f"{made} Python packages: {todo} of {len(packages)} to install there, among them {build}, Transformers "
-                 f"and spaCy. About {mb_text(packages_download_mb(nvidia))} to download and "
-                 f"{mb_text(packages_disk_mb(nvidia))} on disk. pip checks every file against a SHA-256 written in "
-                 f"{lists}.")
+                 f"and spaCy. About {mb_text(download)} to download and {mb_text(disk)} on disk. pip checks every file "
+                 f"against a SHA-256 written in {lists}.")
     english = bool(voices) and all(Path(item["path"]).stem[0] in ENGLISH for item in voices)
     second = (f"Kokoro 82M, revision {manifest['revision'][:7]}, from huggingface.co/{manifest['repo']}: the "
               f"{size_text(checkpoint['size'])} checkpoint, its model card and {len(voices)} {'English ' if english else ''}"
@@ -530,11 +622,13 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
               + (f"{size_text(sum(item['size'] for item in pending))} to download" if pending else "Everything is already in place")
               + ". Every file is checked against a SHA-256 written in catalog/kokoro_snapshot.json.")
     third = ("A speech check: loads the model without using the network and speaks one sentence, which you can play afterwards"
-             + (", on the graphics card." if nvidia else "."))
+             + (f", on the {card['name']}." if card else ", on the graphics card." if nvidia else "."))
     notes = []
     if languages:
         notes.append(f"The {' and '.join(languages)} voices also need Misaki language packages that this installer does not add.")
-    if nvidia:
+    if card:
+        notes.append(amd_build().plan_note(card, cards))
+    elif nvidia:
         notes.append("The CUDA 13.0 build needs a GeForce GTX 16 or RTX 20 series card or newer and an NVIDIA driver of version 580 or "
                      "later. It carries NVIDIA's CUDA libraries inside it, under NVIDIA's own licence terms. Nobody has tried the Lab "
                      "on an NVIDIA card yet: if it works, or does not, a hardware report on GitHub helps the next person.")
@@ -545,7 +639,8 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
     intro = textwrap.fill("This adds a small speech model that runs on an ordinary computer, so the studio can speak. Everything is "
                           f"installed into this folder ({ENVIRONMENT}, hf-cache and out\\kokoro) and nothing system-wide; pip keeps "
                           "its usual download cache in your user profile.", width=110, break_on_hyphens=False)
-    title = "Fel's Voice Lab: Kokoro 82M on an NVIDIA graphics card" if nvidia else "Fel's Voice Lab: Kokoro 82M on the CPU"
+    title = "Fel's Voice Lab: Kokoro 82M on " + ("an AMD graphics card" if card else "an NVIDIA graphics card" if nvidia
+                                                 else "the CPU")
     return "\n\n".join([title, intro, "\n".join([step(1, first), step(2, second), step(3, third)]),
                         *(textwrap.fill(note, width=110, break_on_hyphens=False) for note in notes)]) + "\n"
 
@@ -644,15 +739,21 @@ def make_environment(root, *, runner=subprocess.run):
     make_env(root, ENVIRONMENT, runner=runner)
 
 
-def pinned_packages(root, *, nvidia=False):
-    """The packages to install: requirements/kokoro-cpu.txt, with the CUDA build of torch in place of the CPU one for --nvidia."""
+def pinned_packages(root, *, nvidia=False, card=None):
+    """The packages to install: requirements/kokoro-cpu.txt, with the CUDA build of torch in place of the CPU one for NVIDIA's
+    build, or for an AMD card (hardware.amd_cards) AMD's build of torch, its runtime and the code for the card's chip."""
+    if card:
+        return amd_build().pinned_packages(root, LOCK, card["chip"])
     packages = read_lock(Path(root) / LOCK)
     return swap_packages(packages, read_lock(Path(root) / NVIDIA_LOCK)) if nvidia else packages
 
 
-def install_packages(root, *, nvidia=False, runner=subprocess.run):
-    """Install the pinned packages into .venv-kokoro. For --nvidia, pip gets the CPU list with the CUDA torch swapped in,
-    written beside the receipt."""
+def install_packages(root, *, nvidia=False, card=None, runner=subprocess.run):
+    """Install the pinned packages into .venv-kokoro. For NVIDIA's build, pip gets the CPU list with the CUDA torch swapped in,
+    and for an AMD card the lists amd_build writes; both are written beside the receipt."""
+    if card:
+        amd_build().install_packages(root, ENVIRONMENT, LOCK, card["chip"], Path(root) / OUTPUT, runner=runner)
+        return
     requirements = Path(root) / LOCK
     if nvidia:
         requirements = write_swapped_lock(root, LOCK, NVIDIA_LOCK, Path(root) / OUTPUT / NVIDIA_REQUIREMENTS)
@@ -668,43 +769,56 @@ def last_json_line(text):
     return None
 
 
-def check_failure_hint(output, *, nvidia=False, cuda_needs=CUDA_NEEDS):
-    """A sentence for the most likely cause of a speech check that failed, from what it printed. cuda_needs says which cards and
-    which driver the model's NVIDIA build runs on."""
+def check_failure_hint(output, *, nvidia=False, amd_card=False, cuda_needs=CUDA_NEEDS):
+    """A sentence for the most likely cause of a speech check that failed, from what it printed: on NVIDIA's build (nvidia)
+    cuda_needs says which cards and which driver it runs on, and on AMD's (amd_card) amd_build says what to do."""
     if "DLL" in output or "WinError 126" in output:
         return ("\nA missing DLL usually means the Microsoft Visual C++ Redistributable is not installed. Install the x64 "
                 "version from https://aka.ms/vs/17/release/vc_redist.x64.exe and run the installer again.")
+    if amd_card:
+        return amd_build().failure_hint(output)
     if nvidia and ("CUDA" in output or "cuda" in output):
         return (f"\nPyTorch could not use the graphics card. {cuda_needs}: update the driver from nvidia.com and run the "
                 "installer again. To use the CPU instead, delete the folder of the model's environment and run the installer "
-                "without --nvidia.")
+                "without --gpu or --nvidia.")
     return ""
 
 
-def run_speech_check(root, *, device="cpu", runner=subprocess.run):
-    """In .venv-kokoro, offline: load Kokoro on the device and have it speak the Models page's check sentence."""
+def check_environment(number=None):
+    """The speech check's environment: offline, and for an AMD card the number PyTorch gives it (amd_build.settle_number)."""
+    env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "PYTHONUTF8": "1"}
+    if number is not None:
+        env[amd_build().VARIABLE] = str(number)
+    return env
+
+
+def run_speech_check(root, *, device="cpu", amd_card=False, number=None, runner=subprocess.run):
+    """In .venv-kokoro, offline: load Kokoro on the device and have it speak the Models page's check sentence. amd_card says the
+    graphics card is an AMD card, and number is the number PyTorch gives it (None to leave that to runtime.local.json)."""
     wav = Path(root) / OUTPUT / CHECK_WAV
     wav.parent.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "PYTHONUTF8": "1"}
     try:
-        done = runner([str(environment_python(root)), "-c", SPEECH_CHECK, str(root), str(wav), device], cwd=root, env=env,
-                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+        done = runner([str(environment_python(root)), "-c", SPEECH_CHECK, str(root), str(wav), device], cwd=root,
+                      env=check_environment(number), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                      timeout=900)
     except subprocess.TimeoutExpired as exc:
         raise InstallError("Loading Kokoro took more than 15 minutes, so the speech check was stopped.") from exc
     result = last_json_line(done.stdout or "")
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Kokoro did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:]) + check_failure_hint(output, nvidia=device == "cuda"))
+                           + "\n".join(output.strip().splitlines()[-12:])
+                           + check_failure_hint(output, nvidia=device == "cuda" and not amd_card, amd_card=amd_card))
     if result["problem"]:
         raise InstallError(f"Kokoro loaded but the check clip was not speech: {result['problem']}.")
     return {**result, "wav": wav}
 
 
-def write_receipt(root, manifest, packages, files, check):
+def write_receipt(root, manifest, packages, files, check, *, card=None, number=None):
+    """The installation record in out/kokoro, with the AMD card and its build when it was installed for one."""
     receipt = {"schema": 1, "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                "python": platform.python_version(), "environment": ENVIRONMENT, "torch": check.get("torch"),
-               "device": check.get("device", "cpu"),
+               "device": check.get("device", "cpu"), **(amd_build().receipt_fields(root, card, number) if card else {}),
                "packages_pinned": len(packages), "lock_sha256": hashlib.sha256((Path(root) / LOCK).read_bytes()).hexdigest(),
                "repo": manifest["repo"], "revision": manifest["revision"], "license": manifest["license"],
                "files": [item["path"] for item in files], "checkpoint_bytes": sum(item["size"] for item in files),
@@ -728,21 +842,23 @@ def confirmed(args, *, ask=input, interactive=None):
 
 def run(args, *, say=say_now, ask=input, interactive=None):
     root = ROOT
-    nvidia = getattr(args, "nvidia", False)
+    build, cards = requested_build(args)
+    nvidia = build == "nvidia"
+    card = amd_build().chosen_card(cards, root) if build == "amd" else None
+    if build == "amd" and card is None:
+        raise InstallError(amd_refusal("Kokoro's GPU build", amd_card_problems(cards, root=root)))
     manifest = load_manifest(root / MANIFEST)
-    packages = pinned_packages(root, nvidia=nvidia)
+    packages = pinned_packages(root, nvidia=nvidia, card=card)
     files = checkpoint_files(manifest, choose_voices(manifest, args.voices))
     exists = environment_python(root).is_file()
     installed = environment_versions(root) if exists else {}
     missing, different = package_state(packages, installed)
-    # --nvidia on a Kokoro installed for the CPU replaces its PyTorch; any other difference still stops the installer.
-    switching = build_switch(different, read_lock(root / LOCK), read_lock(root / NVIDIA_LOCK)) if nvidia else []
-    conflicts = [pair for pair in different if pair not in switching]
+    # The GPU build on a Kokoro installed for the CPU replaces its PyTorch; any other difference still stops the installer.
+    switching, conflicts, switch_only = gpu_switch(packages, read_lock(root / LOCK), installed) if build else ([], different, False)
     pending = pending_files(root, manifest, files)
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
-    packages_need = (packages_download_mb(nvidia) + packages_disk_mb(nvidia)) * 10**6 if todo else 0
-    if switching and todo == len(switching):
-        packages_need = (NVIDIA_EXTRA_DOWNLOAD_MB + NVIDIA_EXTRA_DISK_MB) * 10**6
+    download, disk = switch_mb(card=card) if switch_only else packages_mb(nvidia=nvidia, card=card)
+    packages_need = (download + disk) * 10**6 if todo else 0
     need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if nvidia:
@@ -753,7 +869,7 @@ def run(args, *, say=say_now, ask=input, interactive=None):
         problems += package_problems(conflicts, has_pip=not exists or "pip" in installed) + long_path_problems(root)
     problems += space_problems(root, need)
     say(plan_text(manifest, packages, todo, files, pending, checkpoint_only=args.checkpoint_only, environment_exists=exists,
-                  nvidia=nvidia, switching=switching))
+                  nvidia=nvidia, switching=switching, switch_only=switch_only, card=card, cards=cards))
     if problems:
         raise InstallError("This computer cannot take the plan yet:\n" + "\n".join(
             textwrap.fill(problem, width=110, break_on_hyphens=False, initial_indent="  - ", subsequent_indent="    ") for problem in problems))
@@ -769,7 +885,7 @@ def run(args, *, say=say_now, ask=input, interactive=None):
             say(f"Making {ENVIRONMENT}:")
             make_environment(root)
         say(f"Installing the Python packages into {ENVIRONMENT} (pip prints its own progress):")
-        install_packages(root, nvidia=nvidia)
+        install_packages(root, nvidia=nvidia, card=card)
         still_missing, still_different = package_state(packages, environment_versions(root))
         if still_missing:
             raise InstallError(f"pip finished but {len(still_missing)} packages are still missing, for example "
@@ -777,13 +893,18 @@ def run(args, *, say=say_now, ask=input, interactive=None):
         if switching and still_different:
             item, have = still_different[0]
             raise InstallError(f"pip finished but {item['name']} is still {have}, not {item['version']}.")
+    number = None
+    if card and not args.checkpoint_only:
+        number, note = amd_build().settle_number(root, amd_build().hip_devices(root, ENVIRONMENT), card)
+        if note:
+            say(note)
     say("Fetching the Kokoro model files:")
     download_checkpoint(root, manifest, files, say=say)
     say("Checking that Kokoro speaks (the first load is slow):")
-    check = run_speech_check(root, device="cuda" if nvidia else "cpu")
-    receipt = write_receipt(root, manifest, packages, files, check)
+    check = run_speech_check(root, device="cuda" if build else "cpu", amd_card=bool(card), number=number)
+    receipt = write_receipt(root, manifest, packages, files, check, card=card, number=number)
     say("")
-    where = " on the graphics card" if nvidia else ""
+    where = f" on the {card['name']}" if card else " on the graphics card" if build else ""
     say(f"Kokoro is installed and spoke a test sentence{where} ({check['audio_seconds']:.1f} s of audio in "
         f"{check['total_seconds']:.1f} s after a {check['load_seconds']:.0f} s load). The whole install took "
         f"{time.monotonic() - started:.0f} s.")
@@ -800,6 +921,9 @@ def build_parser():
     parser.add_argument("--voices", nargs="+", default=["supported"], metavar="VOICE",
                         help="supported (the default: every voice that works with these packages), english, all, or voice IDs "
                              "such as bm_george ef_dora")
+    parser.add_argument("--gpu", action="store_true",
+                        help="install the GPU build of PyTorch for this computer's graphics card instead of the CPU build: "
+                             "NVIDIA's CUDA build (untested), or AMD's ROCm build for an AMD Radeon")
     parser.add_argument("--nvidia", action="store_true",
                         help="install the CUDA build of PyTorch for an NVIDIA graphics card instead of the CPU build (untested)")
     parser.add_argument("--checkpoint-only", action="store_true",
@@ -820,4 +944,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run the module that tools/amd_build.py and the other installers import, tools.install_kokoro, and not this copy of it
+    # under the name __main__, so that their InstallError is the one main() catches.
+    from tools import install_kokoro
+
+    sys.exit(install_kokoro.main())

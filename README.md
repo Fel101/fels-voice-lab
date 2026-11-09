@@ -132,8 +132,8 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 2. It sets up the core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
    in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which
    also speaks in the voice of any recording longer than five seconds (about 4 GB to download and 7 GB on disk, for a computer
-   with 16 GB of RAM or more). It shows every model's plan and asks once. On a computer with an NVIDIA driver it offers the
-   GPU builds too, each where it runs on the card.
+   with 16 GB of RAM or more). It shows every model's plan and asks once. On a computer with an NVIDIA driver, or an AMD
+   Radeon card, it offers the GPU builds too, each where it runs on the card.
 3. Use the **Fel's Voice Lab** desktop icon. Its dedicated window runs without a console; closing it stops its backend.
 
 To add a model later, press **Install** on its card in **Models & features**, or run its launcher, such as `setup-kokoro.bat`,
