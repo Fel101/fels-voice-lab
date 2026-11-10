@@ -250,6 +250,21 @@ A missing encoder must not be treated as a successful identity check.
 
 **Voice conversion** separates source performance from target identity, retains
 its receipt, and preserves Chatterbox's native watermark. It is not training.
+Its two lists offer recordings already in the Lab's folders. To use a file from
+this computer instead, choose it under the list: **Use a source file from this
+computer** for the performance (WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds; its
+voice is replaced, so it needs no permission), or **Use a target voice file from
+this computer** for the voice to convert to (up to 10 seconds). For a target voice,
+fill in its origin and allowed use and tick that you own the recording or have
+permission to clone the voice first, as Voice cloning asks; the tick clears after
+each file. The file is then kept, and chosen in its list under its own name. Every
+conversion's manifest records the original name of each file, and the target's
+origin and allowed use. The Lab keeps these files as mono WAVs in
+`out\conversions\uploads\source` and `out\conversions\uploads\target`, named by the
+SHA-256 of the file you chose, so the same file chosen twice is kept once, each with
+a small JSON of its name and terms beside it. Backups leave out `out\conversions`,
+so copy that folder yourself if you want to keep them; deleting a recording there
+(with its JSON) takes it off the list.
 Dataset preparation is a provenance/manifest workbench; no training, fine-tuning,
 automatic voice improvement or unrestricted output rights are implied.
 

@@ -99,6 +99,70 @@ def _safe_relative(root: Path, relative: str) -> Path:
     return target
 
 
+REFERENCE_LENGTH = "Source audio duration must be {minimum:g}–{maximum:g} seconds; trim it before saving a reference version."
+
+
+def decode_audio(source_bytes, filename, *, what="Reference", max_seconds=None, length=REFERENCE_LENGTH):
+    """Decode an uploaded recording into float32 samples shaped [frames, channels]: WAV, FLAC, OGG and MP3 with soundfile,
+    M4A with FFmpeg, as `filename`'s extension says (nothing else of the name is used). It refuses an empty file, one over
+    MAX_UPLOAD_BYTES, a rate outside 8–192 kHz, more than MAX_REFERENCE_CHANNELS channels, and a length outside
+    MIN_REFERENCE_SECONDS to max_seconds (MAX_SOURCE_SECONDS, read when it is called, unless given), which `length` says
+    with {minimum} and {maximum}. `what` names the recording in the other refusals. Cast imports call it for a reference's
+    source recording; Voice conversion's uploads with their own limits. Returns (audio, sample rate, seconds, extension)."""
+    max_seconds = MAX_SOURCE_SECONDS if max_seconds is None else max_seconds
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_AUDIO:
+        raise ValueError(f"{what} files must be WAV, FLAC, OGG, MP3 or M4A audio.")
+    if not source_bytes or len(source_bytes) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"{what} audio must be between 1 byte and {MAX_UPLOAD_BYTES // (1024*1024)} MiB.")
+
+    def check_format(rate, channels):
+        if rate < 8_000 or rate > MAX_REFERENCE_RATE:
+            raise ValueError(f"{what} sample rate {rate} Hz is outside 8–192 kHz.")
+        if channels < 1 or channels > MAX_REFERENCE_CHANNELS:
+            raise ValueError(f"{what} audio must have 1–{MAX_REFERENCE_CHANNELS} channels.")
+
+    def check_length(seconds):
+        if seconds < MIN_REFERENCE_SECONDS or seconds > max_seconds:
+            raise ValueError(length.format(minimum=MIN_REFERENCE_SECONDS, maximum=max_seconds))
+
+    if suffix in FFMPEG_AUDIO:
+        # FFmpeg is the only reader, and it decodes at most just past the ceiling. The rate, channels and length it
+        # reports are checked like any other file's.
+        audio, sample_rate = ffmpeg_tools.decode_audio(source_bytes, suffix, max_seconds)
+        check_format(sample_rate, audio.shape[1])
+        duration = audio.shape[0] / sample_rate
+    elif suffix == ".mp3":
+        # An MP3 header only estimates its length, so the length is measured on the samples, and no more than just
+        # past the ceiling is read, whatever the header claims.
+        try:
+            with sf.SoundFile(io.BytesIO(source_bytes)) as mp3:
+                sample_rate = mp3.samplerate
+                check_format(sample_rate, mp3.channels)
+                audio = mp3.read(int(max_seconds * sample_rate) + 1, dtype="float32", always_2d=True)
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"Could not read {what.lower()} audio: {exc}") from exc
+        duration = audio.shape[0] / sample_rate
+    else:
+        try:
+            info = sf.info(io.BytesIO(source_bytes))
+            duration = float(info.duration)
+        except Exception as exc:
+            raise ValueError(f"Could not read {what.lower()} audio: {exc}") from exc
+        check_format(info.samplerate, info.channels)
+        check_length(duration)
+        try:
+            audio, sample_rate = sf.read(io.BytesIO(source_bytes), dtype="float32", always_2d=True)
+        except Exception as exc:
+            raise ValueError(f"Could not decode {what.lower()} audio: {exc}") from exc
+    check_length(duration)
+    if audio.size == 0 or not np.isfinite(audio).all():
+        raise ValueError(f"{what} audio is empty or contains non-finite samples.")
+    return audio, int(sample_rate), duration, suffix
+
+
 AUDIO_SUFFIXES = SUPPORTED_AUDIO
 MAX_EXTERNAL_REPORT = 200
 RETIREMENT_KINDS = ("character", "identity", "reference", "take")
@@ -662,58 +726,7 @@ class CastStore:
 
     @staticmethod
     def _decode_audio(source_bytes, filename):
-        suffix = Path(filename).suffix.lower()
-        if suffix not in SUPPORTED_AUDIO:
-            raise ValueError("Reference files must be WAV, FLAC, OGG, MP3 or M4A audio.")
-        if not source_bytes or len(source_bytes) > MAX_UPLOAD_BYTES:
-            raise ValueError(f"Reference audio must be between 1 byte and {MAX_UPLOAD_BYTES // (1024*1024)} MiB.")
-
-        def check_format(rate, channels):
-            if rate < 8_000 or rate > MAX_REFERENCE_RATE:
-                raise ValueError(f"Reference sample rate {rate} Hz is outside 8–192 kHz.")
-            if channels < 1 or channels > MAX_REFERENCE_CHANNELS:
-                raise ValueError(f"Reference audio must have 1–{MAX_REFERENCE_CHANNELS} channels.")
-
-        def check_length(seconds):
-            if seconds < MIN_REFERENCE_SECONDS or seconds > MAX_SOURCE_SECONDS:
-                raise ValueError(f"Source audio duration must be {MIN_REFERENCE_SECONDS:g}–{MAX_SOURCE_SECONDS:g} seconds; "
-                                 "trim it before saving a reference version.")
-
-        if suffix in FFMPEG_AUDIO:
-            # FFmpeg is the only reader, and it decodes at most just past the ceiling. The rate, channels and length it
-            # reports are checked like any other file's.
-            audio, sample_rate = ffmpeg_tools.decode_audio(source_bytes, suffix, MAX_SOURCE_SECONDS)
-            check_format(sample_rate, audio.shape[1])
-            duration = audio.shape[0] / sample_rate
-        elif suffix == ".mp3":
-            # An MP3 header only estimates its length, so the length is measured on the samples, and no more than just
-            # past the ceiling is read, whatever the header claims.
-            try:
-                with sf.SoundFile(io.BytesIO(source_bytes)) as mp3:
-                    sample_rate = mp3.samplerate
-                    check_format(sample_rate, mp3.channels)
-                    audio = mp3.read(int(MAX_SOURCE_SECONDS * sample_rate) + 1, dtype="float32", always_2d=True)
-            except ValueError:
-                raise
-            except Exception as exc:
-                raise ValueError(f"Could not read reference audio: {exc}") from exc
-            duration = audio.shape[0] / sample_rate
-        else:
-            try:
-                info = sf.info(io.BytesIO(source_bytes))
-                duration = float(info.duration)
-            except Exception as exc:
-                raise ValueError(f"Could not read reference audio: {exc}") from exc
-            check_format(info.samplerate, info.channels)
-            check_length(duration)
-            try:
-                audio, sample_rate = sf.read(io.BytesIO(source_bytes), dtype="float32", always_2d=True)
-            except Exception as exc:
-                raise ValueError(f"Could not decode reference audio: {exc}") from exc
-        check_length(duration)
-        if audio.size == 0 or not np.isfinite(audio).all():
-            raise ValueError("Reference audio is empty or contains non-finite samples.")
-        return audio, int(sample_rate), duration, suffix
+        return decode_audio(source_bytes, filename)
 
     @staticmethod
     def _make_reference(audio, sample_rate, duration, edits, maximum_seconds, speakers=None):

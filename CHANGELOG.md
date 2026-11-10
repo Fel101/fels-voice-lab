@@ -68,6 +68,11 @@
   377 s, Chatterbox Turbo switched from its CPU build in 174 s and cloned a voice in its speech check (2.5 s of audio in 2.0 s),
   Chatterbox 500M and Voice Conversion passed theirs, and **Test** passed for Kokoro (2.7 s in 0.5 s), Turbo (2.1 s in 1.8 s)
   and 500M (2.6 s in 6.6 s).
+- **Voice conversion takes files from this computer.** Under each of its two lists, a picker takes a WAV, FLAC, OGG, MP3
+  or M4A file (read as Cast imports read them, M4A through FFmpeg) and chooses it in the list under its own name: a source
+  performance of up to 60 seconds, or a target voice of up to 10, which needs the permission tick, origin and allowed use
+  that Voice cloning asks for. The files are kept as mono WAVs named by their SHA-256 in `out\conversions\uploads`, and each
+  conversion's manifest records their original names and the target's terms. New route: `POST /api/conversion/uploads`.
 - **update.bat knows every model.** After an update it now names the pinned packages and files of all eleven installable
   models, not only Kokoro's, Phonon's and Chatterbox Turbo's. An environment is named once, with the command of each model
   installed in it (`--gpu` for a GPU build of Kokoro or Chatterbox, where it used to say `--nvidia`), and only for a list its

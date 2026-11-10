@@ -51,12 +51,46 @@ $('convertVoice').addEventListener('click',function(){
     .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';})
     .then(function(){$('convertVoice').disabled=false;});
 });
+// A file from this computer for either side of a conversion. The service keeps it in out\conversions\uploads, and its list
+// then offers it under its original name. A target voice needs the permission, origin and allowed use first, as Voice cloning
+// asks, and the tick is cleared after each file so that every target is confirmed on its own.
+function uploadConversionFile(role,input){
+  var file=input.files&&input.files[0],list=$(role==='target'?'conversionTarget':'conversionSource');
+  if(!file){return Promise.resolve(null);}
+  var metadata={filename:file.name,role:role},problem='';
+  if(role==='target'){
+    metadata.origin=$('conversionTargetOrigin').value.trim();metadata.allowed_use=$('conversionTargetAllowedUse').value.trim();
+    metadata.permission=$('conversionTargetPermission').checked;
+    if(!metadata.permission||!metadata.origin||!metadata.allowed_use){
+      problem='Before you choose a target voice file, tick that you own it or have permission to clone the voice, and fill in its origin and allowed use.';}
+  }
+  if(!problem&&!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)){problem='Choose WAV, FLAC, OGG, MP3 or M4A audio.';}
+  if(!problem&&file.size>32*1024*1024){problem='The file is larger than 32 MB.';}
+  $('conversionError').textContent=problem;
+  if(problem){input.value='';return Promise.resolve(null);}
+  $('conversionStatus').textContent='Reading '+file.name+'…';
+  return fetch('/api/conversion/uploads',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream',
+      'X-Reference-Metadata':encodeReferenceMetadata(metadata)},body:file})
+    .then(function(response){return response.json().then(function(body){
+      if(!response.ok){throw new Error(body.error||('The service answered '+response.status+'.'));}return body.upload;});})
+    .then(function(upload){return refreshConversionAssets().then(function(){
+      list.value=upload.path;
+      if(role==='target'){$('conversionTargetPermission').checked=false;}
+      $('conversionStatus').textContent='Added '+upload.original_name+' ('+upload.duration_seconds+' s) as the '+
+        (role==='target'?'target voice.':'source performance.');
+      return upload;});})
+    .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';return null;})
+    .then(function(result){input.value='';return result;});
+}
+function conversionLabel(item){
+  return (item.original_name?item.original_name+' (from this computer, ':item.relative_path+' (')+item.duration_seconds+' s)';
+}
 function refreshConversionAssets(){
 var previousSource=$('conversionSource').value,previousTarget=$('conversionTarget').value;
 return Promise.all([fetchJson('/api/conversion/sources'),fetchJson('/api/conversion/targets')]).then(function(values){
   var sources=$('conversionSource'),targets=$('conversionTarget');sources.textContent='';targets.textContent='';
-  (values[0].sources||[]).forEach(function(item){option(sources,item.path,item.relative_path+' ('+item.duration_seconds+' s)');});
-  (values[1].targets||[]).forEach(function(item){var label=item.relative_path+' ('+item.duration_seconds+' s)';
+  (values[0].sources||[]).forEach(function(item){option(sources,item.path,conversionLabel(item));});
+  (values[1].targets||[]).forEach(function(item){var label=conversionLabel(item);
     if(item.character_name){label+=' — '+item.character_name+' / '+item.identity_label+' v'+(item.version||'?');}
     option(targets,item.path,label);targets.options[targets.options.length-1].dataset.referenceId=item.reference_version_id||'';});
   if(!sources.options.length){option(sources,'','No local source WAVs found',true);}
@@ -66,6 +100,8 @@ if(Array.from(sources.options).some(function(item){return item.value===previousS
 }).catch(function(error){$('conversionError').textContent='Could not list local conversion inputs: '+error.message;});
 }
 refreshConversionAssets();
+$('conversionSourceFile').addEventListener('change',function(){uploadConversionFile('source',this);});
+$('conversionTargetFile').addEventListener('change',function(){uploadConversionFile('target',this);});
 $('previewKokoroPhonemes').addEventListener('click',function(){
   $('kokoroPhonemes').textContent='Checking installed pronunciation frontend...';
   fetchJson('/api/kokoro/phonemize',{text:$('text').value,language:$('kokoroLanguage').value})

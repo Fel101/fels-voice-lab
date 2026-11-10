@@ -287,6 +287,15 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <label class="field">Target voice reference<select id="conversionTarget"></select></label>
     <button class="go" type="button" id="convertVoice">Convert voice</button>
   </div>
+  <div class="cast-grid">
+    <div><label class="field">Use a source file from this computer<input id="conversionSourceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <p class="meta">WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds. Its voice is replaced, so it needs no permission.</p></div>
+    <div><label class="field">Origin / source<input id="conversionTargetOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
+      <label class="field">Allowed use / restrictions<input id="conversionTargetAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label>
+      <label><input id="conversionTargetPermission" type="checkbox"> I own this recording or have permission to clone this voice.</label>
+      <label class="field">Use a target voice file from this computer<input id="conversionTargetFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <p class="meta">Up to 10 seconds. Fill in its origin and allowed use and tick the box first: every conversion to this voice records them in its manifest.</p></div>
+  </div>
   <p id="conversionError" role="alert"></p><p class="meta" id="conversionStatus"></p>
   <audio id="conversionPlayer" controls></audio>
   <p class="meta" id="conversionManifest"></p>

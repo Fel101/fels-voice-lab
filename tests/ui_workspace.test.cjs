@@ -759,8 +759,8 @@ test('the page offers MP3 and AAC export, M4A and MP3 import, and the FFmpeg not
   for (const id of ['exportFfmpeg']) assert.ok(source.includes(`id="${id}"`));
   assert.match(source, /name="exportFormat" value="mp3"/);
   assert.match(source, /name="exportFormat" value="m4a"/);
-  assert.equal((source.match(/accept="\.wav,\.flac,\.ogg,\.mp3,\.m4a,audio\/wav,audio\/flac,audio\/ogg,audio\/mpeg,audio\/mp4"/g) || []).length, 2,
-    'the clone upload and the Cast import take the same files');
+  assert.equal((source.match(/accept="\.wav,\.flac,\.ogg,\.mp3,\.m4a,audio\/wav,audio\/flac,audio\/ogg,audio\/mpeg,audio\/mp4"/g) || []).length, 4,
+    'the clone upload, the Cast import and the two Voice conversion pickers take the same files');
   assert.match(source, /\/\\\.\(wav\|flac\|ogg\|mp3\|m4a\)\$\/i\.test\(file\.name\)/);
   assert.match(source, /refreshExports\(undefined,true\)/);
 });
@@ -1153,3 +1153,80 @@ test('every control the System script reaches for is on the page, wired once, an
   assert.ok(html.indexOf('/voice_lab_system.js') > html.indexOf('/voice_lab_generate.js') && html.indexOf('/voice_lab_system.js') < html.indexOf('/voice_lab_app.js'));
   assert.match(source, /if\(active==='system'\)refreshSystemPage\(\)/);
 });
+
+test('a file from this computer is uploaded and chosen in its list, and a target voice needs the permission first', async () => {
+  const fields = {conversionError: {textContent: ''}, conversionStatus: {textContent: ''}, conversionSource: {value: ''},
+    conversionTarget: {value: ''}, conversionTargetOrigin: {value: ''}, conversionTargetAllowedUse: {value: ''},
+    conversionTargetPermission: {checked: false}};
+  const calls = [];
+  let answer = (role) => ({ok: true, status: 201, json: async () => ({upload: {
+    path: `D:\\lab\\out\\conversions\\uploads\\${role}\\0a1b.wav`, original_name: role === 'target' ? 'voice.mp3' : 'take.wav',
+    duration_seconds: role === 'target' ? 6.2 : 41.5}})});
+  let refreshed = 0;
+  const c = vm.createContext({$: (id) => fields[id], Promise, Error, JSON,
+    encodeReferenceMetadata: (metadata) => JSON.stringify(metadata),
+    fetch: async (url, options) => {
+      calls.push({url, options});
+      return answer(JSON.parse(options.headers['X-Reference-Metadata']).role);
+    },
+    refreshConversionAssets: async () => { refreshed += 1; }});
+  vm.runInContext(sourceBetween('function uploadConversionFile(', 'function refreshConversionAssets('), c);
+  const file = (name, size = 1000) => ({value: 'C:\\fakepath\\' + name, files: [{name, size, type: 'audio/wav'}]});
+
+  // A source performance needs no permission: it is sent with its name and role, then chosen once the list has it.
+  const performance = file('take.wav');
+  const uploaded = await c.uploadConversionFile('source', performance);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/conversion/uploads');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.body, performance.files[0]);
+  assert.deepEqual(JSON.parse(calls[0].options.headers['X-Reference-Metadata']), {filename: 'take.wav', role: 'source'});
+  assert.equal(refreshed, 1);
+  assert.equal(fields.conversionSource.value, uploaded.path);
+  assert.equal(fields.conversionStatus.textContent, 'Added take.wav (41.5 s) as the source performance.');
+  assert.equal(performance.value, '');  // the same file can be chosen again
+
+  // A target voice is refused before anything is sent until the box is ticked and both terms are filled in.
+  const target = file('voice.mp3');
+  assert.equal(await c.uploadConversionFile('target', target), null);
+  fields.conversionTargetPermission.checked = true;
+  fields.conversionTargetOrigin.value = 'My own voice, recorded today';
+  target.value = 'C:\\fakepath\\voice.mp3';
+  assert.equal(await c.uploadConversionFile('target', target), null);  // the allowed use is still empty
+  assert.equal(calls.length, 1);
+  assert.match(fields.conversionError.textContent, /tick that you own it or have permission to clone the voice, and fill in its origin and allowed use/);
+  assert.equal(target.value, '');
+  fields.conversionTargetAllowedUse.value = 'Private tests only';
+  target.value = 'C:\\fakepath\\voice.mp3';
+  await c.uploadConversionFile('target', target);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[1].options.headers['X-Reference-Metadata']), {filename: 'voice.mp3', role: 'target',
+    origin: 'My own voice, recorded today', allowed_use: 'Private tests only', permission: true});
+  assert.equal(fields.conversionTarget.value, 'D:\\lab\\out\\conversions\\uploads\\target\\0a1b.wav');
+  assert.equal(fields.conversionError.textContent, '');
+  assert.equal(fields.conversionTargetPermission.checked, false);  // the next target file is confirmed on its own
+
+  // Other files are refused before sending, and the service's refusal is shown.
+  assert.equal(await c.uploadConversionFile('source', file('notes.txt')), null);
+  assert.equal(fields.conversionError.textContent, 'Choose WAV, FLAC, OGG, MP3 or M4A audio.');
+  assert.equal(await c.uploadConversionFile('source', file('long.wav', 40 * 1024 * 1024)), null);
+  assert.equal(fields.conversionError.textContent, 'The file is larger than 32 MB.');
+  answer = () => ({ok: false, status: 400, json: async () => ({error: 'A source performance must be 0.5 to 60 seconds long.'})});
+  assert.equal(await c.uploadConversionFile('source', file('long.wav')), null);
+  assert.equal(fields.conversionError.textContent, 'A source performance must be 0.5 to 60 seconds long.');
+  assert.equal(fields.conversionStatus.textContent, '');
+  assert.equal(calls.length, 3);
+
+  // The lists name an upload by the name it had on this computer.
+  vm.runInContext(sourceBetween('function conversionLabel(', 'function refreshConversionAssets('), c);
+  assert.equal(c.conversionLabel({original_name: 'voice.mp3', relative_path: 'out/conversions/uploads/target/0a1b.wav',
+    duration_seconds: 6.2}), 'voice.mp3 (from this computer, 6.2 s)');
+  assert.equal(c.conversionLabel({relative_path: 'reference/af_heart.wav', duration_seconds: 9.4}), 'reference/af_heart.wav (9.4 s)');
+  assert.match(pageHtml(), /id="conversionSourceFile" type="file" accept="\.wav,\.flac,\.ogg,\.mp3,\.m4a/);
+  assert.match(pageHtml(), /id="conversionTargetFile" type="file" accept="\.wav,\.flac,\.ogg,\.mp3,\.m4a/);
+  assert.match(source, /\$\('conversionTargetFile'\)\.addEventListener\('change',function\(\)\{uploadConversionFile\('target',this\);\}\);/);
+});
+
+function pageHtml() {
+  return source.slice(0, source.indexOf('</html>'));
+}

@@ -616,13 +616,30 @@ ROUTES = [
     R("POST", "/api/convert", "Conversion", "Say a recording again in another voice, with Chatterbox voice conversion.",
       status=201,
       body=(F("source_path", "string", "The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's "
-                                       "reference, saved-voice, Cast, scene or conversion folders.", True),
+                                       "reference, saved-voice, Cast, scene or conversion folders, such as a file kept with "
+                                       "`POST /api/conversion/uploads`.", True),
             F("target_reference_path", "string", "The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in "
-                                                 "the reference, saved-voice or Cast reference folders.", True),
+                                                 "the reference, saved-voice, Cast reference or conversion folders. A file "
+                                                 "kept with `POST /api/conversion/uploads` must have been sent as a target.",
+              True),
             F("target_reference_id", "string", "A Cast reference version; its recording must be the target file.")),
       reply="`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both "
-            "inputs by checksum.",
+            "inputs by checksum, and for a file chosen from this computer its original name and, for the target, the origin "
+            "and allowed use it was given.",
       errors=((409, "The GPU worker is busy."),)),
+    R("POST", "/api/conversion/uploads", "Conversion", "Keep a recording from this computer as a source performance or a "
+                                                       "target voice for voice conversion.",
+      status=201, body_kind="audio",
+      reply="`upload`: `path` (for `POST /api/convert`), `role`, `original_name`, `original_sha256`, `uploaded_at`, "
+            "`duration_seconds`, `sample_rate_hz` and, for a target, `permission`, `origin` and `allowed_use`.",
+      errors=((413, "The recording is over 32 MiB."),),
+      notes="Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, "
+            "base64url-encoded JSON: `{\"filename\": \"take.mp3\", \"role\": \"source\"}` for the performance, or `{\"filename\": "
+            "\"voice.wav\", \"role\": \"target\", \"permission\": true, \"origin\": \"...\", \"allowed_use\": \"...\"}` for the "
+            "voice to convert to, which is refused without all three. `filename` sets the format and the label, and names "
+            "nothing on disk: the recording is kept as a mono WAV named by the SHA-256 of the bytes sent, in "
+            "`out/conversions/uploads/source` or `.../target`, so the same file sent twice is kept once, with a JSON of the "
+            "rest beside it. A source may be 0.5 to 60 seconds long and a target 0.5 to 10."),
 
     # ---------------------------------------------------------------- System
     R("GET", "/api/system", "System", "Report the version, the system, the library, FFmpeg, disk space and engine states.",

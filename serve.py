@@ -46,7 +46,7 @@ from engine_checks import EngineCheckStore
 from engine_devices import EngineDeviceStore
 from engine_install import EngineInstaller
 from cast_store import (CastStore, DIRECTION_ENGINES, MAX_UPLOAD_BYTES,
-                        PRESET_VOICE_ENGINES, generation_identity_snapshot)
+                        PRESET_VOICE_ENGINES, decode_audio, generation_identity_snapshot)
 from scene_store import SceneBatchRunner, SceneStore, SUPPORTED_LANGUAGES, csv_template, json_template
 import export_panel
 import speaker_similarity
@@ -89,6 +89,96 @@ PAGE_SCRIPTS = frozenset({"voice_lab_studio.js", "voice_lab_cast.js", "voice_lab
 APP_ROOT = LAB
 COMPARE_PAGE = _page("compare.html")
 AUDIO_EXTENSIONS = {".wav", ".flac", ".ogg"}
+# Voice conversion's two inputs: what each is called, and how long it may be.
+CONVERSION_ROLES = {"source": "Source performance", "target": "Target voice reference"}
+CONVERSION_SECONDS = {"source": 60.0, "target": 10.0}
+CONVERSION_PERMISSION = ("To use a recording as the target voice, confirm that you own it or have permission to clone the "
+                         "voice, and record its origin and allowed use.")
+
+
+def _conversion_uploads():
+    """Where Voice conversion keeps the files chosen from this computer: out/conversions/uploads/source and .../target."""
+    return OUT / "conversions" / "uploads"
+
+
+def _write_whole(path, data):
+    """Write a file whole, through a temporary file beside it, so that a reader never sees half of it."""
+    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, path)
+
+
+def save_conversion_upload(body, metadata):
+    """Keep a file chosen on the Voice conversion tab: read it as Cast imports do (WAV, FLAC, OGG and MP3, M4A through
+    FFmpeg), check its length for its role, and save it as a mono WAV named by the SHA-256 of the bytes sent, so the same file
+    sent twice lands in the same place. Beside it goes a JSON with its original name, its role, the time and, for a target
+    voice, the permission, origin and allowed use it was given, which the lists and the conversion manifest read. A target
+    needs all three. The name the browser sends sets the format and the label only, never a path. Returns what the lists
+    show for it, with its path."""
+    role = metadata.get("role")
+    if role not in CONVERSION_ROLES:
+        raise ValueError('Say whether the file is the source performance or the target voice: "role" is "source" or "target".')
+    name = metadata.get("filename")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Send the file's name as filename: its extension says how to read it.")
+    original = re.split(r"[\\/]", name.strip())[-1][:255]
+    terms = {}
+    if role == "target":
+        origin, allowed = metadata.get("origin"), metadata.get("allowed_use")
+        if metadata.get("permission") is not True or not all(isinstance(text, str) and text.strip() for text in (origin, allowed)):
+            raise ValueError(CONVERSION_PERMISSION)
+        if len(origin) > 1000 or len(allowed) > 1000:
+            raise ValueError("Keep the origin and the allowed use under 1,000 characters each.")
+        terms = {"permission": True, "origin": origin.strip(), "allowed_use": allowed.strip()}
+    what = CONVERSION_ROLES[role]
+    audio, rate, seconds, _suffix = decode_audio(
+        body, original, what=what, max_seconds=CONVERSION_SECONDS[role],
+        length=f"A {what.lower()} must be {{minimum:g}} to {{maximum:g}} seconds long. Trim it, or choose a shorter one.")
+    import io
+    import numpy as np
+    wav = io.BytesIO()
+    sf.write(wav, np.clip(audio.mean(axis=1), -1.0, 1.0), rate, format="WAV", subtype="PCM_16")
+    digest = hashlib.sha256(body).hexdigest()
+    folder = _conversion_uploads() / role
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{digest}.wav"
+    _write_whole(path, wav.getvalue())
+    record = {"schema": 1, "role": role, "original_name": original, "original_sha256": digest,
+              "uploaded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+              "duration_seconds": round(float(seconds), 3), "sample_rate_hz": int(rate), **terms}
+    _write_whole(path.with_suffix(".json"), (json.dumps(record, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+    return {"path": str(path.resolve()), **{key: value for key, value in record.items() if key != "schema"}}
+
+
+def _upload_record(path):
+    """The JSON beside a file kept by save_conversion_upload: {} when it cannot be read, and None for any other file."""
+    path = Path(path)
+    if _conversion_uploads().resolve() not in path.parents:
+        return None
+    try:
+        record = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def _upload_row(path, target):
+    """What a conversion list shows of a file chosen from this computer: its original name, and a target's terms. None for a
+    file that is not one, and False for one that the list must not offer: an upload made for the other role, or a target
+    whose permission, origin and allowed use are not all recorded."""
+    record = _upload_record(path)
+    if record is None:
+        return None
+    if Path(path).parent.name != ("target" if target else "source"):
+        return False
+    original = str(record.get("original_name") or "")
+    row = {"name": original or Path(path).name, "original_name": original, "uploaded_at": str(record.get("uploaded_at", ""))}
+    if target:
+        terms = [str(record.get(key) or "").strip() for key in ("origin", "allowed_use")]
+        if record.get("permission") is not True or not all(terms):
+            return False
+        row.update(origin=terms[0], allowed_use=terms[1])
+    return row
 
 
 def _conversion_roots(target=False, cast=None):
@@ -116,12 +206,14 @@ def _conversion_audio_path(value, role, *, target=False, cast=None):
     if not any(root in path.parents for root in _conversion_roots(target=target, cast=cast)):
         role_hint = "reference or saved voice" if target else "reference, saved voice, Cast take, scene, or voice conversion"
         raise ValueError(f"{role} audio must be under voice-lab {role_hint} storage.")
+    if target and _upload_row(path, True) is False:
+        raise ValueError(f"{CONVERSION_PERMISSION} Choose the file under Target voice reference to give them.")
     if cast is not None:
         cast.assert_media_usable(path)
     details = sf.info(path)
-    maximum = 10 if target else 60
+    maximum = CONVERSION_SECONDS["target" if target else "source"]
     if details.duration <= 0 or details.duration > maximum:
-        raise ValueError(f"{role} audio must be non-empty and no longer than {maximum} seconds.")
+        raise ValueError(f"{role} audio must be non-empty and no longer than {maximum:g} seconds.")
     return path, details
 
 
@@ -152,7 +244,8 @@ def _conversion_asset_rows(cast, *, target=False):
                 continue
             metadata_by_path[resolved] = {"take_id": take["id"], "source_provenance": take.get("provenance", {})}
     rows, seen = [], set()
-    for root in roots:
+    # The files chosen from this computer come first, so that no number of conversions can push them out of the list.
+    for root in ((_conversion_uploads() / ("target" if target else "source")).resolve(), *roots):
         if not root.is_dir():
             continue
         for candidate in sorted(root.rglob("*"), key=lambda item: str(item).casefold()):
@@ -169,12 +262,16 @@ def _conversion_asset_rows(cast, *, target=False):
             if details.duration <= 0:
                 continue
             seen.add(resolved)
+            upload = _upload_row(resolved, target)
+            if upload is False:
+                continue
             display_root = LAB if LAB in resolved.parents else cast.root
             row = {"path": str(resolved), "relative_path": resolved.relative_to(display_root).as_posix(),
                    "name": resolved.name, "source": root.relative_to(display_root).as_posix(),
                    "size_bytes": resolved.stat().st_size, "sample_rate_hz": details.samplerate,
                    "duration_seconds": round(float(details.duration), 3)}
             row.update(metadata_by_path.get(resolved, {}))
+            row.update(upload or {})
             rows.append(row)
     return rows
 
@@ -748,6 +845,15 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def conversion_targets(self, parsed, req):
         self._json(200, {"targets": _conversion_asset_rows(cast, target=True)})
 
+    @router.post("/api/conversion/uploads")
+    def conversion_upload(self, parsed, req):
+        body = self._read_body(MAX_UPLOAD_BYTES)
+        try:
+            metadata = reference_metadata(self)
+        except ValueError as exc:
+            raise ValueError("Send the file's name and role as base64url JSON in the X-Reference-Metadata header.") from exc
+        self._json(201, {"upload": save_conversion_upload(body, metadata)})
+
     @router.post("/api/system/use-library")
     def use_library(self, parsed, req):
         self._json(200, library_backup.use_library(APP_ROOT, library_backup.restore_target(library_root, req.get("folder"))))
@@ -1062,6 +1168,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         audio = np.asarray(wav, dtype=np.float32).reshape(-1)
         if not audio.size or not np.isfinite(audio).all():
             raise RuntimeError("Chatterbox voice conversion produced empty or invalid audio.")
+        source_upload = _upload_record(source_path) or {}  # a file chosen from this computer: the name it had there
         conversion_id = uuid.uuid4().hex
         artifact_dir = OUT / "conversions" / conversion_id
         artifact_dir.mkdir(parents=True, exist_ok=False)
@@ -1080,7 +1187,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 "sample_rate_hz": source_info.samplerate,
                 "duration_seconds": round(float(source_info.duration), 4),
                 **({"cast_take_id": next((row.get("take_id") for row in _conversion_asset_rows(cast)
-                                         if Path(row["path"]).resolve() == source_path), None)})
+                                         if Path(row["path"]).resolve() == source_path), None)}),
+                **({"original_name": source_upload["original_name"]} if source_upload.get("original_name") else {}),
             },
             "target_voice_reference": {
                 "path": str(target_path), "sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),

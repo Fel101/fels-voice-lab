@@ -4394,11 +4394,11 @@
                 "properties": {
                   "source_path": {
                     "type": "string",
-                    "description": "The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's reference, saved-voice, Cast, scene or conversion folders."
+                    "description": "The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's reference, saved-voice, Cast, scene or conversion folders, such as a file kept with `POST /api/conversion/uploads`."
                   },
                   "target_reference_path": {
                     "type": "string",
-                    "description": "The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in the reference, saved-voice or Cast reference folders."
+                    "description": "The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in the reference, saved-voice, Cast reference or conversion folders. A file kept with `POST /api/conversion/uploads` must have been sent as a target."
                   },
                   "target_reference_id": {
                     "type": "string",
@@ -4415,7 +4415,7 @@
         },
         "responses": {
           "201": {
-            "description": "`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both inputs by checksum.",
+            "description": "`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both inputs by checksum, and for a file chosen from this computer its original name and, for the target, the origin and allowed use it was given.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4426,6 +4426,63 @@
           },
           "409": {
             "description": "The GPU worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/conversion/uploads": {
+      "post": {
+        "operationId": "post_api_conversion_uploads",
+        "summary": "Keep a recording from this computer as a source performance or a target voice for voice conversion.",
+        "tags": [
+          "Conversion"
+        ],
+        "description": "Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, base64url-encoded JSON: `{\"filename\": \"take.mp3\", \"role\": \"source\"}` for the performance, or `{\"filename\": \"voice.wav\", \"role\": \"target\", \"permission\": true, \"origin\": \"...\", \"allowed_use\": \"...\"}` for the voice to convert to, which is refused without all three. `filename` sets the format and the label, and names nothing on disk: the recording is kept as a mono WAV named by the SHA-256 of the bytes sent, in `out/conversions/uploads/source` or `.../target`, so the same file sent twice is kept once, with a JSON of the rest beside it. A source may be 0.5 to 60 seconds long and a target 0.5 to 10.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Reference-Metadata",
+            "in": "header",
+            "required": true,
+            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and optional `edits`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`upload`: `path` (for `POST /api/convert`), `role`, `original_name`, `original_sha256`, `uploaded_at`, `duration_seconds`, `sample_rate_hz` and, for a target, `permission`, `origin` and `allowed_use`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The recording is over 32 MiB.",
             "content": {
               "application/json": {
                 "schema": {
