@@ -28,6 +28,8 @@ from app_version import REPOSITORY, VERSION  # noqa: E402
 from tools import install_drama3, install_kokoro, install_voxcpm, update  # noqa: E402
 
 GIT = shutil.which("git")
+# The version of the stand-in Lab folders that the update tests update to 0.2.0, whatever version this copy is itself.
+CURRENT = "0.1.0"
 
 
 def release(tag="v0.2.0", body="Fixes the RTX 50 setup.\nAdds Check for updates."):
@@ -320,6 +322,7 @@ class ZipUpdateTests(unittest.TestCase):
         self.temp = Path(temp.name)
         self.lab = Lab(self.temp)
         self.finished = []
+        self.enterContext(mock.patch.object(update, "VERSION", CURRENT))  # the updater runs from the folder it updates
 
     def plan(self, old=OLD):
         return update.zip_plan(self.lab.root, NEW, old)
@@ -357,7 +360,7 @@ class ZipUpdateTests(unittest.TestCase):
 
     def fetch(self, url, destination):
         tag = url.rsplit("/", 1)[1]
-        files = {"v0.2.0": NEW, f"v{VERSION}": OLD}.get(tag)
+        files = {"v0.2.0": NEW, f"v{CURRENT}": OLD}.get(tag)
         return make_zip(Path(destination), files, top=f"fels-voice-lab-{tag[1:]}") if files is not None else None
 
     def update(self, *argv, running=(), check=None, fetch=None):
@@ -367,7 +370,7 @@ class ZipUpdateTests(unittest.TestCase):
             status = update.update(
                 self.lab.root,
                 args=args,
-                check=check or (lambda: updates.check(fetch=answers(release()))),
+                check=check or (lambda: updates.check(current=CURRENT, fetch=answers(release()))),
                 runner=self.runner,
                 processes=lambda root: list(running),
                 fetch=fetch or self.fetch,
@@ -392,7 +395,7 @@ class ZipUpdateTests(unittest.TestCase):
         self.assertFalse((self.lab.root / "out/update/downloads").exists())
         record = update.read_record(self.lab.root)
         self.assertEqual(
-            (record["state"], record["from"], record["to"], record["method"]), ("applied", VERSION, "0.2.0", "zip")
+            (record["state"], record["from"], record["to"], record["method"]), ("applied", CURRENT, "0.2.0", "zip")
         )
         self.assertEqual(self.finished, [[sys.executable, str(self.lab.root / "tools" / "update.py"), "--finish"]])
         for words in (
@@ -436,8 +439,8 @@ class ZipUpdateTests(unittest.TestCase):
         self.assertEqual(self.lab.files(), self.lab.before)
 
     def test_nothing_happens_when_this_is_the_newest_version(self):
-        status, out = self.update("--yes", check=lambda: updates.check(fetch=answers(release(f"v{VERSION}"))))
-        self.assertEqual((status, out), (0, f"This is the newest version, {VERSION}."))
+        status, out = self.update("--yes", check=lambda: updates.check(current=CURRENT, fetch=answers(release(f"v{CURRENT}"))))
+        self.assertEqual((status, out), (0, f"This is the newest version, {CURRENT}."))
         self.assertEqual(self.lab.files(), self.lab.before)
 
     def test_a_release_whose_files_name_another_version_is_not_used(self):
@@ -457,7 +460,7 @@ class ZipUpdateTests(unittest.TestCase):
         self.assertEqual(plan["add"], ["tools/added.py", "zz/inside.py"])
         record = {
             "schema": update.SCHEMA,
-            "from": VERSION,
+            "from": CURRENT,
             "to": "0.2.0",
             "method": "zip",
             "backup": "out/update/0.1.0-to-0.2.0",
@@ -516,6 +519,7 @@ class GitUpdateTests(unittest.TestCase):
         self.git(self.source.parent, "clone", "-q", "--no-tags", str(self.source), str(self.lab))
         self.git(self.lab, "reset", "-q", "--hard", self.git(self.source, "rev-parse", "v0.1.0"))
         self.calls = []
+        self.enterContext(mock.patch.object(update, "VERSION", CURRENT))
 
     def runner(self, command, **kwargs):
         if command[0] == "git":
@@ -531,7 +535,7 @@ class GitUpdateTests(unittest.TestCase):
             status = update.update(
                 self.lab,
                 args=update.build_parser().parse_args(["--yes"]),
-                check=lambda: updates.check(fetch=answers(release())),
+                check=lambda: updates.check(current=CURRENT, fetch=answers(release())),
                 runner=self.runner,
                 processes=lambda root: [],
                 interactive=False,

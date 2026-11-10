@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-10
+
+Every model now installs from its card on the Models page, and each card has a GPU/CPU switch. The models that run on a
+graphics card get AMD's ROCm build on an AMD Radeon as well as NVIDIA's CUDA build. Voice conversion takes recordings from
+this computer, and `update.bat` names every model whose packages or files an update changes. A 0.1.0 folder updates with
+`update.bat`.
 
 ### Models & features
 
@@ -95,6 +100,17 @@
   take. The take's generation details record the seed its audio came from and every try; when all three run on, the
   generation fails instead of saving a take that ran on. Checked on the R9700: seed 42 ran on in its first try, stopped at
   11.2 s, and gave a 4.6 s take at its second; seeds 7 and 1234 were unchanged.
+
+### Checked
+
+- In this release's checkout, with an environment built from `requirements/core.txt` and no model installed, CI's steps
+  pass: `ruff check .`, `ruff format --check .`, 1660 Python tests (the 17 skipped need model packages and files, FFmpeg
+  encoders or link privileges that environment lacks), 203 Node tests, `tools/check_repo.py` and
+  `tools/build_api_docs.py --check`.
+- The AMD builds were checked on one AMD mini PC with a Radeon AI PRO R9700, as each item above says. The NVIDIA builds of
+  every model ran only against stand-ins for `nvidia-smi` and PyTorch: no NVIDIA card was available.
+- `update.bat` from 0.1.0 to this release ran only in tests, against stand-in GitHub answers and downloads, because the
+  release did not exist yet.
 
 ## 0.1.0 — 2026-11-04
 

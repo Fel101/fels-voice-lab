@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Fel's Voice Lab HTTP API",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "summary": "The local service behind the Voice Lab's pages, for scripts and other programs.",
     "description": "Listens on 127.0.0.1 only. JSON in, JSON out, except where a call returns audio. Every error is a JSON object with an `error` message. See docs/API.md for the conventions, the speaking calls and the command-line tool.",
     "license": {

@@ -5,6 +5,6 @@ only, and describe the new version in CHANGELOG.md.
 """
 
 APP_NAME = "Fel's Voice Lab"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 # Where its releases are published: Check for updates and update.bat ask GitHub for the newest release here, tagged v<version>.
 REPOSITORY = "Fel101/fels-voice-lab"
