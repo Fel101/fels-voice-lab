@@ -68,6 +68,12 @@
   377 s, Chatterbox Turbo switched from its CPU build in 174 s and cloned a voice in its speech check (2.5 s of audio in 2.0 s),
   Chatterbox 500M and Voice Conversion passed theirs, and **Test** passed for Kokoro (2.7 s in 0.5 s), Turbo (2.1 s in 1.8 s)
   and 500M (2.6 s in 6.6 s).
+- **update.bat knows every model.** After an update it now names the pinned packages and files of all eleven installable
+  models, not only Kokoro's, Phonon's and Chatterbox Turbo's. An environment is named once, with the command of each model
+  installed in it (`--gpu` for a GPU build of Kokoro or Chatterbox, where it used to say `--nvidia`), and only for a list its
+  build of PyTorch came from: a change to `requirements/amd-rocm.txt` names only AMD installs. A model counts as installed
+  when its checkpoint is on disk at any revision, and its files are named only when its installer would fetch some; Drama 3
+  when its receipt differs from its installer's pins.
 - **MIOpen off for Qwen3-TTS and Breeze TTS 2 on AMD's build too.** Measured on the R9700 with each model's Lab worker:
   Qwen3-TTS's first take after a load took 18 to 25 s with MIOpen and 3 s without it, and its later takes were 15 to 30%
   slower with it even once its kernels were cached; Breeze took 35 to 150% longer over each take of a new length with MIOpen

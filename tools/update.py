@@ -20,13 +20,15 @@ is named at the end, and its copy is there.
 
 Once the files are in place, the new version's own update.py runs with --finish. It updates the core packages in .venv (and
 the desktop window's) when their lists changed, and says which installed model needs its installer run again because its
-pinned packages or model files changed. --finish and the record in out\\update\\last.json are how one version hands over to the
-next: keep both working as they are.
+pinned packages or model files changed: per environment, by the build of PyTorch it holds, and per model, by the files its
+installer would fetch. --finish and the record in out\\update\\last.json are how one version hands over to the next: keep both
+working as they are.
 """
 
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -55,22 +57,73 @@ SCHEMA = 1
 # Never written, replaced or removed by an update, whatever a release holds: git's own folder, the environments, the model
 # caches, run output, backups and the library's own folders, all of which the repository keeps out (see .gitignore).
 PROTECTED_FOLDERS = {".git", "out", "hf-cache", "backups", "restored", "data", "reference"}
-# The model environments whose packages or files a release can change: (environment, launcher, pinned lists, model files).
-MODELS = {
-    "Kokoro": (
-        ".venv-kokoro",
-        "setup-kokoro.bat",
-        ("requirements/kokoro-cpu.txt", "requirements/kokoro-nvidia.txt"),
-        "catalog/kokoro_snapshot.json",
-    ),
-    "Phonon": (".venv-phonon", "setup-phonon.bat", ("requirements/phonon.txt",), "catalog/phonon_snapshot.json"),
-    "Chatterbox Turbo": (
-        ".venv-chatterbox",
-        "setup-chatterbox.bat",
-        ("requirements/chatterbox-cpu.txt", "requirements/chatterbox-nvidia.txt"),
-        "catalog/chatterbox_turbo_snapshot.json",
-    ),
+AMD_LOCK = "requirements/amd-rocm.txt"
+# The model environments whose packages a release can change, with the pinned lists their packages came from, by the build of
+# PyTorch an environment holds (torch_build): the CPU build from the CPU list; NVIDIA's from the CPU list with NVIDIA's torch in
+# place of the CPU one, or from the model's own list for the models that run only on a graphics card; AMD's from that same
+# list with AMD's torch, the ROCm runtime and the code for the card's chip, from requirements/amd-rocm.txt (tools/amd_build.py).
+# Phonon's holds no PyTorch. An environment whose build is not named here is judged by all of its lists.
+ENVIRONMENTS = {
+    ".venv-kokoro": {
+        "cpu": ("requirements/kokoro-cpu.txt",),
+        "cuda": ("requirements/kokoro-cpu.txt", "requirements/kokoro-nvidia.txt"),
+        "rocm": ("requirements/kokoro-cpu.txt", AMD_LOCK),
+    },
+    ".venv-phonon": {None: ("requirements/phonon.txt",)},
+    ".venv-chatterbox": {
+        "cpu": ("requirements/chatterbox-cpu.txt",),
+        "cuda": ("requirements/chatterbox-cpu.txt", "requirements/chatterbox-nvidia.txt"),
+        "rocm": ("requirements/chatterbox-cpu.txt", AMD_LOCK),
+    },
+    ".venv-fqwen": {"cuda": ("requirements/qwen-nvidia.txt",), "rocm": ("requirements/qwen-nvidia.txt", AMD_LOCK)},
+    ".venv-voxcpm": {"cuda": ("requirements/voxcpm-nvidia.txt",), "rocm": ("requirements/voxcpm-nvidia.txt", AMD_LOCK)},
+    ".venv-breeze": {"cuda": ("requirements/breeze-nvidia.txt",), "rocm": ("requirements/breeze-nvidia.txt", AMD_LOCK)},
 }
+VOXCPM_SOURCE = "catalog/voxcpm2_source.json"
+# The models whose packages or files a release can change: (environment, the command that installs the model, as the Models
+# page names it (engine_checks.GUIDED_INSTALLERS), and the pinned lists of its files, its checkpoint's first). One environment
+# can hold several models. Chatterbox 500M and Voice Conversion share a checkpoint and a command. Drama 3 runs from .venv, and
+# its installer holds the pins of its files.
+MODELS = {
+    "Kokoro": (".venv-kokoro", "setup-kokoro.bat", ("catalog/kokoro_snapshot.json",)),
+    "Phonon": (".venv-phonon", "setup-phonon.bat", ("catalog/phonon_snapshot.json",)),
+    "Chatterbox Turbo": (".venv-chatterbox", "setup-chatterbox.bat", ("catalog/chatterbox_turbo_snapshot.json",)),
+    "Chatterbox 500M and Voice Conversion": (
+        ".venv-chatterbox",
+        "setup-chatterbox.bat --original",
+        ("catalog/chatterbox_snapshot.json",),
+    ),
+    "Qwen3-TTS 0.6B Base": (
+        ".venv-fqwen",
+        "setup-qwen.bat --model 0.6b-base",
+        ("catalog/qwen3_tts_0.6b_base_snapshot.json",),
+    ),
+    "Qwen3-TTS 1.7B Base": (
+        ".venv-fqwen",
+        "setup-qwen.bat --model 1.7b-base",
+        ("catalog/qwen3_tts_1.7b_base_snapshot.json",),
+    ),
+    "Qwen3-TTS 1.7B VoiceDesign": (
+        ".venv-fqwen",
+        "setup-qwen.bat --model 1.7b-voice-design",
+        ("catalog/qwen3_tts_1.7b_voice_design_snapshot.json",),
+    ),
+    "Qwen3-TTS 1.7B CustomVoice": (
+        ".venv-fqwen",
+        "setup-qwen.bat --model 1.7b-custom-voice",
+        ("catalog/qwen3_tts_1.7b_custom_voice_snapshot.json",),
+    ),
+    "VoxCPM2": (".venv-voxcpm", "setup-voxcpm.bat", ("catalog/voxcpm2_snapshot.json", VOXCPM_SOURCE)),
+    "Breeze TTS 2": (".venv-breeze", "setup-breeze.bat", ("catalog/breeze_tts2_snapshot.json",)),
+    "Drama 3": (None, "setup-drama3.bat", ("tools/install_drama3.py",)),
+}
+DRAMA_RECEIPT = "out/drama3/installation.json"
+# A snapshot holds a model when one of these is in it, as the Models page judges (engine_checks.WEIGHT_SUFFIXES).
+WEIGHT_SUFFIXES = (".safetensors", ".pth", ".pt", ".bin", ".gguf")
+TORCH_INFO = re.compile(r"torch-(?P<version>[^-]+)\.dist-info", re.IGNORECASE)
+# Joins the words of a command in the advice (whole()), so that fill() never breaks the command over two lines; finish()
+# prints a space for it.
+KEEP = " "
 # Environments whose packages --finish brings up to date itself: pip installs their list as setup.bat and setup-desktop.bat do.
 SYNCED = ((".venv", "requirements/core.txt"), (".venv-desktop", "requirements/desktop.txt"))
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -571,12 +624,174 @@ def confirmed(args, *, ask=input, interactive=None):
         return False
 
 
+# ------------------------------------------------------------------------------------------------ the models installed here
+
+
+def torch_build(root, environment):
+    """ "cuda", "rocm" or "cpu" for the build of PyTorch in a model environment, read from the name of its dist-info folder as the
+    Models page reads it (engine_devices.torch_build): 2.12.0+cu130 is NVIDIA's build, 2.12.0+rocm7.14.0 AMD's, and 2.12.0 or
+    2.12.0+cpu the CPU build. None when the environment holds no PyTorch."""
+    try:
+        names = os.listdir(Path(root) / environment / "Lib" / "site-packages")
+    except OSError:
+        return None
+    for name in names:
+        match = TORCH_INFO.fullmatch(name)
+        if match:
+            local = match["version"].partition("+")[2].lower()
+            return "cuda" if local.startswith("cu") else "rocm" if local.startswith("rocm") else "cpu"
+    return None
+
+
+def read_list(root, listing):
+    return json.loads((Path(root) / listing).read_text(encoding="utf-8"))
+
+
+def drama3_receipt(root):
+    """Drama 3's receipt when Drama 3 is installed here, which is when the receipt and the model and runtime it names are in
+    place, as the Models page asks (engine_checks.installation); None otherwise."""
+    try:
+        receipt = json.loads((Path(root) / DRAMA_RECEIPT).read_text(encoding="utf-8"))
+        paths = (Path(receipt["model_path"]), Path(receipt["runtime_path"]))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return receipt if all(path.is_file() for path in paths) else None
+
+
+def model_present(root, name):
+    """Whether a model is installed here: its environment is, and a weight file is in a snapshot of its checkpoint (or in
+    Breeze's folder), as the Models page judges a snapshot. Any revision counts, since a release that pins a new one leaves the
+    old snapshot in place until the installer fetches the new. Drama 3 is installed when its receipt says so (drama3_receipt)."""
+    environment, _, listings = MODELS[name]
+    if environment is None:
+        return drama3_receipt(root) is not None
+    if not (Path(root) / environment).is_dir():
+        return False
+    from tools import install_kokoro as base
+
+    manifest = read_list(root, listings[0])
+    manifest = manifest["repos"][0] if "repos" in manifest else manifest  # Phonon: the model's repository, then its voices'
+    snapshot = base.snapshot_dir(root, manifest)
+    folders = [snapshot] if "folder" in manifest else sorted(snapshot.parent.glob("*"))
+    return any(
+        item.is_file() and item.suffix in WEIGHT_SUFFIXES for folder in folders if folder.is_dir() for item in folder.iterdir()
+    )
+
+
+def pending_files(root, listing):
+    """The files of a pinned list that its installer would fetch now, by the installer's own test: those not in place at the
+    size the list pins (of Kokoro's voices, the ones it installs by default), and VoxCPM's source files whose SHA-256 differs."""
+    from tools import install_kokoro as base
+
+    manifest = read_list(root, listing)
+    if listing == VOXCPM_SOURCE:
+        from tools import install_voxcpm
+
+        return install_voxcpm.pending_source(root, manifest)
+    if "repos" in manifest:
+        return [item for repo in manifest["repos"] for item in base.pending_files(root, repo, repo["files"])]
+    return base.pending_files(root, manifest, base.checkpoint_files(manifest, base.choose_voices(manifest, ["supported"])))
+
+
+def drama3_changes(root, receipt):
+    """What setup-drama3.bat would fetch now, by the pins its installer holds: (whether it fetches anything, the model file it
+    then no longer uses or None). It fetches the model or the speech.cpp runtime when the receipt names others, and the model's
+    licence, notice and cards when one differs from its SHA-256; a model of another name goes beside the old one."""
+    from tools import install_drama3 as drama
+
+    model = Path(receipt["model_path"])
+    fetches = (
+        receipt.get("model_sha256") != drama.MODEL_SHA256
+        or model.name != drama.MODEL
+        or receipt.get("runtime_archive_sha256") != drama.RUNTIME_SHA256
+        or bool(drama.pending_assets(root))
+    )
+    return fetches, (model if fetches and model.name != drama.MODEL else None)
+
+
+def joined(items):
+    items = list(items)
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def whole(command):
+    return command.replace(" ", KEEP)
+
+
+def files_changed(root, name, changed):
+    """Whether this update changed the pinned files of a model and its installer would fetch some of them now."""
+    return any(pending_files(root, listing) for listing in MODELS[name][2] if listing in changed)
+
+
+def gpu_build(root, environment):
+    """Whether an environment holds a GPU build that its installers put in only when asked with --gpu: Kokoro's and
+    Chatterbox's, which have a CPU build too. The models that run only on a graphics card always get the GPU build."""
+    return "cpu" in ENVIRONMENTS[environment] and torch_build(root, environment) in ("cuda", "rocm")
+
+
+def reinstall_text(environment, models, lists, *, gpu, fresh):
+    """The advice for an environment whose pinned packages changed: delete it, then install each model in it again."""
+    commands = joined(whole(MODELS[name][1] + (" --gpu" if gpu else "")) for name in models)
+    shown = ", ".join(shown_path(item) for item in lists)
+    if len(models) == 1:
+        first = f"{models[0]}'s pinned packages changed ({shown}). Delete the {environment} folder and install it again"
+        cards, switch = "its card", " with its switch on GPU"
+    else:
+        first = (
+            f"The pinned packages of {joined(models)} changed ({shown}). Delete the {environment} folder, which they share, "
+            "and install them again"
+        )
+        cards, switch = "their cards", " with their switches on GPU"
+    kept = "The model files you already have are kept, so only the packages download again"
+    return f"{first}: press Install on {cards} in Models & features{switch if gpu else ''}, or run {commands}. {kept}" + (
+        f", and the new model files of {joined(fresh)}." if fresh else "."
+    )
+
+
+def model_advice(root, changed):
+    """What to do about each installed model whose pinned packages or files this update changed, as sentences.
+
+    An environment whose packages changed is named once, with the command for each model installed in it (with --gpu for a
+    GPU build of Kokoro or Chatterbox): installing again also fetches the models' new files. Only the lists that the
+    environment's build of PyTorch was installed from count. A model whose files changed is named when its installer would
+    fetch some of them now, so a list that names files already here says nothing."""
+    root = Path(root)
+    advice, reinstalled = [], set()
+    for environment, builds in ENVIRONMENTS.items():
+        if not (root / environment).is_dir():
+            continue
+        lists = builds.get(torch_build(root, environment))
+        lists = lists or tuple(dict.fromkeys(item for group in builds.values() for item in group))
+        changed_lists = [item for item in lists if item in changed]
+        if not changed_lists:
+            continue
+        models = [name for name, (home, _, _) in MODELS.items() if home == environment and model_present(root, name)]
+        if models:
+            reinstalled.update(models)
+            fresh = [name for name in models if files_changed(root, name, changed)]
+            advice.append(reinstall_text(environment, models, changed_lists, gpu=gpu_build(root, environment), fresh=fresh))
+    for name, (environment, command, listings) in MODELS.items():
+        if name in reinstalled or not changed.intersection(listings) or not model_present(root, name):
+            continue
+        if environment is None:
+            fetches, old = drama3_changes(root, drama3_receipt(root))
+            unused = (
+                f" It then no longer uses {old}, which you can delete to free {old.stat().st_size / 1e9:.1f} GB." if old else ""
+            )
+            if fetches:
+                advice.append(f"{name}'s pinned files changed. Run {whole(command)} to fetch them.{unused}")
+        elif files_changed(root, name, changed):
+            gpu = " --gpu" if gpu_build(root, environment) else ""
+            advice.append(f"{name}'s model files changed. Run {whole(command + gpu)} to fetch them.")
+    return advice
+
+
 # ------------------------------------------------------------------------------------------------ after the files: --finish
 
 
 def finish(root, *, runner=subprocess.run, say=say):
     """The new version's last steps (or, after --undo, the old version's): bring the core and desktop packages up to date when
-    their lists changed, and say which installed model needs its installer run again."""
+    their lists changed, and say which installed model needs its installer run again (model_advice)."""
     root = Path(root)
     record = read_record(root)
     if record is None or record.get("state") not in ("applied", "undone"):
@@ -600,20 +815,12 @@ def finish(root, *, runner=subprocess.run, say=say):
                         "message says, then run update.bat --finish to try again."
                     )
                 )
-    advice = []
-    for name, (environment, launcher, locks, manifest) in MODELS.items():
-        if not (root / environment).is_dir():
-            continue
-        if changed & set(locks):
-            advice.append(
-                f"{name}'s pinned packages changed. Delete the {environment} folder and run {launcher} (with --nvidia "
-                "if you use its NVIDIA build): the model files you already have are kept, so only the packages "
-                "download again."
-            )
-        elif manifest in changed:
-            advice.append(f"{name}'s model files changed. Run {launcher} to fetch them.")
+    try:
+        advice = model_advice(root, changed)
+    except (ImportError, OSError, ValueError) as exc:  # a file list or a receipt that cannot be read stops no update
+        advice = [f"The installed models could not be checked ({exc}). Run the installer of any model that no longer loads."]
     for text in advice:
-        say(fill(text, initial_indent="  - ", subsequent_indent="    "))
+        say(fill(text, initial_indent="  - ", subsequent_indent="    ", break_long_words=False).replace(KEEP, " "))
     if record["state"] == "applied":
         say(f"Updated to version {record['to']}. Start the Lab as usual; update.bat --undo puts version {record['from']} back.")
     else:

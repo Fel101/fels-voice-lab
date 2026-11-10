@@ -158,8 +158,9 @@ moved forward to a release, never merged. Commit or stash your changes and run `
 `out\update\<from>-to-<to>`, or with `git reset --keep` in a Git checkout. An update and an undo never change your library, the
 models or `runtime.local.json`.
 
-**"pinned packages changed".** A release can pin newer packages for a model, and the update names the models it affects. Delete
-that model's environment folder and run its installer again; the model files are kept, so only the packages download again.
+**"pinned packages changed".** A release can pin newer packages for a model, and the update names each environment it affects,
+with the models installed in it. Delete that folder, then press **Install** on each model's card or run the command it names
+(with `--gpu` where it says so); the model files are kept, so only the packages download again.
 
 **Check for updates says GitHub could not be reached.** The check asks `api.github.com` and needs the internet; a firewall or a
 proxy can stop it. Nothing else in the Lab needs GitHub once it is installed. "No release of the Lab has been published" is an

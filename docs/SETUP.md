@@ -755,8 +755,12 @@ too, and your copy stays in that folder. In a folder made with `git clone` it mo
 fast-forward, and refuses if you have changed tracked files or made commits of your own.
 
 Then the new version finishes the job: it updates the core packages in `.venv` (and the desktop window's) when their lists
-changed, and names any installed model whose pinned packages or model files changed. For those, delete the model's environment
-folder and run its installer again; the model files already in `hf-cache` are kept.
+changed, and says what to do about each installed model whose pinned packages or files changed. An environment whose packages
+changed is named once, with every installed model that uses it (the Qwen3-TTS models share `.venv-fqwen`): delete that folder,
+then press **Install** on each model's card or run the command it names, with `--gpu` for the GPU build of Kokoro or
+Chatterbox. The model files you already have are kept. Only the lists an environment's build of PyTorch came from count, so a
+change to `requirements/amd-rocm.txt` names only models installed with AMD's build. A model whose files changed is named when
+its installer would fetch some of them, and Drama 3 when its receipt names other files than its installer pins.
 
 ## Removing the Lab
 

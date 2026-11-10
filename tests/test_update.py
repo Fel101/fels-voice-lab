@@ -2,6 +2,7 @@
 the processes and pip are stand-ins; the Git tests make their own repositories in a temporary folder."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -24,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 
 import updates  # noqa: E402
 from app_version import REPOSITORY, VERSION  # noqa: E402
-from tools import update  # noqa: E402
+from tools import install_drama3, install_kokoro, install_voxcpm, update  # noqa: E402
 
 GIT = shutil.which("git")
 
@@ -555,70 +556,397 @@ class GitUpdateTests(unittest.TestCase):
             update.git_plan(self.lab, "v0.2.0", source=str(self.source), runner=self.runner)
 
 
+# The name of the dist-info folder of each build of PyTorch, as pip leaves it in an environment.
+TORCH = {"cpu": "torch-2.12.0", "cuda": "torch-2.12.0+cu130", "rocm": "torch-2.12.0+rocm7.14.0"}
+KEPT = "The model files you already have are kept, so only the packages download again."
+
+
+def content(path, revision):
+    """What a stand-in model file holds: its name and revision, so the same file at another revision has another size."""
+    return f"{path} at {revision}\n".encode()
+
+
+def pinned(entry):
+    """A shipped list of a model's files (or one repository of it) with stand-ins of a few bytes for its files."""
+    revision = entry.get("revision") or entry["commit"]
+    files = [
+        {
+            "path": item["path"],
+            "size": len(content(item["path"], revision)),
+            "sha256": hashlib.sha256(content(item["path"], revision)).hexdigest(),
+        }
+        for item in entry["files"]
+    ]
+    return {**entry, "files": files}
+
+
+DRAMA_ASSETS = tuple(pinned({"commit": "drama", "files": [{"path": "LICENSE"}, {"path": "NOTICE"}]})["files"])
+
+
+class ModelLab:
+    """A Lab folder for --finish: the shipped lists of the models' files in catalog/, with stand-ins of a few bytes for the
+    files, and the models a test installs: an environment holding a build of PyTorch, and the model's files at the pinned
+    revision or an older one, where its installer puts them. Drama 3 is installed as its receipt says."""
+
+    def __init__(self, temp):
+        self.root = Path(temp)
+        for _, _, listings in update.MODELS.values():
+            for listing in listings:
+                if listing.startswith("catalog/"):
+                    shipped = json.loads((ROOT / listing).read_text(encoding="utf-8"))
+                    if "repos" in shipped:
+                        shipped["repos"] = [pinned(repo) for repo in shipped["repos"]]
+                    self.write(listing, json.dumps(shipped if "repos" in shipped else pinned(shipped)).encode())
+        self.text = ""
+
+    def write(self, path, data):
+        path = self.root / path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def environment(self, environment, build):
+        """Make an environment, or change the build of PyTorch it holds (None: none)."""
+        site = self.root / environment / "Lib" / "site-packages"
+        site.mkdir(parents=True, exist_ok=True)
+        for old in site.glob("torch-*.dist-info"):
+            old.rmdir()
+        if build:
+            (site / f"{TORCH[build]}.dist-info").mkdir()
+
+    def install(self, name, build=None, *, old=False):
+        """Install a model as its installer would: its environment, and every file of its lists at the pinned revision (of
+        Kokoro's voices, those its installer fetches by default), or with old=True at the revision before (Breeze's, in a
+        folder of its own, then hold other content)."""
+        environment, _, listings = update.MODELS[name]
+        self.environment(environment, build)
+        for listing in listings:
+            manifest = json.loads((self.root / listing).read_text(encoding="utf-8"))
+            if listing == update.VOXCPM_SOURCE:
+                folder = self.root / install_voxcpm.SOURCE
+                self.put(folder, manifest["files"], "old" if old else manifest["commit"])
+                continue
+            for entry in manifest.get("repos", [manifest]):
+                revision = "old" if old else entry["revision"]
+                folder = install_kokoro.snapshot_dir(self.root, entry if "folder" in entry else {**entry, "revision": revision})
+                chosen = install_kokoro.choose_voices(entry, ["supported"])
+                self.put(
+                    folder, entry["files"] if "repos" in manifest else install_kokoro.checkpoint_files(entry, chosen), revision
+                )
+
+    @staticmethod
+    def put(folder, files, revision):
+        for item in files:
+            (folder / item["path"]).parent.mkdir(parents=True, exist_ok=True)
+            (folder / item["path"]).write_bytes(content(item["path"], revision))
+
+    def drama(self, model_name=install_drama3.MODEL, **receipt):
+        """Install Drama 3 as its receipt says: the model and the runtime it names, the small files, and the receipt, with the
+        pins of its installer unless a test names others."""
+        folder = self.root / "out/drama3"
+        model, runtime = folder / "models" / model_name, folder / "runtime" / "speech.exe"
+        for path in (model, runtime):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"stand-in")
+        self.put(folder / "models", DRAMA_ASSETS, "drama")
+        receipt = {
+            "model_path": str(model),
+            "model_sha256": install_drama3.MODEL_SHA256,
+            "runtime_path": str(runtime),
+            "runtime_archive_sha256": install_drama3.RUNTIME_SHA256,
+            **receipt,
+        }
+        (folder / "installation.json").write_text(json.dumps(receipt), encoding="utf-8")
+
+    def finish(self, *changed):
+        """Run --finish after an update that changed these files: the advice it printed, one sentence per item (all of what
+        it printed, on one line, is in self.text)."""
+        record = {"schema": update.SCHEMA, "from": "0.1.0", "to": "0.2.0", "method": "git", "state": "applied"}
+        update.save_record(self.root, {**record, "changed": list(changed)})
+        lines = []
+        update.finish(self.root, runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 0), say=lines.append)
+        self.text = " ".join("\n".join(lines).split())
+        advice = []
+        for line in "\n".join(lines).splitlines():
+            if line.startswith("  - "):
+                advice.append(line[4:])
+            elif line.startswith("    ") and advice:
+                advice[-1] += " " + line.strip()
+        return advice
+
+
 class FinishTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(install_drama3, "ASSETS", DRAMA_ASSETS))
+        self.lab = ModelLab(self.enterContext(tempfile.TemporaryDirectory()))
+
     def test_finish_updates_changed_package_lists_and_names_the_models_to_reinstall(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            for folder in (".venv/Scripts", ".venv-desktop/Scripts", ".venv-kokoro", ".venv-phonon"):
-                (root / folder).mkdir(parents=True)
-            (root / ".venv/Scripts/python.exe").write_bytes(b"")
-            (root / ".venv-desktop/Scripts/python.exe").write_bytes(b"")
-            update.save_record(
-                root,
-                {
-                    "schema": update.SCHEMA,
-                    "from": "0.1.0",
-                    "to": "0.2.0",
-                    "method": "zip",
-                    "state": "applied",
-                    "backup": "out/update/0.1.0-to-0.2.0",
-                    "yours": ["catalog/engines.json"],
-                    "changed": [
-                        "requirements/core.txt",
-                        "requirements/kokoro-nvidia.txt",
-                        "catalog/phonon_snapshot.json",
-                        "catalog/chatterbox_turbo_snapshot.json",
-                    ],
-                },
-            )
-            calls, out = [], io.StringIO()
-            runner = lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0)  # noqa: E731
-            with contextlib.redirect_stdout(out):
-                self.assertEqual(update.finish(root, runner=runner), 0)
-            text = " ".join(out.getvalue().split())
-            self.assertEqual(
-                calls,
-                [
-                    [
-                        str(root / ".venv/Scripts/python.exe"),
-                        "-m",
-                        "pip",
-                        "install",
-                        "--no-input",
-                        "--disable-pip-version-check",
-                        "-r",
-                        str(root / "requirements/core.txt"),
-                    ]
+        root = self.lab.root
+        for folder in (".venv/Scripts", ".venv-desktop/Scripts"):
+            (root / folder).mkdir(parents=True)
+            (root / folder / "python.exe").write_bytes(b"")
+        self.lab.install("Kokoro", "cpu")
+        self.lab.install("Phonon", old=True)
+        update.save_record(
+            root,
+            {
+                "schema": update.SCHEMA,
+                "from": "0.1.0",
+                "to": "0.2.0",
+                "method": "zip",
+                "state": "applied",
+                "backup": "out/update/0.1.0-to-0.2.0",
+                "yours": ["catalog/engines.json"],
+                "changed": [
+                    "requirements/core.txt",
+                    "requirements/kokoro-cpu.txt",
+                    "catalog/phonon_snapshot.json",
+                    "catalog/chatterbox_turbo_snapshot.json",
                 ],
-            )
-            self.assertIn("Kokoro's pinned packages changed. Delete the .venv-kokoro folder and run setup-kokoro.bat", text)
-            self.assertIn("Phonon's model files changed. Run setup-phonon.bat to fetch them.", text)
-            self.assertNotIn("Chatterbox", text)  # not installed here
-            self.assertIn("Updated to version 0.2.0.", text)
-            self.assertIn("out\\update\\0.1.0-to-0.2.0\\files: catalog/engines.json", text)
-
-    def test_the_model_files_it_watches_are_the_installers_own(self):
-        from tools import install_chatterbox as ic, install_kokoro as ik, install_phonon as ip
-
-        self.assertEqual(update.MODELS["Kokoro"], (ik.ENVIRONMENT, "setup-kokoro.bat", (ik.LOCK, ik.NVIDIA_LOCK), ik.MANIFEST))
-        self.assertEqual(update.MODELS["Phonon"], (ip.ENVIRONMENT, "setup-phonon.bat", (ip.LOCK,), ip.MANIFEST))
-        self.assertEqual(
-            update.MODELS["Chatterbox Turbo"], (ic.ENVIRONMENT, "setup-chatterbox.bat", (ic.LOCK, ic.NVIDIA_LOCK), ic.MANIFEST)
+            },
         )
-        for environment, launcher, locks, manifest in update.MODELS.values():
-            self.assertTrue((ROOT / launcher).is_file(), launcher)
-            for name in (*locks, manifest):
-                self.assertTrue((ROOT / name).is_file(), name)
+        calls, out = [], io.StringIO()
+        runner = lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0)  # noqa: E731
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(update.finish(root, runner=runner), 0)
+        text = " ".join(out.getvalue().split())
+        self.assertEqual(
+            calls,
+            [
+                [
+                    str(root / ".venv/Scripts/python.exe"),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-input",
+                    "--disable-pip-version-check",
+                    "-r",
+                    str(root / "requirements/core.txt"),
+                ]
+            ],
+        )
+        self.assertIn(
+            "- Kokoro's pinned packages changed (requirements\\kokoro-cpu.txt). Delete the .venv-kokoro folder and install it "
+            f"again: press Install on its card in Models & features, or run setup-kokoro.bat. {KEPT}",
+            text,
+        )
+        self.assertIn("- Phonon's model files changed. Run setup-phonon.bat to fetch them.", text)
+        self.assertNotIn("Chatterbox", text)  # not installed here
+        self.assertIn("Updated to version 0.2.0.", text)
+        self.assertIn("out\\update\\0.1.0-to-0.2.0\\files: catalog/engines.json", text)
+
+    def test_only_the_qwen3_tts_models_installed_here_are_named(self):
+        self.lab.install("Qwen3-TTS 1.7B VoiceDesign", "rocm", old=True)
+        self.lab.install("Qwen3-TTS 1.7B CustomVoice", "rocm")
+        self.assertEqual(
+            self.lab.finish("requirements/qwen-nvidia.txt"),
+            [
+                "The pinned packages of Qwen3-TTS 1.7B VoiceDesign and Qwen3-TTS 1.7B CustomVoice changed "
+                "(requirements\\qwen-nvidia.txt). Delete the .venv-fqwen folder, which they share, and install them again: "
+                "press Install on their cards in Models & features, or run setup-qwen.bat --model 1.7b-voice-design and "
+                f"setup-qwen.bat --model 1.7b-custom-voice. {KEPT}"
+            ],
+        )
+        # All four lists of model files changed: VoiceDesign's revision is an older one, CustomVoice's files are already in
+        # place, and the Base models are not installed.
+        qwen = [listings[0] for name, (_, _, listings) in update.MODELS.items() if name.startswith("Qwen3-TTS")]
+        self.assertEqual(len(qwen), 4)
+        self.assertEqual(
+            self.lab.finish(*qwen),
+            ["Qwen3-TTS 1.7B VoiceDesign's model files changed. Run setup-qwen.bat --model 1.7b-voice-design to fetch them."],
+        )
+        # Installing again fetches the new files too, so they are named with the packages and not on their own.
+        advice = self.lab.finish("requirements/qwen-nvidia.txt", *qwen)
+        self.assertEqual(len(advice), 1)
+        self.assertTrue(
+            advice[0].endswith("so only the packages download again, and the new model files of Qwen3-TTS 1.7B VoiceDesign."),
+            advice[0],
+        )
+
+    def test_chatterbox_500m_and_voice_conversion_are_named_only_where_their_checkpoint_is(self):
+        self.lab.install("Chatterbox Turbo", "cpu")
+        self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [])
+        self.lab.install("Chatterbox 500M and Voice Conversion", "cpu", old=True)
+        fetch = "Chatterbox 500M and Voice Conversion's model files changed. Run setup-chatterbox.bat --original"
+        self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [f"{fetch} to fetch them."])
+        self.lab.environment(".venv-chatterbox", "rocm")  # the GPU build, which its installer must be asked for again
+        self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [f"{fetch} --gpu to fetch them."])
+        self.assertEqual(self.lab.finish("catalog/chatterbox_turbo_snapshot.json"), [])  # Turbo's files are in place
+
+    def test_drama_3_is_named_only_when_its_installer_would_fetch_a_file(self):
+        self.assertEqual(self.lab.finish("tools/install_drama3.py"), [])  # not installed
+        self.lab.drama()
+        # The pins its receipt names are its installer's, as after the update from 0.1.0, which rewrote the installer.
+        self.assertEqual(self.lab.finish("tools/install_drama3.py"), [])
+        fetch = "Drama 3's pinned files changed. Run setup-drama3.bat to fetch them."
+        for receipt in ({"model_sha256": "0" * 64}, {"runtime_archive_sha256": "0" * 64}):
+            self.lab.drama(**receipt)
+            self.assertEqual(self.lab.finish("tools/install_drama3.py"), [fetch])
+        self.lab.drama()
+        (self.lab.root / "out/drama3/models/NOTICE").write_bytes(b"another notice")
+        self.assertEqual(self.lab.finish("tools/install_drama3.py"), [fetch])
+        self.lab.drama("Drama-older.gguf")  # a model of another name: the new one goes beside it
+        old = self.lab.root / "out/drama3/models/Drama-older.gguf"
+        self.assertEqual(
+            self.lab.finish("tools/install_drama3.py"),
+            [f"{fetch} It then no longer uses {old}, which you can delete to free 0.0 GB."],
+        )
+        self.assertEqual(self.lab.finish("requirements/core.txt"), [])  # its installer did not change
+
+    def test_amd_rocm_txt_reaches_every_model_installed_with_amds_build_and_no_other(self):
+        gpu = ("Kokoro", "Chatterbox Turbo", "Chatterbox 500M and Voice Conversion", "Qwen3-TTS 0.6B Base", "VoxCPM2")
+        for name in (*gpu, "Breeze TTS 2"):
+            self.lab.install(name, "rocm")
+        self.lab.install("Phonon")
+        advice = self.lab.finish(update.AMD_LOCK)
+        self.assertEqual(
+            advice[:2],
+            [
+                "Kokoro's pinned packages changed (requirements\\amd-rocm.txt). Delete the .venv-kokoro folder and install it "
+                "again: press Install on its card in Models & features with its switch on GPU, or run setup-kokoro.bat --gpu. "
+                f"{KEPT}",
+                "The pinned packages of Chatterbox Turbo and Chatterbox 500M and Voice Conversion changed "
+                "(requirements\\amd-rocm.txt). Delete the .venv-chatterbox folder, which they share, and install them again: "
+                "press Install on their cards in Models & features with their switches on GPU, or run setup-chatterbox.bat "
+                f"--gpu and setup-chatterbox.bat --original --gpu. {KEPT}",
+            ],
+        )
+        # The models that run only on a graphics card always get its build: their installers need no --gpu.
+        for text, (environment, command) in zip(
+            advice[2:],
+            [
+                (".venv-fqwen", "setup-qwen.bat --model 0.6b-base"),
+                (".venv-voxcpm", "setup-voxcpm.bat"),
+                (".venv-breeze", "setup-breeze.bat"),
+            ],
+        ):
+            self.assertIn(f"(requirements\\amd-rocm.txt). Delete the {environment} folder and install it again", text)
+            self.assertIn(f"press Install on its card in Models & features, or run {command}. {KEPT}", text)
+        self.assertEqual(len(advice), 5)  # not Phonon
+        # NVIDIA's builds, and Kokoro's CPU build, are not installed from it.
+        for name in (*gpu, "Breeze TTS 2"):
+            self.lab.install(name, "cuda")
+        self.lab.environment(".venv-kokoro", "cpu")
+        self.assertEqual(self.lab.finish(update.AMD_LOCK), [])
+
+    def test_a_gpu_build_is_asked_for_with_gpu_and_nvidias_alone_never(self):
+        self.lab.install("Kokoro", "cuda", old=True)  # at the revision before the one the new version pins
+        self.assertEqual(
+            self.lab.finish("requirements/kokoro-nvidia.txt"),
+            [
+                "Kokoro's pinned packages changed (requirements\\kokoro-nvidia.txt). Delete the .venv-kokoro folder and install "
+                "it again: press Install on its card in Models & features with its switch on GPU, or run setup-kokoro.bat --gpu. "
+                f"{KEPT}"
+            ],
+        )
+        said = self.lab.text
+        self.lab.environment(".venv-kokoro", "cpu")
+        self.assertEqual(self.lab.finish("requirements/kokoro-nvidia.txt", update.AMD_LOCK), [])  # not the CPU build's lists
+        self.lab.environment(".venv-kokoro", None)  # no PyTorch that can be read: every list counts, and no build is asked for
+        self.assertEqual(
+            self.lab.finish(update.AMD_LOCK),
+            [
+                "Kokoro's pinned packages changed (requirements\\amd-rocm.txt). Delete the .venv-kokoro folder and install it "
+                f"again: press Install on its card in Models & features, or run setup-kokoro.bat. {KEPT}"
+            ],
+        )
+        self.lab.environment(".venv-kokoro", "cuda")
+        self.assertEqual(
+            self.lab.finish("catalog/kokoro_snapshot.json"),
+            ["Kokoro's model files changed. Run setup-kokoro.bat --gpu to fetch them."],
+        )
+        self.assertNotIn("--nvidia", said + self.lab.text)
+        self.lab.install("Kokoro", "cuda")  # the files the new version pins are in place already
+        self.assertEqual(self.lab.finish("catalog/kokoro_snapshot.json"), [])
+
+    def test_the_voices_kokoro_leaves_out_by_default_are_not_asked_for(self):
+        self.lab.install("Kokoro", "cpu")
+        self.assertFalse(
+            (
+                install_kokoro.snapshot_dir(
+                    self.lab.root, json.loads((self.lab.root / install_kokoro.MANIFEST).read_text("utf-8"))
+                )
+                / "voices/jf_alpha.pt"
+            ).exists()
+        )
+        self.assertEqual(self.lab.finish("catalog/kokoro_snapshot.json"), [])
+
+    def test_a_list_that_cannot_be_read_does_not_stop_the_update_from_finishing(self):
+        self.lab.install("Kokoro", "cpu")
+        (self.lab.root / "catalog/kokoro_snapshot.json").write_text("{", encoding="utf-8")
+        advice = self.lab.finish("requirements/kokoro-cpu.txt")
+        self.assertTrue(advice[0].startswith("The installed models could not be checked"), advice)
+        self.assertIn("Updated to version 0.2.0.", self.lab.text)
+
+    def test_the_build_of_pytorch_is_read_as_the_models_page_reads_it(self):
+        import engine_devices
+
+        entry = {"runtime": {"python": ".venv-kokoro/Scripts/python.exe"}}
+        for build in (None, "cpu", "cuda", "rocm", "torch-2.6.0+cpu"):
+            if build in TORCH or build is None:
+                self.lab.environment(".venv-kokoro", build)
+            else:
+                (self.lab.root / ".venv-kokoro/Lib/site-packages" / f"{build}.dist-info").mkdir()
+            self.assertEqual(
+                update.torch_build(self.lab.root, ".venv-kokoro"), engine_devices.torch_build(self.lab.root, entry)[0]
+            )
+        self.assertIsNone(update.torch_build(self.lab.root, ".venv-missing"))
+
+    def test_the_models_and_lists_are_the_installers_own(self):
+        import engine_checks
+        from tools import amd_build as amd
+        from tools import install_breeze as ib
+        from tools import install_chatterbox as ic
+        from tools import install_phonon as ip
+        from tools import install_qwen as iq
+
+        ik, iv = install_kokoro, install_voxcpm
+        self.assertEqual(update.AMD_LOCK, amd.LOCK)
+        self.assertEqual(
+            update.ENVIRONMENTS,
+            {
+                ik.ENVIRONMENT: {"cpu": (ik.LOCK,), "cuda": (ik.LOCK, ik.NVIDIA_LOCK), "rocm": (ik.LOCK, amd.LOCK)},
+                ip.ENVIRONMENT: {None: (ip.LOCK,)},
+                ic.ENVIRONMENT: {"cpu": (ic.LOCK,), "cuda": (ic.LOCK, ic.NVIDIA_LOCK), "rocm": (ic.LOCK, amd.LOCK)},
+                **{module.ENVIRONMENT: {"cuda": (module.LOCK,), "rocm": (module.LOCK, amd.LOCK)} for module in (iq, iv, ib)},
+            },
+        )
+        self.assertEqual(
+            update.MODELS,
+            {
+                "Kokoro": (ik.ENVIRONMENT, "setup-kokoro.bat", (ik.MANIFEST,)),
+                "Phonon": (ip.ENVIRONMENT, "setup-phonon.bat", (ip.MANIFEST,)),
+                "Chatterbox Turbo": (ic.ENVIRONMENT, "setup-chatterbox.bat", (ic.MANIFEST,)),
+                "Chatterbox 500M and Voice Conversion": (
+                    ic.ENVIRONMENT,
+                    "setup-chatterbox.bat --original",
+                    (ic.ORIGINAL_MANIFEST,),
+                ),
+                **{
+                    spec["name"]: (iq.ENVIRONMENT, f"setup-qwen.bat --model {spec['short']}", (spec["manifest"],))
+                    for spec in iq.MODELS.values()
+                },
+                "VoxCPM2": (iv.ENVIRONMENT, "setup-voxcpm.bat", (iv.MANIFEST, iv.SOURCE_MANIFEST)),
+                "Breeze TTS 2": (ib.ENVIRONMENT, "setup-breeze.bat", (ib.MANIFEST,)),
+                "Drama 3": (None, "setup-drama3.bat", ("tools/install_drama3.py",)),
+            },
+        )
+        # Every model the Models page can install is here, with the command its card names.
+        self.assertEqual({command for _, command, _ in update.MODELS.values()}, set(engine_checks.GUIDED_INSTALLERS.values()))
+        self.assertEqual(update.DRAMA_RECEIPT, engine_checks.DRAMA_RECEIPT)
+        self.assertEqual(update.WEIGHT_SUFFIXES, engine_checks.WEIGHT_SUFFIXES)
+        self.assertEqual(update.VOXCPM_SOURCE, iv.SOURCE_MANIFEST)
+        for _, command, listings in update.MODELS.values():
+            self.assertTrue((ROOT / command.split()[0]).is_file(), command)
+            for listing in listings:
+                self.assertTrue((ROOT / listing).is_file(), listing)
+        # Every package list is watched, but the linter's and the one for the speech recognizer's .venv-asr, which is made by
+        # hand (docs/SETUP.md) and has no installer to name.
+        watched = {item for builds in update.ENVIRONMENTS.values() for lists in builds.values() for item in lists}
+        watched |= {listing for _, listing in update.SYNCED}
+        shipped = {path.relative_to(ROOT).as_posix() for path in (ROOT / "requirements").glob("*.txt")}
+        self.assertEqual(shipped - watched, {"requirements/lint.txt", "requirements/asr-faster-whisper.txt"})
+        for listing in watched:
+            self.assertTrue((ROOT / listing).is_file(), listing)
 
 
 class RunningLabTests(unittest.TestCase):
