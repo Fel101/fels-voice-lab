@@ -38,6 +38,10 @@ jobs:
           .venv/Scripts/python.exe -m pip install -r requirements/core.txt
       - name: Contracts and synthetic audio
         run: .venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py" -v
+      - name: Check the page's JavaScript
+        run: |
+          npm ci
+          npm run check
       - name: Frontend contracts
         run: node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs
       - name: Check the repository for secrets, private files and dead links

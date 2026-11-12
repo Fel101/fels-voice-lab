@@ -1,0 +1,12 @@
+{
+  "name": "fels-voice-lab-checks",
+  "private": true,
+  "description": "Development only: TypeScript's check of the page's JavaScript (npm ci, then npm run check). Nothing here is installed for people who use the Lab.",
+  "license": "MIT",
+  "scripts": {
+    "check": "tsc -p jsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

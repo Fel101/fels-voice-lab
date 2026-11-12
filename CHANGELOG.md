@@ -96,6 +96,10 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   every installed model and lists each one's load time; the clips are kept in `out\smoke\` for a person to listen to. A new
   weekly workflow runs it with Kokoro on a Windows runner with no Python, after `setup.bat` and Kokoro's installer
   ([CONTRIBUTING.md](CONTRIBUTING.md#making-a-release)).
+- **The page's JavaScript is checked.** The page's scripts share one global scope, and nothing caught a misspelt function
+  name in a branch no test reaches. TypeScript's checker now reads them as one program (`npm run check`, after `npm ci`),
+  in every CI run; it found no misspelt names, and a dozen spots now say their types where the checker could not tell.
+  TypeScript is the one development tool in `package.json`, pinned in `package-lock.json`; the Lab itself needs no Node.
 
 ## 0.2.0 — 2026-11-10
 

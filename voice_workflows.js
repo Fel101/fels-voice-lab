@@ -10,6 +10,7 @@
   var transcriptFields = {reference:'referenceText',qwenReference:'qwenReferenceText',
     voxPromptReference:'voxPromptText',dramaReference:'dramaTranscript'};
   var referenceSelectors = ['reference','qwenReference','voxReference','voxPromptReference','dramaReference','chatterboxReference'];
+  /** @param {string} id @returns {any} */
   function el(id) { return document.getElementById(id); }
   function json(url, body) { return global.fetchJson(url, body); }
   function selectedRow(select) { return rows.find(function (row) { return row.path === select.value; }); }
@@ -60,11 +61,11 @@
   }
   function addReferenceFilters(container, select) {
     var filters=document.createElement('div');filters.className='reference-filters';
-    [['All reference versions',function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]].forEach(function(item,index){
+    /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([['All reference versions',function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
       var wrap=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=item[1]();
       input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',item[0]+' for '+select.id);
       input.addEventListener('change',function(){item[2](input.checked);
-        document.querySelectorAll('[data-reference-filter="'+index+'"]').forEach(function(other){other.checked=input.checked;});render(rows);});
+        /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('[data-reference-filter="'+index+'"]')).forEach(function(other){other.checked=input.checked;});render(rows);});
       wrap.append(input,document.createTextNode(' '+item[0]));filters.appendChild(wrap);
     });container.appendChild(filters);
   }

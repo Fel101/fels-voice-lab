@@ -1,0 +1,38 @@
+{
+  "//": "TypeScript's checker over the page's plain JavaScript (npm run check). The classic scripts are listed in the order serve.html loads them, as one program, because the page runs them in one global scope: a name used in one and defined in another is found, and a misspelt one is not. The Drama panel's two module scripts are checked with them; paths maps the URL the panel imports to its file. Not strict; nothing is emitted.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "target": "es2022",
+    "lib": [
+      "es2022",
+      "dom",
+      "dom.iterable"
+    ],
+    "types": [],
+    "skipLibCheck": true,
+    "paths": {
+      "/drama3-studio.js": [
+        "./drama3_studio.js"
+      ]
+    }
+  },
+  "files": [
+    "types/page.d.ts",
+    "theme.js",
+    "voice_workflows.js",
+    "voice_library.js",
+    "voice_lab_studio.js",
+    "voice_lab_cast.js",
+    "voice_lab_take_edit.js",
+    "voice_lab_scenes.js",
+    "voice_lab_cast_bindings.js",
+    "voice_lab_generate.js",
+    "voice_lab_system.js",
+    "voice_lab_app.js",
+    "voice_lab_drama.js",
+    "drama3_studio.js"
+  ]
+}

@@ -2,6 +2,7 @@
 (function (global) {
   'use strict';
   var library={voices:[]}, revision=0, busyNavigation=false;
+  /** @param {string} id @returns {any} */
   function el(id){return document.getElementById(id);}
   function node(tag,text,className){var item=document.createElement(tag);if(text!==undefined)item.textContent=text;if(className)item.className=className;return item;}
   function engineName(id,fallback){

@@ -219,8 +219,8 @@ function loadSavedReference(reference) {
   $('noiseProfileStart').value=noise.profile_start_seconds===undefined?0:noise.profile_start_seconds;
   $('noiseProfileEnd').value=noise.profile_end_seconds===undefined?0.30:noise.profile_end_seconds;
   $('noiseReductionStrength').value=noise.strength===undefined?0.75:noise.strength;syncNoiseReductionFields();
-  fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(r.status);return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not load audio: '+error.message;});
-  fetch('/api/references/'+reference.id+'/source').then(function(r){if(!r.ok)throw new Error(r.status);return r.blob();}).then(function(blob){return loadReferenceSource(blob,null,revision);})
+  fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not load audio: '+error.message;});
+  fetch('/api/references/'+reference.id+'/source').then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){return loadReferenceSource(blob,null,revision);})
     .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent='v'+reference.version+' / '+reference.duration_seconds.toFixed(2)+' s / '+reference.sample_rate+' Hz / '+reference.channels+' mono channel(s) / '+reference.audio_sha256.slice(0,16)+(reference.warnings.length?' / '+reference.warnings.join(' '):'');})
     .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not preview saved reference: '+error.message;});
 }
@@ -480,6 +480,7 @@ function generatePerformanceSet(){
   function next(i){
     if(i>=count||run.stopRequested)return Promise.resolve();
     run.index=i+1;run.started=performance.now();$('performStatus').textContent=performStatusText(run);
+    /** @type {Record<string, any>} */
     var candidateSettings=Object.assign({},base.settings);
     if(Object.prototype.hasOwnProperty.call(candidateSettings,'seed'))candidateSettings.seed=(seed+i)%2147483648;
     var body=Object.assign({},base,{settings:candidateSettings});

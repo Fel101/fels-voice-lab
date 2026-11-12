@@ -1,4 +1,6 @@
 // Voice Lab studio: model catalog, engine status and the saved-clip history.
+/** The element with this id, typed loosely: the page's ids name selects, inputs, players and dialogs alike.
+ * @param {string} id @returns {any} */
 var $ = function (id) { return document.getElementById(id); };
 var hints = {
   kokoro: 'Kokoro has fixed voices and speed control. It does not accept reference audio or perform vocal events.',
@@ -87,12 +89,12 @@ function refresh() {
   $('hint').textContent = hints[e] || '';
 }
 function updateValues() {
-  [['speed','speedV',2],['exag','exagV',2],['cfg','cfgV',2],['cfgScale','cfgScaleV',1],['maxTokens','maxTokensV',0],
+  /** @type {Array<[string, string, number]>} */ ([['speed','speedV',2],['exag','exagV',2],['cfg','cfgV',2],['cfgScale','cfgScaleV',1],['maxTokens','maxTokensV',0],
    ['temperature','temperatureV',2],['topK','topKV',0],['topP','topPV',2],['repetitionPenalty','repetitionPenaltyV',2],
    ['depthTemperature','depthTemperatureV',2],['depthTopK','depthTopKV',0],['depthTopP','depthTopPV',2],
    ['qwenMaxTokens','qwenMaxTokensV',0],['qwenTemperature','qwenTemperatureV',2],['qwenTopK','qwenTopKV',0],
    ['qwenTopP','qwenTopPV',2],['qwenRepetition','qwenRepetitionV',2],
-   ['phononTemperature','phononTemperatureV',2],['phononPace','phononPaceV',1]].forEach(function (x) {
+   ['phononTemperature','phononTemperatureV',2],['phononPace','phononPaceV',1]]).forEach(function (x) {
     $(x[1]).textContent = Number($(x[0]).value).toFixed(x[2]);
   });
 }
@@ -166,7 +168,7 @@ function refreshPhononVoices() {
   return fetchJson('/api/info').then(function (info) { fillPhononVoices(info.phonon_voices); return phononVoices.length; });
 }
 function openHistoryDb() {
-  return new Promise(function (resolve, reject) {
+  return new Promise(/** @param {(value?: any) => void} resolve @param {(reason?: any) => void} reject */ function (resolve, reject) {
     if (!window.indexedDB) { reject(new Error('This browser does not provide IndexedDB.')); return; }
     var request = window.indexedDB.open('voice-lab-studio', 1);
     request.onupgradeneeded = function () {
@@ -179,7 +181,7 @@ function openHistoryDb() {
 }
 function persistHistory(blob, body, meta) {
   return openHistoryDb().then(function (db) {
-    return new Promise(function (resolve, reject) {
+    return new Promise(/** @param {(value?: any) => void} resolve @param {(reason?: any) => void} reject */ function (resolve, reject) {
       var tx = db.transaction('runs', 'readwrite'), store = tx.objectStore('runs');
       store.add({body:body, meta:meta, audio:blob, createdAt:Date.now()});
       tx.oncomplete = function () { db.close(); resolve(); };
@@ -188,7 +190,7 @@ function persistHistory(blob, body, meta) {
     });
   }).then(function () {
     return openHistoryDb().then(function (db) {
-      return new Promise(function (resolve, reject) {
+      return new Promise(/** @param {(value?: any) => void} resolve @param {(reason?: any) => void} reject */ function (resolve, reject) {
         var tx = db.transaction('runs', 'readwrite'), store = tx.objectStore('runs'), request = store.getAll();
         request.onsuccess = function () {
           var rows = request.result.sort(function (a,b) { return a.id - b.id; });
@@ -203,7 +205,7 @@ function persistHistory(blob, body, meta) {
 }
 function restoreHistory() {
   return openHistoryDb().then(function (db) {
-    return new Promise(function (resolve, reject) {
+    return new Promise(/** @param {(value?: any) => void} resolve @param {(reason?: any) => void} reject */ function (resolve, reject) {
       var tx = db.transaction('runs', 'readonly'), request = tx.objectStore('runs').getAll();
       request.onsuccess = function () {
         var rows = request.result.sort(function (a,b) { return a.id - b.id; });

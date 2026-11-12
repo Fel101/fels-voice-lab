@@ -1,6 +1,7 @@
 // Voice Lab generation: requests, the history list and streamed audio playback.
 function bodyForRequest() {
   var engine = $('engine').value;
+  /** @type {Record<string, any>} */
   var body = {engine:engine, text:$('text').value, voice:selectedValues($('voice')).join(','),
     language:$('kokoroLanguage').value, speed:$('speed').value, clone:$('clone').checked};
   var qwenMode = qwenModeFor(engine);
@@ -209,7 +210,7 @@ function streamGenerate() {
   $('status').textContent='Loading the selected Qwen checkpoint if needed, then streaming generated PCM chunks.';
   var requestStarted = performance.now();
   function waitForBufferRoom() {
-    return new Promise(function(resolve) {
+    return new Promise(/** @param {(value?: any) => void} resolve */ function(resolve) {
       function check() {
         if (state.cancelled || !state.audioContext || state.nextStart-state.audioContext.currentTime <= 1.5) { resolve(); }
         else { setTimeout(check,20); }

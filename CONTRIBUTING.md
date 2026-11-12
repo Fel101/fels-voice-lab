@@ -1,7 +1,8 @@
 # Contributing
 
 Use Python 3.12. Install the core requirements in a new environment; model
-dependencies and weights are optional. Node is needed only for frontend tests.
+dependencies and weights are optional. Node is needed only for the frontend tests and the JavaScript
+check.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -10,6 +11,8 @@ py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs
 .venv\Scripts\python.exe tools/check_repo.py
+npm ci
+npm run check
 ```
 
 The last command checks the repository's files for secrets, personal paths, recordings, models, databases, logs and links to
@@ -19,6 +22,16 @@ writes under the real `data/` folder or opens one of its databases, so give a te
 that starts the service its own library: `library_fixture.temp_cast(self)`, passed to
 `serve.make_handler`. Checks requiring optional
 encoders, ASR models, FFmpeg or Windows are explicitly skipped when absent.
+The last two check the page's JavaScript. TypeScript's checker reads the page's scripts as one program, the way the page
+loads them, so a function or variable that is misspelt, or used where no script defines it, fails the check, even in a
+branch no test reaches. `npm ci` installs the one development tool, TypeScript, at the version `package-lock.json` pins,
+into `node_modules`; nothing of it reaches people who use the Lab. The check reads `jsconfig.json`, which lists the scripts
+in the order `serve.html` loads them (a new script goes there too), and `types/page.d.ts` declares the few names the
+scripts share through `window`. It is not strict: an element from `$` can be any element. When it reports something that
+is not a mistake, say so with a JSDoc type where it happens rather than switching the check off. Scripts follow the Python
+rule for formatting: reformat one with Prettier (`npx prettier@3.10.1 --write <file>`, which reads `.prettierrc.json`)
+only when you rework it.
+
 Contract tests do not establish perceptual voice quality. Hardware/model
 acceptance should report exact runtimes, checkpoints, words, identity, acting,
 resource usage and shutdown behavior separately.

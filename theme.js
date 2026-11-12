@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var root = document.documentElement;
-  var picker = document.getElementById('themeChoice');
+  var picker = /** @type {HTMLSelectElement} */ (document.getElementById('themeChoice'));
   var status = document.getElementById('themeStatus');
   if (!picker) return;
   picker.value = root.dataset.theme || 'system';

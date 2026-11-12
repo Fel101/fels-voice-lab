@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXT_SUFFIXES = {".py", ".html", ".js", ".cjs", ".json", ".md", ".txt", ".bat", ".ps1", ".yml", ".svg", ".toml", ".iss"}
+TEXT_SUFFIXES = {".py", ".html", ".js", ".cjs", ".ts", ".json", ".md", ".txt", ".bat", ".ps1", ".yml", ".svg", ".toml", ".iss"}
 TEXT_NAMES = {"LICENSE", "NOTICE", ".gitignore", ".gitattributes"}
 FORBIDDEN_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".mp4", ".safetensors", ".gguf", ".pth", ".pt",
                       ".bin", ".sqlite3", ".db", ".log", ".exe", ".dll", ".zip", ".7z"}
