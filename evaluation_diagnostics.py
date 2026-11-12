@@ -11,6 +11,22 @@ import soundfile as sf
 
 
 WORD_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
+# A clip whose peak reaches this, 0.01 dB below full scale, is flagged as clipping.
+CLIPPING_PEAK = 10 ** (-0.01 / 20.0)
+# The peak a model's clip is brought down to when it reaches CLIPPING_PEAK (with_headroom).
+HEADROOM_PEAK = 10 ** (-1.0 / 20.0)
+
+
+def with_headroom(samples):
+    """A model's clip, scaled down to a -1 dBFS peak when its peak reaches full scale, and otherwise as it is.
+
+    Written as 16-bit, a sample at or past full scale is cut off, and the take checks below flag the clip as clipping. A
+    model can overshoot by a sample or two (Chatterbox 500M's smoke clip did), so every clip a model makes goes through this
+    before anything writes it (worker_pool.speak). Quieter clips are left exactly as they are."""
+    peak = float(np.max(np.abs(samples))) if samples.size else 0.0
+    if peak < CLIPPING_PEAK:
+        return samples
+    return (samples * (HEADROOM_PEAK / peak)).astype(samples.dtype, copy=False)
 
 
 def normalize_words(text):
@@ -140,7 +156,7 @@ def analyze_audio(path, *, expected_text="", heard_text=None, evaluator=None):
     flags = []
     if peak <= 10 ** (-90.0 / 20.0):
         flags.append("silent_audio")
-    if peak >= 10 ** (-0.01 / 20.0):
+    if peak >= CLIPPING_PEAK:
         flags.append("clipping")
     if silent_duration >= 1.0 and "silent_audio" not in flags:
         flags.append("long_silence")

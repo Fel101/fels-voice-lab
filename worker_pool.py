@@ -673,7 +673,8 @@ class EnginePool:
             self._last_error = None
             info = result.get("info") or {}
             self._record_clip(key, info, wav.size, int(result["sample_rate"]))
-            return wav.astype(np.float32, copy=False), int(result["sample_rate"]), info
+            from evaluation_diagnostics import with_headroom  # a clip at full scale would be cut off when written
+            return with_headroom(wav.astype(np.float32, copy=False)), int(result["sample_rate"]), info
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -853,7 +854,8 @@ class EnginePool:
             self._last_error = None
             info = result.get("info") or {}
             self._record_clip(key, info, wav.size, int(result["sample_rate"]))
-            return wav.astype(np.float32, copy=False), int(result["sample_rate"]), info
+            from evaluation_diagnostics import with_headroom  # a clip at full scale would be cut off when written
+            return with_headroom(wav.astype(np.float32, copy=False)), int(result["sample_rate"]), info
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:

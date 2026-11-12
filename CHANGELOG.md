@@ -41,6 +41,10 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   conversion made from an uploaded target, answered `400` when the Lab's folder path was spelled otherwise than its resolved
   form, as with a short folder name such as `RUNNER~1`. That made three tests fail on GitHub's runner for 0.2.0. A Lab
   started with `serve.py` or the desktop app was not affected, because it resolves its own folder.
+- **A clip that reaches full scale gets headroom.** A model can overshoot full scale by a sample or two, and Chatterbox 500M
+  did in the new smoke test. Written as 16-bit, those samples were cut off, and the take checks flagged the take as clipped.
+  Every clip a model makes, and every voice conversion, is now scaled to a -1 dBFS peak when its peak reaches full scale;
+  quieter clips are left exactly as they are.
 - The Clone page's note on Common Voice no longer says Cast cannot take MP3.
 
 ### Setup

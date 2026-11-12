@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from evaluation_diagnostics import analyze_audio, compare_transcript, take_checks
+from evaluation_diagnostics import CLIPPING_PEAK, analyze_audio, compare_transcript, take_checks, with_headroom
 from evaluation_store import EvaluationStore, RATING_FIELDS, digest_json
 from evaluation_suites import SUITES, get_suite
 from library_fixture import use_old_comparison_folder
@@ -52,6 +52,21 @@ class DiagnosticsTests(unittest.TestCase):
             sf.write(clipping, np.ones(24_000, dtype=np.float32), 24_000, subtype="PCM_16")
             self.assertIn("silent_audio", analyze_audio(silence)["flags"])
             self.assertIn("clipping", analyze_audio(clipping)["flags"])
+
+    def test_a_clip_that_reaches_full_scale_gets_headroom_and_then_passes_the_clipping_check(self):
+        tone = np.sin(2 * np.pi * 220 * np.arange(24_000) / 24_000).astype(np.float32)
+        for peak in (1.0, 1.2, CLIPPING_PEAK):
+            with self.subTest(peak=peak):
+                fixed = with_headroom(tone * peak)
+                self.assertEqual(fixed.dtype, np.float32)
+                self.assertAlmostEqual(float(np.max(np.abs(fixed))), 10 ** (-1 / 20), places=5)
+                with tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "fixed.wav"
+                    sf.write(path, fixed, 24_000, subtype="PCM_16")
+                    self.assertNotIn("clipping", analyze_audio(path)["flags"])
+        quiet = tone * 0.98
+        self.assertIs(with_headroom(quiet), quiet, "a clip below full scale is left exactly as it is")
+        self.assertEqual(with_headroom(np.zeros(0, np.float32)).size, 0)
 
     def test_take_checks_flag_pauses_inside_the_take_but_not_leading_or_trailing_quiet(self):
         tone = 0.1 * np.sin(2 * np.pi * 220 * np.arange(12_000, dtype=np.float32) / 24_000)

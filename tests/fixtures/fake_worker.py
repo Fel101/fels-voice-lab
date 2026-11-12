@@ -57,7 +57,10 @@ def main():
                     time.sleep(args.delay)
                 path = Path(params["output_file"])
                 path.parent.mkdir(parents=True, exist_ok=True)
-                np.save(path, np.linspace(-0.25, 0.25, 4800, dtype=np.float32), allow_pickle=False)
+                samples = np.linspace(-0.25, 0.25, 4800, dtype=np.float32)
+                if params.get("text") == "__past_full_scale__":
+                    samples = samples * 4.8  # a peak of 1.2, as a model that overshoots makes
+                np.save(path, samples, allow_pickle=False)
                 result, stop = {"audio_file": str(path), "sample_rate": 24000, "sample_count": 4800,
                                 "info": {"total_s": 0.1, "first_chunk_s": 0.01},
                                 "memory": {"allocated_bytes": 0}}, False

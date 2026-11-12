@@ -167,6 +167,16 @@ class WorkerTests(unittest.TestCase):
             pool.close()
         self.assertIsNotNone(workers[1].returncode)
 
+    def test_a_clip_past_full_scale_comes_back_with_headroom(self):
+        pool = self.pool(lambda entry: self.new_fake_worker(entry["id"]))
+        try:
+            wav, _rate, _info = pool.speak({"engine": "kokoro", "text": "__past_full_scale__"})
+            self.assertAlmostEqual(float(np.max(np.abs(wav))), 10 ** (-1 / 20), places=5)
+            wav, _rate, _info = pool.speak({"engine": "kokoro", "text": "an ordinary clip"})
+            self.assertAlmostEqual(float(np.max(np.abs(wav))), 0.25, places=6)
+        finally:
+            pool.close()
+
     def test_timeout_stops_only_the_worker_that_missed_its_deadline(self):
         workers = []
 
