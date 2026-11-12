@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {pageSource} = require('./page_source.cjs');
 const source = pageSource();
+// The page's scripts with all white space taken out, for checks that should not depend on how a script is formatted.
+const compact = source.replace(/\s+/g, '');
 function sourceBetween(start, end) {
   return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 }
@@ -58,10 +60,10 @@ test('take retirement controls show the correct buttons for active, retired, and
   const inherited = buttonsFor({id: 't', retired: true, retirement: {reason: 'Withdrawn.', inherited: true, source_label: 'its voice'}});
   assert.deepEqual(inherited.buttons, ['Purge take…']);
   assert.match(inherited.note, /because its voice is retired/);
-  assert.match(source, /appendTakeRetirement\(article,take,loadCurrentTakes/);
-  assert.match(source, /appendTakeRetirement\(article,\{id:row\.take_id,retired:!!row\.retirement,retirement:row\.retirement\},refreshSceneJob/);
-  assert.match(source, /choose\.disabled=!!row\.retirement/);
-  assert.match(source, /if\(row\.purged\)/);
+  assert.match(compact, /appendTakeRetirement\(article,take,loadCurrentTakes/);
+  assert.match(compact, /appendTakeRetirement\(article,\{id:row\.take_id,retired:!!row\.retirement,retirement:row\.retirement\},refreshSceneJob/);
+  assert.match(compact, /choose\.disabled=!!row\.retirement/);
+  assert.match(compact, /if\(row\.purged\)/);
 });
 
 test('take waveform checks are plain text beside each Perform and Scenes take', () => {
@@ -82,8 +84,8 @@ test('take waveform checks are plain text beside each Perform and Scenes take', 
   c.appendTakeChecks(parent, {status: 'unavailable', flags: [], error: 'disk full'});
   assert.equal(parent.children[3].textContent, 'Waveform checks could not run: disk full.');
   assert.equal(parent.children[3].className, 'meta take-checks flagged');
-  assert.match(source, /appendTakeChecks\(article,take\.waveform_checks\)/);
-  assert.match(source, /appendTakeChecks\(article,row\.waveform_checks\)/);
+  assert.match(compact, /appendTakeChecks\(article,take\.waveform_checks\)/);
+  assert.match(compact, /appendTakeChecks\(article,row\.waveform_checks\)/);
 });
 
 test('cloning is a full workspace; navigation shows exactly one panel', () => {
@@ -224,7 +226,7 @@ test('scene editor explains blank, empty, and invalid script states', () => {
   assert.ok(source.includes('Open a scene or start one from the current performer.'));
   assert.ok(source.includes('This script has no dialogue lines. Add a line to continue.'));
   assert.ok(source.includes('Fix the advanced JSON to use the script form.'));
-  assert.ok(source.includes("$('sceneError').textContent='';"));
+  assert.ok(compact.includes("$('sceneError').textContent='';"));
 });
 test('failed generation retains failure status and reenables controls', async () => {
   const fields={};const field=id=>fields[id]||(fields[id]={value:'',checked:false,disabled:false,textContent:''});
@@ -701,8 +703,8 @@ test('a take not measured yet, or one that could not be, is said plainly', () =>
 });
 
 test('Perform and Scenes take cards both carry the loudness line', () => {
-  assert.match(source, /appendTakeLoudness\(article,take\.loudness\)/);
-  assert.match(source, /appendTakeLoudness\(article,row\.loudness\)/);
+  assert.match(compact, /appendTakeLoudness\(article,take\.loudness\)/);
+  assert.match(compact, /appendTakeLoudness\(article,row\.loudness\)/);
 });
 
 // The export panel offers only what this PC's FFmpeg can write.
