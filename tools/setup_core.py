@@ -1,4 +1,8 @@
-"""Create a minimal broker environment without altering an existing model environment."""
+"""Create a minimal broker environment without altering an existing model environment.
+
+setup.bat runs it with the Python it found or fetched. Setup.exe runs it with --wheels: the installer carries the core's
+packages, so the core installs without the internet."""
+import argparse
 import os
 import pathlib
 import subprocess
@@ -9,12 +13,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 # Left inside .venv while setup.bat is still installing the core packages, so the next run finishes a run that was interrupted.
 # A .venv without it is an environment that works, or one someone else made: setup.bat checks it and never changes it.
 UNFINISHED = ".voice-lab-setup-unfinished"
+# The pip every environment the Lab makes is moved to. Setup.exe carries its wheel (tools/build_installer.py).
+PIP = "pip==26.2.2"
+# Where Windows says the OneDrive folders are. Setup.exe's folder page warns with the same rule (installer/FelsVoiceLab.iss).
+ONEDRIVE_VARIABLES = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
 
 
 def onedrive_folder(root, environ=os.environ):
     """The OneDrive folder that holds `root`, or None. OneDrive would upload the gigabytes of packages and models the Lab
     installs, and can hold the Lab's databases open while it syncs them."""
-    for name in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+    for name in ONEDRIVE_VARIABLES:
         folder = environ.get(name)
         if folder and pathlib.Path(root).resolve().is_relative_to(pathlib.Path(folder).resolve()):
             return folder
@@ -27,7 +35,15 @@ def install(command):
                          "connection, then run setup.bat again: it continues where it stopped.")
 
 
-def main():
+def offline(wheels):
+    """pip's options for installing from the wheels in a folder alone, or none."""
+    return ["--no-index", "--find-links", str(wheels)] if wheels else []
+
+
+def main(argv=()):
+    parser = argparse.ArgumentParser(description="Set up the Lab's core environment, .venv.")
+    parser.add_argument("--wheels", type=pathlib.Path, help="install from the wheels in this folder, without the internet")
+    args = parser.parse_args(argv)
     if sys.version_info[:2] != (3, 12):
         raise SystemExit("Use Python 3.12: run setup.bat, which finds or fetches it.")
     folder = onedrive_folder(ROOT)
@@ -51,12 +67,12 @@ def main():
         unfinished.write_text("setup.bat has not finished installing the core packages here. Run it again to finish.\n",
                               encoding="utf-8")
         venv.EnvBuilder(with_pip=True).create(environment)
-        install([str(python), "-m", "pip", "install", "pip==26.2.2"])
-        install([str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements/core.txt")])
+        install([str(python), "-m", "pip", "install", *offline(args.wheels), PIP])
+        install([str(python), "-m", "pip", "install", *offline(args.wheels), "-r", str(ROOT / "requirements/core.txt")])
         unfinished.unlink()
     # setup.bat goes on with tools/first_setup.py: the desktop window, then the speech models.
     print("Core ready.")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

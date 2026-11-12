@@ -39,6 +39,13 @@ shell uses pywebview (BSD-3-Clause), Python.NET (MIT), and Microsoft Edge WebVie
 (Microsoft terms). They retain their own dependency licenses. This repository
 does not redistribute Python, FFmpeg, WebView2 or a frozen executable.
 
+Setup.exe, which each release carries from 0.3.0 (`tools/build_installer.py`), does redistribute some: Python 3.12.10 from the
+same nuget.org package, and the wheels of `requirements/core.txt` and `requirements/desktop.txt` and pip, unchanged from PyPI.
+Each keeps its licence inside it, and the installed Lab keeps them: Python's in `python\LICENSE.txt`, each package's in its
+`*.dist-info` folder in `.venv` or `.venv-desktop`. The SoundFile wheel includes libsndfile (LGPL-2.1-or-later) as a
+separate DLL, `_soundfile_data\libsndfile_x64.dll`, with its licence in `_soundfile_data\COPYING`; its source is at
+[libsndfile](https://github.com/libsndfile/libsndfile). Setup.exe carries no FFmpeg, no WebView2 and no model.
+
 On a computer with no Python 3.12, `setup.bat` downloads Python 3.12.10 into the Lab's `python` folder
 (`tools/get_python.ps1`): the package `python` that the Python Software Foundation publishes on nuget.org, checked against
 the SHA-256 in `catalog/python_runtime.json`. Python is under the PSF License Agreement, whose text, with the licenses of

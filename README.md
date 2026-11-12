@@ -126,15 +126,21 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 
 ## Start here
 
-1. Download the newest release's ZIP from the Releases page, or clone the repository, into a folder OneDrive does not sync,
+1. Download `FelsVoiceLab-Setup-<version>.exe` from the newest release on the Releases page and run it. It installs for you
+   alone, with no administrator prompt, into `%LOCALAPPDATA%\FelsVoiceLab`, with its own Python and the packages of the core
+   and the desktop window, so it needs no internet until you install a model. The file is not signed yet, so Windows
+   SmartScreen warns about it: press **More info**, then **Run anyway**. [Verify a download](SECURITY.md#verify-a-download)
+   says how to check it first. Or download the release's ZIP, or clone the repository, into a folder OneDrive does not sync,
    such as `C:\voice-lab`, and run `setup.bat`. There is no Python to install first: when the computer has no Python 3.12,
    setup downloads one for the Lab alone (about 14 MB) into its `python` folder.
-2. It sets up the core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
+2. Setup.exe opens the Lab when it is done; install the speech models from **Models & features**. `setup.bat` sets up the
+   core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
    in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which
    also speaks in the voice of any recording longer than five seconds (about 4 GB to download and 7 GB on disk, for a computer
    with 16 GB of RAM or more). It shows every model's plan and asks once. On a computer with an NVIDIA driver, or an AMD
    Radeon card, it offers the GPU builds too, each where it runs on the card.
-3. Use the **Fel's Voice Lab** desktop icon. Its dedicated window runs without a console; closing it stops its backend.
+3. Open **Fel's Voice Lab** from the Start menu (Setup.exe) or the desktop icon (`setup.bat`). Its dedicated window runs
+   without a console; closing it stops its backend.
 
 To add a model later, press **Install** on its card in **Models & features**, or run its launcher, such as `setup-kokoro.bat`,
 `setup-phonon.bat` or `setup-chatterbox.bat`. Every model has one; the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only

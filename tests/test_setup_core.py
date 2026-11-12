@@ -66,6 +66,15 @@ class SetupCoreTests(unittest.TestCase):
         self.assertTrue(self.pip_commands()[1].endswith("core.txt"))
         self.assertFalse((self.environment / setup_core.UNFINISHED).exists())
 
+    def test_setup_exe_installs_the_core_from_the_wheels_it_carries_with_no_index(self):
+        wheels = self.root / "wheels"
+        with contextlib.redirect_stdout(io.StringIO()):
+            setup_core.main(["--wheels", str(wheels)])
+        self.assertEqual(len(self.pip_commands()), 2)
+        for command in self.pip_commands():
+            self.assertIn(f"--no-index --find-links {wheels}", command)
+        self.assertTrue(self.pip_commands()[0].endswith(setup_core.PIP))
+
     def test_an_interrupted_install_is_finished_by_the_next_run(self):
         self.failing = "core.txt"
         with self.assertRaisesRegex(SystemExit, "run setup.bat again: it continues where it stopped"):

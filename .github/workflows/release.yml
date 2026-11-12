@@ -1,6 +1,7 @@
 name: Release
 # Pushing a tag v<VERSION> publishes that release, but only after the checks every push gets have passed on the tagged commit.
 # When they fail nothing is published: fix the problem and release the next patch number (CONTRIBUTING.md, "Making a release").
+# The release carries Setup.exe, built from the tag, and SHA256SUMS, with a GitHub attestation of where both came from.
 on:
   push:
     tags: ['v*.*.*']
@@ -26,6 +27,10 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      # For the attestation of Setup.exe and SHA256SUMS (actions/attest).
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
@@ -39,8 +44,19 @@ jobs:
       # update.bat refuses a release whose tag is not v plus the version in app_version.py, so this refuses it first.
       - name: Check the tag and write the notes from the changelog
         run: python tools/release_notes.py --tag "$env:TAG" --output "$env:RUNNER_TEMP\notes.md"
+      # Inno Setup is on the runner. Setup.exe is built before anything is published, so a failed build publishes nothing.
+      - name: Build Setup.exe from the tag
+        run: python tools/build_installer.py --ref HEAD --output "$env:RUNNER_TEMP\installer"
+      - name: Attest where Setup.exe and SHA256SUMS came from
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ runner.temp }}/installer/FelsVoiceLab-Setup-*.exe
+            ${{ runner.temp }}/installer/SHA256SUMS
       - name: Publish the release
         run: |
           $title = python -c "import app_version; print(app_version.APP_NAME, app_version.VERSION)"
           if ($LASTEXITCODE -ne 0 -or -not $title) { exit 1 }
-          gh release create "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "$title" --notes-file "$env:RUNNER_TEMP\notes.md"
+          $version = python -c "import app_version; print(app_version.VERSION)"
+          $files = "$env:RUNNER_TEMP\installer\FelsVoiceLab-Setup-$version.exe", "$env:RUNNER_TEMP\installer\SHA256SUMS"
+          gh release create "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "$title" --notes-file "$env:RUNNER_TEMP\notes.md" @files

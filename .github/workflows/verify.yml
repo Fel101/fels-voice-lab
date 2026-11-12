@@ -70,3 +70,44 @@ jobs:
           Stop-Process -Id $lab.Id -Force
           if ($health.status -ne 'ready') { throw "The Lab did not answer /api/health" }
           "The Lab started on its own Python: version $($health.version)"
+  installer:
+    # Setup.exe from this commit: build it (Inno Setup is on the runner), install it silently into a temporary folder, start
+    # the Lab, put one character in its library, then uninstall it and find the library still there and the program gone.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Setup.exe
+        run: python tools/build_installer.py --ref HEAD --output "$env:RUNNER_TEMP\installer"
+      - name: Install it silently, start the Lab, uninstall it
+        run: |
+          $setup = Get-ChildItem "$env:RUNNER_TEMP\installer\FelsVoiceLab-Setup-*.exe" | Select-Object -First 1
+          $lab = Join-Path $env:RUNNER_TEMP 'FelsVoiceLab'
+          $arguments = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$lab`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`""
+          $install = Start-Process $setup.FullName -ArgumentList $arguments -Wait -PassThru
+          if ($install.ExitCode) {
+            Get-Content "$lab\out\install\setup-exe.log" -ErrorAction SilentlyContinue
+            throw "Setup.exe ended with exit code $($install.ExitCode)"
+          }
+          $service = Start-Process "$lab\.venv\Scripts\python.exe" -ArgumentList 'serve.py', '--port', '8790' -WorkingDirectory $lab -PassThru -NoNewWindow
+          $health = $null
+          foreach ($try in 1..60) {
+            try { $health = Invoke-RestMethod http://127.0.0.1:8790/api/health -TimeoutSec 2; break } catch { Start-Sleep 1 }
+          }
+          if ($health.status -ne 'ready') { Stop-Process -Id $service.Id -Force; throw "The installed Lab did not answer /api/health" }
+          Invoke-RestMethod -Method Post http://127.0.0.1:8790/api/characters -ContentType 'application/json' -Body '{"name": "Kept"}' | Out-Null
+          Stop-Process -Id $service.Id -Force
+          Start-Sleep 2
+          # The uninstaller runs from a copy of itself, so wait for it to remove its own files.
+          Start-Process "$lab\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          foreach ($try in 1..120) { if (-not (Test-Path "$lab\unins000.exe")) { break }; Start-Sleep 1 }
+          if (Test-Path "$lab\unins000.exe") { throw "The uninstaller did not finish" }
+          if (-not (Test-Path "$lab\data\cast\cast.sqlite3")) { throw "Uninstalling removed the library" }
+          foreach ($gone in '.venv', '.venv-desktop', 'python', 'serve.py') {
+            if (Test-Path "$lab\$gone") { throw "Uninstalling left $gone" }
+          }
+          "Setup.exe installed version $($health.version), the Lab answered, and uninstalling kept the library."

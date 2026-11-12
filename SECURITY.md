@@ -27,6 +27,22 @@ recordings, model files, databases and logs, and Markdown links to pages that ar
 missing. It looks for personal names or other words only if you list them in a
 file and pass it with `--deny-file`.
 
+## Verify a download
+
+From 0.3.0 each release carries `FelsVoiceLab-Setup-<version>.exe` and `SHA256SUMS`, which the release workflow builds from
+the release's tag, with a [GitHub attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
+that records which workflow run built both. In PowerShell, in the folder you downloaded them to:
+
+```powershell
+Get-FileHash .\FelsVoiceLab-Setup-0.3.0.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS
+```
+
+The two hashes must be the same. With the [GitHub CLI](https://cli.github.com/),
+`gh attestation verify FelsVoiceLab-Setup-0.3.0.exe --repo Fel101/fels-voice-lab` checks that this repository's release
+workflow built the file. Setup.exe is not signed yet, so Windows SmartScreen warns before it runs; until it is, the hash and
+the attestation are how to check it.
+
 ## Reporting a security problem
 
 Report it privately, not in a public issue: use

@@ -16,6 +16,21 @@ Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phon
 the service's `.venv`, so no installer can change the packages another model or the service depends on.
 [Troubleshooting](TROUBLESHOOTING.md) has a table of what runs on an 8, 16 or 32 GB computer.
 
+## Setup.exe
+
+From 0.3.0 each release has `FelsVoiceLab-Setup-<version>.exe`. It installs the Lab for the current user, with no
+administrator prompt, into `%LOCALAPPDATA%\FelsVoiceLab` unless you choose another folder (the Lab writes into its own folder,
+so it cannot live in Program Files, and Setup warns about a folder OneDrive syncs). It carries the release's files, the Lab's
+own Python 3.12.10 and the packages of the core and the desktop window, sets those two up without the internet, puts **Fel's
+Voice Lab** in the Start menu (and on the desktop if you tick it) and opens the Lab. The speech models are installed
+afterwards from **Models & features**. If a step fails, it says where its log is (`out\install\setup-exe.log`); run Setup.exe
+again, or `setup.bat` in the Lab's folder, to finish. The installed folder is an ordinary Lab: `update.bat`, the launchers and
+the rest of this page work in it. Setup.exe is not signed yet: [verify a download](../SECURITY.md#verify-a-download) says how
+to check it, and Windows SmartScreen asks once (**More info**, then **Run anyway**).
+
+The rest of this page is for the ZIP. To build Setup.exe yourself, run `tools\build_installer.py` (it needs Inno Setup 6.7 or
+later).
+
 ## Core and desktop
 
 Download the newest release's ZIP from the repository's Releases page on GitHub and extract it, or clone the repository, into a
@@ -827,8 +842,14 @@ Lab's own `python` folder moved with it.
 
 ## Removing the Lab
 
-The Lab has no installer and writes nothing to the registry, so it does not appear in Settings, Apps. Nearly everything it
-adds sits in its own folder, and deleting that folder removes it. In this order:
+**Installed with Setup.exe:** uninstall **Fel's Voice Lab** in Settings, Apps. It asks whether to keep your library (your
+voices, takes, scenes, comparisons, exports, backups, the `reference` folder and your settings files) and keeps it unless you
+say no. The program, its environments, the models and FFmpeg go either way, and so do the Start menu and desktop shortcuts.
+A kept library stays in the Lab's folder, where installing the Lab there again finds it. Close the Lab first, and back up
+before you choose to delete the library.
+
+**Unpacked from the ZIP:** that Lab has no installer and writes nothing to the registry, so it does not appear in Settings,
+Apps. Nearly everything it adds sits in its own folder, and deleting that folder removes it. In this order:
 
 1. **Close the Lab.** Its window stops its own backend. A service started by hand stops when its console closes. Windows
    will not delete files that a running program holds.

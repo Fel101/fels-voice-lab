@@ -51,6 +51,15 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   computer with Python 3.12 keeps using it and downloads nothing. **System & backups** says which Python the Lab runs on.
   Keep the `python` folder. After moving a Lab set up this way, delete its `.venv` folders and run `setup.bat` again
   ([Moving the Lab](docs/SETUP.md#moving-the-lab)).
+- **Setup.exe.** Each release now has `FelsVoiceLab-Setup-<version>.exe`. It installs for you alone, with no administrator
+  prompt, into `%LOCALAPPDATA%\FelsVoiceLab` (it warns about a folder OneDrive syncs), carries the Lab's own Python and the
+  packages of the core and the desktop window so it needs no internet, sets both up, adds a Start menu shortcut (and a
+  desktop one if ticked) and opens the Lab. Models install from **Models & features** as before. Uninstalling in Settings,
+  Apps asks whether to keep your library and keeps it unless you say no. The installed folder holds the release's files, so
+  `update.bat` updates it like an unpacked ZIP. It is not signed yet: Windows SmartScreen warns, and
+  [Verify a download](SECURITY.md#verify-a-download) says how to check the file against `SHA256SUMS` and its GitHub
+  attestation. Built by `tools/build_installer.py` with Inno Setup; `tools/setup_core.py` and `tools/setup_desktop.py` take
+  `--wheels`, and the desktop one `--no-shortcut`.
 - **FFmpeg from a button.** Scene export, reference cleaning and M4A references need FFmpeg, which meant leaving the Lab to
   run `winget`. **Install FFmpeg**, on **System & backups** and on a scene's export panel while no FFmpeg writes every
   format, now downloads FFmpeg 9.0.2 (Gyan Doshi's essentials build, GPL v3, about 115 MB) from its GitHub release, checks
