@@ -1,0 +1,46 @@
+name: Release
+# Pushing a tag v<VERSION> publishes that release, but only after the checks every push gets have passed on the tagged commit.
+# When they fail nothing is published: fix the problem and release the next patch number (CONTRIBUTING.md, "Making a release").
+on:
+  push:
+    tags: ['v*.*.*']
+  # To publish an existing tag again after a failure that was not the code's, such as GitHub being down.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to release, such as v0.3.0
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+  publish:
+    needs: verify
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # update.bat refuses a release whose tag is not v plus the version in app_version.py, so this refuses it first.
+      - name: Check the tag and write the notes from the changelog
+        run: python tools/release_notes.py --tag "$env:TAG" --output "$env:RUNNER_TEMP\notes.md"
+      - name: Publish the release
+        run: |
+          $title = python -c "import app_version; print(app_version.APP_NAME, app_version.VERSION)"
+          if ($LASTEXITCODE -ne 0 -or -not $title) { exit 1 }
+          gh release create "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "$title" --notes-file "$env:RUNNER_TEMP\notes.md"

@@ -43,6 +43,13 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   started with `serve.py` or the desktop app was not affected, because it resolves its own folder.
 - The Clone page's note on Common Voice no longer says Cast cannot take MP3.
 
+### Releases
+
+- **A release is published only after its checks pass.** 0.2.0 was published by hand while three of its tests failed on
+  GitHub's runner. Pushing a version's tag now runs the checks every push gets on the tagged commit, and only when they pass
+  does GitHub publish the release, with this changelog's section as its notes (`tools/release_notes.py`). A tag that is not
+  `v` and the version in `app_version.py` is refused, as `update.bat` would refuse it.
+
 ## 0.2.0 — 2026-11-10
 
 Every model now installs from its card on the Models page, and each card has a GPU/CPU switch. The models that run on a

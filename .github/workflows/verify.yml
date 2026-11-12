@@ -1,5 +1,17 @@
 name: Source verification
-on: [push, pull_request, workflow_dispatch]
+on:
+  # Branches only: a pushed tag is checked by release.yml, which calls this workflow before it publishes.
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to check, such as refs/tags/v0.3.0. Empty checks the caller's own commit.
+        type: string
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -7,6 +19,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

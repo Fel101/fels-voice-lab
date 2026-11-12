@@ -56,10 +56,17 @@ third-party licenses for borrowed code and document its source and modifications
 Check for updates and `update.bat` compare `VERSION` in `app_version.py` with the newest release on GitHub, so a release is a
 version number, a tag and a GitHub release that agree:
 
-1. Set `VERSION` in `app_version.py`, and give the version its heading and date in `CHANGELOG.md`.
-2. Commit, then tag that commit `v` and the version (`git tag v0.2.0`) and push the commit and the tag.
-3. On GitHub, publish a release from the tag, with the changelog's section as its notes. GitHub packs the source ZIP that
-   `update.bat` downloads.
+1. Set `VERSION` in `app_version.py`, and give the version its heading and date in `CHANGELOG.md` (`## 0.3.0 — 2026-11-20`,
+   in place of "Unreleased"). `.venv\Scripts\python.exe tools/release_notes.py` shows the notes the release will get.
+2. Run every check, commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push the commit and the tag.
+3. Pushing the tag publishes the release once the checks pass. [The release workflow](.github/workflows/release.yml) runs the
+   same checks as every push on the tagged commit. Then it refuses a tag that is not `v` and `VERSION`, writes the notes from
+   the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), and
+   publishes the release. GitHub packs the source ZIP that `update.bat` downloads.
+
+When the checks fail on the tag, nothing is published. Do not move or delete the tag even then: fix the problem and release the
+next patch number. When the checks passed and only publishing failed (GitHub was down, say), run the Release workflow again
+from the Actions tab with the tag's name.
 
 `update.bat` refuses a release whose `app_version.py` names another version than its tag. It compares the new release with
 the previous one's ZIP to tell a file the project removed from one a user changed, so do not move or delete a published tag.
