@@ -276,6 +276,18 @@ class ConversionUploadTests(unittest.TestCase):
         outside.write_bytes(tone(2.0))
         self.assertIn("must be under voice-lab", self.convert(str(outside), str(target), status=400)["error"])
 
+    def test_the_lists_do_not_depend_on_how_the_lab_folder_is_spelled(self):
+        # GitHub's runner names the temporary folder by a short name, RUNNER~1, which resolves to runneradmin: the Lab's folder
+        # can be spelled otherwise than the resolved paths it is compared with. A ".." does that on any computer.
+        path = self.upload(tone(1.0), "take.wav", "source")["upload"]["path"]
+        spelled = self.lab / ".." / self.lab.name
+        with patch.object(serve, "LAB", spelled), patch.object(serve, "OUT", spelled / "out"):
+            sources = self.listed("source")
+        self.assertEqual(
+            [(row["path"], row["relative_path"], row["source"]) for row in sources],
+            [(path, f"out/conversions/uploads/source/{Path(path).name}", "out/conversions/uploads/source")],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

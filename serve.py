@@ -244,6 +244,9 @@ def _conversion_asset_rows(cast, *, target=False):
                 continue
             metadata_by_path[resolved] = {"take_id": take["id"], "source_provenance": take.get("provenance", {})}
     rows, seen = [], set()
+    # Paths are shown relative to the Lab's folder or the Cast store's, compared with resolved paths, so those two are
+    # resolved too: a folder spelled otherwise, such as by a short name like RUNNER~1, would match nothing.
+    lab, cast_root = LAB.resolve(), Path(cast.root).resolve()
     # The files chosen from this computer come first, so that no number of conversions can push them out of the list.
     for root in ((_conversion_uploads() / ("target" if target else "source")).resolve(), *roots):
         if not root.is_dir():
@@ -265,7 +268,7 @@ def _conversion_asset_rows(cast, *, target=False):
             upload = _upload_row(resolved, target)
             if upload is False:
                 continue
-            display_root = LAB if LAB in resolved.parents else cast.root
+            display_root = lab if lab in resolved.parents else cast_root
             row = {"path": str(resolved), "relative_path": resolved.relative_to(display_root).as_posix(),
                    "name": resolved.name, "source": root.relative_to(display_root).as_posix(),
                    "size_bytes": resolved.stat().st_size, "sample_rate_hz": details.samplerate,
@@ -287,6 +290,25 @@ def unscreened_by_engine(engine_ids):
     """Languages the language screen did not clear, per engine, for every engine the app offers (not only those with controls)."""
     marks = {key: unscreened_languages(key) for key in engine_ids}
     return {key: labels for key, labels in marks.items() if labels}
+
+
+def byte_range(header, size):
+    """The part of a body of size bytes that a Range header asks for, as (first, last) with both included. None means send
+    the whole body: no header, one this service does not read, or several ranges at once, which a server may answer whole.
+    False means no byte asked for is in the body."""
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", (header or "").strip())
+    if not match or match.groups() == ("", ""):
+        return None
+    first, last = match.groups()
+    if not first:  # bytes=-N asks for the last N bytes
+        count = int(last)
+        return (max(size - count, 0), size - 1) if count and size else False
+    first = int(first)
+    if last and int(last) < first:
+        return None
+    if first >= size:
+        return False
+    return first, (min(int(last), size - 1) if last else size - 1)
 
 
 def answer_unexpected_errors(method):
@@ -462,6 +484,19 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             ctype.encode("ascii")
             if "\r" in ctype or "\n" in ctype:
                 raise ValueError("Invalid response content type.")
+            if code == 200 and self.command == "GET" and ctype.startswith("audio/"):
+                # An <audio> player seeks by asking for part of the file. Chromium lets it seek only when the answer says
+                # parts can be asked for, so every recording says so and a request for a part gets that part.
+                headers["Accept-Ranges"] = "bytes"
+                # If-Range asks for the part only if the file is unchanged, which this service cannot tell: send it whole.
+                wanted = None if self.headers.get("If-Range") else byte_range(self.headers.get("Range"), len(body))
+                if wanted is False:
+                    error = json.dumps({"error": "The range asked for is not in the file."}).encode("utf-8")
+                    return self._send(416, error, "application/json", {"Content-Range": f"bytes */{len(body)}"})
+                if wanted:
+                    first, last = wanted
+                    headers["Content-Range"] = f"bytes {first}-{last}/{len(body)}"
+                    code, body = 206, body[first:last + 1]
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))

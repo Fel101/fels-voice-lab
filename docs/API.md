@@ -33,6 +33,11 @@ is refused with `409`, not queued: wait, then send it again. Scene batches queue
 **Request ids.** Every answer carries `X-Request-Id`. Send your own (letters, digits, `.`, `_` and `-`, up to 64 characters)
 and the same id is in the service log, so your logs and the Lab's can be matched.
 
+**Parts of a recording.** A `GET` that answers with audio, such as `GET /api/takes/{take_id}/audio`, says
+`Accept-Ranges: bytes` and reads one `Range: bytes=first-last` (or `first-`, or `-count`): the answer is `206` with that part
+and a `Content-Range`, or `416` when the part lies past the end. This is how an `<audio>` player seeks. Several ranges at
+once, or an `If-Range`, get the whole file with `200`. A recording made by a `POST` is always sent whole.
+
 **Header text.** A header value that is not plain ASCII, such as a character's name, is percent-encoded as UTF-8, and
 `X-Metadata-Encoding` lists which headers were.
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Players can seek.** A `GET` that answers with audio now says `Accept-Ranges: bytes` and answers a `Range` request with
+  `206` and that part of the file. Without it Chromium would not seek in a recording loaded by its address, so a scene line's
+  player, the Compare page and the voice library could only play from the start. Recordings made by a `POST` are unchanged.
+- **The conversion lists on a folder spelled another way.** The source and target lists for Voice conversion, and a
+  conversion made from an uploaded target, answered `400` when the Lab's folder path was spelled otherwise than its resolved
+  form, as with a short folder name such as `RUNNER~1`. That made three tests fail on GitHub's runner for 0.2.0. A Lab
+  started with `serve.py` or the desktop app was not affected, because it resolves its own folder.
+- The Clone page's note on Common Voice no longer says Cast cannot take MP3.
+
 ## 0.2.0 — 2026-11-10
 
 Every model now installs from its card on the Models page, and each card has a GPU/CPU switch. The models that run on a

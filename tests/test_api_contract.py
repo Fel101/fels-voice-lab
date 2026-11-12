@@ -207,6 +207,29 @@ class PerformContractTests(unittest.TestCase):
         listed = self.service.get_json(f"/api/takes?identity_id={self.identity['id']}&line_id=scene1-001")["takes"]
         self.assertEqual([item["id"] for item in listed], [take_id])
 
+    def test_a_saved_take_can_be_read_in_parts_so_a_player_can_seek(self):
+        # Chromium's <audio> first asks for "bytes=0-", and lets its player seek only if the answer says parts can be asked for.
+        _status, headers, wav = self.perform()
+        url, size = f"/api/takes/{headers['X-Take-Id']}/audio", len(wav)
+        status, headers, body = self.service.request("GET", url)
+        self.assertEqual((status, headers["Accept-Ranges"], body), (200, "bytes", wav))
+        for asked, (first, last) in (("bytes=0-", (0, size - 1)), ("bytes=10-19", (10, 19)), ("bytes=-8", (size - 8, size - 1)),
+                                     (f"bytes=40-{size * 2}", (40, size - 1))):
+            with self.subTest(asked):
+                status, headers, body = self.service.request("GET", url, headers={"Range": asked})
+                self.assertEqual((status, headers["Content-Range"]), (206, f"bytes {first}-{last}/{size}"))
+                self.assertEqual((int(headers["Content-Length"]), body), (last - first + 1, wav[first:last + 1]))
+        status, headers, _body = self.service.request("GET", url, headers={"Range": f"bytes={size}-"})
+        self.assertEqual((status, headers["Content-Range"]), (416, f"bytes */{size}"))
+        # Several parts at once, a unit other than bytes, and a part wanted only if the file is unchanged: the whole file.
+        for asked in ({"Range": "bytes=0-1,4-5"}, {"Range": "items=0-1"}, {"Range": "bytes=0-1", "If-Range": '"v1"'}):
+            with self.subTest(asked):
+                self.assertEqual(self.service.request("GET", url, headers=asked)[::2], (200, wav))
+        # A recording made by a POST is always sent whole.
+        body = {"identity_id": self.identity["id"], "line_id": "scene1-002", "text": "And then?"}
+        status, headers, _body = self.service.request("POST", "/api/performance", body, headers={"Range": "bytes=0-9"})
+        self.assertEqual((status, headers.get("Accept-Ranges")), (200, None))
+
     def test_a_repeat_with_the_same_key_returns_the_same_take_without_generating_again(self):
         first = self.perform(idempotency_key="attempt-1")
         made = len(self.engines.requests)
