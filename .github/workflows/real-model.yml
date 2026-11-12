@@ -1,0 +1,48 @@
+name: A real model speaks
+on:
+  # Weekly, and by hand from the Actions tab. It downloads from PyPI and Hugging Face, so a release does not wait for it.
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kokoro-on-an-empty-machine:
+    # Every other check runs without a model. This one is a computer with no Python: setup.bat fetches the Lab's own and sets
+    # up the core, Kokoro's installer puts in its CPU build with one voice, and tools/real_model_smoke.py loads it, runs its
+    # Test, has it say one sentence and checks the clip. The clip is kept as an artifact for a person to listen to.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reuse Kokoro's model files and pip's downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            hf-cache
+            ~\AppData\Local\pip\Cache
+          key: kokoro-cpu-${{ hashFiles('requirements/core.txt', 'requirements/kokoro-cpu.txt', 'catalog/engines.json') }}
+      - name: Hide this runner's Python, and set up the core with setup.bat
+        run: |
+          foreach ($launcher in "$env:SystemRoot\py.exe", "$env:SystemRoot\pyw.exe") {
+            if (Test-Path $launcher) { Remove-Item $launcher -Force }
+          }
+          $env:PATH = ($env:PATH -split ';' | Where-Object {
+            $_ -and -not (Test-Path (Join-Path $_ 'python.exe')) -and -not (Test-Path (Join-Path $_ 'py.exe'))
+          }) -join ';'
+          if (Get-Command py -ErrorAction SilentlyContinue) { throw "py is still on the PATH" }
+          if (Get-Command python -ErrorAction SilentlyContinue) { throw "python is still on the PATH" }
+          cmd /c ".\setup.bat --models none --yes --no-desktop < NUL"
+          if ($LASTEXITCODE) { throw "setup.bat failed" }
+          if (-not (Test-Path python\python.exe)) { throw "setup.bat did not fetch the Lab's own Python" }
+      - name: Install Kokoro, the CPU build with one voice
+        run: .venv\Scripts\python.exe tools\install_kokoro.py --yes --voices af_heart
+      - name: Have Kokoro speak, and check the clip
+        run: .venv\Scripts\python.exe tools\real_model_smoke.py kokoro --device cpu
+      - name: Keep the clip, its report and the service's log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kokoro-smoke
+          path: out/smoke/
+          if-no-files-found: warn

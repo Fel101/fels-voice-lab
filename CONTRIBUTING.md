@@ -23,6 +23,17 @@ Contract tests do not establish perceptual voice quality. Hardware/model
 acceptance should report exact runtimes, checkpoints, words, identity, acting,
 resource usage and shutdown behavior separately.
 
+None of those tests loads a model. `tools/real_model_smoke.py` does. Close the Lab, then run
+`.venv\Scripts\python.exe tools/real_model_smoke.py kokoro` (or name other models, or give `--all-installed`). It starts the
+service on a free port and, for each model, runs its **Test** from the Models page, has it say one fixed sentence through
+`/api/speak` and checks the WAV: the model's sample rate, a length that fits the sentence, audible and not clipped by the
+Lab's own waveform checks, and the AI-generated speech label naming that model. It prints a table with each model's load time
+and keeps the clips, a `report.json` and the service's log in `out\smoke\`. Listen to the clips: a clip can pass every check
+and still not be speech. Its Test results are kept, as the Models page keeps them. [The real-model
+workflow](.github/workflows/real-model.yml) does the same each week on an empty Windows runner: the core from `setup.bat` with
+the runner's Python hidden, then Kokoro's CPU build with one voice. It downloads from PyPI and Hugging Face, so a release
+does not wait for it, and it keeps the clip as an artifact.
+
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is a one-page map of the processes, the environments and which file decides what.
 
 The HTTP API is one table, `api_spec.py`: the service's dispatch is built from it (`routes.py`), and `docs/API.md` and
@@ -58,7 +69,9 @@ version number, a tag and a GitHub release that agree:
 
 1. Set `VERSION` in `app_version.py`, and give the version its heading and date in `CHANGELOG.md` (`## 0.3.0 — 2026-11-20`,
    in place of "Unreleased"). `.venv\Scripts\python.exe tools/release_notes.py` shows the notes the release will get.
-2. Run every check, commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push the commit and the tag.
+2. Run every check. On the development PC, also run `.venv\Scripts\python.exe tools/real_model_smoke.py --all-installed`
+   and listen to its clips. Commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push the commit and the
+   tag.
 3. Pushing the tag publishes the release once the checks pass. [The release workflow](.github/workflows/release.yml) runs the
    same checks as every push on the tagged commit. Then it refuses a tag that is not `v` and `VERSION`, writes the notes from
    the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), and

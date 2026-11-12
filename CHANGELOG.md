@@ -67,6 +67,12 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   GitHub's runner. Pushing a version's tag now runs the checks every push gets on the tagged commit, and only when they pass
   does GitHub publish the release, with this changelog's section as its notes (`tools/release_notes.py`). A tag that is not
   `v` and the version in `app_version.py` is refused, as `update.bat` would refuse it.
+- **A real model speaks.** Every other test runs without loading a model. `tools/real_model_smoke.py` starts the service,
+  runs a model's **Test**, has it say one sentence and checks the clip: its sample rate, its length for the sentence, that it
+  is audible and not clipped, and that the AI-generated speech label inside it names the model. `--all-installed` tries
+  every installed model and lists each one's load time; the clips are kept in `out\smoke\` for a person to listen to. A new
+  weekly workflow runs it with Kokoro on a Windows runner with no Python, after `setup.bat` and Kokoro's installer
+  ([CONTRIBUTING.md](CONTRIBUTING.md#making-a-release)).
 
 ## 0.2.0 — 2026-11-10
 
