@@ -1,5 +1,22 @@
 # Setup
 
+## The quick way
+
+Either of these ends with the Lab open and speaking. Neither needs Python, or anything else, installed first.
+
+- **Setup.exe.** Download `FelsVoiceLab-Setup-<version>.exe` from the newest release and run it (Windows SmartScreen asks
+  once: **More info**, then **Run anyway**). It opens the Lab when it is done. On **Model studio**, press **Install Kokoro
+  82M** in the note at the top, then **Install now**; when it finishes, press **Generate**. The README's
+  [Quick start](../README.md#quick-start) gives the times this took, and [Setup.exe](#setupexe) says what
+  it installs.
+- **The ZIP.** Extract the newest release's ZIP into a folder OneDrive does not sync, such as `C:\voice-lab`, and run
+  `setup.bat`. Choose **1**, Kokoro and Phonon (about 0.8 GB to download), and type `yes` under their plans. Open **Fel's Voice
+  Lab** from the desktop and press **Generate**. [Core and desktop](#core-and-desktop) says what it does.
+
+The rest of this page is reference: what each installer puts where, every model's needs, and the settings.
+
+## What the Lab is made of
+
 This is an early Windows release that runs from source, not a bundled
 installer with every model. It runs on Python 3.12 (64-bit), and `setup.bat` brings its own when the computer has none.
 `setup.bat` sets up the core, the desktop window and the speech models you choose, in one go: [Kokoro](#kokoro-on-the-cpu),

@@ -77,6 +77,12 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   `tools/install_ffmpeg.py` does it from a terminal. An FFmpeg you installed yourself still works; the Lab's own comes
   first, and `update.bat` leaves it alone ([FFmpeg](docs/SETUP.md#ffmpeg)). New routes: `GET` and
   `POST /api/ffmpeg/install`. The `ffmpeg` part of `GET /api/exports` and `GET /api/system` gains `own` and `offer`.
+- **The first run installs a model from the studio.** A Lab with no speech model said to go to **Models & features** and press
+  Install there. The note on **Model studio** now has the **Install** button itself, with how much the model downloads and
+  how much disk it takes, and starts the same install as the model's card. When the install it started finishes, the studio
+  is ready to speak: the model chosen, a sentence in the box and the focus on **Generate**. The README starts with a
+  [Quick start](README.md#quick-start) with measured times, and [Setup](docs/SETUP.md) with the quick way.
+  `GET /api/engines/status` gives each model that is not installed an `install_size`, from its installer's own numbers.
 
 ### Releases
 

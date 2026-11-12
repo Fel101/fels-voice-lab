@@ -162,7 +162,10 @@ ROUTES = [
             "and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), "
             "`device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU "
             "can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or "
-            "`null`) and `install` (Install puts in its GPU build). `install` is the latest install started from the Models "
+            "`null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer "
+            "also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, "
+            "from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. "
+            "`install` is the latest install started from the Models "
             "page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), "
             "`state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end "
             "of its output) and `log` (all of it, a path under the lab folder)."),

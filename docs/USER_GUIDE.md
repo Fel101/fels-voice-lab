@@ -5,6 +5,14 @@ Updated 25 October 2026. Start with [setup](SETUP.md) and
 packages and pinned assets have been installed. The version you are running is
 at the foot of every page and in `/api/health`; `python serve.py --version` prints it.
 
+## The first time
+
+A Lab with no speech model installed says so at the top of **Model studio**, and offers the model it can install, with how
+much it downloads and how much disk it takes. Its **Install** button starts the same install as that model's card in **Models
+& features**: it shows what it will do first, and nothing changes until you press **Install now**. While it runs, **Show
+progress** opens its window again. When it finishes, the studio is ready to speak: the model is chosen, a sentence is in the
+box and **Generate** has the focus.
+
 ## Appearance and navigation
 
 The header's **Theme** menu offers **Light**, **Dark** (neutral grey), **Forest** (dark green), and **System**. System

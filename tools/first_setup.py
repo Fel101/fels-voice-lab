@@ -87,19 +87,18 @@ def installed(names, root=ROOT, probe=engine_checks.installation):
 
 def model_sizes(root=ROOT):
     """{model: (bytes to download, bytes on disk)} for a first install of each guided model on the CPU, from the numbers its
-    installer plans with: its packages, and the model files it fetches by default."""
-    from tools import install_chatterbox as ic, install_kokoro as ik, install_phonon as ip
+    installer plans with: its packages, and the model files it fetches by default (install_sizes, which the Models page
+    shows too)."""
+    import install_sizes
+    from chatterbox_support import TURBO_ENGINE_ID
+    from phonon_support import PHONON_ENGINE_ID
 
-    root = Path(root)
-    kokoro = ik.load_manifest(root / ik.MANIFEST)
-    kokoro_files = sum(item["size"] for item in ik.checkpoint_files(kokoro, ik.choose_voices(kokoro, ["supported"])))
-    phonon_files = sum(item["size"] for repo in ip.load_manifest(root / ip.MANIFEST)["repos"] for item in repo["files"])
-    turbo_files = sum(item["size"] for item in ik.load_manifest(root / ic.MANIFEST)["files"])
-    return {
-        "kokoro": (ik.PACKAGES_DOWNLOAD_MB * 10**6 + kokoro_files, ik.PACKAGES_DISK_MB * 10**6 + kokoro_files),
-        "phonon": (ip.PACKAGES_DOWNLOAD_MB * 10**6 + phonon_files, ip.PACKAGES_DISK_MB * 10**6 + phonon_files),
-        "chatterbox": (ic.PACKAGES_DOWNLOAD_MB * 10**6 + turbo_files, ic.PACKAGES_DISK_MB * 10**6 + turbo_files),
-    }
+    engines = {"kokoro": "kokoro", "phonon": PHONON_ENGINE_ID, "chatterbox": TURBO_ENGINE_ID}
+    sizes = {name: install_sizes.model_bytes(engine, Path(root)) for name, engine in engines.items()}
+    unread = [name for name, size in sizes.items() if size is None]
+    if unread:
+        raise ValueError(f"The sizes of {', '.join(unread)} could not be read from their installers' file lists.")
+    return sizes
 
 
 def sizes_text(names, sizes):

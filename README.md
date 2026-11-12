@@ -5,11 +5,31 @@ in your Cast, act dialogue with it, render whole scenes as batches, compare take
 production audio with a checksummed manifest. It runs on your own computer: the service listens only
 on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate.
 
-**An early release (0.2.0) for Windows 10/11 and Python 3.12.** It runs from source: `setup.bat` sets up the core, the desktop
-window and the speech models you choose, and each model runs in a Python environment of its own. It was built and checked on one
-Windows machine with an AMD GPU, and every NVIDIA build the installers offer was checked on a laptop with a GeForce RTX 5070
-Laptop GPU (8 GB). There are no Linux or macOS results. Original application code is MIT; borrowed code and optional models keep
-their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
+## Quick start
+
+On Windows 10 or 11, with nothing installed first (not even Python):
+
+1. Download `FelsVoiceLab-Setup-<version>.exe` (70 MB) from the newest release on the
+   [Releases page](https://github.com/Fel101/fels-voice-lab/releases) and run it. It is not signed yet, so Windows SmartScreen
+   warns about it: press **More info**, then **Run anyway**.
+2. Press **Next** until **Install**. It installs for you alone, with no administrator prompt and no internet, and opens the Lab
+   when it is done. It took 70 seconds here.
+3. **Model studio** says that no voice model is installed yet. Press **Install Kokoro 82M**, read what it will do, and press
+   **Install now**. It downloads 0.6 GB and took 5 minutes here, most of it unpacking Python packages. On a computer with
+   a graphics card, Kokoro's card is set to install its GPU build instead, 2.0 to 2.4 GB, which took 7 minutes here; set it
+   to **CPU** in **Models & features** first for the smaller one.
+4. When it finishes, the studio is ready to speak, with a sentence in the box. Press **Generate**. The first sentence took 11
+   seconds here, most of it loading the model (26 seconds with the GPU build); after that a sentence takes about a second.
+
+From starting Setup.exe to the first sentence took about 6½ minutes with the CPU build and 9 with the GPU build, measured on
+12 November 2026 on the development PC (an AMD mini PC with a Radeon AI PRO R9700, Windows 11), with nothing in pip's cache.
+A slower connection or disk takes longer.
+
+**An early release (0.2.0) for Windows 10/11 and Python 3.12.** It runs from source: Setup.exe or `setup.bat` sets up the core
+and the desktop window, the speech models install from the page or with `setup.bat`, and each model runs in a Python environment
+of its own. It was built and checked on one Windows machine with an AMD GPU, and every NVIDIA build the installers offer was
+checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB). There are no Linux or macOS results. Original application code
+is MIT; borrowed code and optional models keep their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
 
 ## Hear it
 
@@ -124,15 +144,14 @@ Voices belong to people. Clone only recordings you made yourself or whose speake
 allow it, keep the transcript, origin and permission with each reference, and do not use the
 software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBLE_USE.md) says more.
 
-## Start here
+## Other ways to set it up
 
-1. Download `FelsVoiceLab-Setup-<version>.exe` from the newest release on the Releases page and run it. It installs for you
-   alone, with no administrator prompt, into `%LOCALAPPDATA%\FelsVoiceLab`, with its own Python and the packages of the core
-   and the desktop window, so it needs no internet until you install a model. The file is not signed yet, so Windows
-   SmartScreen warns about it: press **More info**, then **Run anyway**. [Verify a download](SECURITY.md#verify-a-download)
-   says how to check it first. Or download the release's ZIP, or clone the repository, into a folder OneDrive does not sync,
-   such as `C:\voice-lab`, and run `setup.bat`. There is no Python to install first: when the computer has no Python 3.12,
-   setup downloads one for the Lab alone (about 14 MB) into its `python` folder.
+1. Setup.exe ([Quick start](#quick-start)) installs into `%LOCALAPPDATA%\FelsVoiceLab` unless you choose
+   another folder, with its own Python and the packages of the core and the desktop window.
+   [Verify a download](SECURITY.md#verify-a-download) says how to check the file first. Or download the release's ZIP, or
+   clone the repository, into a folder OneDrive does not sync, such as `C:\voice-lab`, and run `setup.bat`. There is no Python
+   to install first: when the computer has no Python 3.12, setup downloads one for the Lab alone (about 14 MB) into its
+   `python` folder.
 2. Setup.exe opens the Lab when it is done; install the speech models from **Models & features**. `setup.bat` sets up the
    core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
    in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which

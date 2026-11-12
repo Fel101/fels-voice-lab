@@ -356,7 +356,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="studio">
   <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or audition a reference. Save the voice you like, then build its character in the Cast library.</p>
-  <div class="workflow-note" id="firstRun" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><a href="#models">Open Models &amp; features →</a></div>
+  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
   <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including fixed speaker blends that do not use a reference recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
   <label class="field">Text to speak
     <textarea id="text">Hey, you're back. I was hoping you'd stop by tonight. How was your day?</textarea>

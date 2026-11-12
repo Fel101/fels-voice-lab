@@ -177,6 +177,32 @@ class EngineInstaller:
                 self._amd = list(self.amd_cards())
             return self._amd
 
+    def with_sizes(self, status):
+        """The engine status (worker_pool.engine_status) with an `install_size` on each model that is not installed and that
+        Install can put in: {download_bytes, disk_bytes} for the build its Install starts (install_sizes), or None when its
+        numbers cannot be read. The page's first-run note and the cards show it before anyone presses Install."""
+        import install_sizes
+
+        gpu = []    # (nvidia, AMD card) for a GPU build, worked out once and only when a row needs it
+
+        def gpu_target():
+            if not gpu:
+                if self._nvidia()[0]:
+                    gpu.append((True, None))
+                else:
+                    from tools import amd_build
+
+                    gpu.append((False, amd_build.chosen_card(self._amd_cards(), self.root)))
+            return gpu[0]
+
+        for row in status.get("engines", []):
+            if row.get("state") != "not_installed" or not (row.get("installation") or {}).get("installer"):
+                continue
+            nvidia, card = gpu_target() if (row.get("gpu") or {}).get("install") else (False, None)
+            answer = install_sizes.model_bytes(row["id"], self.root, nvidia=nvidia, card=card)
+            row["install_size"] = install_sizes.size_fields(answer)
+        return status
+
     def gpu_build(self, key):
         """(ok, reason): whether the app can install the GPU build of an engine on this computer. It needs an installer with a
         GPU build, and either an NVIDIA driver with a card and driver that NVIDIA's build runs on, which the installer's own

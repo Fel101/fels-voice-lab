@@ -926,7 +926,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
     @router.get("/api/engines/status")
     def engine_status(self, parsed, req):
-        self._json(200, {**engines.engine_status(), "install": installer.snapshot()})
+        status = engines.engine_status()
+        if hasattr(installer, "with_sizes"):
+            status = installer.with_sizes(status)
+        self._json(200, {**status, "install": installer.snapshot()})
 
     @router.post("/api/engines/{engine_id}/check")
     def engine_check(self, parsed, req, engine_id):

@@ -324,15 +324,66 @@ function showEngineHint(){
   link.href='#models';link.textContent=(row.installation||{}).installer?'Install it in Models & features':'See what it needs in Models & features';
   hint.appendChild(text);hint.appendChild(link);
 }
+// The first-run note, on a Lab where no model can speak yet: it offers the first model the app can install, with its size, and
+// starts the same install as that model's card. When an install it started finishes, the studio is made ready to speak:
+// the model chosen, a sentence in the text box (the page's own, unless something else was typed) and the focus on Generate.
+var firstRun={engine:null,action:null,ready:null},firstRunWired=false;
+function gigabytes(bytes){return (bytes/1e9).toFixed(1)+' GB';}
+function installSizeText(row){
+  var size=row.install_size;
+  return size?'It downloads about '+gigabytes(size.download_bytes)+' and uses '+gigabytes(size.disk_bytes)+' of disk. ':'';
+}
+function wireFirstRun(){
+  if(firstRunWired){return;}
+  firstRunWired=true;
+  $('firstRunButton').addEventListener('click',function(){
+    var action=firstRun.action;if(!action){return;}
+    if(action.kind==='progress'){return showProgress(action.engine);}
+    firstRun.engine=action.engine;
+    return planInstall(action.engine,(modelCards[action.engine]||{}).installGpu);
+  });
+  $('go').addEventListener('click',function(){if(firstRun.ready){firstRun.ready=null;$('firstRun').hidden=true;}});
+}
+function studioReady(job){
+  // An install the note started has finished: close its window, which would keep the focus, and set the studio up to speak.
+  firstRun.engine=null;firstRun.ready=job.name;
+  if(installDialog.engine===job.engine){closeInstallDialog();}
+  var engine=$('engine'),text=$('text');
+  if(engine.value!==job.engine){engine.value=job.engine;if(typeof refresh==='function'){refresh();}}
+  if(!String(text.value||'').trim()){text.value=text.defaultValue||'';}
+  if(!$('studio').hidden){$('go').focus();}
+}
 function renderFirstRun(status){
-  var rows=status.engines||[],job=status.install||null,box=$('firstRun');
+  var rows=status.engines||[],job=status.install||null,box=$('firstRun'),button=$('firstRunButton');
   var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only;});
   var running=!!job&&job.state==='running';
   var offer=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;})[0];
+  if(installed&&firstRun.engine&&job&&job.engine===firstRun.engine&&job.state==='finished'){studioReady(job);}
+  firstRun.action=null;
+  if(firstRun.ready&&installed){
+    box.hidden=false;button.hidden=true;$('firstRunModels').hidden=true;
+    $('firstRunTitle').textContent=firstRun.ready+' is installed';
+    $('firstRunText').textContent='Press Generate to hear it say the sentence below. The first time, the model takes a little while to load.';
+    return;
+  }
+  firstRun.ready=null;
   box.hidden=installed||!(running||offer);
   if(box.hidden){return;}
-  $('firstRunTitle').textContent=running?'Installing '+job.name+'…':'No voice model is installed yet';
-  $('firstRunText').textContent=running?'Follow it in Models & features. Nothing can speak until it finishes.':'Press Install on the '+offer.name+' card in Models & features. It shows what it will do first.';
+  $('firstRunModels').hidden=false;button.hidden=false;
+  if(running){
+    firstRun.action={kind:'progress',engine:job.engine};
+    $('firstRunTitle').textContent='Installing '+job.name+'…';
+    $('firstRunText').textContent='Running for '+elapsedText(job.seconds)+'. Nothing can speak until it finishes; when it does, this page is ready to speak.';
+    button.textContent='Show progress';button.disabled=false;
+    return;
+  }
+  firstRun.action={kind:'install',engine:offer.id};
+  var failed=job&&job.state==='failed'&&job.engine===offer.id;
+  $('firstRunTitle').textContent=failed?offer.name+' did not install':'No voice model is installed yet';
+  $('firstRunText').textContent=failed
+    ?'The install stopped (exit code '+job.exit_code+') after '+elapsedText(job.seconds)+'; all of its output is in '+job.log+'. Press Install to try again: it continues where it stopped.'
+    :'Install '+offer.name+' to hear the Lab speak. '+installSizeText(offer)+'Install shows what it will do first, and nothing changes until you agree.';
+  button.textContent='Install '+offer.name;button.disabled=!!status.busy;
 }
 function placeCards(status){
   var main=$('modelOverview'),more=$('modelMore'),apart=0;
@@ -348,7 +399,7 @@ function placeCards(status){
 function cardNode(tag,className,text){var node=document.createElement(tag);if(className){node.className=className;}if(text!==undefined){node.textContent=text;}return node;}
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
-  wireInstallDialog();
+  wireInstallDialog();wireFirstRun();
   (result.engines||[]).forEach(function(entry){
     var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),integrated=cardNode('p','eyebrow'),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('p','meta'),ram=cardNode('p','meta');
     var devices=cardNode('div','device-switch'),choices=cardNode('span','device-choices'),note=cardNode('p','meta device-note'),actions=cardNode('div','model-actions'),button=cardNode('button','','Test'),extra=cardNode('button');

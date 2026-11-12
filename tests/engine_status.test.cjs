@@ -626,23 +626,107 @@ test('the More models fold stays hidden while every model is installed or can be
   assert.equal(c.modelCards.kokoro.card.parentNode, fields.modelOverview);
 });
 
-test('a studio with no model installed says so and points at the card that can install one', () => {
+test('a studio with no model installed offers the model it can install, with its size', () => {
   const {context: c, fields} = harness();
+  c.wireFirstRun();
   c.modelCards = {kokoro: card('Kokoro 82M'), breeze: card('Breeze')};
-  const none = snapshot([kokoroMissing, manual('breeze', 'Breeze')]);
+  const sized = {...kokoroMissing, install_size: {download_bytes: 623681118, disk_bytes: 1678681118}};
+  const none = snapshot([sized, manual('breeze', 'Breeze')]);
   c.renderEngineStatus(none);
   assert.equal(fields.firstRun.hidden, false);
   assert.equal(fields.firstRunTitle.textContent, 'No voice model is installed yet');
-  assert.equal(fields.firstRunText.textContent, 'Press Install on the Kokoro 82M card in Models & features. It shows what it will do first.');
+  assert.equal(fields.firstRunText.textContent, 'Install Kokoro 82M to hear the Lab speak. It downloads about 0.6 GB and uses '
+    + '1.7 GB of disk. Install shows what it will do first, and nothing changes until you agree.');
+  assert.equal(fields.firstRunButton.textContent, 'Install Kokoro 82M');
+  assert.deepEqual([fields.firstRunButton.hidden, fields.firstRunButton.disabled, fields.firstRunModels.hidden], [false, false, false]);
+  c.renderEngineStatus(snapshot([kokoroMissing]));    // a size the service could not read is left out
+  assert.equal(fields.firstRunText.textContent, 'Install Kokoro 82M to hear the Lab speak. Install shows what it will do first, '
+    + 'and nothing changes until you agree.');
   c.renderEngineStatus({...none, busy: true, install: job()});
   assert.equal(fields.firstRunTitle.textContent, 'Installing Kokoro 82M…');
-  assert.equal(fields.firstRunText.textContent, 'Follow it in Models & features. Nothing can speak until it finishes.');
+  assert.equal(fields.firstRunText.textContent, 'Running for 1 min 5 s. Nothing can speak until it finishes; when it does, this page '
+    + 'is ready to speak.');
+  assert.equal(fields.firstRunButton.textContent, 'Show progress');
+  assert.equal(fields.firstRunButton.disabled, false);
   const conversionOnly = {id: 'vc', name: 'Chatterbox Voice Conversion', integrated: true, task_only: true, state: 'conversion_task',
     installation: {installed: true, missing: []}};
   c.modelCards.vc = card('Chatterbox Voice Conversion');
   c.renderEngineStatus(snapshot([kokoroMissing, conversionOnly]));
   assert.equal(fields.firstRun.hidden, false);    // a conversion tool cannot speak a line
   c.renderEngineStatus(snapshot([kokoroReady, manual('breeze', 'Breeze')]));
+  assert.equal(fields.firstRun.hidden, true);
+});
+
+test("the note's Install starts the same install as the card, and a busy service holds it", async () => {
+  const {context: c, fields, calls} = harness({'/api/engines/kokoro/install': {plan: {ok: true, paragraphs: ['Plan.'], problems: []}}});
+  c.wireFirstRun();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  const gpuBuild = {...kokoroMissing, switch: 'gpu', gpu: {choosable: true, reason: null, build: null, install: true, cpu: null}};
+  c.renderEngineStatus(snapshot([gpuBuild], {busy: true}));
+  assert.equal(fields.firstRunButton.disabled, true);
+  c.renderEngineStatus(snapshot([gpuBuild], {device: 'cuda'}));
+  await fields.firstRunButton.handlers.click();
+  assert.deepEqual([calls[0].url, JSON.stringify(calls[0].body)], ['/api/engines/kokoro/install', '{"dry_run":true,"nvidia":true}']);
+  assert.equal(fields.installDialog.open, true);
+  assert.equal(fields.installTitle.textContent, 'Install the GPU build of Kokoro 82M');
+});
+
+test('while it installs the note shows its progress, and a failed install says where its output is', async () => {
+  const {context: c, fields} = harness();
+  c.wireFirstRun();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(snapshot([kokoroMissing], {busy: true, install: job()}));
+  await fields.firstRunButton.handlers.click();
+  assert.equal(fields.installDialog.open, true);
+  assert.equal(fields.installTitle.textContent, 'Installing Kokoro 82M');
+  c.closeInstallDialog();
+  c.renderEngineStatus(snapshot([kokoroMissing], {install: job({state: 'failed', exit_code: 1, seconds: 200})}));
+  assert.equal(fields.firstRunTitle.textContent, 'Kokoro 82M did not install');
+  assert.equal(fields.firstRunText.textContent, 'The install stopped (exit code 1) after 3 min 20 s; all of its output is in '
+    + 'out/install/kokoro-1.log. Press Install to try again: it continues where it stopped.');
+  assert.equal(fields.firstRunButton.textContent, 'Install Kokoro 82M');
+});
+
+test('when the install the note started finishes, the studio is ready to speak', async () => {
+  const {context: c, fields} = harness({'/api/engines/kokoro/install': {plan: {ok: true, paragraphs: [], problems: []}}});
+  let focused = null;
+  fields.go = Object.assign(element('go'), {focus() { focused = 'go'; }});
+  fields.engine = Object.assign(element('engine'), {value: 'qwen3-tts-1.7b-voice-design'});
+  fields.text = Object.assign(element('text'), {value: '  ', defaultValue: "Hey, you're back."});
+  c.wireFirstRun();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(snapshot([kokoroMissing]));
+  await fields.firstRunButton.handlers.click();
+  c.renderEngineStatus(snapshot([kokoroMissing], {busy: true, install: job()}));
+  c.showProgress('kokoro');
+  assert.equal(fields.installDialog.open, true);
+  c.renderEngineStatus(snapshot([kokoroReady], {install: job({state: 'finished', exit_code: 0})}));
+  assert.equal(fields.installDialog.open, false);    // its window would keep the focus
+  assert.deepEqual([fields.engine.value, fields.text.value, focused], ['kokoro', "Hey, you're back.", 'go']);
+  assert.equal(fields.firstRun.hidden, false);
+  assert.equal(fields.firstRunTitle.textContent, 'Kokoro 82M is installed');
+  assert.equal(fields.firstRunText.textContent, 'Press Generate to hear it say the sentence below. The first time, the model takes '
+    + 'a little while to load.');
+  assert.deepEqual([fields.firstRunButton.hidden, fields.firstRunModels.hidden], [true, true]);
+  focused = null;
+  fields.text.value = 'My own line.';
+  c.renderEngineStatus(snapshot([kokoroReady], {install: job({state: 'finished', exit_code: 0})}));
+  assert.deepEqual([fields.text.value, focused], ['My own line.', null]);    // done once: a later refresh changes nothing
+  fields.go.handlers.click();
+  assert.equal(fields.firstRun.hidden, true);
+  c.renderEngineStatus(snapshot([kokoroReady], {install: job({state: 'finished', exit_code: 0})}));
+  assert.equal(fields.firstRun.hidden, true);
+});
+
+test('an install started from a card does not move the focus to the studio', () => {
+  const {context: c, fields} = harness();
+  let focused = null;
+  fields.go = Object.assign(element('go'), {focus() { focused = 'go'; }});
+  c.wireFirstRun();
+  c.modelCards = {kokoro: card('Kokoro 82M')};
+  c.renderEngineStatus(snapshot([kokoroMissing], {busy: true, install: job()}));
+  c.renderEngineStatus(snapshot([kokoroReady], {install: job({state: 'finished', exit_code: 0})}));
+  assert.equal(focused, null);
   assert.equal(fields.firstRun.hidden, true);
 });
 
