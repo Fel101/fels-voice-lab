@@ -298,9 +298,18 @@ class RunTests(unittest.TestCase):
             (root / ib.OUTPUT).mkdir(parents=True, exist_ok=True)
             return self.check
 
+        def torch_cuda(root, environment, **kwargs):
+            self.calls.append("cuda")
+            return {
+                "torch": "2.12.0+cu130",
+                "arches": ["sm_75", "sm_120"],
+                "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": [12, 0]}],
+            }
+
         for owner, name, value in (
             (ib, "ROOT", self.base),
             (base, "HOST", self.server.address),
+            (base, "check_torch_cuda", torch_cuda),
             (ib, "make_environment", make),
             (ib, "environment_versions", lambda root: dict(self.installed or {})),
             (ib, "install_packages", pip),
@@ -331,7 +340,7 @@ class RunTests(unittest.TestCase):
     def test_the_whole_install_puts_the_files_where_the_loader_reads_them_and_writes_a_receipt(self):
         status, out, err = self.run_main("--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, ["venv", "pip", "check"])
+        self.assertEqual(self.calls, ["venv", "pip", "cuda", "check"])
         folder = self.base / "breeze" / "models" / "breezetts2" / "drbaph_Breeze-TTS-2-comfyui"
         self.assertEqual(
             (folder / "audio_tokenizer" / "model.safetensors").read_bytes(), self.contents["audio_tokenizer/model.safetensors"]

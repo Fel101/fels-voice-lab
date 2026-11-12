@@ -415,7 +415,7 @@ def run_speech_check(root, *, runner=subprocess.run):
         )
         raise InstallError(
             "The runtime and model are in place, but Drama 3 did not load or speak:\n"
-            + "\n".join(output.strip().splitlines()[-12:])
+            + base.check_output(output, wav.with_suffix(".log"), root=root)
             + hint
         )
     if result["problem"]:

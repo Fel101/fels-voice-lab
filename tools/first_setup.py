@@ -188,6 +188,11 @@ def gpu_choice(gpu_models, cards, build="nvidia"):
                 f" To move it to the graphics card later, update the driver from nvidia.com or the NVIDIA app, delete the "
                 f"{environment} folder and run {launcher} --nvidia."
             )
+        elif any("CUDA cannot use the" in problem for problem in problems):
+            text += (
+                f" To move it to the graphics card once the card is on, switch {label}'s card in Models & features to GPU and "
+                "press Install GPU build."
+            )
         refused[name] = text
     return able, refused
 
@@ -205,8 +210,8 @@ def offer_text(build, able, cards):
     if build == "nvidia":
         return (
             f"This computer has an NVIDIA graphics driver. {names} can run on the graphics card with an NVIDIA build of "
-            f"PyTorch instead of the CPU one: a larger download (about 2 GB{each}), and the Lab has not been tried on an "
-            "NVIDIA card yet, so a report of how it went is welcome."
+            f"PyTorch instead of the CPU one: a larger download (about 2 GB{each}). It was checked on a GeForce RTX 5070 "
+            "Laptop GPU; on another NVIDIA card, a report of how it went is welcome."
         )
     from tools import amd_build
 
@@ -374,13 +379,12 @@ def build_parser():
         "--gpu",
         action="store_true",
         help="install the GPU build of PyTorch for Kokoro and Chatterbox, each where it runs on this computer's graphics card: "
-        "NVIDIA's CUDA build (untested by the Lab), or AMD's ROCm build for an AMD Radeon",
+        "NVIDIA's CUDA build, or AMD's ROCm build for an AMD Radeon",
     )
     parser.add_argument(
         "--nvidia",
         action="store_true",
-        help="install the NVIDIA (CUDA) build of PyTorch for Kokoro and Chatterbox, each where it runs on this card; untested "
-        "by the Lab",
+        help="install the NVIDIA (CUDA) build of PyTorch for Kokoro and Chatterbox, each where it runs on this card",
     )
     parser.add_argument("--no-desktop", action="store_true", help="skip the desktop window and its shortcut")
     return parser

@@ -92,13 +92,17 @@ test('state text names the device and keeps install and conversion states apart'
   assert.equal(c.engineStateText({state: 'usable'}, 'cpu', job({nvidia: true})), 'Installing the GPU build…');
 });
 
-test('a model whose PyTorch cannot use the graphics card is said to speak on the CPU, and why', () => {
+test('a model that could not use the graphics card is said to speak on the CPU, and why', () => {
   const {context: c} = harness();
-  const fellBack = {state: 'usable', check: {status: 'passed', checked_at: '2026-11-03T10:00:00+00:00', total_s: 0.8,
-    audio_seconds: 2.7, ran_on: 'cpu'}};
+  // A GPU build of PyTorch that found no card when it loaded, as on a laptop whose NVIDIA card a power-saving mode switched off.
+  const fellBack = {state: 'usable', gpu: {build: 'cuda'}, check: {status: 'passed', checked_at: '2026-11-03T10:00:00+00:00',
+    total_s: 0.8, audio_seconds: 2.7, ran_on: 'cpu'}};
   assert.equal(c.engineStateText(fellBack, 'cuda'), 'Speaks now on CPU');
   assert.equal(c.engineDetailText(fellBack, 'cuda'),
-    "Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio, on the CPU: this model's PyTorch cannot use the graphics card.");
+    'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio, on the CPU: the graphics card was not available when it ' +
+    'loaded (on a laptop, a power-saving mode can switch the card off).');
+  assert.equal(c.engineDetailText({...fellBack, gpu: {build: 'cpu'}}, 'cuda'),
+    'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio, on the CPU: this model has the CPU build of PyTorch.');
   const onCard = {...fellBack, check: {...fellBack.check, ran_on: 'cuda'}};
   assert.equal(c.engineStateText(onCard, 'cuda'), 'Speaks now on GPU');
   assert.equal(c.engineDetailText(onCard, 'cuda'), 'Tested 2026-11-03 10:00 UTC: 0.8 s to make 2.7 s of audio.');

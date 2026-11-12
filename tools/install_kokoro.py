@@ -12,8 +12,8 @@ the lab's own Python, which setup.bat creates; setup-kokoro.bat does that for yo
 installs requirements/kokoro-cpu.txt there with every file's SHA-256 checked, and the script refuses to replace a package that
 is already installed at another version, so an environment that has its own PyTorch keeps it. --gpu takes the GPU build of
 PyTorch for this computer's graphics card instead of the CPU one: on a computer with an NVIDIA driver the CUDA build in
-requirements/kokoro-nvidia.txt, which the Lab has not been tried with yet, and on one whose graphics card is an AMD Radeon,
-AMD's ROCm build with the code for the card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how), which was
+requirements/kokoro-nvidia.txt, which was checked on a GeForce RTX 5070 Laptop GPU, and on one whose graphics card is an AMD
+Radeon, AMD's ROCm build with the code for the card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how), which was
 checked on an AMD Radeon AI PRO R9700. --nvidia asks for the CUDA build alone. In a .venv-kokoro that holds the CPU build, the
 GPU build replaces PyTorch and changes nothing else. The checkpoint files in catalog/kokoro_snapshot.json come from Hugging Face
 at the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again installs
@@ -71,8 +71,8 @@ ENGLISH = ("a", "b")
 EXTRA_PACKAGES = {"j": "Japanese", "z": "Mandarin Chinese"}
 # Measured on a clean install of the lock into a new .venv-kokoro: 275 MB of wheels, 1.3 GB installed, and 126 characters for
 # the longest path below site-packages. Windows stops at 259 characters unless long paths are switched on. The CUDA build of
-# PyTorch is a 1.9 GB wheel where the CPU one is 123 MB, and takes about 4 GB more once installed (an estimate: it has not been
-# installed on an NVIDIA computer yet).
+# PyTorch is a 1.9 GB wheel where the CPU one is 123 MB, and takes about 4 GB more once installed (an estimate: the install on
+# an NVIDIA laptop was not measured).
 PACKAGES_DOWNLOAD_MB = 275
 PACKAGES_DISK_MB = 1330
 NVIDIA_EXTRA_DOWNLOAD_MB = 1800
@@ -351,17 +351,57 @@ NO_GPU = ("--gpu asks for the GPU build of PyTorch, and this computer has neithe
           "Software: Adrenalin Edition from amd.com. Or leave out --gpu for the CPU build.")
 
 
+# What a switched-off NVIDIA card looks like, and where it is switched on. The installers say it before they download anything
+# (hardware.cuda_probe finds it), and after a check that PyTorch found no card.
+SWITCHED_OFF = ("On a laptop this usually means the NVIDIA card is switched off: by a power-saving, Eco or iGPU-only mode in "
+                "Windows or in the maker's app (such as GIGABYTE Control Center, Armoury Crate, Lenovo Vantage or MSI Center), "
+                "or in the BIOS. Device Manager then shows the card greyed out, or with Code 45. Switch the card on (a restart "
+                "may be needed) and try again.")
+# The beginnings of the sentences below that carry their own advice, so an installer adds none of its own to them.
+CARD_UNAVAILABLE = "This computer has an NVIDIA driver, but CUDA cannot use the "
+MEMORY_UNREAD = "could not read how much memory"
+
+
+def unavailable_text(card, *, environ=None):
+    """Why no NVIDIA build can run now on a card the driver is installed for: the driver itself says CUDA cannot start
+    (card["unavailable"] holds its words, from hardware.nvidia_cards), with what to do about it."""
+    said = card["unavailable"]
+    text = f"{CARD_UNAVAILABLE}{card['name']}: the driver says \"{said}\"."
+    if "NO_DEVICE" not in said:
+        return (text + " Restart the computer, and if that does not help, reinstall the driver from nvidia.com or the "
+                "NVIDIA app.")
+    hidden = (os.environ if environ is None else environ).get("CUDA_VISIBLE_DEVICES")
+    if hidden is not None:
+        text += (f" CUDA_VISIBLE_DEVICES is set to \"{hidden}\" in this window, which can hide the card from CUDA: clear "
+                 "it and try again.")
+    return f"{text} {SWITCHED_OFF}"
+
+
+def needs_no_advice(problem):
+    """Whether a sentence from nvidia_card_problems already says what to do."""
+    return problem.startswith(CARD_UNAVAILABLE) or MEMORY_UNREAD in problem
+
+
 def nvidia_card_problems(cards, *, build, cards_text, lowest=None, newest_major=None, driver=None, memory_gb=None):
-    """Why an NVIDIA build of PyTorch would not run on these cards, as sentences that name the card: a card of a generation the
+    """Why an NVIDIA build of PyTorch would not run on these cards, as sentences that name the card: CUDA cannot start on them
+    at all (a card that hardware.nvidia_cards marks unavailable, as a switched-off laptop card is), a card of a generation the
     build has no code for (older than `lowest`, or of a newer generation than `newest_major`), a driver older than its CUDA
-    needs, or, for a model that needs `memory_gb` GiB of graphics memory, no card with that much. An empty list when it would
-    run, and when nvidia-smi could not say."""
+    needs, or, for a model that needs `memory_gb` GiB of graphics memory, no card with that much, or no card whose memory could
+    be read. An empty list when it would run, and when a generation or driver could not be read."""
+    unavailable = [card for card in cards if card.get("unavailable")]
+    if unavailable:
+        return [unavailable_text(unavailable[0])]
     problems = []
     sizes = [card["memory_mib"] for card in cards if card.get("memory_mib")]
     if memory_gb and sizes and max(sizes) < memory_gb * 1024:
         biggest = max((card for card in cards if card.get("memory_mib")), key=lambda card: card["memory_mib"])
         problems.append(f"{build} needs a graphics card with at least {memory_gb} GB of memory, and the {biggest['name']} has "
                         f"{biggest['memory_mib'] / 1024:.1f} GB.")
+    elif memory_gb and not sizes:
+        named = f"the {cards[0]['name']}" if cards else "this computer's NVIDIA card"
+        problems.append(f"{build} needs a graphics card with at least {memory_gb} GB of memory, and the Lab {MEMORY_UNREAD} "
+                        f"{named} has: neither nvidia-smi nor NVIDIA's driver answered. Check that the card is switched on "
+                        "and that nvidia-smi lists it in a Command Prompt, then try again.")
     for card in cards:
         capability = card.get("capability")
         if capability and ((lowest and capability < lowest) or (newest_major is not None and capability[0] > newest_major)):
@@ -382,6 +422,8 @@ def card_problems(cards):
 
 def nvidia_advice(problem):
     """A problem card_problems found, with what to do about it for someone who typed --nvidia."""
+    if needs_no_advice(problem):
+        return problem + " Or leave out --nvidia for the CPU build."
     if "needs NVIDIA driver" in problem:
         return (problem + " Update the driver from nvidia.com or the NVIDIA app and run the installer again, or leave out "
                 "--nvidia for the CPU build.")
@@ -389,11 +431,29 @@ def nvidia_advice(problem):
 
 
 def nvidia_problems(*, present=None, cards=None, check=card_problems):
-    """Why --nvidia cannot work on this computer, checked before anything is downloaded: there is no NVIDIA driver, or the card
-    or the driver is one the build cannot run on (nvidia-smi says which)."""
+    """Why --nvidia cannot work on this computer, checked before anything is downloaded: there is no NVIDIA driver, the driver
+    cannot start CUDA on the card (it is switched off, say), or the card or the driver is one the build cannot run on
+    (nvidia-smi and the driver say which)."""
     if not (present if present is not None else nvidia_driver_present()):
         return [NO_NVIDIA_DRIVER]
     return [nvidia_advice(problem) for problem in check(nvidia_cards() if cards is None else cards)]
+
+
+def gpu_only_nvidia_problems(no_driver, check, model, *, present=None, cards=None):
+    """nvidia_problems for a model that runs only on a graphics card (Qwen3-TTS, VoxCPM2, Breeze TTS 2): no_driver is its
+    sentence for a computer without an NVIDIA driver, check its card_problems, and model its name."""
+    if not (present if present is not None else nvidia_driver_present()):
+        return [no_driver]
+    advice = {True: "", False: f" {model} cannot run on this card in the Lab."}
+    return [
+        problem
+        + (
+            " Update the driver from nvidia.com or the NVIDIA app and run the installer again."
+            if "needs NVIDIA driver" in problem
+            else advice[needs_no_advice(problem)]
+        )
+        for problem in check(nvidia_cards() if cards is None else cards)
+    ]
 
 
 def amd_build():
@@ -593,7 +653,7 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
         build = f"AMD's ROCm 7.14 build of PyTorch 2.12 with the code for the {amd_build().card_text(card)}"
         lists = f"{LOCK} and {amd_build().LOCK}"
     elif nvidia:
-        build, lists = "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)", f"{LOCK} and {NVIDIA_LOCK}"
+        build, lists = "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards", f"{LOCK} and {NVIDIA_LOCK}"
     else:
         build, lists = "PyTorch for the CPU", LOCK
     if switch_only is None:
@@ -630,8 +690,9 @@ def plan_text(manifest, packages, todo, files, pending, *, checkpoint_only, envi
         notes.append(amd_build().plan_note(card, cards))
     elif nvidia:
         notes.append("The CUDA 13.0 build needs a GeForce GTX 16 or RTX 20 series card or newer and an NVIDIA driver of version 580 or "
-                     "later. It carries NVIDIA's CUDA libraries inside it, under NVIDIA's own licence terms. Nobody has tried the Lab "
-                     "on an NVIDIA card yet: if it works, or does not, a hardware report on GitHub helps the next person.")
+                     "later. It carries NVIDIA's CUDA libraries inside it, under NVIDIA's own licence terms. It was checked "
+                     "on a GeForce RTX 5070 Laptop GPU (8 GB), where the first load took up to a minute and a half. On "
+                     "another NVIDIA card, a hardware report on GitHub helps the next person, whether it works or not.")
     notes.append(f"Licences: the Kokoro weights are {manifest['license']}. The Python packages keep their own licences, nearly all "
                  "MIT, BSD or Apache. The exceptions are phonemizer-fork and the espeak-ng library inside espeakng-loader "
                  "(GPL-3.0), num2words (LGPL), and certifi and tqdm (MPL-2.0). They are installed on this computer and are not "
@@ -769,19 +830,132 @@ def last_json_line(text):
     return None
 
 
-def check_failure_hint(output, *, nvidia=False, amd_card=False, cuda_needs=CUDA_NEEDS):
-    """A sentence for the most likely cause of a speech check that failed, from what it printed: on NVIDIA's build (nvidia)
-    cuda_needs says which cards and which driver it runs on, and on AMD's (amd_card) amd_build says what to do."""
+# What PyTorch and the models print when they find no NVIDIA card they can use (a card switched off, or hidden by
+# CUDA_VISIBLE_DEVICES), when the driver is too old for the build's CUDA, and when the build has no code for the card.
+NO_CARD_SIGNS = ("No CUDA GPUs are available", "is_available() is False", "CUDA graphs require CUDA device",
+                 "CUDA_ERROR_NO_DEVICE", "no CUDA-capable device is detected")
+OLD_DRIVER_SIGNS = ("driver on your system is too old", "driver version is insufficient", "CUDA_ERROR_INSUFFICIENT_DRIVER")
+NO_CODE_SIGNS = ("no kernel image is available", "CUDA_ERROR_NO_BINARY_FOR_GPU")
+CPU_INSTEAD = (" To use the CPU instead, delete the folder of the model's environment and run the installer without --gpu "
+               "or --nvidia.")
+OUT_OF_MEMORY = ("The graphics card ran out of memory. Close other programs that use it (games, or another model loaded in the "
+                 "Lab) and run the installer again.")
+TORCH_TIMEOUT = 600
+# Starts CUDA with the environment's own PyTorch and lists what it sees: each card's name and generation, and the generations
+# the build has code for. torch.cuda.init() raises PyTorch's own error when it can use no card.
+TORCH_CUDA = """
+import json, torch
+torch.cuda.init()
+cards = []
+for index in range(torch.cuda.device_count()):
+    major, minor = torch.cuda.get_device_capability(index)
+    cards.append({"name": torch.cuda.get_device_name(index), "capability": [major, minor]})
+print(json.dumps({"torch": torch.__version__, "arches": torch.cuda.get_arch_list(), "cards": cards}))
+"""
+# The warning that the sox package prints on every start when SoX itself is not installed, which nothing in the Lab needs.
+SOX_WARNING = re.compile(r"SoX could not be found!.*?path variables\.[ \t]*(?:\r?\n)?", re.S)
+# The line a Python traceback ends on, such as "RuntimeError: No CUDA GPUs are available" or "torch.OutOfMemoryError: ...".
+ERROR_LINE = re.compile(r"^(?:[A-Za-z_]\w*\.)*[A-Z]\w*(?:Error|Exception|Interrupt|Exit)\b.*$", re.M)
+
+
+def check_failure_hint(output, *, nvidia=False, amd_card=False, cuda_needs=CUDA_NEEDS, memory=None, cpu=False):
+    """A sentence for the most likely cause of a check that failed, from what it printed, or "" when it is not clear. On
+    NVIDIA's build (nvidia) the error says which: no card PyTorch can use (SWITCHED_OFF says why that usually is), a driver too
+    old for the build or a card it has no code for (cuda_needs says which cards and which driver it runs on), or a card out of
+    memory (memory, for a model that says how much it needs; OUT_OF_MEMORY otherwise). cpu says the model has a CPU build to
+    fall back on. On AMD's (amd_card) amd_build says what to do."""
     if "DLL" in output or "WinError 126" in output:
         return ("\nA missing DLL usually means the Microsoft Visual C++ Redistributable is not installed. Install the x64 "
                 "version from https://aka.ms/vs/17/release/vc_redist.x64.exe and run the installer again.")
+    if (nvidia or amd_card) and "out of memory" in output.lower():
+        return "\n" + (memory or OUT_OF_MEMORY)
     if amd_card:
         return amd_build().failure_hint(output)
-    if nvidia and ("CUDA" in output or "cuda" in output):
-        return (f"\nPyTorch could not use the graphics card. {cuda_needs}: update the driver from nvidia.com and run the "
-                "installer again. To use the CPU instead, delete the folder of the model's environment and run the installer "
-                "without --gpu or --nvidia.")
+    if not nvidia:
+        return ""
+    if any(sign in output for sign in NO_CARD_SIGNS):
+        return ("\nPyTorch found no NVIDIA card it could use, so this is about the card, not the packages. "
+                f"{SWITCHED_OFF.replace('try again', 'run the installer again')}")
+    if any(sign in output for sign in OLD_DRIVER_SIGNS):
+        return (f"\nThe NVIDIA driver is too old for this build. {cuda_needs}: update the driver from nvidia.com or the NVIDIA "
+                "app and run the installer again." + (CPU_INSTEAD if cpu else ""))
+    if any(sign in output for sign in NO_CODE_SIGNS):
+        return f"\nThis build of PyTorch has no code for this graphics card: {cuda_needs}." + (CPU_INSTEAD if cpu else "")
+    if "Torch not compiled with CUDA enabled" in output:
+        return ("\nThe model's environment has the CPU build of PyTorch, which cannot use the graphics card. Run the "
+                "installer again with --gpu: it puts in the GPU build.")
     return ""
+
+
+def check_output(output, log=None, *, root=None, lines=12):
+    """What a check that failed printed, for the person who ran the installer: the error it ended on first, then the end of its
+    output without the sox package's warning, and where all of it was written (log, a path beside the check's clip)."""
+    if log is not None:
+        try:
+            Path(log).parent.mkdir(parents=True, exist_ok=True)
+            Path(log).write_text(output, encoding="utf-8")
+        except OSError:
+            log = None
+    cleaned = SOX_WARNING.sub("", output).strip()
+    tail = cleaned.splitlines()[-lines:]
+    errors = ERROR_LINE.findall(cleaned)
+    if log is not None:
+        shown = Path(log).relative_to(root) if root and Path(log).is_relative_to(root) else Path(log)
+        ending = f"The end of its output (all of it is in {shown}):"
+    else:
+        ending = "The end of its output:"
+    return (f"{errors[-1].strip()}\n\n" if errors else "") + ending + "\n" + "\n".join(tail)
+
+
+def has_code_for(arches, capability):
+    """Whether a PyTorch build whose torch.cuda.get_arch_list() is arches has code for a card of this compute capability:
+    machine code for its generation at its version or an earlier one (sm_86 runs on an 8.9 card), or PTX for an earlier
+    generation, which the driver compiles (compute_90)."""
+    for arch in arches:
+        match = re.fullmatch(r"(sm|compute)_(\d+)(\d)[a-z]?", str(arch))
+        if not match:
+            continue
+        version = (int(match[2]), int(match[3]))
+        if (match[1] == "sm" and version[0] == capability[0] and version <= capability) or (
+            match[1] == "compute" and version <= capability
+        ):
+            return True
+    return False
+
+
+def check_torch_cuda(root, environment, *, cuda_needs=CUDA_NEEDS, cpu=False, runner=subprocess.run):
+    """After pip and before the model files: start CUDA with the PyTorch in the environment, so that a card it cannot use stops
+    the install before gigabytes of model files are fetched. Returns {"torch", "arches", "cards"} as PyTorch gave them; raises
+    InstallError with PyTorch's own error and what to do about it (cpu: the model has a CPU build to fall back on)."""
+    try:
+        done = runner([str(env_python(root, environment)), "-I", "-c", TORCH_CUDA], cwd=root, capture_output=True, text=True,
+                      encoding="utf-8", errors="replace", timeout=TORCH_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise InstallError(f"PyTorch in {environment} did not start CUDA within {TORCH_TIMEOUT // 60} minutes, so the model "
+                           "files were not fetched.") from exc
+    found = last_json_line(done.stdout or "")
+    if done.returncode or not isinstance(found, dict) or not isinstance(found.get("cards"), list):
+        output = (done.stdout or "") + (done.stderr or "")
+        raise InstallError(f"The packages are in {environment}, but its PyTorch could not use the NVIDIA card, so the model "
+                           "files were not fetched:\n" + check_output(output)
+                           + check_failure_hint(output, nvidia=True, cuda_needs=cuda_needs, cpu=cpu))
+    arches = found.get("arches") or []
+    for card in found["cards"]:
+        capability = tuple(card.get("capability") or ())
+        if len(capability) == 2 and not has_code_for(arches, capability):
+            raise InstallError(f"PyTorch {found.get('torch')} in {environment} has no code for the {card.get('name')} (compute "
+                               f"capability {capability_text(capability)}), so the model files were not fetched: "
+                               f"{cuda_needs}." + (CPU_INSTEAD if cpu else ""))
+    return found
+
+
+def torch_cuda_step(root, environment, *, cuda_needs=CUDA_NEEDS, cpu=False, say=say_now):
+    """The installers' step between pip and the model files on NVIDIA's build: check_torch_cuda, said as it goes."""
+    say(f"Checking that PyTorch in {environment} can use the NVIDIA card:")
+    found = check_torch_cuda(root, environment, cuda_needs=cuda_needs, cpu=cpu)
+    names = ", ".join(str(card.get("name")) for card in found["cards"]) or "graphics card"
+    say(f"  PyTorch {found.get('torch')} sees the {names}.")
+    return found
 
 
 def check_environment(number=None):
@@ -807,8 +981,8 @@ def run_speech_check(root, *, device="cpu", amd_card=False, number=None, runner=
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Kokoro did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:])
-                           + check_failure_hint(output, nvidia=device == "cuda" and not amd_card, amd_card=amd_card))
+                           + check_output(output, wav.with_suffix(".log"), root=root)
+                           + check_failure_hint(output, nvidia=device == "cuda" and not amd_card, amd_card=amd_card, cpu=True))
     if result["problem"]:
         raise InstallError(f"Kokoro loaded but the check clip was not speech: {result['problem']}.")
     return {**result, "wav": wav}
@@ -898,6 +1072,8 @@ def run(args, *, say=say_now, ask=input, interactive=None):
         number, note = amd_build().settle_number(root, amd_build().hip_devices(root, ENVIRONMENT), card)
         if note:
             say(note)
+    if nvidia and not args.checkpoint_only:
+        torch_cuda_step(root, ENVIRONMENT, cpu=True, say=say)
     say("Fetching the Kokoro model files:")
     download_checkpoint(root, manifest, files, say=say)
     say("Checking that Kokoro speaks (the first load is slow):")
@@ -923,9 +1099,9 @@ def build_parser():
                              "such as bm_george ef_dora")
     parser.add_argument("--gpu", action="store_true",
                         help="install the GPU build of PyTorch for this computer's graphics card instead of the CPU build: "
-                             "NVIDIA's CUDA build (untested), or AMD's ROCm build for an AMD Radeon")
+                             "NVIDIA's CUDA build, or AMD's ROCm build for an AMD Radeon")
     parser.add_argument("--nvidia", action="store_true",
-                        help="install the CUDA build of PyTorch for an NVIDIA graphics card instead of the CPU build (untested)")
+                        help="install the CUDA build of PyTorch for an NVIDIA graphics card instead of the CPU build")
     parser.add_argument("--checkpoint-only", action="store_true",
                         help=f"fetch the model files only and leave the packages in {ENVIRONMENT} alone")
     return parser

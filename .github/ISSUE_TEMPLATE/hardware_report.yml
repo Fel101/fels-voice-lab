@@ -6,10 +6,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        The Lab has been checked on one Windows 11 computer, on its CPU. A report from yours helps fill in
+        The Lab has been checked on two Windows 11 computers: one with an AMD Radeon AI PRO R9700, and a laptop with a
+        GeForce RTX 5070 Laptop GPU (8 GB) for the NVIDIA builds. A report from yours helps fill in
         [the hardware table](https://github.com/Fel101/fels-voice-lab/blob/main/docs/TROUBLESHOOTING.md#what-runs-on-which-computer),
-        whether things worked or not. NVIDIA reports are especially welcome: the `--nvidia` installs have not been tried
-        on an NVIDIA card yet.
+        whether things worked or not. Reports from other NVIDIA and AMD cards are especially welcome.
 
         Leave out anything private: no recordings, scripts, transcripts or names of real people's voices.
   - type: textarea

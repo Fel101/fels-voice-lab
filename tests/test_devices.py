@@ -1,5 +1,7 @@
 """Which device the service asks for, and which one a worker really uses. Nothing here loads a model or needs a GPU."""
 
+import json
+import subprocess
 import sys
 import tempfile
 import types
@@ -196,7 +198,7 @@ class HardwareTests(unittest.TestCase):
         run, calls = self.smi(
             (0, "NVIDIA GeForce RTX 5070 Laptop GPU, 12.0, 581.80, 8151 MiB\nNVIDIA GeForce RTX 3060, 8.6, 581.80, [N/A]\n")
         )
-        cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[])
+        cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[], probe=False)
         self.assertEqual(
             cards,
             [
@@ -210,7 +212,7 @@ class HardwareTests(unittest.TestCase):
         run, calls = self.smi(
             (6, 'Field "compute_cap" is not a valid field to query.'), (0, "NVIDIA GeForce GTX 1080, 472.12, 8192 MiB\n")
         )
-        cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[])
+        cards = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[], probe=False)
         self.assertEqual(
             cards, [{"name": "NVIDIA GeForce GTX 1080", "capability": None, "driver": (472, 12), "memory_mib": 8192}]
         )
@@ -225,7 +227,7 @@ class HardwareTests(unittest.TestCase):
         for smi in (False, Path("nvidia-smi.exe")):
             with self.subTest(smi=smi):
                 self.assertEqual(
-                    hardware.nvidia_cards(run=run, smi=smi, listed=listed),
+                    hardware.nvidia_cards(run=run, smi=smi, listed=listed, probe=False),
                     [
                         {
                             "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
@@ -235,7 +237,105 @@ class HardwareTests(unittest.TestCase):
                         }
                     ],
                 )
-        self.assertEqual(hardware.nvidia_cards(smi=False, listed=listed[:1]), [])
+        self.assertEqual(hardware.nvidia_cards(smi=False, listed=listed[:1], probe=False), [])
+
+    # The RTX 5070 laptop, whose Radeon 890M drives the display, as NVIDIA's driver answered with its card switched off and on.
+    LAPTOP = [
+        {"name": "AMD Radeon(TM) 890M Graphics", "driver": "32.0.31035.1003"},
+        {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "driver": "32.0.16.1714"},
+    ]
+    OFF = {
+        "error": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected",
+        "code": 100,
+        "driver_cuda": (13, 4),
+        "cards": [],
+    }
+    ON = {
+        "error": None,
+        "code": None,
+        "driver_cuda": (13, 4),
+        "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "memory_mib": 8151}],
+    }
+
+    def test_a_card_the_driver_cannot_start_cuda_on_is_marked_unavailable(self):
+        # Switched off, the card stays in Windows' list with its driver, and nvidia-smi blames permissions.
+        failed = (4, "NVIDIA-SMI has failed because you do not have sufficient permissions.")
+        run, _calls = self.smi(failed, failed)
+        self.assertEqual(
+            hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=self.LAPTOP, probe=self.OFF),
+            [
+                {
+                    "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+                    "capability": None,
+                    "driver": (617, 14),
+                    "memory_mib": None,
+                    "unavailable": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected",
+                }
+            ],
+        )
+        # nvidia-smi can list a card that CUDA is kept from (CUDA_VISIBLE_DEVICES=-1): the driver decides.
+        run, _calls = self.smi((0, "NVIDIA GeForce RTX 5070 Laptop GPU, 12.0, 617.14, 8151 MiB\n"))
+        [card] = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[], probe=self.OFF)
+        self.assertEqual((card["memory_mib"], card["unavailable"]), (8151, self.OFF["error"]))
+        # A driver with no card Windows lists still has one to name.
+        [card] = hardware.nvidia_cards(smi=False, listed=[], probe=self.OFF)
+        self.assertEqual((card["name"], card["unavailable"]), ("NVIDIA graphics card", self.OFF["error"]))
+
+    def test_without_nvidia_smi_the_driver_gives_the_generation_and_memory(self):
+        self.assertEqual(
+            hardware.nvidia_cards(smi=False, listed=self.LAPTOP, probe=self.ON),
+            [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "memory_mib": 8151, "driver": (617, 14)}],
+        )
+        # An nvidia-smi from before compute_cap: the driver fills in the generation.
+        run, _calls = self.smi(
+            (6, 'Field "compute_cap" is not a valid field to query.'),
+            (0, "NVIDIA GeForce RTX 5070 Laptop GPU, 617.14, [N/A]\n"),
+        )
+        [card] = hardware.nvidia_cards(run=run, smi=Path("nvidia-smi.exe"), listed=[], probe=self.ON)
+        self.assertEqual((card["capability"], card["memory_mib"], card["driver"]), ((12, 0), 8151, (617, 14)))
+        self.assertNotIn("unavailable", card)
+
+    @unittest.skipUnless(sys.platform == "win32", "only Windows has NVIDIA's nvcuda.dll for the probe to ask")
+    def test_the_driver_probe_is_read_from_its_last_line_and_anything_else_is_no_answer(self):
+        def answer(code, output):
+            return lambda command, **kwargs: types.SimpleNamespace(returncode=code, stdout=output, stderr="")
+
+        def hang(command, **kwargs):
+            raise subprocess.TimeoutExpired(command, hardware.CUDA_TIMEOUT)
+
+        off = {"error": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected", "code": 100, "driver_cuda": [13, 4]}
+        on = {
+            "error": None,
+            "code": None,
+            "driver_cuda": [13, 4],
+            "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": [12, 0], "memory_mib": 8151}],
+        }
+        with tempfile.TemporaryDirectory() as windows:
+            self.assertIsNone(hardware.cuda_probe(run=answer(0, json.dumps(on)), system_root=windows))  # no driver: not asked
+            (Path(windows) / "System32").mkdir()
+            (Path(windows) / "System32" / "nvcuda.dll").write_bytes(b"")
+            asked = hardware.cuda_probe(
+                run=answer(0, "a warning\n" + json.dumps({**off, "cards": []}) + "\n"), system_root=windows
+            )
+            self.assertEqual(asked, self.OFF)
+            self.assertEqual(hardware.cuda_probe(run=answer(0, json.dumps(on)), system_root=windows), self.ON)
+            # A driver that starts CUDA but lists no card has none to use.
+            empty = hardware.cuda_probe(run=answer(0, json.dumps({**on, "cards": []})), system_root=windows)
+            self.assertEqual((empty["code"], empty["cards"]), (100, []))
+            for broken in (answer(3, json.dumps(on)), answer(0, "no answer"), answer(0, json.dumps(off)), hang):
+                self.assertIsNone(hardware.cuda_probe(run=broken, system_root=windows))
+
+    @unittest.skipUnless(sys.platform == "win32", "the probe calls NVIDIA's Windows driver")
+    def test_the_driver_probe_itself_runs_here_and_answers_in_one_line(self):
+        done = subprocess.run(
+            [sys.executable, "-I", "-c", hardware.CUDA_PROBE], capture_output=True, text=True, encoding="utf-8", timeout=60
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        found = json.loads(done.stdout.strip().splitlines()[-1])
+        self.assertEqual(set(found), {"error", "code", "driver_cuda", "cards"})
+        if not hardware.nvidia_driver_present():
+            self.assertIn("nvcuda.dll could not be loaded", found["error"])
+            self.assertIsNone(hardware.cuda_probe())
 
     def test_nvidia_smi_is_looked_for_in_system32_then_in_program_files(self):
         with (
@@ -263,7 +363,8 @@ class HardwareTests(unittest.TestCase):
             self.assertFalse(card["name"].startswith("Microsoft "), card)
         self.assertEqual(len(cards), len({(card["name"], card["driver"]) for card in cards}))
         for card in hardware.nvidia_cards():
-            self.assertEqual(set(card), {"name", "capability", "driver"})
+            self.assertLessEqual({"name", "capability", "driver", "memory_mib"}, set(card))
+            self.assertLessEqual(set(card), {"name", "capability", "driver", "memory_mib", "unavailable"})
 
 
 if __name__ == "__main__":

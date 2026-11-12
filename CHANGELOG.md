@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+Every NVIDIA build has now run on an NVIDIA card: on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB), each model installed
+and passed **Test** with no change to the Lab. The first try there failed only because the laptop had switched its NVIDIA card
+off, and the installers did not notice, so they now ask NVIDIA's driver itself before they download anything.
+
+### NVIDIA graphics cards
+
+- **A switched-off card is caught before the download.** A laptop's power-saving, Eco or iGPU-only mode can switch its NVIDIA
+  card off while the driver stays installed. Windows then still lists the card, `nvidia-smi` blames permissions, and the
+  installers went ahead, downloaded every package and model file, and failed at the speech check. Each installer now asks the
+  driver itself (`nvcuda.dll`, in a Python of its own) whether CUDA starts, and stops before any download when it does not,
+  naming the card and saying where such a card is switched back on. The driver's answer also gives the card's generation and
+  memory when `nvidia-smi` cannot.
+- **PyTorch is asked to start CUDA after pip.** On NVIDIA's build each installer has the PyTorch it just installed start CUDA
+  and list the card before it fetches the model files, and stops with PyTorch's own error, or when the build has no code for
+  the card.
+- **A memory check is never skipped.** VoxCPM2 and Breeze TTS 2 need 7 and 10 GB of graphics memory. When neither
+  `nvidia-smi` nor the driver could say how much the card has, the check was skipped without a word; the installers now stop
+  and say so.
+- **Failures say what happened.** A failed check now shows the error it ended on first, leaves out the warning the sox package
+  prints on every start, and keeps all of its output beside the check's clip (`install-check.log` and the like). The hint
+  under it matches the error: no card PyTorch can use (with what to check on a laptop), a driver too old for CUDA 13.0, a
+  build with no code for the card, or a card out of memory; it no longer says to update the driver for every error that
+  mentions CUDA, and it offers the CPU build only for Kokoro and Chatterbox.
+- **Models & features notices a card switched on.** The service read the NVIDIA cards once and kept the answer until it
+  restarted; it now reads them again after half a minute. A model that ran on the CPU because the card was not available
+  when it loaded no longer blames its PyTorch.
+- The installers, `setup.bat`, the guides and [MODEL_CAPABILITIES.md](MODEL_CAPABILITIES.md) give the laptop's results in
+  place of "not yet tried on an NVIDIA card". The comments in `requirements/*-nvidia.txt` still say it, because changing
+  those files would make `update.bat` ask for every NVIDIA model to be installed again.
+
 ### Fixes
 
 - **Players can seek.** A `GET` that answers with audio now says `Accept-Ranges: bytes` and answers a `Range` request with

@@ -197,6 +197,14 @@ class ShippedFilesTests(unittest.TestCase):
 
 
 class ProblemTests(unittest.TestCase):
+    def test_a_switched_off_card_stops_it_before_any_download_and_is_not_called_too_old(self):
+        off = {**RTX_5070, "memory_mib": None, "unavailable": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"}
+        [problem] = iq.nvidia_problems(present=True, cards=[off])
+        self.assertIn("CUDA cannot use the NVIDIA GeForce RTX 5070 Laptop GPU", problem)
+        self.assertIn("switched off", problem)
+        for wrong in ("cannot run on this card", "Update the driver", "leave out --nvidia"):
+            self.assertNotIn(wrong, problem)
+
     def test_without_an_nvidia_driver_or_an_amd_card_it_stops_and_says_there_is_no_cpu_build(self):
         problems = iq.nvidia_problems(present=False)
         self.assertEqual(problems, [iq.NO_NVIDIA_DRIVER])
@@ -276,11 +284,11 @@ class PlanTests(unittest.TestCase):
         self.assertIn("in a voice cloned from reference\\af_heart.wav", text)
         self.assertIn("(.venv-fqwen, hf-cache and out\\qwen)", text)
 
-    def test_the_plan_says_which_cards_and_driver_the_build_needs_that_it_is_untried_and_the_licences(self):
+    def test_the_plan_says_which_cards_and_driver_the_build_needs_where_it_was_checked_and_the_licences(self):
         text = self.plan()
         self.assertIn("GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included", text)
         self.assertIn("driver of version 580 or later", text)
-        self.assertIn("Nobody has tried the Lab on an NVIDIA card yet", text)
+        self.assertIn("They were checked on a GeForce RTX 5070 Laptop GPU (8 GB)", text)
         self.assertIn("Qwen3-TTS weights and qwen-tts-hf are Apache-2.0", text)
         self.assertIn("faster-qwen3-tts is MIT", text)
         self.assertIn("in a voice made from a short description", text)
@@ -318,7 +326,7 @@ class PlanTests(unittest.TestCase):
         self.assertIn("This computer has 2 AMD graphics cards", text)
         self.assertIn("under AMD's own licence terms", text)
         self.assertNotIn("CUDA 13.0", text)
-        self.assertNotIn("Nobody has tried the Lab on an NVIDIA card", text)
+        self.assertNotIn("RTX 5070 Laptop GPU", text)
         text.encode("ascii")
 
     def test_the_plan_reflects_what_is_already_done(self):
@@ -330,7 +338,7 @@ class PlanTests(unittest.TestCase):
         text = self.plan(checkpoint_only=True)
         self.assertIn("the ones in .venv-fqwen are left alone (--checkpoint-only)", text)
         self.assertIn("on your own graphics card build", text)
-        self.assertNotIn("Nobody has tried", text)
+        self.assertNotIn("RTX 5070 Laptop GPU", text)
 
 
 class SpeechCheckTests(unittest.TestCase):
@@ -386,9 +394,16 @@ class SpeechCheckTests(unittest.TestCase):
         with self.assertRaisesRegex(iq.InstallError, "ran out of memory. Close other programs") as caught:
             self.check(stderr="torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB", code=1)
         self.assertNotIn("without --nvidia", str(caught.exception))
-        with self.assertRaisesRegex(iq.InstallError, "PyTorch could not use the graphics card. CUDA 13.0 needs") as caught:
+        with self.assertRaisesRegex(iq.InstallError, "has no code for this graphics card: CUDA 13.0 needs") as caught:
             self.check(stderr="RuntimeError: CUDA error: no kernel image is available", code=1)
-        self.assertNotIn("without --nvidia", str(caught.exception))
+        self.assertNotIn("without --gpu or --nvidia", str(caught.exception))
+        with self.assertRaisesRegex(iq.InstallError, "driver is too old for this build. CUDA 13.0 needs") as caught:
+            self.check(stderr="RuntimeError: The NVIDIA driver on your system is too old (found version 12080).", code=1)
+        self.assertNotIn("without --gpu or --nvidia", str(caught.exception))
+        # What the laptop printed with its NVIDIA card switched off: the hint is about the card, not the driver.
+        with self.assertRaisesRegex(iq.InstallError, "(?s)PyTorch found no NVIDIA card it could use.*Code 45") as caught:
+            self.check(stderr="ValueError: CUDA graphs require CUDA device", code=1)
+        self.assertNotIn("update the driver", str(caught.exception))
         with self.assertRaisesRegex(iq.InstallError, r"(?s)WinError 126.*vc_redist\.x64\.exe"):
             self.check(stderr="OSError: [WinError 126] The specified module could not be found. c10.dll", code=1)
 
@@ -521,9 +536,18 @@ class RunTests(unittest.TestCase):
             folder.mkdir(parents=True, exist_ok=True)
             return self.check
 
+        def torch_cuda(root, environment, **kwargs):
+            self.calls.append("cuda")
+            return {
+                "torch": "2.12.0+cu130",
+                "arches": ["sm_75", "sm_120"],
+                "cards": [{"name": RTX_5070, "capability": [12, 0]}],
+            }
+
         for owner, name, value in (
             (iq, "ROOT", self.base),
             (base, "HOST", self.server.address),
+            (base, "check_torch_cuda", torch_cuda),
             (iq, "make_environment", make),
             (iq, "environment_versions", lambda root: dict(self.installed or {})),
             (iq, "install_packages", pip),
@@ -584,7 +608,7 @@ class RunTests(unittest.TestCase):
     def test_the_whole_install_runs_in_order_and_ends_with_a_receipt(self):
         status, out, err = self.run_main("--model", "1.7b-voice-design", "--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, ["venv", "pip", ("check", DESIGN)])
+        self.assertEqual(self.calls, ["venv", "pip", "cuda", ("check", DESIGN)])
         self.assertIn("Making .venv-fqwen:", out)
         self.assertIn(f"[1/{len(self.lab.contents)}] README.md", out)
         self.assertIn(
@@ -702,7 +726,7 @@ class RunTests(unittest.TestCase):
         self.own_environment({"pip": "25.0.1", "faster-qwen3-tts": "0.4.0", "torch": "2.12.0+cu130"})
         status, out, _err = self.run_main("--model", DESIGN, "--yes")
         self.assertEqual(status, 0)
-        self.assertEqual(self.calls, [("check", DESIGN)])
+        self.assertEqual(self.calls, ["cuda", ("check", DESIGN)])  # PyTorch is asked to start CUDA before the files every time
         self.assertIn("all 2 are already installed in .venv-fqwen", " ".join(out.split()))
 
     def test_a_different_version_of_a_pinned_package_stops_everything_before_any_change(self):
@@ -718,7 +742,7 @@ class RunTests(unittest.TestCase):
         self.own_environment({"pip": "25.0.1", "faster-qwen3-tts": "0.4.0", "torch": "2.12.0+rocm7.14.0"})
         status, out, err = self.run_main("--model", DESIGN, "--checkpoint-only", "--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, [("check", DESIGN)])
+        self.assertEqual(self.calls, [("check", DESIGN)])  # its own build: no NVIDIA check before the files
         self.assertIn("left alone (--checkpoint-only)", " ".join(out.split()))
 
     def test_checkpoint_only_without_an_environment_is_refused_before_any_change(self):

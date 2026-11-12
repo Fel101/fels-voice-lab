@@ -358,8 +358,9 @@ To remove them, delete `hf-cache\hub\models--ResembleAI--chatterbox` and, in `ou
 
 Kokoro and the three Chatterbox models can run on an NVIDIA graphics card with a GPU (CUDA) build of PyTorch instead of the CPU
 one, and the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, NVIDIA's or
-[AMD's](#amd-radeon-cards) (their sections follow). **Nobody has tried this on an NVIDIA card yet**: the builds are pinned by their SHA-256 and the installers check them, but whether they
-load and speak on your card is what a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) would tell the next person.
+[AMD's](#amd-radeon-cards) (their sections follow). **Every NVIDIA build was checked on one laptop**, with a GeForce RTX 5070
+Laptop GPU (8 GB) and NVIDIA driver 617.14: each model installed, passed its speech check and passed **Test** (the table
+below). On another NVIDIA card, a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) tells the next person how it went.
 
 ```powershell
 setup-kokoro.bat --gpu
@@ -368,9 +369,11 @@ setup-chatterbox.bat --gpu
 
 `--gpu` takes the GPU build for this computer's card, which is NVIDIA's when there is an NVIDIA driver; `--nvidia` asks for
 NVIDIA's alone. `setup.bat` offers the same when it finds an NVIDIA driver, and so does **Install** on a model's card when its
-switch says GPU (below). Before anything is downloaded, each installer asks NVIDIA's own `nvidia-smi` which card and driver this computer has,
-and refuses a build that cannot run there: without a driver (`System32\nvcuda.dll`), on a card older than the build has code
-for, or with a driver older than 580. Each then runs its speech check on the card. `setup.bat` asks once for both models and
+switch says GPU (below). Before anything is downloaded, each installer asks NVIDIA's own `nvidia-smi` and the driver itself
+(`nvcuda.dll`) which card and driver this computer has, and refuses a build that cannot run there: without a driver
+(`System32\nvcuda.dll`), when the driver cannot start CUDA on the card (as when a laptop's card is switched off), on a card
+older than the build has code for, or with a driver older than 580. Once pip is done, it has the new PyTorch start CUDA
+before it fetches the model files, and then it runs its speech check on the card. `setup.bat` asks once for both models and
 gives each the build that runs on the card, and says why when one gets its CPU build.
 
 | Model | PyTorch build | Cards | Download, beyond the CPU install |
@@ -380,8 +383,31 @@ gives each the build that runs on the card, and says why when one gets its CPU b
 
 On a computer with an NVIDIA driver, the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 get the same PyTorch and torchaudio files,
 and their installers make the same checks. VoxCPM2's and Breeze's also refuse a card with less graphics memory than the model
-needs, 7 and 10 GB, which `nvidia-smi` reports too. On a computer whose card is an AMD Radeon they get AMD's build instead
-([AMD Radeon cards](#amd-radeon-cards)).
+needs, 7 and 10 GB, which `nvidia-smi` or the driver reports; when neither can say, they stop rather than guess. On a
+computer whose card is an AMD Radeon they get AMD's build instead ([AMD Radeon cards](#amd-radeon-cards)).
+
+What the models did on the RTX 5070 Laptop GPU, from the Models page's **Test** with the model already loaded (memory is what
+`nvidia-smi` showed for the whole card):
+
+| Model | Spoke | Graphics memory at most |
+|---|---|---|
+| Kokoro | 2.7 s of audio in 0.19 s | 0.8 GB |
+| Chatterbox Turbo | 2.4 s in 1.9 s | 3.2 GB |
+| Chatterbox 500M | 2.1 s in 4.0 s | 3.6 GB |
+| Qwen3-TTS 0.6B Base | 1.8 s in 0.83 s | 2.8 GB |
+| Qwen3-TTS 1.7B Base | 2.7 s in 1.4 s | 4.7 GB |
+| Qwen3-TTS 1.7B VoiceDesign | 1.9 s in 0.96 s | 4.5 GB |
+| Qwen3-TTS 1.7B CustomVoice | 2.6 s in 1.3 s | 4.6 GB |
+| VoxCPM2 | 4.0 s in 9.7 s | 5.7 GB |
+| Breeze TTS 2 | 2.6 s in 17 s | 7.4 of 8 GB |
+
+Chatterbox Voice Conversion passed its installer's check there too (2.0 s of audio said again in 1.8 s). Breeze's installer
+refuses a card under 10 GB; its **Test** passed on this one, where the NVIDIA card drives no display, for the short check
+sentence only. Loading took 26 to 84 seconds, much of it PyTorch's CUDA 13.0 build preparing code for the RTX 50 card.
+
+On a laptop, a power-saving, Eco or iGPU-only mode can switch the NVIDIA card off while its driver stays installed. The
+installers then stop before they download anything and say so; [Troubleshooting](TROUBLESHOOTING.md#graphics-cards) has
+the details.
 
 Chatterbox asks for PyTorch 2.6, and PyTorch 2.6 has no build for RTX 50 series cards, so its NVIDIA build is the PyTorch 2.12
 that Kokoro's uses (one download serves both, from pip's cache) with torchaudio 2.11, the newest torchaudio. Chatterbox Turbo
@@ -506,15 +532,16 @@ folder, in `.venv-fqwen`, `hf-cache` and `out\qwen`:
 
 Before anything is downloaded it stops on a computer with neither an NVIDIA driver nor an AMD card, with an NVIDIA card older
 than the GeForce GTX 16 and RTX 20 series or a driver older than 580, or with an AMD card whose chip AMD's build has no code
-for. Each model wants 10 GB of free RAM before it loads. **Nobody has tried Qwen3-TTS on an NVIDIA card in the Lab yet.** What
-it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), installed with AMD's build: the 1.7B VoiceDesign loaded and
-warmed up in 50 seconds, spoke 1.9 seconds in 1.3 seconds and used at most 4.5 GB of graphics memory, and the 1.7B CustomVoice
-spoke 2.7 seconds in 3.9 seconds with at most 4.6 GB. With MIOpen switched off ([AMD Radeon cards](#amd-radeon-cards)),
-**Test** passed for both, after loads of 15 and 17 seconds, and once loaded the CustomVoice spoke sentences of 1 to 8 seconds
-about twice as fast as real time (7.8 seconds in 3.7). Earlier, in an environment made by hand from ROCm builds of the same
-packages, the 0.6B Base loaded in 40 seconds, used at most 2.8 GB, and its **Test** made 2.2 seconds of speech in 3.8 seconds.
-An 8 GB card should therefore hold one 1.7B model, with other programs' use of the card on top; close games and other models if
-a load runs out of graphics memory.
+for. Each model wants 10 GB of free RAM before it loads. On a GeForce RTX 5070 Laptop GPU (8 GB) all four installed and passed
+**Test**, each speaking about twice as fast as real time once loaded, with 2.8 to 4.7 GB of graphics memory ([NVIDIA graphics
+cards](#nvidia-graphics-cards)). What it did on one computer with an AMD Radeon AI PRO R9700 (32 GB), installed with AMD's
+build: the 1.7B VoiceDesign loaded and warmed up in 50 seconds, spoke 1.9 seconds in 1.3 seconds and used at most 4.5 GB of
+graphics memory, and the 1.7B CustomVoice spoke 2.7 seconds in 3.9 seconds with at most 4.6 GB. With MIOpen switched off ([AMD
+Radeon cards](#amd-radeon-cards)), **Test** passed for both, after loads of 15 and 17 seconds, and once loaded the CustomVoice
+spoke sentences of 1 to 8 seconds about twice as fast as real time (7.8 seconds in 3.7). Earlier, in an environment made by hand
+from ROCm builds of the same packages, the 0.6B Base loaded in 40 seconds, used at most 2.8 GB, and its **Test** made 2.2
+seconds of speech in 3.8 seconds. An 8 GB card should therefore hold one 1.7B model, with other programs' use of the card on
+top; close games and other models if a load runs out of graphics memory.
 
 For a graphics card neither build runs on, make `.venv-fqwen` yourself with a GPU build of PyTorch for it, faster-qwen3-tts
 0.4.0 and the other packages, then run the launcher with `--checkpoint-only`: it fetches the model files, leaves the packages
@@ -557,8 +584,9 @@ It prints its plan and asks first, and installs into this folder, in `.venv-voxc
    page's check sentence in a voice made from a description. The clip and a receipt stay in `out\voxcpm2`.
 
 It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, with an NVIDIA card or
-driver the CUDA 13.0 build cannot run on, or with an AMD card whose chip AMD's build has no code for. **Nobody has tried VoxCPM2
-on an NVIDIA card in the Lab yet.** Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700, it loaded in 22
+driver the CUDA 13.0 build cannot run on, or with an AMD card whose chip AMD's build has no code for. On a GeForce RTX 5070
+Laptop GPU (8 GB) it installed and passed **Test**: it loaded in 26 seconds and spoke 4.0 seconds in 9.7 once loaded, with at
+most 5.7 GB of graphics memory. Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700, it loaded in 22
 seconds, and its first take, the check sentence, was 4.6 seconds of speech made in 36 seconds with the warm-up, using at most 5.8
 GB of graphics memory. Before the installer could do that, the same computer ran it with `--checkpoint-only` and an empty
 `.venv-voxcpm` that borrows the Qwen environment's ROCm packages (below): it fetched
@@ -621,14 +649,15 @@ It prints its plan and asks first, and installs into this folder, in `.venv-bree
    in `out\breeze`.
 
 It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, or with a card, driver or
-amount of graphics memory the build cannot run with. **Nobody has tried Breeze on an NVIDIA card in the Lab yet.** Installed
-with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61 seconds, spoke 3.0 seconds in 14.5
-seconds and used at most 7.5 GB of graphics memory. With MIOpen switched off ([AMD Radeon cards](#amd-radeon-cards)), **Test**
-there loaded it in 31 seconds and spoke the check sentence, 3.0 seconds, in 9.3: Breeze takes about three times as long as the
-speech it makes. A 29-second take of 400 characters took 93 seconds and allocated up to 9.5 GB of graphics memory, so on a card
-with 10 or 12 GB keep lines short. It wants 12 GB of free RAM before it loads. For a graphics card neither
-build runs on, make `.venv-breeze` yourself with a GPU build of PyTorch and the packages above, then run the launcher with
-`--checkpoint-only`. To remove Breeze, delete `.venv-breeze`, `breeze\models` and `out\breeze`.
+amount of graphics memory the build cannot run with. Its installer refuses a GeForce RTX 5070 Laptop GPU, which has 8 GB; with
+the files already in place, **Test** passed there, speaking 2.6 seconds in 17 with 7.4 of the 8 GB in use, too close to the
+limit for longer lines. Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61
+seconds, spoke 3.0 seconds in 14.5 seconds and used at most 7.5 GB of graphics memory. With MIOpen switched off ([AMD Radeon
+cards](#amd-radeon-cards)), **Test** there loaded it in 31 seconds and spoke the check sentence, 3.0 seconds, in 9.3: Breeze
+takes about three times as long as the speech it makes. A 29-second take of 400 characters took 93 seconds and allocated up to
+9.5 GB of graphics memory, so on a card with 10 or 12 GB keep lines short. It wants 12 GB of free RAM before it loads. For a
+graphics card neither build runs on, make `.venv-breeze` yourself with a GPU build of PyTorch and the packages above, then run
+the launcher with `--checkpoint-only`. To remove Breeze, delete `.venv-breeze`, `breeze\models` and `out\breeze`.
 
 ## Model runtimes
 

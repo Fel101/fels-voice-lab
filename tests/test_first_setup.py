@@ -192,7 +192,7 @@ class FirstSetupTests(unittest.TestCase):
         status, out = self.run_setup(nvidia=True)
         self.assertEqual(status, 0)
         self.assertIn("This computer has an NVIDIA graphics driver.", out)
-        self.assertIn("has not been tried on an NVIDIA card yet", out)
+        self.assertIn("It was checked on a GeForce RTX 5070 Laptop GPU", out)
         gpu = [command for command in self.installers.commands if "--nvidia" in command]
         self.assertEqual(sorted({command[0] for command in gpu}), ["install_chatterbox.py", "install_kokoro.py"])
         self.assertNotIn("--nvidia", next(command for command in self.installers.commands if command[0] == "install_phonon.py"))
@@ -239,6 +239,18 @@ class FirstSetupTests(unittest.TestCase):
         )
         self.assertIn("delete the .venv-kokoro folder and run setup-kokoro.bat --nvidia", out)
         self.assertIn("So setup installs Chatterbox Turbo's CPU build", out)
+        self.assertEqual(self.installers.runs("--nvidia"), [])
+
+    def test_a_switched_off_laptop_card_gets_the_cpu_builds_and_says_how_to_move_them_later(self):
+        off = {**self.RTX_5070, "capability": None, "unavailable": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"}
+        self.answers = ["2", "yes"]
+        status, out = self.run_setup(nvidia=True, cards=[off])
+        self.assertEqual(status, 0)
+        self.assertNotIn("Install the NVIDIA builds?", " ".join(self.questions))
+        self.assertIn("CUDA cannot use the NVIDIA GeForce RTX 5070 Laptop GPU", out)
+        self.assertIn("switched off", out)
+        self.assertIn("So setup installs Kokoro's CPU build", out)
+        self.assertIn("switch Kokoro's card in Models & features to GPU and press Install GPU build", out)
         self.assertEqual(self.installers.runs("--nvidia"), [])
 
     def test_an_amd_computer_is_offered_amds_builds_for_the_models_that_have_them(self):

@@ -753,7 +753,7 @@ class PlanTests(unittest.TestCase):
         text = self.flat(ik.plan_text(REAL_MANIFEST, packages, 1, files, [], checkpoint_only=False, environment_exists=True,
                                       nvidia=True, switching=switching))
         self.assertIn("Kokoro is already installed in .venv-kokoro, and its CPU build of PyTorch is replaced by the CUDA 13.0 build "
-                      "of PyTorch for NVIDIA graphics cards (not yet tried on one): torch 2.12.0 becomes 2.12.0+cu130. About "
+                      "of PyTorch for NVIDIA graphics cards: torch 2.12.0 becomes 2.12.0+cu130. About "
                       f"{ik.mb_text(ik.NVIDIA_EXTRA_DOWNLOAD_MB)} to download", text)
         installed["spacy"] = "3.0.0"    # a package of someone's own: it still stops the installer
         _missing, different = ik.package_state(packages, installed)
@@ -762,7 +762,7 @@ class PlanTests(unittest.TestCase):
 
     def test_the_nvidia_plan_names_the_cuda_build_its_size_and_that_it_is_untried(self):
         text = self.flat(self.plan(nvidia=True))
-        for part in ("Kokoro 82M on an NVIDIA graphics card", "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards (not yet tried on one)",
+        for part in ("Kokoro 82M on an NVIDIA graphics card", "the CUDA 13.0 build of PyTorch for NVIDIA graphics cards",
                      f"About {ik.mb_text(ik.PACKAGES_DOWNLOAD_MB + ik.NVIDIA_EXTRA_DOWNLOAD_MB)} to download",
                      "requirements/kokoro-cpu.txt and requirements/kokoro-nvidia.txt", "speaks one sentence, which you can play "
                      "afterwards, on the graphics card.", "GTX 16 or RTX 20 series card or newer", "driver of version 580",
@@ -918,6 +918,50 @@ class SpeechCheckTests(unittest.TestCase):
         self.assertIn("Update the graphics driver (AMD Software: Adrenalin Edition", str(caught.exception))
         self.assertNotIn("nvidia.com", str(caught.exception))
 
+    # What a model printed on the laptop whose NVIDIA card was switched off: the sox package's warning, then the traceback.
+    SOX = ("SoX could not be found!\n\n    If you do not have SoX, proceed here:\n     - - - http://sox.sourceforge.net/\n\n"
+           "    If you do (or think that you should) have SoX, double-check your\n    path variables.\n    \n")
+    NO_CARD = ('Traceback (most recent call last):\n  File "<string>", line 13, in <module>\n'
+               "RuntimeError: No CUDA GPUs are available\n")
+
+    def test_the_error_comes_first_without_the_sox_warning_and_all_of_the_output_is_kept(self):
+        def runner(command, **kwargs):
+            return subprocess.CompletedProcess(command, 1, "", self.SOX + self.NO_CARD)
+
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(ik.InstallError) as caught:
+                ik.run_speech_check(folder, device="cuda", runner=runner)
+            log = Path(folder) / "out" / "kokoro" / "install-check.log"
+            self.assertEqual(log.read_text(encoding="utf-8"), self.SOX + self.NO_CARD)
+        text = str(caught.exception)
+        self.assertTrue(text.startswith("The packages and model files are in place, but Kokoro did not load or speak:\n"
+                                        "RuntimeError: No CUDA GPUs are available\n\nThe end of its output (all of it is in "
+                                        "out\\kokoro\\install-check.log):\nTraceback"), text)
+        self.assertNotIn("SoX", text)
+        # The card, not the driver: the driver was new enough.
+        for part in ("PyTorch found no NVIDIA card it could use", "switched off", "Code 45", "run the installer again"):
+            self.assertIn(part, text)
+        self.assertNotIn("update the driver", text)
+
+    def test_each_nvidia_failure_gets_its_own_hint_and_an_unknown_one_none(self):
+        def hint(output, **options):
+            return ik.check_failure_hint(output, nvidia=True, **options)
+
+        for output in ("RuntimeError: No CUDA GPUs are available", "ValueError: CUDA graphs require CUDA device",
+                       "RuntimeError: CUDA was selected but torch.cuda.is_available() is False.",
+                       "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"):
+            self.assertIn("PyTorch found no NVIDIA card it could use", hint(output), output)
+        self.assertIn("driver is too old", hint("RuntimeError: The NVIDIA driver on your system is too old (found 12020)."))
+        no_code = "torch.AcceleratorError: CUDA error: no kernel image is available for execution on the device"
+        self.assertIn("has no code for this graphics card: CUDA 13.0 needs", hint(no_code))
+        self.assertNotIn("without --gpu or --nvidia", hint(no_code))
+        self.assertIn("without --gpu or --nvidia", hint(no_code, cpu=True))
+        self.assertIn("ran out of memory", hint("torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB"))
+        self.assertIn("Breeze needs", hint("CUDA out of memory", memory="Breeze needs about 10 GB."))
+        self.assertIn("CPU build of PyTorch", hint("AssertionError: Torch not compiled with CUDA enabled"))
+        self.assertEqual(hint("RuntimeError: CUDA error: an illegal memory access was encountered"), "")
+        self.assertEqual(ik.check_failure_hint("RuntimeError: No CUDA GPUs are available"), "")  # the CPU build: no guess
+
     def test_a_crash_shows_the_end_of_the_output(self):
         with self.assertRaisesRegex(ik.InstallError, r"in place, but Kokoro did not load or speak:\n(.*\n)*last line"):
             self.check(stdout="first\n", stderr="\n".join(f"line {n}" for n in range(30)) + "\nlast line", code=1)
@@ -977,6 +1021,80 @@ class SpeechCheckTests(unittest.TestCase):
         self.assertTrue(hasattr(engines, "Kokoro") and callable(engines.ensure_reference))
         self.assertTrue(callable(kokoro_support.discover_kokoro_voices))
         compile(ik.SPEECH_CHECK, "<speech check>", "exec")
+
+
+class NvidiaCardTests(unittest.TestCase):
+    """A card NVIDIA's driver cannot start CUDA on, a card whose memory nobody could read, and PyTorch's own check after pip."""
+
+    # The laptop's RTX 5070 as hardware.nvidia_cards gives it while the card is switched off.
+    OFF = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": None, "driver": (617, 14), "memory_mib": None,
+           "unavailable": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"}
+
+    def test_a_card_the_driver_cannot_start_cuda_on_stops_the_install_before_any_download(self):
+        with mock.patch.dict("os.environ"):
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+            [problem] = ik.nvidia_problems(present=True, cards=[self.OFF])
+        self.assertTrue(problem.startswith(
+            "This computer has an NVIDIA driver, but CUDA cannot use the NVIDIA GeForce RTX 5070 Laptop GPU: the driver says "
+            '"CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected".'), problem)
+        for part in ("switched off", "GIGABYTE Control Center", "Code 45", "Or leave out --nvidia for the CPU build."):
+            self.assertIn(part, problem)
+        self.assertNotIn("CUDA_VISIBLE_DEVICES", problem)
+        self.assertNotIn("Update the driver", problem)
+
+    def test_a_setting_that_hides_the_card_is_named_and_another_driver_error_is_not_blamed_on_a_switch(self):
+        hidden = ik.unavailable_text(self.OFF, environ={"CUDA_VISIBLE_DEVICES": "-1"})
+        self.assertIn('CUDA_VISIBLE_DEVICES is set to "-1" in this window', hidden)
+        broken = ik.unavailable_text({**self.OFF, "unavailable": "CUDA_ERROR_OPERATING_SYSTEM: OS call failed"}, environ={})
+        self.assertIn("Restart the computer", broken)
+        self.assertNotIn("switched off", broken)
+
+    def test_a_memory_nobody_could_read_is_said_rather_than_skipped(self):
+        card = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (617, 14), "memory_mib": None}
+        [problem] = ik.nvidia_card_problems([card], build="Breeze's NVIDIA build", cards_text="newer cards", memory_gb=10)
+        self.assertIn("could not read how much memory the NVIDIA GeForce RTX 5070 Laptop GPU has", problem)
+        self.assertEqual(ik.nvidia_card_problems([card], build="Kokoro's NVIDIA build", cards_text="newer cards"), [])
+
+    def test_a_build_has_code_for_its_own_generations_and_the_later_versions_of_each(self):
+        arches = ["sm_75", "sm_80", "sm_86", "sm_90", "sm_100", "sm_120"]  # PyTorch 2.12.0+cu130, as the laptop listed it
+        self.assertTrue(ik.has_code_for(arches, (12, 0)))
+        self.assertTrue(ik.has_code_for(arches, (8, 9)))     # sm_86 runs on an RTX 40
+        self.assertFalse(ik.has_code_for(arches, (6, 1)))    # a GTX 10
+        self.assertFalse(ik.has_code_for([], (12, 0)))
+        self.assertTrue(ik.has_code_for(["sm_80", "compute_90"], (12, 0)))    # PTX, which the driver compiles
+
+    def test_pytorch_is_asked_to_start_cuda_and_its_own_error_stops_the_install(self):
+        def runner(stdout="", stderr="", code=0):
+            calls = []
+
+            def run(command, **kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, code, stdout, stderr)
+
+            return run, calls
+
+        def answer(name, capability):
+            return json.dumps({"torch": "2.12.0+cu130", "arches": ["sm_75", "sm_80", "sm_86", "sm_90", "sm_100", "sm_120"],
+                               "cards": [{"name": name, "capability": capability}]})
+
+        with tempfile.TemporaryDirectory() as folder:
+            run, calls = runner(stdout=answer("NVIDIA GeForce RTX 5070 Laptop GPU", [12, 0]))
+            found = ik.check_torch_cuda(folder, ".venv-kokoro", runner=run)
+            self.assertEqual(found["cards"][0]["name"], "NVIDIA GeForce RTX 5070 Laptop GPU")
+            self.assertEqual(calls[0][:3], [str(Path(folder) / ".venv-kokoro" / "Scripts" / "python.exe"), "-I", "-c"])
+            self.assertIn("torch.cuda.init()", calls[0][3])
+            run, _calls = runner(stderr=SpeechCheckTests.SOX + SpeechCheckTests.NO_CARD, code=1)
+            with self.assertRaises(ik.InstallError) as caught:
+                ik.check_torch_cuda(folder, ".venv-kokoro", runner=run)
+            text = str(caught.exception)
+            for part in ("could not use the NVIDIA card, so the model files were not fetched",
+                         "RuntimeError: No CUDA GPUs are available", "switched off"):
+                self.assertIn(part, text)
+            run, _calls = runner(stdout=answer("NVIDIA GeForce GTX 1080", [6, 1]))
+            no_code = (r"(?s)has no code for the NVIDIA GeForce GTX 1080 \(compute capability 6\.1\), so the model files "
+                       r"were not fetched.*without --gpu")
+            with self.assertRaisesRegex(ik.InstallError, no_code):
+                ik.check_torch_cuda(folder, ".venv-kokoro", cpu=True, runner=run)
 
 
 class ReceiptTests(unittest.TestCase):
@@ -1057,8 +1175,16 @@ class RunTests(ServerCase):
             patch = mock.patch.object(ik, target, value)
             patch.start()
             self.addCleanup(patch.stop)
+        def torch_cuda(root, environment, **kwargs):
+            self.calls.append("cuda")
+            self.cuda_options.append(kwargs)
+            return {"torch": "2.12.0+cu130", "arches": ["sm_75", "sm_120"],
+                    "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": [12, 0]}]}
+
+        self.cuda_options = []
         for name, replacement in (("environment_versions", lambda root, **kwargs: dict(self.installed)),
                                   ("make_environment", venv), ("install_packages", pip), ("run_speech_check", speak),
+                                  ("check_torch_cuda", torch_cuda),
                                   ("interpreter_problems", lambda root: []), ("long_path_problems", lambda root: []),
                                   ("space_problems", lambda root, need: []), ("nvidia_problems", lambda: list(self.nvidia)),
                                   ("graphics", lambda: (self.graphics[0], list(self.graphics[1]))),
@@ -1143,6 +1269,10 @@ class RunTests(ServerCase):
         status, out, err = self.run_main("--yes", "--nvidia")
         self.assertEqual((status, err), (0, ""))
         self.assertEqual((self.pip_options, self.check_devices), ([{"nvidia": True, "card": None}], ["cuda"]))
+        # PyTorch is asked to start CUDA between pip and the model files, so a card it cannot use stops it before the download.
+        self.assertEqual(self.calls, ["venv", "pip", "cuda", "check"])
+        self.assertEqual(self.cuda_options, [{"cuda_needs": ik.CUDA_NEEDS, "cpu": True}])
+        self.assertLess(out.index("PyTorch 2.12.0+cu130 sees the NVIDIA GeForce RTX 5070 Laptop GPU."), out.index("[1/6]"))
         self.assertIn("Kokoro 82M on an NVIDIA graphics card", out)
         self.assertIn("spoke a test sentence on the graphics card", out)
 

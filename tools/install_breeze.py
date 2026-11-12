@@ -14,7 +14,7 @@ Python 3.12 as .venv, gets only the packages it imports, from requirements/breez
 the script refuses to replace a package that is already installed at another version. The Lab runs Breeze only on a graphics
 card, with its BF16 weights, which peaked at 7.5 GB of graphics memory, so there is no CPU build, and the installer stops on a
 card with less memory than Breeze needs. On a computer with an NVIDIA driver the list's CUDA 13.0 build of PyTorch 2.12 goes
-in, and the installer stops for a card or driver that build cannot run on; nobody has tried it on an NVIDIA card yet. On a
+in, and the installer stops for a card or driver that build cannot run on; it was checked on a GeForce RTX 5070 Laptop GPU. On a
 computer whose graphics card is an AMD Radeon, AMD's ROCm 7.14 build of PyTorch 2.12 takes its place, with the code for the
 card's chip (tools/amd_build.py and requirements/amd-rocm.txt say how); it was checked on an AMD Radeon AI PRO R9700. --gpu and
 --nvidia are taken and change nothing. The checkpoint's files, listed in catalog/breeze_tts2_snapshot.json, come from Hugging
@@ -56,8 +56,8 @@ OUTPUT = "out/breeze"
 CHECK_WAV = "install-check.wav"
 RECEIPT = "installation.json"
 WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
-# Measured: 1976 MB of wheels, 1926 MB of them PyTorch's CUDA build, which takes about 4.5 GB installed (an estimate: it has not
-# been installed on an NVIDIA computer yet); the other packages take about 0.3 GB.
+# Measured: 1976 MB of wheels, 1926 MB of them PyTorch's CUDA build, which takes about 4.5 GB installed, and the other packages
+# about 0.3 GB: on an NVIDIA laptop the whole .venv-breeze took 4.8 GB.
 PACKAGES_DOWNLOAD_MB = 2000
 PACKAGES_DISK_MB = 4800
 # The packages other than PyTorch, to which AMD's build adds its own (amd_build.sizes_mb).
@@ -160,18 +160,7 @@ def card_problems(cards):
 
 def nvidia_problems(*, present=None, cards=None):
     """Why Breeze cannot run on this computer's graphics card, checked before anything is downloaded."""
-    if not (present if present is not None else base.nvidia_driver_present()):
-        return [NO_NVIDIA_DRIVER]
-    problems = card_problems(base.nvidia_cards() if cards is None else cards)
-    return [
-        problem
-        + (
-            " Update the driver from nvidia.com or the NVIDIA app and run the installer again."
-            if "needs NVIDIA driver" in problem
-            else " Breeze TTS 2 cannot run on this card in the Lab."
-        )
-        for problem in problems
-    ]
+    return base.gpu_only_nvidia_problems(NO_NVIDIA_DRIVER, card_problems, "Breeze TTS 2", present=present, cards=cards)
 
 
 def graphics():
@@ -242,7 +231,7 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
         build = (
             f"AMD's ROCm 7.14 builds of PyTorch 2.12 and torchaudio 2.11 with the code for the {amd.card_text(card)}"
             if card
-            else "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one)"
+            else "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards"
         )
         download, disk = packages_mb(card)
         lists = f"{LOCK} and {amd.LOCK}" if card else LOCK
@@ -275,8 +264,9 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
         notes.append(
             "The CUDA 13.0 builds need a GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included, and an NVIDIA "
             "driver of version 580 or later. They carry NVIDIA's CUDA libraries inside them, under NVIDIA's own licence "
-            "terms. Nobody has tried the Lab on an NVIDIA card yet: if it works, or does not, a hardware report on GitHub "
-            "helps the next person."
+            "terms. Breeze passed Test on a GeForce RTX 5070 Laptop GPU even with its 8 GB, for a short line, and its first "
+            "load took 75 seconds there. On another NVIDIA card, a hardware report on GitHub helps the next person, whether "
+            "it works or not."
         )
     notes.append(
         "The Python packages keep their own licences, nearly all MIT, BSD or Apache; the exceptions are the libsndfile "
@@ -324,22 +314,11 @@ def install_packages(root, *, card=None, runner=subprocess.run):
 
 def check_failure_hint(output, *, amd_card=False):
     """A sentence for the most likely cause of a speech check that failed on the graphics card, from what it printed."""
-    hint = base.check_failure_hint(output)
-    if hint:
-        return hint
-    if amd_card and "out of memory" not in output.lower():
-        return amd.failure_hint(output)
-    if "out of memory" in output.lower():
-        return (
-            f"\nThe graphics card ran out of memory: Breeze needs about {GPU_MEMORY_GB} GB of it. Close other programs that "
-            "use it (games, or another model loaded in the Lab) and run the installer again."
-        )
-    if "CUDA" in output or "cuda" in output:
-        return (
-            f"\nPyTorch could not use the graphics card. {CUDA_NEEDS}: update the driver from nvidia.com and run the "
-            "installer again."
-        )
-    return ""
+    memory = (
+        f"The graphics card ran out of memory: Breeze needs about {GPU_MEMORY_GB} GB of it. Close other programs that use it "
+        "(games, or another model loaded in the Lab) and run the installer again."
+    )
+    return base.check_failure_hint(output, nvidia=not amd_card, amd_card=amd_card, cuda_needs=CUDA_NEEDS, memory=memory)
 
 
 def run_speech_check(root, *, number=None, runner=subprocess.run):
@@ -370,7 +349,7 @@ def run_speech_check(root, *, number=None, runner=subprocess.run):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError(
             "The packages and model files are in place, but Breeze TTS 2 did not load or speak:\n"
-            + "\n".join(output.strip().splitlines()[-12:])
+            + base.check_output(output, wav.with_suffix(".log"), root=root)
             + check_failure_hint(output, amd_card=number is not None)
         )
     if result["problem"]:
@@ -474,6 +453,8 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
         number, note = amd.settle_number(root, amd.hip_devices(root, ENVIRONMENT), card)
         if note:
             say(note)
+    if vendor == "nvidia":
+        base.torch_cuda_step(root, ENVIRONMENT, cuda_needs=CUDA_NEEDS, say=say)
     say("Fetching the Breeze TTS 2 model files:")
     base.download_checkpoint(root, manifest, manifest["files"], say=say)
     say("Checking that Breeze TTS 2 speaks on the graphics card (a few minutes):")

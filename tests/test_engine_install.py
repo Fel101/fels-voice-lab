@@ -431,7 +431,7 @@ class GpuBuildTests(unittest.TestCase):
     GPU_ONLY = {"qwen3-tts-1.7b-voice-design": "tools.install_qwen", "voxcpm2": "tools.install_voxcpm",
                 "breeze-tts-2": "tools.install_breeze"}
 
-    def installer(self, *, present=True, cards=(), builds=None, amd=(), root=ROOT):
+    def installer(self, *, present=True, cards=(), builds=None, amd=(), root=ROOT, clock=time.monotonic):
         """An installer on a computer with NVIDIA cards (present and cards, as nvidia-smi gives them) or AMD cards (amd, as AMD's
         driver gives them)."""
         self.asked = self.amd_asked = 0
@@ -451,7 +451,7 @@ class GpuBuildTests(unittest.TestCase):
                    **{key: module.replace(".", "/") + ".py" for key, module in self.GPU_ONLY.items()}}
         return EngineInstaller(pool, root=root, python=sys.executable, nvidia_present=lambda: present, nvidia_cards=listed,
                                amd_listed=lambda: [{"name": card["name"], "driver": card["driver"]} for card in amd],
-                               amd_cards=amd_cards, scripts=scripts,
+                               amd_cards=amd_cards, scripts=scripts, clock=clock,
                                gpu_builds={"kokoro": "tools.install_kokoro"} if builds is None else builds)
 
     def test_with_an_amd_card_every_model_with_a_gpu_build_can_take_amds_build(self):
@@ -489,6 +489,26 @@ class GpuBuildTests(unittest.TestCase):
         self.assertEqual(installer.gpu_build("kokoro"), (True, None))
         self.assertEqual(installer.gpu_build("kokoro"), (True, None))
         self.assertEqual(self.asked, 1)    # nvidia-smi is asked once
+
+    def test_a_laptop_card_switched_on_while_the_service_runs_is_noticed(self):
+        # As the RTX 5070 laptop was: its card switched off in the maker's app, so the driver could not start CUDA.
+        current = [{**self.RTX_5070, "unavailable": "CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected"}]
+        now = [100.0]
+        installer = self.installer(cards=current, builds={"kokoro": "tools.install_kokoro", **self.GPU_ONLY},
+                                   clock=lambda: now[0])
+        for key in ("kokoro", "qwen3-tts-1.7b-voice-design"):
+            ok, reason = installer.gpu_build(key)
+            self.assertFalse(ok)
+            self.assertIn("CUDA cannot use the NVIDIA GeForce RTX 5070 Laptop GPU", reason)
+            self.assertIn("switched off", reason)
+            self.assertNotIn("cannot run on this card", reason)
+        current[:] = [self.RTX_5070]    # switched on again
+        now[0] += engine_install.CARDS_SECONDS - 1
+        self.assertFalse(installer.gpu_build("kokoro")[0])    # the answer read moments ago still stands
+        self.assertEqual(self.asked, 1)
+        now[0] += 1
+        self.assertEqual(installer.gpu_build("kokoro"), (True, None))
+        self.assertEqual(self.asked, 2)
 
     def test_the_reasons_a_gpu_build_cannot_be_installed(self):
         self.assertEqual(self.installer(present=False).gpu_build("kokoro"),

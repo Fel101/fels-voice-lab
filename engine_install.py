@@ -17,6 +17,7 @@ PyTorch can get its GPU build afterwards, which replaces PyTorch in its environm
 card (Qwen3-TTS, VoxCPM2, Breeze TTS 2) always get the GPU build, whatever the switch says. gpu_build() says whether that can
 work on this computer before anything is asked of the script: an NVIDIA driver, and a card and driver the build runs on, from
 the installer's own card_problems(); or an AMD card whose chip AMD's ROCm build has code for, from its amd_card_problems().
+The NVIDIA cards are read again every CARDS_SECONDS, so a laptop card switched on while the service runs is noticed.
 """
 
 import codecs
@@ -66,6 +67,9 @@ KEPT_LINES = 200        # lines of output held in memory
 TAIL_LINES = 40         # lines a snapshot hands to the page
 PLAN_TIMEOUT = 120
 CLOSE_WAIT = 10
+# How long the NVIDIA cards' answer is kept. A laptop's NVIDIA card can be switched on or off while the service runs, and the
+# Models page should notice soon after; nvidia-smi and the driver's probe take about a second together.
+CARDS_SECONDS = 30
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 DRY_RUN_DONE = "Checks passed."
 _STEP = re.compile(r"(?:\d+\.|-)\s")
@@ -103,7 +107,7 @@ class EngineInstaller:
     """Plans and runs the guided installers for the Models page, one install at a time (see the note above)."""
 
     def __init__(self, pool, *, root=None, python=None, scripts=None, gpu_builds=None, nvidia_present=None,
-                 nvidia_cards=None, amd_listed=None, amd_cards=None):
+                 nvidia_cards=None, amd_listed=None, amd_cards=None, clock=time.monotonic):
         self.pool = pool
         self.root = Path(root or worker_pool.LAB)
         self.python = python    # None: the lab's own Python, as the launchers use
@@ -116,6 +120,8 @@ class EngineInstaller:
         self._lock = threading.Lock()
         self._cards_lock = threading.Lock()
         self._cards = None
+        self._cards_at = None
+        self.clock = clock
         self._amd = None
         self._job = None
         self._process = None
@@ -137,12 +143,13 @@ class EngineInstaller:
         return entry, [str(python), "-u", str(self.root / script), *arguments]
 
     def _nvidia(self):
-        """(driver present, its cards), read once: nvidia-smi takes a moment, and the card does not change while the service
-        runs."""
+        """(driver present, its cards), read again when the last answer is older than CARDS_SECONDS: nvidia-smi and the
+        driver's probe take a moment, and a laptop's NVIDIA card can be switched on or off while the service runs."""
         with self._cards_lock:
-            if self._cards is None:
+            now = self.clock()
+            if self._cards is None or now - self._cards_at >= CARDS_SECONDS:
                 present = bool(self.nvidia_present())
-                self._cards = (present, self.nvidia_cards() if present else [])
+                self._cards, self._cards_at = (present, self.nvidia_cards() if present else []), now
             return self._cards
 
     def _amd_cards(self):

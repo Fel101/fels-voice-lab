@@ -187,7 +187,7 @@ def run_speech_check(root, *, runner=subprocess.run):
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Phonon did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:]) + base.check_failure_hint(output))
+                           + base.check_output(output, wav.with_suffix(".log"), root=root) + base.check_failure_hint(output))
     if result["problem"]:
         raise InstallError(f"Phonon loaded but the check clip was not speech: {result['problem']}.")
     return {**result, "wav": wav}

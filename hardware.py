@@ -1,11 +1,12 @@
 """What this computer has that the Lab asks about, read without loading a model or importing a GPU library: whether an
 NVIDIA driver is installed, the processor's name, the graphics cards Windows lists with their driver versions, for NVIDIA
 cards the generation (CUDA compute capability) and driver version that decide which NVIDIA build of PyTorch can run on them,
-and for AMD cards the chip (such as gfx1201) that decides which of AMD's ROCm code packages they need.
+and whether NVIDIA's driver can start CUDA on them at all, and for AMD cards the chip (such as gfx1201) that decides which of
+AMD's ROCm code packages they need.
 
 Standard library only, so the installers and setup.bat can use it before any package is installed. Every answer comes from
-files, the registry, NVIDIA's own nvidia-smi and AMD's own OpenCL driver; a value that cannot be read is left out rather than
-guessed.
+files, the registry, NVIDIA's own nvidia-smi and CUDA driver, and AMD's own OpenCL driver; a value that cannot be read is left
+out rather than guessed.
 """
 
 import json
@@ -22,6 +23,7 @@ DISPLAY_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc
 PROCESSOR_KEY = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SMI_TIMEOUT = 20
+CUDA_TIMEOUT = 30
 AMD_TIMEOUT = 30
 # What nvidia-smi is asked. A driver older than 2022 does not know compute_cap, so it is asked again without it.
 SMI_FIELDS = (("name", "compute_cap", "driver_version", "memory.total"), ("name", "driver_version", "memory.total"))
@@ -69,6 +71,62 @@ if cl.clGetPlatformIDs(0, None, ctypes.byref(count)) == 0 and count.value:
                           "bus": topology[21] if topology and len(topology) == 24 and topology[0] == 1 else None})
 print(json.dumps({"cards": cards}))
 """
+# Asks NVIDIA's CUDA driver itself (nvcuda.dll) whether CUDA can start and, when it can, each card's name, generation (compute
+# capability: attributes 75 and 76) and memory, and which CUDA version the driver supports. A laptop's power-saving, Eco or
+# iGPU-only mode can switch the NVIDIA card off: Windows then still lists the card and its driver, nvidia-smi says only that it
+# has "insufficient permissions", and cuInit says CUDA_ERROR_NO_DEVICE, which is what every model's PyTorch then meets. It runs
+# in a Python of its own, so a driver fault cannot stop the program that asks. It prints one JSON line.
+CUDA_PROBE = r"""
+import ctypes, json
+try:
+    cuda = ctypes.WinDLL("nvcuda.dll")
+except OSError as exc:
+    print(json.dumps({"error": f"nvcuda.dll could not be loaded ({exc})", "code": None, "driver_cuda": None, "cards": []}))
+    raise SystemExit
+for name in ("cuInit", "cuDriverGetVersion", "cuDeviceGetCount", "cuDeviceGet", "cuDeviceGetName", "cuDeviceTotalMem_v2",
+             "cuDeviceGetAttribute", "cuGetErrorName", "cuGetErrorString"):
+    getattr(cuda, name).restype = ctypes.c_int
+version = ctypes.c_int()
+driver = None
+if cuda.cuDriverGetVersion(ctypes.byref(version)) == 0 and version.value:
+    driver = list(divmod(version.value // 10, 100))
+code, cards = cuda.cuInit(0), []
+if code == 0:
+    count = ctypes.c_int()
+    code = cuda.cuDeviceGetCount(ctypes.byref(count))
+    for ordinal in range(count.value if code == 0 else 0):
+        device, major, minor = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        name, memory = ctypes.create_string_buffer(256), ctypes.c_size_t()
+        if cuda.cuDeviceGet(ctypes.byref(device), ordinal) or cuda.cuDeviceGetName(name, 256, device):
+            continue
+        known = cuda.cuDeviceTotalMem_v2(ctypes.byref(memory), device) == 0
+        generation = (cuda.cuDeviceGetAttribute(ctypes.byref(major), 75, device) == 0
+                      and cuda.cuDeviceGetAttribute(ctypes.byref(minor), 76, device) == 0)
+        cards.append({"name": name.value.decode("utf-8", "replace").strip(),
+                      "capability": [major.value, minor.value] if generation else None,
+                      "memory_mib": memory.value // 2**20 if known and memory.value else None})
+    if code == 0 and not cards:
+        code = 100
+error = None
+if code:
+    label, words = ctypes.c_char_p(), ctypes.c_char_p()
+    cuda.cuGetErrorName(code, ctypes.byref(label))
+    cuda.cuGetErrorString(code, ctypes.byref(words))
+    label = (label.value or b"").decode("utf-8", "replace") or f"CUDA error {code}"
+    words = (words.value or b"").decode("utf-8", "replace")
+    error = f"{label}: {words}" if words else label
+print(json.dumps({"error": error, "code": code or None, "driver_cuda": driver, "cards": cards}))
+"""
+
+
+def _last_json(text):
+    """The last line of a probe's output that is JSON, or None."""
+    for line in reversed((text or "").splitlines()):
+        try:
+            return json.loads(line)
+        except ValueError:
+            continue
+    return None
 
 
 def nvidia_driver_present(system_root=None):
@@ -194,21 +252,85 @@ def _smi_cards(smi, run):
     return cards
 
 
-def nvidia_cards(*, run=subprocess.run, smi=None, listed=None):
+def cuda_probe(*, run=subprocess.run, python=None, system_root=None):
+    """What NVIDIA's CUDA driver itself says (CUDA_PROBE), as {"error", "code", "driver_cuda", "cards"}: error is None when CUDA
+    starts, and otherwise the driver's own name and words for why it cannot, such as "CUDA_ERROR_NO_DEVICE: no CUDA-capable
+    device is detected"; code is CUDA's number for it (100 for that one); driver_cuda the newest CUDA version the driver runs,
+    as a pair such as (13, 4); and cards [{"name", "capability", "memory_mib"}] as nvidia_cards gives them. The probe runs with
+    this program's environment, so a CUDA_VISIBLE_DEVICES that hides every card counts, as it would for a model. None when there
+    is no NVIDIA driver to ask, or the probe crashed, hung or printed nothing it could read."""
+    if not nvidia_driver_present(system_root):
+        return None
+    try:
+        done = run(
+            [python or sys.executable, "-I", "-c", CUDA_PROBE],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=CUDA_TIMEOUT,
+            creationflags=NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    found = _last_json(done.stdout)
+    if done.returncode or not isinstance(found, dict) or not isinstance(found.get("cards"), list):
+        return None
+
+    def pair(value):
+        ok = isinstance(value, list) and len(value) == 2 and all(isinstance(part, int) for part in value)
+        return tuple(value) if ok else None
+
+    cards = [
+        {
+            "name": card["name"],
+            "capability": pair(card.get("capability")),
+            "memory_mib": card.get("memory_mib") if isinstance(card.get("memory_mib"), int) else None,
+        }
+        for card in found["cards"]
+        if isinstance(card, dict) and isinstance(card.get("name"), str) and card["name"]
+    ]
+    error = found.get("error") if isinstance(found.get("error"), str) and found.get("error") else None
+    code = found.get("code") if isinstance(found.get("code"), int) else None
+    if error is None and not cards:
+        error, code = "CUDA_ERROR_NO_DEVICE: the driver lists no CUDA device", 100
+    return {"error": error, "code": code, "driver_cuda": pair(found.get("driver_cuda")), "cards": [] if error else cards}
+
+
+def nvidia_cards(*, run=subprocess.run, smi=None, listed=None, probe=None):
     """The NVIDIA graphics cards as [{"name", "capability", "driver", "memory_mib"}]. capability is the card's CUDA compute
     capability as a pair, such as (12, 0) for a GeForce RTX 50 series card and (8, 9) for an RTX 40, driver is NVIDIA's driver
     version as a pair, such as (581, 80), and memory_mib its graphics memory (an "8 GB" card has about 8150). nvidia-smi answers
-    them when it is there; without it, the names and driver versions Windows lists are used, and the capability and memory are
-    None. [] when this computer has no NVIDIA card."""
+    them when it is there. NVIDIA's CUDA driver is asked too (cuda_probe; probe is its answer, or False not to ask): when
+    nvidia-smi does not answer, the driver gives the generation and memory, and the driver version comes from Windows' list.
+    When the driver says CUDA cannot start, as when a laptop's NVIDIA card is switched off, every card carries "unavailable",
+    the driver's own words, because no model's PyTorch can use it then; Windows keeps listing such a card. With neither answer,
+    the names and driver versions Windows lists are used, and the capability and memory are None. [] when this computer has no
+    NVIDIA card."""
     smi = nvidia_smi_path() if smi is None else smi
-    if smi:
-        cards = _smi_cards(smi, run)
-        if cards is not None:
-            return cards
-    return [
+    cards = _smi_cards(smi, run) if smi else None
+    cuda = cuda_probe(run=run) if probe is None else probe or None
+    windows = [
         {"name": card["name"], "capability": None, "driver": nvidia_driver_version(card.get("driver")), "memory_mib": None}
         for card in (graphics_cards() if listed is None else listed)
         if "nvidia" in card["name"].lower()
+    ]
+    if cuda and cuda["error"]:
+        named = cards or windows or [{"name": "NVIDIA graphics card", "capability": None, "driver": None, "memory_mib": None}]
+        return [{**card, "unavailable": cuda["error"]} for card in named]
+    if cards is None and cuda:
+        drivers = {card["name"]: card["driver"] for card in windows}
+        first = windows[0]["driver"] if windows else None
+        return [{**card, "driver": drivers.get(card["name"], first)} for card in cuda["cards"]]
+    if cards is None:
+        return windows
+    # An nvidia-smi from before 2022 does not know compute_cap: the driver fills in what it leaves out, card by card.
+    answered = {card["name"]: card for card in (cuda or {}).get("cards", [])}
+    return [
+        {**card, **{key: answered[card["name"]][key] for key in ("capability", "memory_mib") if card[key] is None}}
+        if card["name"] in answered
+        else card
+        for card in cards
     ]
 
 
@@ -247,13 +369,7 @@ def amd_cards(*, run=subprocess.run, python=None, listed=None):
         )
     except (OSError, subprocess.SubprocessError):
         return []
-    found = None
-    for line in reversed((done.stdout or "").splitlines()):
-        try:
-            found = json.loads(line)
-            break
-        except ValueError:
-            continue
+    found = _last_json(done.stdout)
     if done.returncode or not isinstance(found, dict) or not isinstance(found.get("cards"), list):
         return []
     drivers = {card["name"]: card.get("driver") for card in windows}

@@ -92,21 +92,34 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 **NVIDIA.** Kokoro and the Chatterbox models can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it
 finds an NVIDIA driver, or run `setup-kokoro.bat --gpu` and `setup-chatterbox.bat --gpu` (`--nvidia` asks for NVIDIA's build
 alone). The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card; on an NVIDIA one, **Install** on their cards
-puts in their NVIDIA build. Nobody has tried any of this on an NVIDIA card yet, so a [hardware report](#reporting-a-problem) of
-how it went is welcome.
+puts in their NVIDIA build. Every NVIDIA build was checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB), so a
+[hardware report](#reporting-a-problem) from another NVIDIA card is welcome.
+
+- **"CUDA cannot use the ...", "No CUDA GPUs are available" or "CUDA graphs require CUDA device".** The NVIDIA driver is
+  installed, but the card is not available. On a laptop it is usually switched off: by a power-saving, Eco or iGPU-only
+  mode in Windows or in the maker's app (GIGABYTE Control Center, Armoury Crate, Lenovo Vantage, MSI Center), or in the
+  BIOS. Device Manager then shows the card greyed out or with Code 45, and `nvidia-smi` blames permissions, which are not
+  the problem. Switch the card on (restart if asked) and install again: the files already downloaded are kept. A
+  `CUDA_VISIBLE_DEVICES` of `-1` hides the card in the same way. The installers check this before they download anything,
+  and again once PyTorch is in place; **Models & features** reads the card again within half a minute of it being
+  switched on. While the card is off, a model already installed runs on the CPU, and its card says so.
+- **The first load on an RTX 50 card is slow.** Loads on the RTX 5070 Laptop GPU took 26 to 84 seconds, much of it PyTorch's
+  CUDA 13.0 build preparing code for the card. Once a model is loaded, it is quick.
 
 - Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
   NVIDIA driver of version 580 or later. On an older card, setup gives Kokoro and Chatterbox their CPU builds.
 - **"needs a graphics card with at least 10 GB of memory".** VoxCPM2 needs 7 GB of graphics memory and Breeze TTS 2 10 GB, so
   their installers refuse a smaller card before they download anything. Breeze used 7.5 GB at most for the check sentence, too
-  much for an 8 GB card once Windows and other programs have taken their share, and a 29-second take allocated 9.5 GB: on a
-  card with 10 or 12 GB, keep Breeze's lines short.
+  much for most 8 GB cards once Windows and other programs have taken their share (on a laptop whose NVIDIA card drives no
+  display, **Test** passed at 7.4 of 8 GB), and a 29-second take allocated 9.5 GB: on a card with 10 or 12 GB, keep
+  Breeze's lines short. When neither `nvidia-smi` nor the driver can say how much memory the card has, they stop and say so.
 - **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
   build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
 - **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA
   app, restart the Lab, and press **Install GPU build** on the model's card (or run its launcher with `--gpu`, which
-  replaces a CPU build of PyTorch in place). The installers read the card and the driver with NVIDIA's `nvidia-smi`; when it
-  cannot say, they go by the driver version Windows lists.
+  replaces a CPU build of PyTorch in place). The installers read the card and the driver with NVIDIA's `nvidia-smi` and ask
+  the driver itself (`nvcuda.dll`) whether CUDA starts; when `nvidia-smi` cannot say, they go by the driver's answer and the
+  driver version Windows lists.
 - Going back from a GPU build to the CPU build takes deleting the model's folder (`.venv-kokoro` or `.venv-chatterbox`) and
   installing it again; the model files stay. The switch alone keeps a GPU build on the CPU.
 - The service uses the card when it finds an NVIDIA driver. To keep everything on the CPU, put `{"device": "cpu"}` in

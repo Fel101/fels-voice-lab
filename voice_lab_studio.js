@@ -250,7 +250,7 @@ function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':S
 function engineStateText(row,device,job){
   // While an install runs the card's text stays put, so the cards around it do not move: its progress is in the install window.
   if(job&&job.state==='running'){return job.nvidia?'Installing the GPU build…':'Installing…';}
-  // A model whose own PyTorch cannot use the graphics card runs on the CPU: say so rather than the service's device.
+  // A model that could not use the graphics card when it loaded ran on the CPU: say so rather than the service's device.
   var ran=row.check&&row.check.ran_on==='cpu'?'cpu':device;
   if(row.state==='usable'){return 'Speaks now on '+deviceLabel(ran);}
   if(row.state==='check_failed'){return 'Test failed on '+deviceLabel(ran);}
@@ -276,7 +276,10 @@ function engineDetailText(row,device,job){
   if(row.state==='check_outdated'){return 'The last test ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before tests recorded that. Press Test again to confirm it still speaks.';}
   if(check.status==='passed'){
     var where='';
-    if(check.ran_on&&check.ran_on!==device){where=check.ran_on==='cpu'&&device==='cuda'?', on the CPU: this model\'s PyTorch cannot use the graphics card':', on '+check.ran_on;}
+    // On the CPU though the graphics card was asked for: a CPU build of PyTorch, or (with a GPU build) a card PyTorch could not
+    // find when the model loaded, as when a laptop's power-saving mode has switched its NVIDIA card off.
+    var fellBack=(row.gpu||{}).build==='cpu'?', on the CPU: this model has the CPU build of PyTorch':', on the CPU: the graphics card was not available when it loaded (on a laptop, a power-saving mode can switch the card off)';
+    if(check.ran_on&&check.ran_on!==device){where=check.ran_on==='cpu'&&device==='cuda'?fellBack:', on '+check.ran_on;}
     return 'Tested '+utcStamp(check.checked_at)+': '+check.total_s+' s to make '+check.audio_seconds+' s of audio'+where+'.';
   }
   return 'Failed '+utcStamp(check.checked_at)+': '+check.reason;

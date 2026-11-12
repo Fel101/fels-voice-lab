@@ -317,14 +317,15 @@ class PlanTests(unittest.TestCase):
             self.assertIn(part, text)
         self.assertNotIn("NVIDIA", text)
 
-    def test_the_nvidia_plan_names_the_cuda_builds_the_cards_they_run_on_and_that_they_are_untried(self):
+    def test_the_nvidia_plan_names_the_cuda_builds_the_cards_they_run_on_and_where_they_were_checked(self):
         text = self.plan(nvidia=True)
         for part in ("Chatterbox Turbo 350M on an NVIDIA graphics card",
-                     "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one)",
+                     "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards",
                      f"About {base.mb_text(ic.PACKAGES_DOWNLOAD_MB + ic.NVIDIA_EXTRA_DOWNLOAD_MB)} to download",
                      "requirements/chatterbox-cpu.txt and requirements/chatterbox-nvidia.txt", "It runs on the graphics card.",
                      "GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included", "driver of version 580 or later",
-                     "checked to speak and clone a voice with PyTorch 2.12", "hardware report on GitHub"):
+                     "checked to speak and clone a voice with PyTorch 2.12",
+                     "They were checked on a GeForce RTX 5070 Laptop GPU (8 GB)", "hardware report on GitHub"):
             self.assertIn(part, text)
 
     def test_the_cuda_13_build_runs_on_an_rtx_50_card_and_is_refused_on_old_cards_and_drivers(self):
@@ -357,7 +358,7 @@ class PlanTests(unittest.TestCase):
         text = " ".join(ic.plan_text(REAL_MANIFEST, packages, 2, [], environment_exists=True, checkpoint_only=False,
                                      nvidia=True, switching=switching).split())
         self.assertIn("Chatterbox is already installed in .venv-chatterbox, and its CPU build of PyTorch is replaced by the CUDA "
-                      "13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one): torch "
+                      "13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards: torch "
                       "2.6.0 becomes 2.12.0+cu130, torchaudio 2.6.0 becomes 2.11.0+cu130. About 1.9 GB to download", text)
 
     def test_the_amd_plan_names_the_card_its_chip_amds_list_and_which_card_the_lab_uses(self):
@@ -724,7 +725,13 @@ class RunTests(unittest.TestCase):
             folder.mkdir(parents=True, exist_ok=True)
             return self.check
 
+        def torch_cuda(root, environment, **kwargs):
+            self.calls.append("cuda")
+            return {"torch": "2.12.0+cu130", "arches": ["sm_75", "sm_120"],
+                    "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": [12, 0]}]}
+
         for owner, name, value in ((ic, "ROOT", self.base), (base, "HOST", self.server.address), (ic, "make_environment", make),
+                                   (base, "check_torch_cuda", torch_cuda),
                                    (ic, "environment_versions", lambda root: dict(self.installed or {})),
                                    (ic, "install_packages", pip), (ic, "run_speech_check", speak),
                                    (ic, "voice_match", lambda check: self.match), (ic, "interpreter_problems", lambda root: []),

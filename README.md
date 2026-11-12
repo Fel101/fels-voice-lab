@@ -5,11 +5,11 @@ in your Cast, act dialogue with it, render whole scenes as batches, compare take
 production audio with a checksummed manifest. It runs on your own computer: the service listens only
 on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate.
 
-**An early release (0.2.0) for Windows 10/11 and Python 3.12.** It runs from source: `setup.bat` sets up the core, the
-desktop window and the speech models you choose, and each model runs in a Python environment of its own. It was built and
-checked on one Windows machine with an AMD GPU. The NVIDIA builds the installers offer have not been tried on an NVIDIA card
-yet, and there are no Linux or macOS results. Original application code is MIT; borrowed code and optional models keep their
-own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
+**An early release (0.2.0) for Windows 10/11 and Python 3.12.** It runs from source: `setup.bat` sets up the core, the desktop
+window and the speech models you choose, and each model runs in a Python environment of its own. It was built and checked on one
+Windows machine with an AMD GPU, and every NVIDIA build the installers offer was checked on a laptop with a GeForce RTX 5070
+Laptop GPU (8 GB). There are no Linux or macOS results. Original application code is MIT; borrowed code and optional models keep
+their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
 
 ## Hear it
 

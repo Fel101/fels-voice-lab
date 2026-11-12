@@ -298,7 +298,7 @@
         "streaming": {"status": "not_exposed", "api_output": "complete_wav"}
       },
       "limitations": ["ROCm inference worked on the local R9700 but upstream only documents CUDA/MPS; AMD support is not promised.",
-                      "The NVIDIA build that tools/install_voxcpm.py installs has not been tried on an NVIDIA card.",
+                      "The NVIDIA build that tools/install_voxcpm.py installs passed its speech check and Test on one card only, an 8 GB RTX 5070 Laptop GPU.",
                       "With seed 42 the Models page's check sentence ran on to 20.8 s on the R9700; seeds 7 and 1234 gave 3.5 s and 2.7 s."]
     },
     {

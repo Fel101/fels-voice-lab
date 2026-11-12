@@ -14,16 +14,16 @@ the lab's own Python, which setup.bat creates; setup-chatterbox.bat does that fo
 .venv-kokoro could not share one. pip installs requirements/chatterbox-cpu.txt there with every file's SHA-256 checked, and the
 script refuses to replace a package that is already installed at another version, so an environment with its own PyTorch keeps
 it. --gpu takes GPU builds of PyTorch 2.12 and torchaudio 2.11 for this computer's graphics card instead of the CPU ones: on a
-computer with an NVIDIA driver the CUDA 13.0 builds in requirements/chatterbox-nvidia.txt, which the Lab has not been tried with
-yet, and on one whose graphics card is an AMD Radeon, AMD's ROCm builds with the code for the card's chip (tools/amd_build.py
-and requirements/amd-rocm.txt say how), which were checked on an AMD Radeon AI PRO R9700. --nvidia asks for the CUDA builds
-alone. In a .venv-chatterbox that holds the CPU build, the GPU build replaces those two and changes nothing else. The
-checkpoint files in catalog/chatterbox_turbo_snapshot.json come from Hugging
-Face at the pinned revision, resume after an interruption, and are kept only when their SHA-256 matches. Running it again
-installs only what is missing. --checkpoint-only fetches the model files and leaves the packages alone, for a .venv-chatterbox
-you made yourself. --original installs Chatterbox 500M and Chatterbox Voice Conversion instead of Turbo: the same environment
-and packages, and the ResembleAI/chatterbox files in catalog/chatterbox_snapshot.json, which both of them read. The
-environment, download, hash and pip helpers are the ones install_kokoro.py uses, so a fix there reaches this installer too.
+computer with an NVIDIA driver the CUDA 13.0 builds in requirements/chatterbox-nvidia.txt, which were checked on a GeForce RTX
+5070 Laptop GPU, and on one whose graphics card is an AMD Radeon, AMD's ROCm builds with the code for the card's chip
+(tools/amd_build.py and requirements/amd-rocm.txt say how), which were checked on an AMD Radeon AI PRO R9700. --nvidia asks for
+the CUDA builds alone. In a .venv-chatterbox that holds the CPU build, the GPU build replaces those two and changes nothing
+else. The checkpoint files in catalog/chatterbox_turbo_snapshot.json come from Hugging Face at the pinned revision, resume after
+an interruption, and are kept only when their SHA-256 matches. Running it again installs only what is missing. --checkpoint-only
+fetches the model files and leaves the packages alone, for a .venv-chatterbox you made yourself. --original installs Chatterbox
+500M and Chatterbox Voice Conversion instead of Turbo: the same environment and packages, and the ResembleAI/chatterbox files in
+catalog/chatterbox_snapshot.json, which both of them read. The environment, download, hash and pip helpers are the ones
+install_kokoro.py uses, so a fix there reaches this installer too.
 """
 
 import argparse
@@ -63,8 +63,8 @@ CONVERTED_WAV = "install-vc.wav"
 ORIGINAL_RECEIPT = "installation-original.json"
 # Measured on a clean install of the lock: 400 MB of wheels, 1984 MB installed, and 130 characters for the longest path below
 # site-packages. Windows stops at 259 characters unless long paths are switched on. The CUDA builds of PyTorch and torchaudio
-# are 1.93 GB of wheels, about 1.7 GB more than the CPU ones, and take about 4 GB more once installed (an estimate: they have
-# not been installed on an NVIDIA computer yet).
+# are 1.93 GB of wheels, about 1.7 GB more than the CPU ones, and take about 4 GB more once installed (an estimate: the install
+# on an NVIDIA laptop was not measured).
 PACKAGES_DOWNLOAD_MB = 400
 PACKAGES_DISK_MB = 2000
 NVIDIA_DOWNLOAD_MB = 1930
@@ -245,7 +245,7 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
                  f"{base.amd_build().card_text(card)}")
         lists = f"{LOCK} and {base.amd_build().LOCK}"
     elif nvidia:
-        build = "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards (not yet tried on one)"
+        build = "the CUDA 13.0 builds of PyTorch 2.12 and torchaudio 2.11 for NVIDIA graphics cards"
         lists = f"{LOCK} and {NVIDIA_LOCK}"
     else:
         build, lists = "PyTorch 2.6 for the CPU", LOCK
@@ -295,8 +295,9 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
         notes.append("The CUDA 13.0 builds need a GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included, and an NVIDIA "
                      "driver of version 580 or later. Chatterbox asks for PyTorch 2.6, which has no build for RTX 50 cards; it was "
                      "checked to speak and clone a voice with PyTorch 2.12. The builds carry NVIDIA's CUDA libraries inside them, "
-                     "under NVIDIA's own licence terms. Nobody has tried the Lab on an NVIDIA card yet: if it works, or does not, a "
-                     "hardware report on GitHub helps the next person.")
+                     "under NVIDIA's own licence terms. They were checked on a GeForce RTX 5070 Laptop GPU (8 GB), where the "
+                     "first load took up to a minute and a half. On another NVIDIA card, a hardware report on GitHub helps the "
+                     "next person, whether it works or not.")
     weights = "the Chatterbox 500M weights" if original else "the Turbo weights"
     notes.append(f"Licences: the Chatterbox code (chatterbox-tts) and {weights} are {manifest['license']}. Every clip Chatterbox "
                  "makes carries Resemble AI's Perth watermark, a mark you cannot hear that detection tools can find; the Lab does "
@@ -356,9 +357,9 @@ def run_speech_check(root, *, device="cpu", amd_card=False, number=None, runner=
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Chatterbox Turbo did not load or speak:\n"
-                           + "\n".join(output.strip().splitlines()[-12:])
+                           + base.check_output(output, wav.with_suffix(".log"), root=root)
                            + base.check_failure_hint(output, nvidia=device == "cuda" and not amd_card, amd_card=amd_card,
-                                                     cuda_needs=CUDA_NEEDS))
+                                                     cuda_needs=CUDA_NEEDS, cpu=True))
     if result["problem"]:
         raise InstallError(f"Chatterbox Turbo loaded but a check clip was not speech: {result['problem']}.")
     return {**result, "reference": reference, "wav": wav}
@@ -381,9 +382,9 @@ def run_original_check(root, *, device="cpu", amd_card=False, number=None, runne
     if done.returncode or not isinstance(result, dict):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError("The packages and model files are in place, but Chatterbox 500M or Voice Conversion did not load "
-                           "or speak:\n" + "\n".join(output.strip().splitlines()[-12:])
+                           "or speak:\n" + base.check_output(output, wav.with_suffix(".log"), root=root)
                            + base.check_failure_hint(output, nvidia=device == "cuda" and not amd_card, amd_card=amd_card,
-                                                     cuda_needs=CUDA_NEEDS))
+                                                     cuda_needs=CUDA_NEEDS, cpu=True))
     if result["problem"]:
         raise InstallError(f"Chatterbox 500M or Voice Conversion loaded but a check clip was not speech: {result['problem']}.")
     return {**result, "wav": wav, "converted": converted}
@@ -484,6 +485,8 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
         number, note = base.amd_build().settle_number(root, base.amd_build().hip_devices(root, ENVIRONMENT), card)
         if note:
             say(note)
+    if nvidia and not args.checkpoint_only:
+        base.torch_cuda_step(root, ENVIRONMENT, cuda_needs=CUDA_NEEDS, cpu=True, say=say)
     device = "cuda" if build else "cpu"
     where = f" on the {card['name']}:" if card else " on the graphics card:" if build else " (on a CPU this takes a few minutes):"
     if original:
@@ -526,10 +529,10 @@ def build_parser():
     parser.add_argument("--dry-run", action="store_true", help="show the plan and run the checks; change nothing")
     parser.add_argument("--gpu", action="store_true",
                         help="install GPU builds of PyTorch and torchaudio for this computer's graphics card instead of the CPU "
-                             "builds: NVIDIA's CUDA builds (untested), or AMD's ROCm builds for an AMD Radeon")
+                             "builds: NVIDIA's CUDA builds, or AMD's ROCm builds for an AMD Radeon")
     parser.add_argument("--nvidia", action="store_true",
                         help="install the CUDA builds of PyTorch and torchaudio for an NVIDIA graphics card instead of the CPU "
-                             "builds (untested)")
+                             "builds")
     parser.add_argument("--checkpoint-only", action="store_true",
                         help=f"fetch the model files only and leave the packages in {ENVIRONMENT} alone")
     parser.add_argument("--original", action="store_true",

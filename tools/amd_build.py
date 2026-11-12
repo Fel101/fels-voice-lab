@@ -336,7 +336,7 @@ def hip_devices(root, environment, *, runner=subprocess.run):
         output = (done.stdout or "") + (done.stderr or "")
         raise InstallError(
             f"The packages are in {environment}, but AMD's PyTorch could not list the graphics cards:\n"
-            + "\n".join(output.strip().splitlines()[-12:])
+            + base.check_output(output)
             + failure_hint(output)
         )
     return found["devices"]

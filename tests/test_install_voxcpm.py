@@ -29,7 +29,7 @@ CATALOG = {entry["id"]: entry for entry in json.loads((ROOT / "catalog" / "engin
 ENTRY = CATALOG["voxcpm2"]
 MANIFEST = json.loads((ROOT / iv.MANIFEST).read_text("utf-8"))
 SOURCE = json.loads((ROOT / iv.SOURCE_MANIFEST).read_text("utf-8"))
-RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 57)}
+RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 57), "memory_mib": 8151}
 
 
 def sha(data):
@@ -168,9 +168,10 @@ class ProblemAndPlanTests(unittest.TestCase):
             "needs a graphics card with at least 7 GB of memory, and the NVIDIA GeForce RTX 3050 has 6.0 GB", small[0]
         )
         self.assertEqual(iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": 8151}]), [])
-        self.assertEqual(
-            iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": None}]), []
-        )  # unknown: the load says
+        # Neither nvidia-smi nor the driver said how much memory the card has: it is said before anything is downloaded.
+        [unread] = iv.nvidia_problems(present=True, cards=[{**RTX_5070, "memory_mib": None}])
+        self.assertIn("could not read how much memory the NVIDIA GeForce RTX 5070 Laptop GPU has", unread)
+        self.assertNotIn("cannot run on this card", unread)
 
     def test_an_amd_card_needs_a_chip_amds_build_has_code_for_and_7_gb_of_memory(self):
         rx_5500 = {**RX_7600, "name": "AMD Radeon RX 5500 XT", "chip": "gfx1012", "memory_mib": 4080}
@@ -347,9 +348,18 @@ class RunTests(unittest.TestCase):
             (root / iv.OUTPUT).mkdir(parents=True, exist_ok=True)
             return self.check
 
+        def torch_cuda(root, environment, **kwargs):
+            self.calls.append("cuda")
+            return {
+                "torch": "2.12.0+cu130",
+                "arches": ["sm_75", "sm_120"],
+                "cards": [{"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": [12, 0]}],
+            }
+
         for owner, name, value in (
             (iv, "ROOT", self.base),
             (base, "HOST", self.server.address),
+            (base, "check_torch_cuda", torch_cuda),
             (iv, "RAW_HOST", self.server.address),
             (iv, "make_environment", make),
             (iv, "environment_versions", lambda root: dict(self.installed or {})),
@@ -382,7 +392,7 @@ class RunTests(unittest.TestCase):
     def test_the_whole_install_fetches_source_and_model_checks_and_writes_a_receipt(self):
         status, out, err = self.run_main("--yes")
         self.assertEqual((status, err), (0, ""))
-        self.assertEqual(self.calls, ["venv", "pip", "check"])
+        self.assertEqual(self.calls, ["venv", "pip", "cuda", "check"])
         self.assertIn("3 of 3 source files fetched", out)
         source = self.base / iv.SOURCE
         self.assertEqual((source / "src" / "voxcpm" / "__init__.py").read_bytes(), self.lab.code["src/voxcpm/__init__.py"])
