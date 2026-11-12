@@ -83,6 +83,10 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   is ready to speak: the model chosen, a sentence in the box and the focus on **Generate**. The README starts with a
   [Quick start](README.md#quick-start) with measured times, and [Setup](docs/SETUP.md) with the quick way.
   `GET /api/engines/status` gives each model that is not installed an `install_size`, from its installer's own numbers.
+- **A model card in plain words.** A card for a model that is not installed read "Missing:" and a list of file paths and
+  snapshot folders. It now reads *Not installed yet* and "Install downloads about 0.6 GB and uses 1.7 GB of disk."; the
+  missing files, the installer's name and the log of an install that stopped are under **Details** on the card, and
+  `GET /api/engines/status` still lists the files as before.
 
 ### Scenes
 

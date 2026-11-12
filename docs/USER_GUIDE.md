@@ -370,8 +370,10 @@ then press **Test**. The figure is the Lab's own rule for loading. For Kokoro, P
 measured peak with room to spare; for the others it is not a measurement of what the model uses. `runtime.local.json` can change it for one
 computer ([hardware and state settings](SETUP.md#hardware-and-state-settings)).
 
-A model that is not installed shows the files it is missing, and its card has an **Install** button: it opens a window with
-what the installer will do and whether this computer can take it, and **Install now** runs it and follows it in the same
+A model that is not installed says *Not installed yet* and how much **Install** downloads and how much disk it uses. The files
+it is missing, the installer that adds them, and where the output of an install that stopped was kept are under **Details**
+on its card, so the card itself shows no paths. **Install** opens a window with what the installer will do and whether this
+computer can take it, and **Install now** runs it and follows it in the same
 window, with the end of its output ([setting up](SETUP.md) has a section on each installer). **Hide** closes the window and
 leaves the install running; **Show progress** on the card opens it again, and **Show output** shows the end of one that
 stopped. The cards stay where they are while it runs. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for a

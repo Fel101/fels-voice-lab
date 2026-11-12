@@ -247,7 +247,7 @@ function fillCatalog() {
   });
 }
 var modelCards={};
-var engineStateNames={not_integrated:'Not integrated',not_installed:'Not installed',conversion_task:'Conversion task'};
+var engineStateNames={not_integrated:'Not integrated',not_installed:'Not installed yet',conversion_task:'Conversion task'};
 function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':String(device||'');}
 function engineStateText(row,device,job){
   // While an install runs the card's text stays put, so the cards around it do not move: its progress is in the install window.
@@ -265,12 +265,13 @@ function elapsedText(seconds){var total=Math.round(seconds||0),minutes=Math.floo
 function engineDetailText(row,device,job){
   // A running install leaves this text as it was (the state line and the button say it runs), so the card keeps its height.
   var check=row.check,install=row.installation||{};
+  // A model that is not installed says what Install will fetch; the files it lacks and any log are under the card's Details.
   if(row.state==='not_installed'){
-    var missing='Missing: '+(install.missing||[]).join('; ')+'.';
-    if(job&&job.state==='failed'){return missing+' The install stopped (exit code '+job.exit_code+') after '+elapsedText(job.seconds)+'. Show output has the end of it, and all of it is in '+job.log+'. Press Install to try again: it continues where it stopped.';}
-    if(install.installer){return missing+' Install adds it to this folder, as does '+install.installer+' in the lab folder; docs/SETUP.md says what it installs.';}
-    if((row.gpu||{}).cpu&&!(row.gpu||{}).choosable){return missing+' The app cannot install it on this computer, for the reason below; docs/SETUP.md (Model runtimes) says what it needs.';}
-    return 'The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs. '+missing;
+    var size=row.install_size;
+    if(job&&job.state==='failed'){return 'The install stopped after '+elapsedText(job.seconds)+'. Show output has the end of it. Press Install to try again: it continues where it stopped.';}
+    if(install.installer){return size?'Install downloads about '+gigabytes(size.download_bytes)+' and uses '+gigabytes(size.disk_bytes)+' of disk.':'Install shows what it will download before anything changes.';}
+    if((row.gpu||{}).cpu&&!(row.gpu||{}).choosable){return 'The app cannot install it on this computer, for the reason below.';}
+    return 'The app cannot install this model yet.';
   }
   if(row.state==='conversion_task'){return 'Tested from Voice conversion, because it needs source audio.';}
   if(row.state==='not_integrated'){return 'This build does not expose the engine.';}
@@ -286,13 +287,24 @@ function engineDetailText(row,device,job){
   }
   return 'Failed '+utcStamp(check.checked_at)+': '+check.reason;
 }
+// What a card keeps under Details, '' for nothing: the files a model lacks, how it is installed, and where a failed install's
+// output went. Paths stay here, so the card itself reads as plain words.
+function engineMoreText(row,job){
+  var install=row.installation||{},parts=[];
+  if(row.state==='not_installed'){
+    if((install.missing||[]).length){parts.push('Missing: '+install.missing.join('; ')+'.');}
+    parts.push(install.installer?'Install adds it to this folder, as does '+install.installer+' in the lab folder; docs/SETUP.md says what it installs.':'docs/SETUP.md (Model runtimes) says what it needs.');
+  }
+  if(job&&job.state==='failed'){parts.push('The last install stopped with exit code '+job.exit_code+'; all of its output is in '+job.log+'.');}
+  return parts.join(' ');
+}
 function deviceNoteText(row,job){
   // What the GPU/CPU switch means for this card now; '' when the switch says it all.
   var gpu=row.gpu||{},installed=!!(row.installation||{}).installed;
   if(gpu.cpu){return gpu.choosable?gpu.cpu:[gpu.reason,gpu.cpu].filter(Boolean).join(' ');}    // a model that needs the card
   if(!gpu.choosable){return gpu.reason||'';}
   if(installed&&row.switch==='gpu'&&gpu.build==='cpu'){
-    var failed=job&&job.state==='failed'&&job.nvidia?' The last try stopped (exit code '+job.exit_code+'); all of its output is in '+job.log+'.':'';
+    var failed=job&&job.state==='failed'&&job.nvidia?' The last try stopped; Details says where its output went.':'';
     return 'Installed with the CPU build of PyTorch, so it runs on the CPU until its GPU build is installed.'+failed;
   }
   if(!installed){return row.switch==='gpu'?'Install puts in its GPU build, for the graphics card.':'Install puts in its CPU build.';}
@@ -404,6 +416,8 @@ function renderModelOverview(result){
   wireInstallDialog();wireFirstRun();
   (result.engines||[]).forEach(function(entry){
     var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),integrated=cardNode('p','eyebrow'),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('p','meta'),ram=cardNode('p','meta');
+    var more=cardNode('details','model-more'),moreText=cardNode('p','meta');
+    more.appendChild(cardNode('summary','','Details'));more.appendChild(moreText);more.hidden=true;
     var devices=cardNode('div','device-switch'),choices=cardNode('span','device-choices'),note=cardNode('p','meta device-note'),actions=cardNode('div','model-actions'),button=cardNode('button','','Test'),extra=cardNode('button');
     var integration=entry.integration||{},caps=entry.capabilities||{},radios={};
     integrated.textContent=integration.service_api?(integration.task_only?'Integrated · conversion':'Integrated'):'Not integrated';
@@ -422,9 +436,9 @@ function renderModelOverview(result){
     button.addEventListener('click',function(){var view=modelCards[entry.id];return view.action==='install'?planInstall(entry.id,view.installGpu):view.action==='progress'?showProgress(entry.id):checkEngine(entry.id);});
     extra.addEventListener('click',function(){return modelCards[entry.id].extra==='gpu'?planInstall(entry.id,true):showProgress(entry.id);});
     actions.appendChild(button);actions.appendChild(extra);
-    [title,integrated,state,details,features,ram,devices,note,actions].forEach(function(node){card.appendChild(node);});
+    [title,integrated,state,details,more,features,ram,devices,note,actions].forEach(function(node){card.appendChild(node);});
     container.appendChild(card);
-    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
+    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
   });
 }
 var installRunning=false,installTimer=null;
@@ -467,6 +481,8 @@ function renderEngineStatus(status){
     view.action=running?'progress':missing?(install.installer?'install':'none'):(row.state==='not_integrated'||row.state==='conversion_task'?'none':'test');
     view.state.textContent=engineStateText(row,device,mine);
     view.details.textContent=engineDetailText(row,device,mine);
+    var more=engineMoreText(row,mine);
+    view.moreText.textContent=more;view.more.hidden=!more;
     view.ram.textContent=need.text;view.ram.className=need.short?'meta warn':'meta';
     view.button.textContent=view.action==='install'?'Install':view.action==='progress'?'Show progress':(row.check?'Test again':'Test');
     view.button.hidden=view.action==='none';

@@ -63,7 +63,8 @@ function card(name) {
     cpu: Object.assign(element('input'), {type: 'radio', value: 'cpu', checked: false})};
   const devices = element('devices');
   for (const value of ['gpu', 'cpu']) element('label').appendChild(radios[value]);
-  return {name, card: element('card'), state: element('state'), details: element('details'), ram: element('ram'), devices, radios,
+  return {name, card: element('card'), state: element('state'), details: element('details'), more: element('details'),
+    moreText: element('p'), ram: element('ram'), devices, radios,
     note: element('note'), button: element('button'), extraButton: element('button'), action: 'test', extra: null,
     installGpu: false, pendingDevice: false, deviceError: ''};
 }
@@ -85,7 +86,7 @@ test('state text names the device and keeps install and conversion states apart'
   assert.equal(c.engineStateText({state: 'check_failed'}, 'cpu'), 'Test failed on CPU');
   assert.equal(c.engineStateText({state: 'not_checked'}, 'cuda'), 'Installed, not tested on GPU');
   assert.equal(c.engineStateText({state: 'check_outdated'}, 'cuda'), 'Installed, test out of date on GPU');
-  assert.equal(c.engineStateText({state: 'not_installed'}, 'cpu'), 'Not installed');
+  assert.equal(c.engineStateText({state: 'not_installed'}, 'cpu'), 'Not installed yet');
   assert.equal(c.engineStateText({state: 'conversion_task'}, 'cpu'), 'Conversion task');
   assert.equal(c.engineStateText({state: 'not_integrated'}, 'cpu'), 'Not integrated');
   assert.equal(c.engineStateText({state: 'not_installed'}, 'cpu', job()), 'Installing…');
@@ -112,8 +113,10 @@ test('a model that could not use the graphics card is said to speak on the CPU, 
 
 test('detail text lists what is missing and what the last test measured', () => {
   const {context: c} = harness();
-  assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing: ['.venv/python.exe', 'hf/snapshot']}}, 'cpu'),
-    'The app cannot install this model yet: docs/SETUP.md (Model runtimes) says what it needs. Missing: .venv/python.exe; hf/snapshot.');
+  const unsupported = {state: 'not_installed', installation: {missing: ['.venv/python.exe', 'hf/snapshot']}};
+  assert.equal(c.engineDetailText(unsupported, 'cpu'), 'The app cannot install this model yet.');
+  assert.equal(c.engineMoreText(unsupported, null),
+    'Missing: .venv/python.exe; hf/snapshot. docs/SETUP.md (Model runtimes) says what it needs.');
   assert.equal(c.engineDetailText({state: 'not_checked', check: null}, 'cpu'),
     'Press Test to load the model and speak one short sentence on this device.');
   const passed = {state: 'usable', check: {status: 'passed', checked_at: '2026-10-22T10:00:00+00:00',
@@ -128,16 +131,24 @@ test('detail text lists what is missing and what the last test measured', () => 
     /last test \(2026-10-22 10:00 UTC\) was made before this model or its packages changed.*Press Test again/);
 });
 
-test('a missing engine with an installer is told to press Install, and one without is told the app cannot install it', () => {
+test('a missing engine with an installer says what Install fetches, and its paths wait under Details', () => {
   const {context: c} = harness();
   const missing = ['hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff'];
-  assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing, installer: 'setup-kokoro.bat'}}, 'cpu'),
+  const kokoro = {state: 'not_installed', installation: {missing, installer: 'setup-kokoro.bat'},
+    install_size: {download_bytes: 0.6e9, disk_bytes: 1.7e9}};
+  assert.equal(c.engineDetailText(kokoro, 'cpu'), 'Install downloads about 0.6 GB and uses 1.7 GB of disk.');
+  assert.equal(c.engineDetailText({...kokoro, install_size: null}, 'cpu'),
+    'Install shows what it will download before anything changes.');
+  assert.equal(c.engineMoreText(kokoro, null),
     'Missing: hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff. Install adds it to this folder, as does '
     + 'setup-kokoro.bat in the lab folder; docs/SETUP.md says what it installs.');
-  assert.match(c.engineDetailText({state: 'not_installed', installation: {missing}}, 'cpu'),
-    /^The app cannot install this model yet: .* Missing: hf-cache\/hub\/models--hexgrad--Kokoro-82M\/snapshots\/f3ff\.$/);
+  assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing}}, 'cpu'), 'The app cannot install this model yet.');
+  for (const row of [kokoro, {state: 'not_installed', installation: {missing}}]) {
+    assert.doesNotMatch(c.engineDetailText(row, 'cpu'), /[\\/]|\.bat|SETUP/, 'no path on the card itself');
+  }
   assert.doesNotMatch(c.engineDetailText({state: 'not_checked', check: null, installation: {missing: [], installer: 'setup-kokoro.bat'}}, 'cpu'),
     /setup-kokoro|Install/);
+  assert.equal(c.engineMoreText({state: 'usable', installation: {missing: [], installer: 'setup-kokoro.bat'}}, null), '');
 });
 
 test('a running install leaves the text of its card as it was, and a failed one says where its output went', () => {
@@ -150,9 +161,13 @@ test('a running install leaves the text of its card as it was, and a failed one 
   assert.equal(c.engineDetailText(row, 'cpu', job({seconds: 900})), c.engineDetailText(row, 'cpu', job()));
   const usable = {state: 'usable', check: {status: 'passed', checked_at: 't', total_s: 1, audio_seconds: 2, ran_on: 'cpu'}};
   assert.equal(c.engineDetailText(usable, 'cpu', job({nvidia: true})), c.engineDetailText(usable, 'cpu', null));
-  assert.equal(c.engineDetailText(row, 'cpu', job({state: 'failed', exit_code: 1, seconds: 123})),
-    'Missing: x. The install stopped (exit code 1) after 2 min 3 s. Show output has the end of it, and all of it is in '
-    + 'out/install/kokoro-1.log. Press Install to try again: it continues where it stopped.');
+  assert.equal(c.engineMoreText(row, job()), c.engineMoreText(row, null));
+  const failed = job({state: 'failed', exit_code: 1, seconds: 123});
+  assert.equal(c.engineDetailText(row, 'cpu', failed),
+    'The install stopped after 2 min 3 s. Show output has the end of it. Press Install to try again: it continues where it stopped.');
+  assert.equal(c.engineMoreText(row, failed), 'Missing: x. Install adds it to this folder, as does setup-kokoro.bat in the lab '
+    + 'folder; docs/SETUP.md says what it installs. The last install stopped with exit code 1; all of its output is in '
+    + 'out/install/kokoro-1.log.');
 });
 
 test('the RAM line says what a model needs and warns when this computer cannot or does not have it', () => {
@@ -189,8 +204,9 @@ test('a missing Kokoro card offers Install, and a missing card without an instal
   c.modelCards = {kokoro: card('Kokoro'), breeze: card('Breeze')};
   c.renderEngineStatus({device: 'cpu', busy: false, speed: [], engines: [
     missingKokoro, {id: 'breeze', state: 'not_installed', check: null, installation: {installed: false, missing: ['x']}}]});
-  assert.equal(c.modelCards.kokoro.state.textContent, 'Not installed');
-  assert.match(c.modelCards.kokoro.details.textContent,
+  assert.equal(c.modelCards.kokoro.state.textContent, 'Not installed yet');
+  assert.equal(c.modelCards.kokoro.more.hidden, false);
+  assert.match(c.modelCards.kokoro.moreText.textContent,
     /^Missing: \.venv\/Scripts\/python\.exe; hf-cache\/snapshot\. Install adds it to this folder, as does setup-kokoro\.bat/);
   assert.equal(c.modelCards.kokoro.action, 'install');
   assert.equal(c.modelCards.kokoro.button.textContent, 'Install');
@@ -416,8 +432,9 @@ test('a failed install offers Install again and Show output, which opens the end
   c.modelCards = {kokoro: card('Kokoro')};
   c.renderEngineStatus(failed);
   const view = c.modelCards.kokoro;
-  assert.equal(view.state.textContent, 'Not installed');
-  assert.match(view.details.textContent, /The install stopped \(exit code 1\) after 2 min 3 s\./);
+  assert.equal(view.state.textContent, 'Not installed yet');
+  assert.match(view.details.textContent, /^The install stopped after 2 min 3 s\./);
+  assert.match(view.moreText.textContent, /exit code 1; all of its output is in /);
   assert.deepEqual([view.button.textContent, view.button.hidden, view.button.disabled], ['Install', false, false]);
   assert.deepEqual([view.extra, view.extraButton.textContent, view.extraButton.hidden], ['output', 'Show output', false]);
   await c.showProgress('kokoro');
@@ -581,8 +598,8 @@ test('a model that runs only on a graphics card the app cannot install here offe
   const view = c.modelCards.qwen;
   assert.equal(view.action, 'none');
   assert.equal(view.button.hidden, true);
-  assert.equal(view.details.textContent, 'Missing: hf-cache/hub/models--Qwen. The app cannot install it on this computer, for the '
-    + 'reason below; docs/SETUP.md (Model runtimes) says what it needs.');
+  assert.equal(view.details.textContent, 'The app cannot install it on this computer, for the reason below.');
+  assert.equal(view.moreText.textContent, 'Missing: hf-cache/hub/models--Qwen. docs/SETUP.md (Model runtimes) says what it needs.');
   assert.equal(view.note.textContent, reason + ' Qwen3-TTS runs only on a graphics card in the Lab.');
 });
 

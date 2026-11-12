@@ -137,9 +137,9 @@ takes the GPU build of PyTorch for this computer's graphics card, [NVIDIA's](#nv
 [AMD's](#amd-radeon-cards) (`--nvidia` asks for NVIDIA's alone).
 
 The studio can run the same installer for you. Until it has run, the Kokoro card on the **Models & features** page reads
-*Not installed*, lists the files that are missing and has an **Install** button. **Install** shows the installer's own plan,
-the text `--dry-run` prints, with the reasons it would refuse if this computer cannot take it. **Install now** then runs the
-installer, and the card shows the end of its output. While it runs nothing else loads a model or speaks, and a page that is
+*Not installed yet*, says how much **Install** downloads and how much disk it uses, and keeps the files that are missing under
+**Details**. **Install** shows the installer's own plan, the text `--dry-run` prints, with the reasons it would refuse if this
+computer cannot take it. **Install now** then runs the installer, and its window shows the end of its output. While it runs nothing else loads a model or speaks, and a page that is
 reloaded shows the progress again. There is no Stop button: closing the studio stops the install, and running it again
 continues where it stopped. The whole output of each run is kept in `out\install`. When it ends the card reads *Installed,
 not tested*; press **Test**. A studio with no model installed says so at the top of **Model studio** and links to that page, and
