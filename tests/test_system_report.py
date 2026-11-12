@@ -248,6 +248,12 @@ class DiagnosticsTests(TempBase):
         text = self.text(self.report(disk={"library": None, "install": None}))
         self.assertIn("Disk: library drive unreadable; install drive unreadable", text)
 
+    def test_the_labs_own_ffmpeg_is_named_as_such(self):
+        own = {"found": True, "ready": True, "version": "9.0.2-essentials_build-www.gyan.dev", "message": None, "own": True,
+               "formats": dict.fromkeys(("wav", "flac", "ogg", "mp3", "m4a"), True)}
+        self.assertIn("FFmpeg 9.0.2-essentials_build-www.gyan.dev (the Lab's own) found; ffprobe found",
+                      self.text(self.report(ffmpeg=own)))
+
     def test_one_of_a_thing_is_said_in_the_singular(self):
         counts = {"characters": 1, "identities": 1, "references": 1, "takes": 1, "scenes": 1}
         text = self.text(self.report(library={"path": "x", "schemas": {}, "counts": counts}))

@@ -303,6 +303,8 @@ class ArchiveTests(unittest.TestCase):
             "breeze/models/x",
             ".env",
             "reference/a.wav",
+            "python/python.exe",
+            "ffmpeg/bin/ffmpeg.exe",
         ):
             self.assertTrue(update.protected(path), path)
         for path in ("serve.py", "docs/demo/kokoro-demo.mp3", "breeze/README.md", ".env.example", "tools/update.py"):

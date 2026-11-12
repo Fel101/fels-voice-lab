@@ -60,7 +60,7 @@ class FirstSetupTests(unittest.TestCase):
             raise EOFError
         return self.answers.pop(0)
 
-    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0, cards=(), amd=None):
+    def run_setup(self, *argv, interactive=True, nvidia=False, total_ram=32.0, cards=(), amd=None, ffmpeg=True):
         """Run setup on a computer with an NVIDIA driver (nvidia) and its cards, or with the AMD cards amd (None: Windows lists
         no AMD card). The AMD cards are judged against the shipped AMD list in a lab folder with no runtime.local.json."""
         args = fs.build_parser().parse_args(list(argv))
@@ -84,6 +84,7 @@ class FirstSetupTests(unittest.TestCase):
                 cards=lambda: list(cards),
                 amd=lambda: None if amd is None else [dict(card) for card in amd],
                 desktop=self.desktop,
+                ffmpeg=lambda: ffmpeg,
             )
         return status, " ".join(out.getvalue().split())
 
@@ -308,6 +309,34 @@ class FirstSetupTests(unittest.TestCase):
         self.desktop_calls = 0
         self.run_setup("--models", "none", "--no-desktop")
         self.assertEqual(self.desktop_calls, 0)
+
+    def test_without_an_ffmpeg_that_writes_every_format_setup_offers_the_labs_own(self):
+        status, out = self.run_setup("--models", "none", "--no-desktop", ffmpeg=True)
+        self.assertNotIn("FFmpeg", out)
+        self.assertEqual((status, self.questions), (0, []))
+
+        self.answers = ["yes"]
+        status, out = self.run_setup("--models", "none", "--no-desktop", ffmpeg=False)
+        self.assertEqual(status, 0)
+        self.assertEqual(len(self.questions), 1)
+        self.assertRegex(self.questions[0], r"Install FFmpeg [\d.]+ into the Lab's folder now \(\d+ MB to download\)\?")
+        self.assertIn(
+            "to export scenes, to clean a reference and to read M4A recordings; everything else works without it", out
+        )
+        self.assertEqual(self.installers.runs("--yes"), ["install_ffmpeg.py"])
+
+    def test_ffmpeg_is_installed_without_asking_only_when_asked_for_and_never_stops_setup(self):
+        status, out = self.run_setup("--models", "none", "--no-desktop", "--yes", ffmpeg=False)
+        self.assertEqual((status, self.questions, self.installers.runs("--yes")), (0, [], []))
+        self.assertIn("FFmpeg was not installed. Install FFmpeg on System & backups puts it in later.", out)
+        status, out = self.run_setup("--models", "none", "--no-desktop", interactive=False, ffmpeg=False)
+        self.assertEqual((status, self.questions, self.installers.runs("--yes")), (0, [], []))
+
+        self.installers = Installers(failing_install="install_ffmpeg.py")
+        status, out = self.run_setup("--models", "none", "--no-desktop", "--ffmpeg", interactive=False, ffmpeg=False)
+        self.assertEqual((status, self.installers.runs("--yes")), (0, ["install_ffmpeg.py"]))
+        self.assertIn("FFmpeg was not installed; the reason is above. Setup goes on without it", out)
+        self.assertIn("Setup is done.", out)
 
     def test_unknown_model_names_are_refused_by_name(self):
         self.assertEqual(fs.parse_models(["recommended", "chatterbox", "kokoro"]), ["kokoro", "phonon", "chatterbox"])

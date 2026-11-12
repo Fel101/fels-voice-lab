@@ -141,7 +141,8 @@ def diagnostics_text(report):
     if ffmpeg.get("found"):
         formats = ", ".join(f"{label} {'yes' if ffmpeg['formats'].get(key) else 'no'}"
                             for key, label in (("wav", "WAV"), ("flac", "FLAC"), ("ogg", "Ogg"), ("mp3", "MP3"), ("m4a", "AAC")))
-        ffmpeg_line = (f"FFmpeg {ffmpeg.get('version') or '(version unknown)'} found; "
+        own = " (the Lab's own)" if ffmpeg.get("own") else ""
+        ffmpeg_line = (f"FFmpeg {ffmpeg.get('version') or '(version unknown)'}{own} found; "
                        f"{'ffprobe found' if ffmpeg.get('ready') else 'ffprobe missing'}; can write: {formats}")
     else:
         ffmpeg_line = "FFmpeg not found"

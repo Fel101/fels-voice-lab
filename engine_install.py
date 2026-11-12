@@ -18,6 +18,11 @@ card (Qwen3-TTS, VoxCPM2, Breeze TTS 2) always get the GPU build, whatever the s
 work on this computer before anything is asked of the script: an NVIDIA driver, and a card and driver the build runs on, from
 the installer's own card_problems(); or an AMD card whose chip AMD's ROCm build has code for, from its amd_card_problems().
 The NVIDIA cards are read again every CARDS_SECONDS, so a laptop card switched on while the service runs is noticed.
+
+The same runner installs the tools the Lab uses that are not models (TOOLS): FFmpeg, from Install FFmpeg on System & backups
+and the export panel. A tool's install shares the one-at-a-time slot, so two installs never compete for the connection, but it
+holds no model: tests, loads and clips go on while it runs. The latest install of each kind is kept apart (snapshot), so the
+Models page never shows FFmpeg's progress as a model's.
 """
 
 import codecs
@@ -72,6 +77,8 @@ CLOSE_WAIT = 10
 CARDS_SECONDS = 30
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 DRY_RUN_DONE = "Checks passed."
+# Tool id -> (its name, the script that installs it). See the note above.
+TOOLS = {"ffmpeg": ("FFmpeg", "tools/install_ffmpeg.py")}
 _STEP = re.compile(r"(?:\d+\.|-)\s")
 _TERMINATORS = re.compile(r"(\r\n|\n|\r)")
 
@@ -107,12 +114,13 @@ class EngineInstaller:
     """Plans and runs the guided installers for the Models page, one install at a time (see the note above)."""
 
     def __init__(self, pool, *, root=None, python=None, scripts=None, gpu_builds=None, nvidia_present=None,
-                 nvidia_cards=None, amd_listed=None, amd_cards=None, clock=time.monotonic):
+                 nvidia_cards=None, amd_listed=None, amd_cards=None, clock=time.monotonic, tools=None):
         self.pool = pool
         self.root = Path(root or worker_pool.LAB)
         self.python = python    # None: the lab's own Python, as the launchers use
         self.scripts = dict(INSTALLERS if scripts is None else scripts)
         self.gpu_builds = dict(GPU_BUILDS if gpu_builds is None else gpu_builds)
+        self.tools = dict(TOOLS if tools is None else tools)
         self.nvidia_present = nvidia_present or hardware.nvidia_driver_present
         self.nvidia_cards = nvidia_cards or hardware.nvidia_cards
         self.amd_listed = amd_listed or hardware.amd_listed
@@ -123,19 +131,29 @@ class EngineInstaller:
         self._cards_at = None
         self.clock = clock
         self._amd = None
-        self._job = None
+        self._jobs = {}    # the latest install of each kind: "engine" or "tool"
         self._process = None
 
     def _running(self):
-        return self._job is not None and self._job["state"] == "running"
+        return any(job["state"] == "running" for job in self._jobs.values())
 
-    def _resolve(self, key):
-        entry = self.pool.entries.get(key)
-        if entry is None:
-            raise ValueError(f"Unknown engine {key!r}.")
-        script = self.scripts.get(key)
-        if script is None:
-            raise ValueError(f"{entry.get('name', key)} cannot be installed from the app yet: docs/SETUP.md says what it needs.")
+    def _running_name(self):
+        return next(job["name"] for job in self._jobs.values() if job["state"] == "running")
+
+    def _resolve(self, key, tool=False):
+        if tool:
+            if key not in self.tools:
+                raise ValueError(f"Unknown tool {key!r}.")
+            name, script = self.tools[key]
+            entry = {"name": name}
+        else:
+            entry = self.pool.entries.get(key)
+            if entry is None:
+                raise ValueError(f"Unknown engine {key!r}.")
+            script = self.scripts.get(key)
+            if script is None:
+                raise ValueError(
+                    f"{entry.get('name', key)} cannot be installed from the app yet: docs/SETUP.md says what it needs.")
         script, *arguments = (script,) if isinstance(script, str) else script
         python = Path(self.python) if self.python else self.root / LAB_PYTHON
         if not python.is_file():
@@ -182,15 +200,15 @@ class EngineInstaller:
             return False, f"The Lab could not check {name}'s GPU build against this card ({type(exc).__name__}: {exc})."
         return (False, " ".join(problems)) if problems else (True, None)
 
-    def plan(self, key, *, nvidia=False):
+    def plan(self, key, *, nvidia=False, tool=False):
         """What the installer would do now, from its own --dry-run: {engine, nvidia, ok, paragraphs, problems}. Changes
         nothing. nvidia asks for the plan of its GPU build (the installer's --gpu), NVIDIA's or AMD's."""
-        _entry, command = self._resolve(key)
-        if nvidia and key not in self.gpu_builds:
+        _entry, command = self._resolve(key, tool)
+        if nvidia and (tool or key not in self.gpu_builds):
             raise ValueError(f"{_entry.get('name', key)} has no GPU build the app can install.")
         with self._lock:
             if self._running():
-                raise worker_pool.WorkerBusy(f"{self._job['name']} is being installed now.")
+                raise worker_pool.WorkerBusy(f"{self._running_name()} is being installed now.")
         try:
             done = subprocess.run([*command, *([GPU_OPTION] if nvidia else []), "--dry-run"], cwd=self.root,
                                   env=_environment(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
@@ -207,24 +225,25 @@ class EngineInstaller:
         problems = [text if len(text) <= 800 else "…" + text[-800:] for text in problems[:8]]
         return {"engine": key, "nvidia": nvidia, "ok": done.returncode == 0, "paragraphs": steps, "problems": problems}
 
-    def start(self, key, *, nvidia=False):
+    def start(self, key, *, nvidia=False, tool=False):
         """Start the installer with --yes (and --gpu for the GPU build) and return the job (see snapshot). Raises ValueError
         when the engine has no installer or no GPU build, is installed already (an engine installed with the CPU build of
         PyTorch can still get its GPU build) or the Python is missing, and WorkerBusy when an install or a request is
         running."""
-        entry, command = self._resolve(key)
+        entry, command = self._resolve(key, tool)
         name = entry.get("name", key)
-        if nvidia and key not in self.gpu_builds:
+        if nvidia and (tool or key not in self.gpu_builds):
             raise ValueError(f"{name} has no GPU build the app can install.")
         with self._lock:
             if self._running():
-                raise worker_pool.WorkerBusy(f"{self._job['name']} is already being installed.")
-        if self.pool.install_probe(entry)["installed"]:
+                raise worker_pool.WorkerBusy(f"{self._running_name()} is already being installed.")
+        if not tool and self.pool.install_probe(entry)["installed"]:
             if not nvidia:
                 raise ValueError(f"{name} is already installed.")
             if self.pool.build_probe(entry)[0] != "cpu":
                 raise ValueError(f"{name} is already installed, and its PyTorch is not the CPU build.")
-        self.pool.hold(f"{name} is being installed")
+        if not tool:
+            self.pool.hold(f"{name} is being installed")
         try:
             log_path = self._new_log(key)
             log = log_path.open("wb")
@@ -236,15 +255,17 @@ class EngineInstaller:
                 log.close()
                 raise
         except Exception:
-            self.pool.release_hold()
+            if not tool:
+                self.pool.release_hold()
             raise
-        job = {"engine": key, "name": name, "nvidia": nvidia, "state": "running", "started": time.time(), "ended": None,
+        job = {"engine": key, "kind": "tool" if tool else "engine", "name": name, "nvidia": nvidia, "state": "running",
+               "started": time.time(), "ended": None,
                "exit_code": None, "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
                "log": f"{LOG_FOLDER}/{log_path.name}"}
         with self._lock:
-            self._job, self._process = job, process
+            self._jobs[job["kind"]], self._process = job, process
         threading.Thread(target=self._pump, args=(job, process, log), name=f"install-{key}", daemon=True).start()
-        return self.snapshot()
+        return self.snapshot(job["kind"])
 
     def _new_log(self, key):
         folder = self.root / LOG_FOLDER
@@ -313,14 +334,16 @@ class EngineInstaller:
                     job["state"] = "finished" if code == 0 else "failed"
                     job["ended"] = time.time()
             finally:
-                self.pool.release_hold()    # after the state is final, so a page that sees the service free sees the result
+                if job["kind"] == "engine":
+                    self.pool.release_hold()    # after the state is final, so a page that sees the service free sees the result
 
-    def snapshot(self):
-        """The latest install, or None when none has run since the service started: engine, name, nvidia (the GPU build),
+    def snapshot(self, kind="engine"):
+        """The latest install of that kind ("engine", or "tool" for FFmpeg), or None when none has run since the service
+        started: engine (the engine's or tool's id), name, nvidia (the GPU build),
         state (running, finished or failed), started_at, ended_at, seconds so far, exit_code, the end of its output as lines,
         and its log file."""
         with self._lock:
-            job = self._job
+            job = self._jobs.get(kind)
             if job is None:
                 return None
             lines = list(job["lines"]) + ([job["current"]] if job["current"] else [])

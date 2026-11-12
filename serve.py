@@ -1631,6 +1631,19 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         recheck = parse_qs(parsed.query).get("recheck") == ["1"]
         self._json(200, {"exports": export_panel.list_exports(scenes.root), "ffmpeg": export_panel.ffmpeg_report(refresh=recheck)})
 
+    @router.get("/api/ffmpeg/install")
+    def ffmpeg_install_status(self, parsed, req):
+        self._json(200, {"install": installer.snapshot("tool")})
+
+    @router.post("/api/ffmpeg/install")
+    def ffmpeg_install(self, parsed, req):
+        dry_run = req.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("dry_run must be true or false.")
+        if dry_run:
+            return self._json(200, {"plan": installer.plan("ffmpeg", tool=True)})
+        self._json(200, {"install": installer.start("ffmpeg", tool=True)})
+
     @router.post("/api/exports/preview")
     def export_preview(self, parsed, req):
         self._json(200, export_panel.run(scenes.root, req, dry_run=True))

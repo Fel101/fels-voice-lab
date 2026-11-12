@@ -330,6 +330,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <details id="sceneExport"><summary>Export package</summary>
     <p class="meta">Writes WAV, FLAC, Ogg, MP3 or AAC (M4A) line files, the raw scene mix, captions, a transcript and a checksummed manifest under <code>out/exports/</code>. FFmpeg writes the files. Original Cast takes are copied byte for byte. Save the scene before exporting.</p>
     <p class="meta" id="exportFfmpeg" role="status"></p>
+    <p class="meta" id="exportFfmpegProgress" role="status" hidden></p>
+    <div class="cast-actions"><button type="button" id="exportFfmpegInstall" hidden>Install FFmpeg</button></div>
     <div class="row"><fieldset class="field compact"><legend>Formats</legend>
       <label><input type="checkbox" name="exportFormat" value="wav" checked> WAV</label>
       <label><input type="checkbox" name="exportFormat" value="flac"> FLAC</label>
@@ -580,7 +582,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. To update, close the Lab and run <code>update.bat</code> in its folder: it shows what will change and asks first, keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> puts the previous version back.</p>
 <h3>FFmpeg</h3>
 <p class="meta" id="systemFfmpeg" role="status"></p>
-<div class="cast-actions"><button type="button" id="systemFfmpegCheck">Check FFmpeg again</button></div>
+<p class="meta" id="systemFfmpegProgress" role="status" hidden></p>
+<div class="cast-actions"><button type="button" id="systemFfmpegInstall" hidden>Install FFmpeg</button><button type="button" id="systemFfmpegCheck">Check FFmpeg again</button></div>
 <h3>Disk space</h3>
 <p class="meta" id="systemDisk" role="status"></p>
 <h3>Models</h3>

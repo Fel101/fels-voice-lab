@@ -143,8 +143,9 @@ without a model.
 [Setup](docs/SETUP.md) covers every installer and the other models, and [troubleshooting](docs/TROUBLESHOOTING.md) says what
 runs on an 8, 16 or 32 GB computer and what to do when something stops.
 
-FFmpeg is not bundled. Install it (`winget install Gyan.FFmpeg`) for scene export, MP3 and AAC
-output, and M4A references. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
+FFmpeg is not bundled. Scene export, reference cleaning and M4A references need it: **Install FFmpeg** on **System &
+backups** puts a pinned build in the Lab's own `ffmpeg` folder, and an FFmpeg you installed yourself
+(`winget install Gyan.FFmpeg`) works too. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
 the header's **Theme** menu; the choice is saved locally. **Check for updates** on **System & backups** says when a newer
 release is out, and `update.bat` installs it with the Lab closed, keeping your library and models
 ([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).

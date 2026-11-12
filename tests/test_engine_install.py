@@ -254,6 +254,61 @@ class PlanTests(InstallerCase):
         self.wait_until(self.finished, "the install to end")
 
 
+class ToolInstallTests(InstallerCase):
+    """FFmpeg's install runs the same way as a model's, holds no model, and is kept apart from the Models page's install."""
+
+    def setUp(self):
+        super().setUp()
+        self.installer.tools = {"ffmpeg": ("FFmpeg", "tools/stub_installer.py")}
+
+    def settle(self):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            jobs = [self.installer.snapshot(kind) for kind in ("engine", "tool")]
+            if all(job is None or job["state"] != "running" for job in jobs):
+                return
+            time.sleep(0.05)
+
+    def tool_finished(self):
+        job = self.installer.snapshot("tool")
+        return job if job and job["state"] != "running" else None
+
+    def test_a_tool_install_holds_no_model_and_is_not_shown_as_a_models_install(self):
+        self.stub("print('downloading', flush=True)\nwait_for('go')\nprint('installed', flush=True)\n")
+        started = self.installer.start("ffmpeg", tool=True)
+        self.assertEqual((started["engine"], started["name"], started["state"]), ("ffmpeg", "FFmpeg", "running"))
+        self.wait_until(lambda: "downloading" in (self.installer.snapshot("tool") or {}).get("lines", []), "its first line")
+        self.assertEqual(self.argv(), "--yes")
+        self.assertFalse(self.pool.busy, "speech goes on while FFmpeg installs")
+        self.assertIsNone(self.installer.snapshot(), "the Models page sees no install")
+        with self.assertRaisesRegex(WorkerBusy, "FFmpeg is already being installed"):
+            self.installer.start("kokoro")
+        self.release()
+        done = self.wait_until(self.tool_finished, "the install to end")
+        self.assertEqual((done["state"], done["lines"]), ("finished", ["downloading", "installed"]))
+        self.assertFalse(self.pool.busy)
+
+    def test_a_tool_cannot_be_reached_as_an_engine_and_an_engine_not_as_a_tool(self):
+        self.stub(DRY_RUN)
+        with self.assertRaisesRegex(ValueError, "Unknown engine 'ffmpeg'"):
+            self.installer.plan("ffmpeg")
+        with self.assertRaisesRegex(ValueError, "Unknown tool 'kokoro'"):
+            self.installer.start("kokoro", tool=True)
+        with self.assertRaisesRegex(ValueError, "no GPU build"):
+            self.installer.start("ffmpeg", tool=True, nvidia=True)
+        self.assertTrue(self.installer.plan("ffmpeg", tool=True)["ok"])
+
+    def test_a_models_install_keeps_its_result_after_a_tool_install(self):
+        self.stub("print('error: pip stopped.', file=sys.stderr, flush=True)\nsys.exit(3)\n")
+        self.installer.start("kokoro")
+        self.wait_until(self.finished, "the model's install to end")
+        self.stub("print('ok', flush=True)\n")
+        self.installer.start("ffmpeg", tool=True)
+        self.wait_until(self.tool_finished, "the tool's install to end")
+        self.assertEqual((self.installer.snapshot()["engine"], self.installer.snapshot()["state"]), ("kokoro", "failed"))
+        self.assertEqual(self.installer.snapshot("tool")["state"], "finished")
+
+
 class InstallTests(InstallerCase):
     def test_the_install_runs_with_yes_keeps_its_output_and_holds_the_service_until_it_ends(self):
         self.stub("""
@@ -664,6 +719,24 @@ class InstallRoutesTests(InstallerCase):
         status, body = self.call("GET", "/api/engines/status")
         self.assertEqual((body["busy"], body["install"]["state"], body["install"]["exit_code"]), (False, "finished", 0))
         self.assertEqual(body["install"]["lines"], ["working", "all done"])
+
+    def test_ffmpeg_installs_through_its_own_routes_and_never_through_an_engines(self):
+        self.installer.tools = {"ffmpeg": ("FFmpeg", "tools/stub_installer.py")}
+        self.stub(DRY_RUN + "print('downloading', flush=True)\nwait_for('go')\n")
+        self.assertEqual(self.call("GET", "/api/ffmpeg/install"), (200, {"install": None}))
+        status, body = self.call("POST", "/api/ffmpeg/install", {"dry_run": True})
+        self.assertEqual((status, body["plan"]["ok"], body["plan"]["engine"]), (200, True, "ffmpeg"))
+        self.assertEqual(self.call("POST", "/api/engines/ffmpeg/install", {"dry_run": True})[0], 400)
+        self.assertEqual(self.call("POST", "/api/ffmpeg/install", {"dry_run": "yes"})[0], 400)
+        status, body = self.call("POST", "/api/ffmpeg/install", {})
+        self.assertEqual((status, body["install"]["engine"], body["install"]["state"]), (200, "ffmpeg", "running"))
+        self.wait_until(lambda: "downloading" in (self.call("GET", "/api/ffmpeg/install")[1]["install"] or {}).get("lines", []),
+                        "the installer's first line")
+        status, body = self.call("GET", "/api/engines/status")
+        self.assertEqual((body["busy"], body["install"]), (False, None))
+        self.assertEqual(self.call("POST", "/api/ffmpeg/install", {})[0], 409)
+        self.release()
+        self.wait_until(lambda: self.call("GET", "/api/ffmpeg/install")[1]["install"]["state"] == "finished", "the end")
 
     def test_bad_requests_are_answered_before_anything_runs(self):
         self.stub(DRY_RUN + "wait_for('go')\n")

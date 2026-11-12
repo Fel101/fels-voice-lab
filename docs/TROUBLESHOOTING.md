@@ -157,10 +157,13 @@ GPU, from the question `setup.bat` asks, or from `setup-kokoro.bat --gpu` and `s
 
 ## Export and audio
 
-**An export will not start, or M4A references will not import.** Export packages and M4A imports need FFmpeg, which is not
-bundled. Run `winget install Gyan.FFmpeg`, then press **Check FFmpeg again** in **System & backups**. The Lab finds it in
-WinGet's folder even before Windows has refreshed its PATH. MP3 and AAC also need FFmpeg's `libmp3lame` and `aac` encoders,
-which the usual full build has. Without FFmpeg, WAV, FLAC, Ogg and MP3 references still import.
+**An export will not start, a reference will not clean, or M4A references will not import.** These need FFmpeg, which is not
+bundled. Press **Install FFmpeg** in **System & backups** (or on the export panel): the Lab downloads its own copy into its
+`ffmpeg` folder and uses it at once, with no restart. If it says the download stopped, connect the computer to the internet
+and press it again; it continues where it stopped. If you would rather install FFmpeg yourself, run
+`winget install Gyan.FFmpeg`, then press **Check FFmpeg again**: the Lab finds it in WinGet's folder even before Windows has
+refreshed its PATH. MP3 and AAC also need FFmpeg's `libmp3lame` and `aac` encoders, which the usual full build and the Lab's
+own have. Without FFmpeg, WAV, FLAC, Ogg and MP3 references still import.
 
 **What a file says about itself.** Every clip the Lab makes is labelled inside the file as AI-generated speech made with the
 Lab, in its comment tag; an export's package checks the label is still there when it is verified. Your own reference recordings

@@ -280,6 +280,7 @@ function applyExportFfmpeg(report){
   boxes.forEach(function(box){var usable=!!(report.formats&&report.formats[box.value]);box.disabled=!usable;if(!usable)box.checked=false;});
   if(ready&&!boxes.some(function(box){return box.checked;})){
     var wav=boxes.filter(function(box){return box.value==='wav';})[0];if(wav&&!wav.disabled)wav.checked=true;}
+  renderFfmpegOffer('export',report);  // voice_lab_system.js: the Install FFmpeg button and its progress
 }
 function refreshExports(preferred,recheck){return fetchJson('/api/exports'+(recheck?'?recheck=1':'')).then(function(result){var select=$('exportSelect'),keep=preferred||select.value;select.textContent='';(result.exports||[]).forEach(function(row){option(select,row.name,row.name+' / '+(row.scene_name||'unknown scene')+' / '+row.status);});if(keep)select.value=keep;applyExportFfmpeg(result.ffmpeg);return result.exports||[];});}
 $('exportPreview').addEventListener('click',function(){var body;try{body=exportRequest();}catch(error){showExportError(error);return;}$('exportError').textContent='';$('exportStatus').textContent='Checking provenance and settings…';fetchJson('/api/exports/preview',body).then(function(result){$('exportStatus').textContent='Dry run only; no files were written.';showExportLog(result.log);}).catch(function(error){$('exportStatus').textContent='';showExportError(error);});});

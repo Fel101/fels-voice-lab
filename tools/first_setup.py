@@ -16,6 +16,10 @@ Models & features.
 On a computer with an NVIDIA driver, or one whose graphics card is an AMD Radeon, it offers Kokoro and Chatterbox Turbo the GPU
 build of PyTorch for that card (NVIDIA's CUDA build, or AMD's ROCm build) where each installer says it runs there; --gpu takes
 them without asking, and --nvidia asks for NVIDIA's alone.
+
+Last, when no FFmpeg that writes every export format is found, it offers to put one in the Lab's folder
+(tools/install_ffmpeg.py, what Install FFmpeg on System & backups runs); --ffmpeg takes it without asking. Setup never stops
+for want of FFmpeg: WAV works without it.
 """
 
 import argparse
@@ -32,6 +36,7 @@ if str(ROOT) not in sys.path:
 import common  # noqa: E402  (points the model cache at this folder before anything else is imported)
 import hardware  # noqa: E402
 import engine_checks  # noqa: E402
+import ffmpeg_tools  # noqa: E402
 
 # What each model is called here, its catalog id and installer, and whether a GPU build of PyTorch exists for it.
 MODELS = {
@@ -262,6 +267,39 @@ def run_installer(name, *, build=None, runner=subprocess.run):
     say("")
 
 
+def ffmpeg_ready(status=ffmpeg_tools.status):
+    """Whether an FFmpeg that writes every export format, with its ffprobe, is found."""
+    report = status(refresh=True)
+    return bool(report["found"] and report["ffprobe"]) and all(ffmpeg_tools.writable_formats(report).values())
+
+
+def offer_ffmpeg(args, *, ask, interactive, runner, ready):
+    """Put FFmpeg in the Lab's folder when none that writes every format is found: --ffmpeg installs it, an interactive window
+    is asked unless --yes was typed, and otherwise setup says where the button is. A failure is reported, not fatal."""
+    if ready():
+        return
+    build = ffmpeg_tools.own_build() or {"version": "", "download_bytes": 0}
+    say("")
+    paragraph(
+        "FFmpeg is not on this computer, or cannot write every format. The Lab uses it to export scenes, to clean a "
+        "reference and to read M4A recordings; everything else works without it."
+    )
+    question = (
+        f"Install FFmpeg {build['version']} into the Lab's folder now ({build['download_bytes'] / 10**6:.0f} MB to "
+        "download)? Type yes, or press Enter to skip: "
+    )
+    if not (args.ffmpeg or (interactive and not args.yes and ask_yes(question, ask=ask))):
+        say("FFmpeg was not installed. Install FFmpeg on System & backups puts it in later.")
+        return
+    say("=== Installing FFmpeg ===")
+    if runner([str(sys.executable), str(ROOT / "tools/install_ffmpeg.py"), "--yes"], cwd=ROOT).returncode:
+        paragraph(
+            "FFmpeg was not installed; the reason is above. Setup goes on without it: Install FFmpeg on System & backups "
+            "tries again, and continues the download where it stopped."
+        )
+    say("")
+
+
 def set_up_desktop():
     """What setup-desktop.bat does: pywebview in .venv-desktop and the desktop shortcut. A failure is reported, not fatal."""
     say("=== The desktop window ===")
@@ -291,6 +329,7 @@ def run(
     cards=hardware.nvidia_cards,
     amd=amd_cards,
     desktop=set_up_desktop,
+    ffmpeg=ffmpeg_ready,
 ):
     interactive = sys.stdin.isatty() if interactive is None else interactive
     desktop_ready = desktop() if not args.no_desktop else None
@@ -356,6 +395,7 @@ def run(
                 todo = []
         for name in todo:
             run_installer(name, build=build if name in gpu else None, runner=runner)
+    offer_ffmpeg(args, ask=ask, interactive=interactive, runner=runner, ready=ffmpeg)
     say("Setup is done.")
     if desktop_ready:
         say("Start the Lab with the Fel's Voice Lab icon on your Desktop.")
@@ -387,6 +427,11 @@ def build_parser():
         help="install the NVIDIA (CUDA) build of PyTorch for Kokoro and Chatterbox, each where it runs on this card",
     )
     parser.add_argument("--no-desktop", action="store_true", help="skip the desktop window and its shortcut")
+    parser.add_argument(
+        "--ffmpeg",
+        action="store_true",
+        help="install FFmpeg into the Lab's folder, when none that writes every format is found",
+    )
     return parser
 
 

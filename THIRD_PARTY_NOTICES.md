@@ -90,8 +90,17 @@ HIP compiler driver and the code object manager, are MIT and Apache-2.0 with LLV
 `tools/install_drama3.py` installs no Python packages. It fetches the Windows build of
 [speech.cpp](https://github.com/nyosegawa/speech.cpp) 0.8.10 (MIT) from its GitHub release into `out/drama3/runtime`.
 
-FFmpeg is an optional external tool. Its obligations depend on its exact build
-and enabled components; do not bundle an arbitrary executable with this project.
+FFmpeg is an optional external program. The Lab runs `ffmpeg.exe` and `ffprobe.exe` as separate programs and links to no
+part of FFmpeg. **Install FFmpeg** (`tools/install_ffmpeg.py`) downloads FFmpeg 9.0.2, Gyan Doshi's essentials build for
+Windows, from the builder's own [GitHub release](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2) onto the user's
+computer when the user asks, checks it against the SHA-256 in `catalog/ffmpeg_build.json`, and keeps `bin/ffmpeg.exe`,
+`bin/ffprobe.exe`, `LICENSE` and `README.txt` in the Lab's `ffmpeg` folder. That build is under the GNU General Public
+License version 3, because it enables GPL libraries: its `LICENSE` is the licence text, and its `README.txt` names the
+FFmpeg source it was built from ([commit 946fcce07b](https://github.com/FFmpeg/FFmpeg/commit/946fcce07b)) and every library
+it includes. The repository holds none of it and the Lab's releases do not ship it, so the GPL asks nothing of the Lab's
+own code or licence. Whoever passes on a copy of the Lab with its `ffmpeg` folder in it passes on that build, and the GPL's
+terms for conveying it then apply to them: the licence with it, and its source or a written offer of the source. Do not
+bundle an arbitrary FFmpeg executable with this project; its obligations depend on its exact build and enabled components.
 
 ## Optional models and outputs
 

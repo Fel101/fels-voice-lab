@@ -3606,7 +3606,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and `ffmpeg` (`found`, `ready`, `version`, `formats` and a `message`).",
+            "description": "`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and `ffmpeg` (`found`, `ready`, `version`, `formats`, a `message`, `own` (it is the Lab's own, which Install FFmpeg put in) and `offer` (the FFmpeg `POST /api/ffmpeg/install` puts in: `version`, `builder`, `license`, `download_bytes`, `disk_bytes`; `null` when the FFmpeg in use writes every format or is the Lab's own)).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3705,6 +3705,88 @@
           },
           "409": {
             "description": "Another package is still being written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/ffmpeg/install": {
+      "get": {
+        "operationId": "get_api_ffmpeg_install",
+        "summary": "Say how the latest FFmpeg install is getting on.",
+        "tags": [
+          "Exports"
+        ],
+        "responses": {
+          "200": {
+            "description": "`install`: the latest FFmpeg install since the service started, or `null`: `engine` (`ffmpeg`), `name`, `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_ffmpeg_install",
+        "summary": "Install FFmpeg into the Lab's own folder, the build `offer` names: read the plan, or run the installer.",
+        "tags": [
+          "Exports"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "Only read the plan; nothing is changed. Default false, which starts the install."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` and `problems`, as for an engine. Otherwise `install`: the job that started, as `GET /api/ffmpeg/install` gives it, which is the route to poll. It runs `tools/install_ffmpeg.py --yes`, which downloads the build, checks its SHA-256 and unpacks `ffmpeg.exe` and `ffprobe.exe` into `ffmpeg/`; from then on the Lab uses that FFmpeg. Speech is not held up while it runs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`dry_run` is not true or false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An install, of FFmpeg or of a model, is already running.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4517,7 +4599,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`generated_at`, `app`, `system`, `library`, `ffmpeg`, `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.",
+            "description": "`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.",
             "content": {
               "application/json": {
                 "schema": {

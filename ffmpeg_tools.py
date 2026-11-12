@@ -1,11 +1,13 @@
 """Where FFmpeg is, what it can write, and the one place that reads audio with it.
 
-Nothing here is bundled. FFmpeg is looked for on PATH first and then in the folder WinGet unpacks it into, so the
-answer is the same whether the service started from a shell or from the desktop shortcut. What a build can encode is
+Nothing here is bundled. FFmpeg is looked for in the Lab's own ffmpeg folder first (Install FFmpeg puts it there:
+tools/install_ffmpeg.py), then on PATH, then in the folder WinGet unpacks it into, so the answer is the same whether the
+service started from a shell or from the desktop shortcut. What a build can encode is
 read from the build itself, and the answer for the usual FFmpeg is kept for a minute so a page that asks often does not
 start a process for every request.
 """
 
+import json
 import os
 import re
 import shutil
@@ -19,7 +21,12 @@ import soundfile as sf
 
 WINGET_FOLDER = (Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
                  / "Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe")
-INSTALL_HINT = "Install FFmpeg (for example, in a terminal: winget install Gyan.FFmpeg) and try again."
+# The one Install FFmpeg puts in the Lab's folder comes first: it is the build the Lab was checked with, and whoever installed
+# it there chose it for the Lab.
+LAB_FOLDER = Path(__file__).resolve().parent / "ffmpeg" / "bin"
+OWN_BUILD = Path(__file__).resolve().parent / "catalog" / "ffmpeg_build.json"
+INSTALL_HINT = ("Press Install FFmpeg on System & backups, or install it yourself (in a terminal: winget install Gyan.FFmpeg), "
+                "and try again.")
 CACHE_SECONDS = 60
 PROBE_TIMEOUT = 20
 DECODE_TIMEOUT = 120
@@ -37,6 +44,9 @@ class FFmpegMissing(ValueError):
 
 
 def _find(tool):
+    own = LAB_FOLDER / f"{tool}.exe"
+    if own.is_file():
+        return str(own)
     found = shutil.which(tool)
     if found:
         return found
@@ -45,6 +55,25 @@ def _find(tool):
         if matches:
             return str(matches[-1])
     return None
+
+
+def own_build():
+    """The FFmpeg Install FFmpeg puts in the Lab's folder, for the button: {"version", "builder", "license",
+    "download_bytes", "disk_bytes"}; None when its catalog entry cannot be read."""
+    try:
+        build = json.loads(OWN_BUILD.read_text(encoding="utf-8"))
+        return {"version": build["version"], "builder": build["builder"], "license": build["license"],
+                "download_bytes": build["bytes"], "disk_bytes": sum(item["size"] for item in build["files"])}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def is_own(program):
+    """Whether this program is the Lab's own FFmpeg (or ffprobe), the one Install FFmpeg put in its folder."""
+    try:
+        return bool(program) and Path(program).resolve().parent == LAB_FOLDER.resolve()
+    except OSError:
+        return False
 
 
 def find_ffmpeg():
@@ -119,7 +148,7 @@ def cannot_write(formats, report):
                if FORMAT_ENCODER[name] and not report["encoders"].get(FORMAT_ENCODER[name])]
     if missing:
         return (f"This FFmpeg build cannot write {' or '.join(missing)}: its encoder is not included. "
-                "Choose other formats, or install a full FFmpeg build.")
+                "Choose other formats, or press Install FFmpeg on System & backups for one that can.")
     return None
 
 

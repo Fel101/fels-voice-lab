@@ -51,6 +51,15 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   computer with Python 3.12 keeps using it and downloads nothing. **System & backups** says which Python the Lab runs on.
   Keep the `python` folder. After moving a Lab set up this way, delete its `.venv` folders and run `setup.bat` again
   ([Moving the Lab](docs/SETUP.md#moving-the-lab)).
+- **FFmpeg from a button.** Scene export, reference cleaning and M4A references need FFmpeg, which meant leaving the Lab to
+  run `winget`. **Install FFmpeg**, on **System & backups** and on a scene's export panel while no FFmpeg writes every
+  format, now downloads FFmpeg 9.0.2 (Gyan Doshi's essentials build, GPL v3, about 115 MB) from its GitHub release, checks
+  it against its SHA-256, tries that it writes every export format, and puts it in the Lab's `ffmpeg` folder. The page
+  follows the download and uses FFmpeg as soon as it is in place, with no restart; a download that stops is continued by
+  pressing the button again. `setup.bat` offers it when it finds no FFmpeg (`--ffmpeg` installs it unasked), and
+  `tools/install_ffmpeg.py` does it from a terminal. An FFmpeg you installed yourself still works; the Lab's own comes
+  first, and `update.bat` leaves it alone ([FFmpeg](docs/SETUP.md#ffmpeg)). New routes: `GET` and
+  `POST /api/ffmpeg/install`. The `ffmpeg` part of `GET /api/exports` and `GET /api/system` gains `own` and `offer`.
 
 ### Releases
 

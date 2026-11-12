@@ -175,6 +175,22 @@ class ExportValidationTests(ExportPanelBase):
             formats = export_panel.ffmpeg_report()["formats"]
         self.assertEqual([name for name, usable in formats.items() if not usable], ["mp3"])
 
+    def test_install_ffmpeg_is_offered_until_the_ffmpeg_in_use_writes_every_format_or_is_the_labs_own(self):
+        full = {"found": True, "ffmpeg": "C:/tools/ffmpeg.exe", "ffprobe": "ffprobe", "version": "9.0", "decoders": {},
+                "encoders": {"mp3": True, "aac": True, "vorbis": True, "flac": True}, "message": None}
+        no_mp3 = {**full, "encoders": {**full["encoders"], "mp3": False}}
+        own = {**no_mp3, "ffmpeg": str(ffmpeg_tools.LAB_FOLDER / "ffmpeg.exe")}
+        for label, status, offered, is_own in (("every format", full, False, False), ("no MP3", no_mp3, True, False),
+                                               ("none", ffmpeg_tools.capabilities(None, None), True, False),
+                                               ("the Lab's own", own, False, True)):
+            with self.subTest(label), mock.patch.object(ffmpeg_tools, "status", return_value=status):
+                report = export_panel.ffmpeg_report()
+                self.assertEqual((report["offer"] is not None, report["own"]), (offered, is_own))
+                if offered:
+                    self.assertEqual(report["offer"], ffmpeg_tools.own_build())
+        with mock.patch.object(ffmpeg_tools, "status", return_value=no_mp3):
+            self.assertIn("Install FFmpeg to turn it on", export_panel.ffmpeg_report()["message"])
+
     def test_a_missing_ffmpeg_or_encoder_is_reported_in_plain_words_before_anything_is_written(self):
         scene_id = self.render_selected_scene()
         with mock.patch.object(ffmpeg_tools, "resolve", return_value=None):

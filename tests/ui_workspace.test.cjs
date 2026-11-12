@@ -706,15 +706,22 @@ test('Perform and Scenes take cards both carry the loudness line', () => {
 });
 
 // The export panel offers only what this PC's FFmpeg can write.
-function exportPanel(report) {
-  const make = (id, extra = {}) => ({id, disabled: false, checked: false, textContent: '', className: '', ...extra});
+// The FFmpeg install button and its progress line, shared by the System page and the export panel (voice_lab_system.js).
+const FFMPEG_INSTALL_SOURCE = () => sourceBetween('// Install FFmpeg: the button here', 'function refreshSystemPage(');
+function exportPanel(report, {job = null} = {}) {
+  const make = (id, extra = {}) => ({id, disabled: false, checked: false, hidden: false, textContent: '', className: '', ...extra});
   const note = make('exportFfmpeg'), buttons = ['exportPreview', 'exportCreate', 'exportVerify'].map(id => make(id));
+  const install = make('exportFfmpegInstall', {hidden: true}), progress = make('exportFfmpegProgress', {hidden: true});
+  const others = ['systemFfmpegInstall', 'systemFfmpegProgress'].map(id => make(id));
   const boxes = ['wav', 'flac', 'ogg', 'mp3', 'm4a'].map(value => make('box-' + value, {value, checked: value === 'wav'}));
-  const byId = Object.fromEntries([note, ...buttons].map(item => [item.id, item]));
-  const c = vm.createContext({$: id => byId[id], document: {querySelectorAll: () => boxes}});
-  vm.runInContext(sourceBetween('function applyExportFfmpeg(', 'function refreshExports('), c);
+  const byId = Object.fromEntries([note, install, progress, ...others, ...buttons].map(item => [item.id, item]));
+  const refreshed = [];
+  const c = vm.createContext({$: id => byId[id], document: {querySelectorAll: () => boxes}, setTimeout: () => 1, clearTimeout() {},
+    refreshSystem: again => refreshed.push(['system', again]), refreshExports: (scene, again) => refreshed.push(['exports', again])});
+  vm.runInContext(sourceBetween('function applyExportFfmpeg(', 'function refreshExports(') + FFMPEG_INSTALL_SOURCE(), c);
+  if (job) c.ffmpegJob = job;
   c.applyExportFfmpeg(report);
-  return {note, buttons, boxes: Object.fromEntries(boxes.map(box => [box.value, box]))};
+  return {note, buttons, install, progress, refreshed, context: c, boxes: Object.fromEntries(boxes.map(box => [box.value, box]))};
 }
 const everyFormat = {wav: true, flac: true, ogg: true, mp3: true, m4a: true};
 
@@ -743,6 +750,40 @@ test('a build without an MP3 encoder switches off only MP3 and keeps the other c
   assert.equal(panel.note.className, 'meta take-checks flagged');
   assert.ok(panel.buttons.every(button => !button.disabled));
   assert.deepEqual(Object.entries(panel.boxes).filter(([, box]) => box.disabled).map(([name]) => name), ['mp3']);
+});
+
+const OFFER = {version: '9.0.2', builder: 'Gyan Doshi (www.gyan.dev), essentials build', license: 'GPL-3.0',
+  download_bytes: 114768076, disk_bytes: 210757726};
+
+test('Install FFmpeg is offered with its size while no FFmpeg writes every format, and hidden once one does', () => {
+  const none = Object.fromEntries(Object.keys(everyFormat).map(key => [key, false]));
+  const offered = exportPanel({ready: false, found: false, version: null, formats: none, message: 'FFmpeg was not found.', offer: OFFER});
+  assert.equal(offered.install.hidden, false);
+  assert.equal(offered.install.disabled, false);
+  assert.equal(offered.install.textContent, 'Install FFmpeg');
+  assert.equal(offered.progress.hidden, false);
+  assert.equal(offered.progress.textContent, "Install FFmpeg puts FFmpeg 9.0.2 in the Lab's own folder: Gyan Doshi (www.gyan.dev), "
+    + 'essentials build, licence GPL-3.0. It downloads 115 MB and uses 211 MB of disk.');
+  const ready = exportPanel({ready: true, found: true, version: '9.0.2', formats: everyFormat, message: null, offer: null, own: true});
+  assert.equal(ready.install.hidden, true);
+  assert.equal(ready.progress.hidden, true);
+});
+
+test('while FFmpeg installs every Install FFmpeg button is busy and says what is happening and why it cannot stop', () => {
+  const none = Object.fromEntries(Object.keys(everyFormat).map(key => [key, false]));
+  const job = {engine: 'ffmpeg', name: 'FFmpeg', state: 'running', lines: ['Downloading FFmpeg 9.0.2 (109.5 MB):', '      40% (45.9 MB of 114.8 MB)']};
+  const panel = exportPanel({ready: false, found: false, formats: none, message: 'FFmpeg was not found.', offer: OFFER}, {job});
+  assert.equal(panel.install.disabled, true);
+  assert.equal(panel.install.textContent, 'Installing FFmpeg…');
+  assert.equal(panel.progress.textContent, 'Installing FFmpeg. 40% (45.9 MB of 114.8 MB) It cannot be stopped from here: closing the Lab '
+    + 'stops it, and Install FFmpeg then continues where it stopped.');
+  panel.context.renderFfmpegJob({...job, state: 'failed', lines: ['Downloading', 'error: The download stopped (no route). If this '
+    + 'computer is offline, connect it first. What was downloaded is kept, and the next try continues from there.']});
+  assert.equal(panel.install.disabled, false);
+  assert.deepEqual(panel.refreshed, [['system', true], ['exports', true]], 'FFmpeg is asked again once the install ends');
+  assert.equal(panel.progress.className, 'meta take-checks flagged');
+  assert.equal(panel.progress.textContent, 'FFmpeg was not installed: The download stopped (no route). If this computer is offline, '
+    + 'connect it first. What was downloaded is kept, and the next try continues from there. Press Install FFmpeg to try again.');
 });
 
 test('a format switched off is also unchecked, and WAV is checked again when nothing else is', () => {
@@ -775,7 +816,7 @@ function systemPanel({answers = {}, confirm = true, navigator = {}, copyAllowed 
     Object.defineProperty(node, 'textContent', {get() { return this._text; }, set(value) { this._text = value; this.children = []; }});
     return node;
   };
-  ['systemFacts', 'systemFfmpeg', 'systemDisk', 'systemModels', 'systemDiagnostics', 'systemCopy', 'systemCopied', 'systemError',
+  ['systemFacts', 'systemFfmpeg', 'systemFfmpegInstall', 'systemFfmpegProgress', 'exportFfmpegInstall', 'exportFfmpegProgress', 'systemDisk', 'systemModels', 'systemDiagnostics', 'systemCopy', 'systemCopied', 'systemError',
     'systemStatus', 'systemMeasure', 'systemClean', 'systemStorage', 'systemCleanup', 'backupFolder', 'backupSections', 'backupSize',
     'backupProgress', 'backupStatus', 'backupList', 'backupCreate', 'restoreBox', 'restoreName', 'restoreFolder', 'restoreGo',
     'restoreUse', 'restoreHint', 'restoreCommand'].forEach(id => { nodes[id] = make(id, 'div'); });
@@ -881,6 +922,31 @@ test('the report page shows the facts, flags what needs attention, and offers th
   assert.equal(nodes.systemCopy.disabled, true);
   assert.equal(nodes.systemFfmpeg.className, 'meta take-checks flagged');
   assert.equal(nodes.systemFacts.children.length, 14, 'a refresh replaces the rows, it does not add to them');
+});
+
+test('Install FFmpeg on the System page starts the install, follows it, and asks FFmpeg again when it ends', async () => {
+  const missing = {found: false, ready: false, version: null, formats: {wav: true, flac: false, ogg: false, mp3: false, m4a: false},
+    message: 'FFmpeg was not found.', own: false, offer: OFFER};
+  const running = {engine: 'ffmpeg', name: 'FFmpeg', kind: 'tool', state: 'running', lines: ['Unpacking FFmpeg.']};
+  let job = running;
+  const panel = systemPanel({answers: {'/api/system?recheck=1': systemReport({ffmpeg: {...missing, found: true, ready: true, own: true,
+    offer: null, formats: {wav: true, flac: true, ogg: true, mp3: true, m4a: true}}}), '/api/ffmpeg/install': () => ({install: job})}});
+  panel.context.renderFfmpegOffer('system', missing);
+  const button = panel.nodes.systemFfmpegInstall, note = panel.nodes.systemFfmpegProgress;
+  assert.equal(button.hidden, false);
+  assert.match(note.textContent, /^Install FFmpeg puts FFmpeg 9\.0\.2 in the Lab's own folder/);
+  await panel.context.startFfmpegInstall();
+  assert.deepEqual(panel.posted('/api/ffmpeg/install'), [['/api/ffmpeg/install', {}]]);
+  assert.equal(button.disabled, true);
+  assert.match(note.textContent, /^Installing FFmpeg\. Unpacking FFmpeg\. It cannot be stopped from here/);
+  assert.equal(panel.timers.at(-1).delay, 1000);
+  job = {...running, state: 'finished', lines: ["FFmpeg 9.0.2 is installed in the Lab's ffmpeg folder."]};
+  await panel.timers.at(-1).callback();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(panel.calls.some(call => call[0] === '/api/system?recheck=1'), 'the System page asks FFmpeg again');
+  assert.equal(button.hidden, true, "the Lab's own FFmpeg writes every format, so nothing is offered");
+  assert.equal(note.hidden, false);
+  assert.equal(note.textContent, 'FFmpeg is installed.');
 });
 
 test('Check FFmpeg again asks the server to look again, and a failed read is shown, not thrown', async () => {

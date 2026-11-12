@@ -38,7 +38,7 @@ install it yourself.
 model's) is built on that Python and records its full path, so they stop working if the folder is deleted or the Lab's folder
 is moved or renamed. `update.bat` never touches it. To move the Lab, see [Moving the Lab](#moving-the-lab).
 
-Run `setup.bat`. It does three things, in order:
+Run `setup.bat`. It does four things, in order:
 
 1. **The core**, `.venv`: the service's own packages from [requirements/core.txt](../requirements/core.txt).
 2. **The desktop window**, `.venv-desktop`: pywebview, and the **Fel's Voice Lab** shortcut on your Desktop. It uses the installed
@@ -51,10 +51,12 @@ Run `setup.bat`. It does three things, in order:
    them one after another. On a computer with an NVIDIA driver, or one whose graphics card is an AMD Radeon, it also offers
    Kokoro and Chatterbox Turbo the GPU build for that card ([NVIDIA graphics cards](#nvidia-graphics-cards),
    [AMD Radeon cards](#amd-radeon-cards)).
+4. **FFmpeg,** when this computer has none that writes every format. It asks whether to put FFmpeg in the Lab's `ffmpeg` folder
+   (about 115 MB to download; see [FFmpeg](#ffmpeg)). Say no and **Install FFmpeg** on **System & backups** does it later.
 
 Typed after `setup.bat`, `--models recommended` (or `all`, `none`, or names such as `kokoro chatterbox`) chooses without the
 question, `--yes` accepts the plans, `--gpu` takes the GPU builds for this computer's card (`--nvidia` asks for NVIDIA's alone)
-and `--no-desktop` skips the window; `--help` lists them. A model that is already installed is left as it is.
+`--ffmpeg` installs FFmpeg without asking, and `--no-desktop` skips the window; `--help` lists them. A model that is already installed is left as it is.
 
 If `setup.bat` is interrupted, run it again: it finishes the job. An existing `.venv` that it did not leave unfinished is checked
 and preserved rather than repaired or upgraded automatically. If its import check fails, inspect the error and restore its
@@ -748,12 +750,24 @@ caches and worker logs stay under the source installation. **System & backups**
 it keeps any other setting in it and never overwrites a file it cannot read. See
 [back up and restore the library](USER_GUIDE.md#back-up-and-restore-the-library).
 
-`ffmpeg` and `ffprobe` are needed for scene export and transcoding, for importing M4A references, and for
-MP3 and AAC export (the build needs its `libmp3lame` and `aac` encoders; the usual full build has both). The lab
-finds them on PATH or in the folder WinGet unpacks them into (`winget install Gyan.FFmpeg`), so a desktop
-shortcut works before PATH has been refreshed. Neither tool is bundled. Without them WAV, FLAC, OGG and MP3
-references still import, and the export panel and the import errors say what is missing. Transcript drafts optionally
-use an isolated `.venv-asr` environment built from `requirements/asr-faster-whisper.txt` and a local copy of the Systran faster-whisper-tiny snapshot (revision d90ca5fe) in `hf-cache/faster-whisper-tiny-d90ca5fe`; `align_takes.py` uses the same pair for word times ([alignment notes](ALIGNMENT.md)).
+### FFmpeg
+
+`ffmpeg` and `ffprobe` are needed for scene export and transcoding, for cleaning a reference, for importing M4A references,
+and for MP3 and AAC export (the build needs its `libmp3lame` and `aac` encoders; the usual full build has both). Neither tool
+is bundled. **Install FFmpeg**, on **System & backups** and on a scene's export panel while no FFmpeg writes every format,
+downloads FFmpeg 9.0.2 (Gyan Doshi's essentials build, about 115 MB) from its GitHub release, checks it against the SHA-256 in
+[catalog/ffmpeg_build.json](../catalog/ffmpeg_build.json), tries that it writes every export format, and puts it in the Lab's
+`ffmpeg` folder (about 210 MB). The Lab uses it at once, without a restart. An interrupted download continues where it
+stopped when you press the button again. `setup.bat` offers the same, and `.venv\Scripts\python.exe tools\install_ffmpeg.py`
+does it from a terminal (`--dry-run` shows the plan). `update.bat` never touches the `ffmpeg` folder.
+
+The Lab looks in its `ffmpeg` folder first, then on PATH, then in the folder WinGet unpacks FFmpeg into
+(`winget install Gyan.FFmpeg`), so a desktop shortcut works before PATH has been refreshed. Without FFmpeg, WAV, FLAC, OGG
+and MP3 references still import, and the export panel and the import errors say what is missing.
+
+### Transcripts and speaker matching
+
+Transcript drafts optionally use an isolated `.venv-asr` environment built from `requirements/asr-faster-whisper.txt` and a local copy of the Systran faster-whisper-tiny snapshot (revision d90ca5fe) in `hf-cache/faster-whisper-tiny-d90ca5fe`; `align_takes.py` uses the same pair for word times ([alignment notes](ALIGNMENT.md)).
 The UI reports unavailable if they are absent. Speaker matching (the voice match on
 takes, the second-voice warning in the reference screen, and the identity checks on
 cleaned and imported clips) needs only Chatterbox Turbo's speaker encoder, `ve.safetensors`
@@ -825,7 +839,7 @@ adds sits in its own folder, and deleting that folder removes it. In this order:
 3. **Delete the shortcut.** `setup.bat` (or `setup-desktop.bat`) put **Fel's Voice Lab** on your Desktop, outside the folder, and
    it would otherwise be left pointing at nothing.
 4. **Delete the Lab folder.** The environments (`.venv`, `.venv-desktop`, `.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and
-   any other `.venv-` folder), the Lab's own `python`, `hf-cache`, `data` and `out` go with it. A library that `state_root` moved elsewhere stays where it
+   any other `.venv-` folder), the Lab's own `python` and `ffmpeg`, `hf-cache`, `data` and `out` go with it. A library that `state_root` moved elsewhere stays where it
    is: delete that folder too if you want it gone.
 
 Three things are outside the folder:
@@ -834,7 +848,8 @@ Three things are outside the folder:
   with every other Python project on the computer, so clearing it only makes the next download fresh. Run
   `.venv\Scripts\python.exe -m pip cache purge` before step 4, or delete that folder afterwards.
 - **Programs you installed separately:** Python 3.12 if you installed it yourself (the Lab's own is in its `python` folder
-  and goes with it), FFmpeg (`winget uninstall Gyan.FFmpeg`) and the Microsoft Visual C++ Redistributable, which other
+  and goes with it), FFmpeg if you installed it yourself (`winget uninstall Gyan.FFmpeg`; the Lab's own is in its `ffmpeg`
+  folder) and the Microsoft Visual C++ Redistributable, which other
   programs use too. Remove them from Settings, Apps when nothing else needs them.
 - **[Fel's Voice Slate](https://github.com/Fel101/fels-voice-slate),** the companion recorder, which is a separate program in
   its own folder.

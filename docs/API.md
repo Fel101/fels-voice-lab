@@ -1346,6 +1346,8 @@ Delivery packages: a scene's selected takes, converted, checked and written to `
 | Method | Path | What it does |
 |---|---|---|
 | GET | [`/api/exports`](#get-api-exports) | List export packages and say which formats FFmpeg can write. |
+| GET | [`/api/ffmpeg/install`](#get-api-ffmpeg-install) | Say how the latest FFmpeg install is getting on. |
+| POST | [`/api/ffmpeg/install`](#post-api-ffmpeg-install) | Install FFmpeg into the Lab's own folder, the build `offer` names: read the plan, or run the installer. |
 | POST | [`/api/exports/preview`](#post-api-exports-preview) | Check an export request and report what it would write, writing nothing. |
 | POST | [`/api/exports`](#post-api-exports) | Write an export package. An existing package is never overwritten. |
 | POST | [`/api/exports/{export_id}/verify`](#post-api-exports-export_id-verify) | Check a written package against its manifest. |
@@ -1360,7 +1362,32 @@ List export packages and say which formats FFmpeg can write.
 |---|---|---|
 | `recheck` | string | `1` asks FFmpeg again, after an install. |
 
-**Answer:** `200`, JSON. `exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and `ffmpeg` (`found`, `ready`, `version`, `formats` and a `message`).
+**Answer:** `200`, JSON. `exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and `ffmpeg` (`found`, `ready`, `version`, `formats`, a `message`, `own` (it is the Lab's own, which Install FFmpeg put in) and `offer` (the FFmpeg `POST /api/ffmpeg/install` puts in: `version`, `builder`, `license`, `download_bytes`, `disk_bytes`; `null` when the FFmpeg in use writes every format or is the Lab's own)).
+
+<a id="get-api-ffmpeg-install"></a>
+
+#### `GET /api/ffmpeg/install`
+
+Say how the latest FFmpeg install is getting on.
+
+**Answer:** `200`, JSON. `install`: the latest FFmpeg install since the service started, or `null`: `engine` (`ffmpeg`), `name`, `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log`.
+
+<a id="post-api-ffmpeg-install"></a>
+
+#### `POST /api/ffmpeg/install`
+
+Install FFmpeg into the Lab's own folder, the build `offer` names: read the plan, or run the installer.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `dry_run` | boolean | Only read the plan; nothing is changed. Default false, which starts the install. |
+
+**Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` and `problems`, as for an engine. Otherwise `install`: the job that started, as `GET /api/ffmpeg/install` gives it, which is the route to poll. It runs `tools/install_ffmpeg.py --yes`, which downloads the build, checks its SHA-256 and unpacks `ffmpeg.exe` and `ffprobe.exe` into `ffmpeg/`; from then on the Lab uses that FFmpeg. Speech is not held up while it runs.
+
+| Also answers | When |
+|---|---|
+| `400` | `dry_run` is not true or false. |
+| `409` | An install, of FFmpeg or of a model, is already running. |
 
 <a id="post-api-exports-preview"></a>
 
@@ -1673,7 +1700,7 @@ Report the version, the system, the library, FFmpeg, disk space and engine state
 |---|---|---|
 | `recheck` | string | `1` asks FFmpeg again. |
 
-**Answer:** `200`, JSON. `generated_at`, `app`, `system`, `library`, `ffmpeg`, `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.
+**Answer:** `200`, JSON. `generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.
 
 <a id="get-api-system-storage"></a>
 

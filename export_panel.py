@@ -142,15 +142,19 @@ def list_exports(state_root):
 
 def ffmpeg_report(refresh=False):
     """What the panel needs to know before anyone presses a button: can packages be written at all, which formats this
-    FFmpeg can encode, and in words what is missing."""
+    FFmpeg can encode, and in words what is missing. own says the FFmpeg in use is the Lab's own; offer is the one Install
+    FFmpeg would put in (ffmpeg_tools.own_build), given while the FFmpeg in use cannot write every format and is not it."""
     report = ffmpeg_tools.status(refresh=refresh)
     formats = ffmpeg_tools.writable_formats(report)
     ready = bool(report["found"] and report["ffprobe"])
     message = report["message"]
     if ready and not all(formats.values()):
         off = ", ".join(ffmpeg_tools.FORMAT_LABEL[name] for name, usable in formats.items() if not usable)
-        message = f"This FFmpeg build cannot write {off}, so that choice is off. Install a full FFmpeg build to turn it on."
-    return {"found": report["found"], "ready": ready, "version": report["version"], "formats": formats, "message": message}
+        message = f"This FFmpeg build cannot write {off}, so that choice is off. Install FFmpeg to turn it on."
+    own = ffmpeg_tools.is_own(report.get("ffmpeg"))
+    offer = None if own or (ready and all(formats.values())) else ffmpeg_tools.own_build()
+    return {"found": report["found"], "ready": ready, "version": report["version"], "formats": formats, "message": message,
+            "own": own, "offer": offer}
 
 
 def run(state_root, req, *, dry_run=False):

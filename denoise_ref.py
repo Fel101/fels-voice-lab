@@ -46,7 +46,7 @@ def find_ffmpeg():
     found = ffmpeg_tools.find_ffmpeg()
     if found:
         return found
-    raise DenoiseError("ffmpeg was not found on PATH or in the WinGet install location.")
+    raise DenoiseError("Cleaning a reference uses FFmpeg, which was not found on this PC. " + ffmpeg_tools.INSTALL_HINT)
 
 
 def sha256_file(path):

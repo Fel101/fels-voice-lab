@@ -546,7 +546,22 @@ ROUTES = [
     R("GET", "/api/exports", "Exports", "List export packages and say which formats FFmpeg can write.",
       query=(F("recheck", "string", "`1` asks FFmpeg again, after an install."),),
       reply="`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and "
-            "`ffmpeg` (`found`, `ready`, `version`, `formats` and a `message`)."),
+            "`ffmpeg` (`found`, `ready`, `version`, `formats`, a `message`, `own` (it is the Lab's own, which Install FFmpeg put "
+            "in) and `offer` (the FFmpeg `POST /api/ffmpeg/install` puts in: `version`, `builder`, `license`, "
+            "`download_bytes`, `disk_bytes`; `null` when the FFmpeg in use writes every format or is the Lab's own))."),
+    R("GET", "/api/ffmpeg/install", "Exports", "Say how the latest FFmpeg install is getting on.",
+      reply="`install`: the latest FFmpeg install since the service started, or `null`: `engine` (`ffmpeg`), `name`, "
+            "`state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end "
+            "of its output) and `log`."),
+    R("POST", "/api/ffmpeg/install", "Exports",
+      "Install FFmpeg into the Lab's own folder, the build `offer` names: read the plan, or run the installer.",
+      body=(F("dry_run", "boolean", "Only read the plan; nothing is changed. Default false, which starts the install."),),
+      reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` and `problems`, as for an engine. Otherwise `install`: the "
+            "job that started, as `GET /api/ffmpeg/install` gives it, which is the route to poll. It runs "
+            "`tools/install_ffmpeg.py --yes`, which downloads the build, checks its SHA-256 and unpacks `ffmpeg.exe` and "
+            "`ffprobe.exe` into `ffmpeg/`; from then on the Lab uses that FFmpeg. Speech is not held up while it runs.",
+      errors=((400, "`dry_run` is not true or false."),
+              (409, "An install, of FFmpeg or of a model, is already running."))),
     R("POST", "/api/exports/preview", "Exports", "Check an export request and report what it would write, writing nothing.",
       body=(F("scene_id", "string", "The scene to export.", True),
             F("formats", "string[]", "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."),
@@ -644,8 +659,8 @@ ROUTES = [
     # ---------------------------------------------------------------- System
     R("GET", "/api/system", "System", "Report the version, the system, the library, FFmpeg, disk space and engine states.",
       query=(F("recheck", "string", "`1` asks FFmpeg again."),),
-      reply="`generated_at`, `app`, `system`, `library`, `ffmpeg`, `disk`, `engines`, `log`, `backups` and `diagnostics`, a "
-            "plain-text version for a bug report with no scripts, transcripts or names in it."),
+      reply="`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, "
+            "`backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it."),
     R("GET", "/api/system/storage", "System", "Measure the library's folders and what a cleanup would remove.",
       reply="`library`, `other` and `cleanup`. Never walks the Drama model folder."),
     R("GET", "/api/system/backups", "System", "List backups, what a new one would include, and the running job.",

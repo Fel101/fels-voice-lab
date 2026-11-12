@@ -6,6 +6,8 @@ __pycache__/
 # The Lab's own Python (setup.bat), per-engine Python environments and model caches
 /python/
 /python.partial/
+/ffmpeg/
+/ffmpeg.partial/
 /.venv/
 /.venv-*/
 /hf-cache/

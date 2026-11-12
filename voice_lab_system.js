@@ -38,7 +38,7 @@ function systemNote(id,text,flagged){var node=$(id);node.textContent=text;node.c
 function renderSystem(report){
   var facts=$('systemFacts');facts.textContent='';
   systemFacts(report).forEach(function(row){var term=document.createElement('dt'),value=document.createElement('dd');term.textContent=row[0];value.textContent=row[1];facts.appendChild(term);facts.appendChild(value);});
-  var ffmpeg=ffmpegSummary(report.ffmpeg);systemNote('systemFfmpeg',ffmpeg.text,!ffmpeg.ok);
+  var ffmpeg=ffmpegSummary(report.ffmpeg);systemNote('systemFfmpeg',ffmpeg.text,!ffmpeg.ok);renderFfmpegOffer('system',report.ffmpeg);
   var library=diskSummary('Library drive',report.disk.library),install=diskSummary('Program drive',report.disk.install);
   systemNote('systemDisk',library.text+' '+install.text,library.low||install.low);
   $('systemModels').textContent=modelsSummary(report.engines);
@@ -222,10 +222,55 @@ function saveUpdateChoice(){
     box.checked=!on;systemNote('updateStatus','That choice could not be saved: '+e.message,true);
   });
 }
-function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups()]);}
+// Install FFmpeg: the button here and the one on the export panel start the same install (POST /api/ffmpeg/install), which the
+// service runs as tools/install_ffmpeg.py. The page follows it (GET /api/ffmpeg/install) and asks FFmpeg again when it ends.
+var ffmpegJob=null,ffmpegTimer=null,ffmpegOffers={system:null,export:null},ffmpegError='';
+var FFMPEG_VIEWS={system:['systemFfmpegInstall','systemFfmpegProgress'],export:['exportFfmpegInstall','exportFfmpegProgress']};
+// In megabytes of a million bytes, as the installer's own progress lines count them, so the offer and the download agree.
+function ffmpegMegabytes(bytes){ return Math.round(bytes/1e6)+' MB'; }
+function ffmpegOfferText(offer){
+  return 'Install FFmpeg puts FFmpeg '+offer.version+' in the Lab\'s own folder: '+offer.builder+', licence '+offer.license+'. It downloads '+ffmpegMegabytes(offer.download_bytes)+' and uses '+ffmpegMegabytes(offer.disk_bytes)+' of disk.';
+}
+function ffmpegJobText(job){
+  var lines=(job.lines||[]).map(function(line){return line.trim();}).filter(Boolean);
+  if(job.state==='running')return 'Installing FFmpeg. '+(lines.slice(-1)[0]||'Starting.')+' It cannot be stopped from here: closing the Lab stops it, and Install FFmpeg then continues where it stopped.';
+  if(job.state==='finished')return 'FFmpeg is installed.';
+  var errors=lines.filter(function(line){return /^error:/.test(line);}).map(function(line){return line.replace(/^error:\s*/,'');});
+  return 'FFmpeg was not installed: '+(errors.join(' ')||lines.slice(-1)[0]||'the installer stopped without saying why.')+' Press Install FFmpeg to try again.';
+}
+function renderFfmpegOffer(where,report){
+  if(report!==undefined)ffmpegOffers[where]=report&&report.offer||null;
+  var ids=FFMPEG_VIEWS[where],button=$(ids[0]),note=$(ids[1]),offer=ffmpegOffers[where],job=ffmpegJob,running=!!job&&job.state==='running';
+  button.hidden=!offer&&!running;
+  button.disabled=running;
+  button.textContent=running?'Installing FFmpeg…':'Install FFmpeg';
+  var text=ffmpegError||(job&&(running||job.state==='failed'||!offer)?ffmpegJobText(job):offer?ffmpegOfferText(offer):'');
+  note.textContent=text;note.hidden=!text;
+  note.className=ffmpegError||(job&&job.state==='failed')?'meta take-checks flagged':'meta';
+}
+function renderFfmpegJob(job){
+  var was=!!ffmpegJob&&ffmpegJob.state==='running';
+  ffmpegJob=job||null;
+  renderFfmpegOffer('system');renderFfmpegOffer('export');
+  clearTimeout(ffmpegTimer);
+  if(ffmpegJob&&ffmpegJob.state==='running'){ffmpegTimer=setTimeout(pollFfmpegInstall,1000);}
+  else if(was){refreshSystem(true);if(typeof refreshExports==='function')refreshExports(undefined,true);}
+}
+function pollFfmpegInstall(){
+  return fetchJson('/api/ffmpeg/install').then(function(result){ffmpegError='';renderFfmpegJob(result.install);}).catch(function(e){
+    ffmpegError='Could not follow the FFmpeg install: '+e.message+'. It may still be running; Check FFmpeg again shows when it is there.';renderFfmpegJob(null);});
+}
+function startFfmpegInstall(){
+  ffmpegError='';
+  return fetchJson('/api/ffmpeg/install',{}).then(function(result){renderFfmpegJob(result.install);}).catch(function(e){
+    ffmpegError='FFmpeg was not installed: '+e.message;renderFfmpegOffer('system');renderFfmpegOffer('export');});
+}
+function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall()]);}
 $('systemRefresh').addEventListener('click',function(){refreshSystemPage();});
 $('systemCopy').addEventListener('click',function(){copyDiagnostics();});
 $('systemFfmpegCheck').addEventListener('click',function(){refreshSystem(true);});
+$('systemFfmpegInstall').addEventListener('click',startFfmpegInstall);
+$('exportFfmpegInstall').addEventListener('click',startFfmpegInstall);
 $('systemMeasure').addEventListener('click',measureStorage);
 $('systemClean').addEventListener('click',runCleanup);
 $('backupCreate').addEventListener('click',startBackup);

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "about": "The FFmpeg that Install FFmpeg puts in the Lab's ffmpeg folder (tools/install_ffmpeg.py): Gyan Doshi's essentials build for Windows, from the GitHub release that mirrors www.gyan.dev's versioned builds. It is GPL v3 and the Lab runs it as a separate program; only the files listed are unpacked.",
+  "version": "9.0.2",
+  "builder": "Gyan Doshi (www.gyan.dev), essentials build",
+  "license": "GPL-3.0",
+  "source": "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b",
+  "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
+  "bytes": 114768076,
+  "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+  "folder": "ffmpeg-9.0.2-essentials_build",
+  "files": [
+    {"path": "bin/ffmpeg.exe", "size": 105423872},
+    {"path": "bin/ffprobe.exe", "size": 105221120},
+    {"path": "LICENSE", "size": 35147},
+    {"path": "README.txt", "size": 41577}
+  ]
+}

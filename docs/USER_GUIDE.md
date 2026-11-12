@@ -203,8 +203,9 @@ never silently overwritten.
 
 FFmpeg writes every format, so the panel checks it when you open it. Without FFmpeg it says so and
 switches off every button that needs it; with an FFmpeg build that lacks one encoder, only that format
-is switched off. **Refresh list** checks again, which is how you pick up an FFmpeg you have just
-installed. MP3 is written as variable bit rate (about 190 kbit/s) and AAC at 192 kbit/s. MP3 takes only
+is switched off. Either way it offers **Install FFmpeg**, which puts FFmpeg in the Lab's own folder and
+switches the formats on when it is done, with no restart. **Refresh list** checks again, which is how you
+pick up an FFmpeg you have just installed yourself. MP3 is written as variable bit rate (about 190 kbit/s) and AAC at 192 kbit/s. MP3 takes only
 8, 11.025, 12, 16, 22.05, 24, 32, 44.1 and 48 kHz, and AAC only 7.35, 8, 11.025, 12, 16, 22.05, 24, 32,
 44.1, 48, 64, 88.2 and 96 kHz; an export that would need another rate is refused before anything is written. FFmpeg records the encoder's delay in the file, so a player that
 honours it plays exactly the take's length; one that does not adds a few tens of milliseconds of silence at
@@ -416,7 +417,9 @@ or paths; do not upload them without review.
 **System & backups**, last in the list on the left, shows what this PC is running without loading a model: the version,
 Python and Windows, the device and free memory, the library folder with the schema number of each database and how much
 is in it, and the name of the service log. It says whether FFmpeg is found and which of WAV, FLAC, Ogg, MP3 and AAC
-this build can write; **Check FFmpeg again** looks again after you install it, with no restart. It shows the free space
+this build can write, and whether it is the Lab's own. While none writes every format, **Install FFmpeg** says what it
+would download and how much disk it uses, and installs it with the page open: the button is busy until it ends, and the
+line under it follows the download. **Check FFmpeg again** looks again after you install one yourself, with no restart. It shows the free space
 on the library's drive and the program's drive, flagging either under 5 GB, and counts the models by state.
 
 **Copy report for a bug report** puts the same facts on the clipboard as plain text, with the processor, the graphics cards

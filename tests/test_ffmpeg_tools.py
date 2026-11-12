@@ -39,6 +39,7 @@ class FindingFFmpegTests(unittest.TestCase):
     def test_nothing_is_found_when_it_is_nowhere(self):
         with tempfile.TemporaryDirectory(prefix="voice-lab-no-ffmpeg-") as empty, \
                 mock.patch.object(ffmpeg_tools.shutil, "which", return_value=None), \
+                mock.patch.object(ffmpeg_tools, "LAB_FOLDER", Path(empty) / "ffmpeg" / "bin"), \
                 mock.patch.object(ffmpeg_tools, "WINGET_FOLDER", Path(empty)):
             self.assertIsNone(ffmpeg_tools.find_ffmpeg())
             self.assertIsNone(ffmpeg_tools.find_ffprobe())
@@ -55,9 +56,30 @@ class FindingFFmpegTests(unittest.TestCase):
                 for tool in ("ffmpeg", "ffprobe"):
                     (Path(winget) / build / "bin" / f"{tool}.exe").write_bytes(b"")
             with mock.patch.object(ffmpeg_tools.shutil, "which", return_value=None), \
+                    mock.patch.object(ffmpeg_tools, "LAB_FOLDER", Path(winget) / "no-lab-ffmpeg"), \
                     mock.patch.object(ffmpeg_tools, "WINGET_FOLDER", Path(winget)):
                 self.assertTrue(ffmpeg_tools.find_ffmpeg().endswith(str(Path("ffmpeg-8.1.1-full_build/bin/ffmpeg.exe"))))
                 self.assertTrue(ffmpeg_tools.find_ffprobe().endswith("ffprobe.exe"))
+
+    def test_the_labs_own_ffmpeg_comes_before_path_and_winget(self):
+        with tempfile.TemporaryDirectory(prefix="voice-lab-own-ffmpeg-") as lab:
+            own = Path(lab) / "ffmpeg" / "bin"
+            own.mkdir(parents=True)
+            (own / "ffmpeg.exe").write_bytes(b"")
+            with mock.patch.object(ffmpeg_tools.shutil, "which", side_effect=lambda name: f"C:/tools/{name}.exe"), \
+                    mock.patch.object(ffmpeg_tools, "LAB_FOLDER", own):
+                self.assertEqual(ffmpeg_tools.find_ffmpeg(), str(own / "ffmpeg.exe"))
+                self.assertEqual(ffmpeg_tools.find_ffprobe(), "C:/tools/ffprobe.exe", "each program is looked for on its own")
+                self.assertTrue(ffmpeg_tools.is_own(own / "ffmpeg.exe"))
+                self.assertFalse(ffmpeg_tools.is_own("C:/tools/ffmpeg.exe"))
+                self.assertFalse(ffmpeg_tools.is_own(None))
+
+    def test_the_offer_names_the_pinned_build_and_its_sizes(self):
+        offer = ffmpeg_tools.own_build()
+        self.assertEqual(set(offer), {"version", "builder", "license", "download_bytes", "disk_bytes"})
+        self.assertGreater(offer["disk_bytes"], offer["download_bytes"])
+        with mock.patch.object(ffmpeg_tools, "OWN_BUILD", Path(tempfile.gettempdir()) / "no-such-ffmpeg-build.json"):
+            self.assertIsNone(ffmpeg_tools.own_build())
 
     def test_a_program_a_caller_names_is_used_instead_of_the_search(self):
         with mock.patch.object(ffmpeg_tools.shutil, "which", side_effect=lambda name: f"C:/tools/{name}.exe"):
