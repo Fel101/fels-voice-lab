@@ -819,6 +819,9 @@ test('the installation facts name the version, the machine, the library and what
     ['Library folder', 'D:\\VoiceLab'], ['Database schemas', 'evaluations 2, scenes 1, cast 8'],
     ['Library contents', '3 characters, 5 voice identities, 4 references, 120 takes, 2 scenes'],
     ['Service log', 'D:\\lab\\out\\logs\\service-1.log']]);
+  const python = source => context.systemFacts(systemReport({system: {...systemReport().system, python: '3.12.10', python_source: source}}))[1][1];
+  assert.equal(python("the Lab's own"), "3.12.10 (the Lab's own), Windows-11");
+  assert.equal(python('C:\\Python312'), '3.12.10 (from C:\\Python312), Windows-11');
   const bare = JSON.parse(JSON.stringify(context.systemFacts(systemReport({log: null, library: {path: 'D:\\New', schemas: {}, counts: {characters: null, takes: 0}}}))));
   assert.deepEqual(bare.slice(4), [['Database schemas', 'no databases yet'], ['Library contents', '0 takes']]);
   assert.ok(!bare.some(row => row[0] === 'Service log'), 'no log, no row');

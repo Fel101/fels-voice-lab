@@ -126,9 +126,9 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 
 ## Start here
 
-1. Install [Python 3.12](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) (64-bit; the newer Python on
-   python.org's front page does not work yet). Download the newest release's ZIP from the Releases page, or clone the
-   repository, into a folder OneDrive does not sync, such as `C:\voice-lab`, and run `setup.bat`.
+1. Download the newest release's ZIP from the Releases page, or clone the repository, into a folder OneDrive does not sync,
+   such as `C:\voice-lab`, and run `setup.bat`. There is no Python to install first: when the computer has no Python 3.12,
+   setup downloads one for the Lab alone (about 14 MB) into its `python` folder.
 2. It sets up the core and the desktop window, then asks which speech models to install: **Kokoro and Phonon**, which speak
    in 78 preset voices on any computer (about 0.8 GB to download and 2 GB on disk), or those and **Chatterbox Turbo**, which
    also speaks in the voice of any recording longer than five seconds (about 4 GB to download and 7 GB on disk, for a computer

@@ -339,7 +339,7 @@ class SetupBatchTests(unittest.TestCase):
         data = (ROOT / "setup.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
         lines = [line.strip() for line in data.decode("ascii").splitlines()]
-        core = lines.index("py -3.12 tools\\setup_core.py")
+        core = lines.index("%PYTHON% tools\\setup_core.py")
         self.assertEqual(lines[core + 1], "if errorlevel 1 goto done", "a core that failed is not followed by the rest")
         self.assertEqual(lines[core + 2], '".venv\\Scripts\\python.exe" tools\\first_setup.py %*')
 

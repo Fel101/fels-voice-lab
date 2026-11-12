@@ -114,11 +114,13 @@ class OneDriveTests(unittest.TestCase):
 
 
 class SetupBatchTests(unittest.TestCase):
-    def test_setup_bat_says_which_python_to_install_when_3_12_cannot_start(self):
+    def test_setup_bat_says_which_python_to_install_when_it_cannot_get_one(self):
+        # The order it tries Pythons in is tests/test_get_python.py's.
         data = (ROOT / "setup.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
-        text = data.decode("utf-8")
-        self.assertIn('py -3.12 -c "import sys; print(\'Python\', sys.version.split()[0])" || goto no_python', text)
+        text = data.decode("ascii")
+        self.assertIn("%PYTHON% -c \"import sys; print('Python', sys.version.split()[0], 'at', sys.executable)\" || goto no_python",
+                      text)
         self.assertIn(":no_python", text)
         self.assertIn("https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe", text)
 

@@ -262,6 +262,18 @@ class DiagnosticsTests(TempBase):
         self.assertIn("  contents: 3 characters, 4 references, 2 scenes", text)
         self.assertIn("  schemas: cast unreadable", text)
 
+    def test_the_python_the_lab_runs_on_is_named_by_where_it_lives(self):
+        own = system_report.LAB_PYTHON / "python.exe"
+        elsewhere = self.base / "Programs" / "Python312" / "python.exe"
+        self.assertEqual(system_report.python_source(own), "the Lab's own")
+        self.assertEqual(system_report.python_source(elsewhere), str(elsewhere.parent.resolve()))
+        self.assertTrue(system_report.python_source())
+        system = {**self.report()["system"], "python": "3.12.10"}
+        self.assertIn("System: Python 3.12.10 (the Lab's own), Windows-11,",
+                      self.text(self.report(system={**system, "python_source": "the Lab's own"})))
+        self.assertIn(f"System: Python 3.12.10 (from ~{os.sep}Programs{os.sep}Python312), Windows-11,",
+                      self.text(self.report(system={**system, "python_source": str(elsewhere.parent)})))
+
 
 class StorageTests(TempBase):
     def setUp(self):

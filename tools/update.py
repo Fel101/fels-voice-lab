@@ -56,7 +56,7 @@ NOTES_LINES = 12
 SCHEMA = 1
 # Never written, replaced or removed by an update, whatever a release holds: git's own folder, the environments, the model
 # caches, run output, backups and the library's own folders, all of which the repository keeps out (see .gitignore).
-PROTECTED_FOLDERS = {".git", "out", "hf-cache", "backups", "restored", "data", "reference"}
+PROTECTED_FOLDERS = {".git", "out", "hf-cache", "backups", "restored", "data", "reference", "python"}
 AMD_LOCK = "requirements/amd-rocm.txt"
 # The model environments whose packages a release can change, with the pinned lists their packages came from, by the build of
 # PyTorch an environment holds (torch_build): the CPU build from the CPU list; NVIDIA's from the CPU list with NVIDIA's torch in

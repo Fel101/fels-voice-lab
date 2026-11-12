@@ -12,7 +12,8 @@ function systemFacts(report){
   var schemas=report.library.schemas,counts=report.library.counts,schemaText=Object.keys(schemas).map(function(key){return key+' '+(schemas[key]===null?'unreadable':schemas[key]);}).join(', ');
   var countText=[['characters','character','characters'],['identities','voice identity','voice identities'],['references','reference','references'],['takes','take','takes'],['scenes','scene','scenes']].filter(function(row){
     return counts[row[0]]!==null&&counts[row[0]]!==undefined;}).map(function(row){return plural(counts[row[0]],row[1],row[2]);}).join(', ');
-  var rows=[['Version',report.app.name+' '+report.app.version],['Python and system',report.system.python+', '+report.system.platform],
+  var source=report.system.python_source,python=report.system.python+(source==="the Lab's own"?' (the Lab\'s own)':source?' (from '+source+')':'');
+  var rows=[['Version',report.app.name+' '+report.app.version],['Python and system',python+', '+report.system.platform],
     ['Device',report.system.device+', '+report.system.free_ram_gb+' GB of memory free'],['Library folder',report.library.path],
     ['Database schemas',schemaText||'no databases yet'],['Library contents',countText||'nothing yet']];
   if(report.log&&report.log.file)rows.push(['Service log',report.log.file]);

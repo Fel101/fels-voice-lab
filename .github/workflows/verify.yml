@@ -42,3 +42,31 @@ jobs:
         run: node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs
       - name: Check the repository for secrets, private files and dead links
         run: .venv/Scripts/python.exe tools/check_repo.py
+  setup-without-python:
+    # setup.bat on a computer with no Python: it fetches the Lab's own (tools/get_python.ps1), sets up the core, and the Lab starts.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Hide this runner's Python, run setup.bat, start the Lab
+        run: |
+          foreach ($launcher in "$env:SystemRoot\py.exe", "$env:SystemRoot\pyw.exe") {
+            if (Test-Path $launcher) { Remove-Item $launcher -Force }
+          }
+          $env:PATH = ($env:PATH -split ';' | Where-Object {
+            $_ -and -not (Test-Path (Join-Path $_ 'python.exe')) -and -not (Test-Path (Join-Path $_ 'py.exe'))
+          }) -join ';'
+          if (Get-Command py -ErrorAction SilentlyContinue) { throw "py is still on the PATH" }
+          if (Get-Command python -ErrorAction SilentlyContinue) { throw "python is still on the PATH" }
+          cmd /c ".\setup.bat --models none --yes --no-desktop < NUL"
+          if ($LASTEXITCODE) { throw "setup.bat failed" }
+          if (-not (Test-Path python\python.exe)) { throw "setup.bat did not fetch the Lab's own Python" }
+          $lab = Start-Process .venv\Scripts\python.exe -ArgumentList 'serve.py', '--port', '8790' -PassThru -NoNewWindow
+          $health = $null
+          foreach ($try in 1..60) {
+            try { $health = Invoke-RestMethod http://127.0.0.1:8790/api/health -TimeoutSec 2; break } catch { Start-Sleep 1 }
+          }
+          Stop-Process -Id $lab.Id -Force
+          if ($health.status -ne 'ready') { throw "The Lab did not answer /api/health" }
+          "The Lab started on its own Python: version $($health.version)"

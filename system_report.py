@@ -11,6 +11,7 @@ import os
 import platform
 import re
 import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,8 @@ import housekeeping
 import library_backup
 
 LOW_DISK_BYTES = 5 * 1024 ** 3
+# The Lab's own Python, which setup.bat fetches when the computer has none (tools/get_python.ps1).
+LAB_PYTHON = Path(__file__).resolve().parent / "python"
 ENGINE_STATES = ("usable", "not_checked", "check_outdated", "check_failed", "not_installed", "conversion_task")
 STATE_WORDS = {"usable": "usable", "not_checked": "installed, not tested", "check_outdated": "test out of date",
                "check_failed": "test failed", "not_installed": "not installed", "conversion_task": "conversion task"}
@@ -66,6 +69,17 @@ def engines_summary(payload):
     return {"device": payload.get("device"), "counts": counts, "rows": rows, "speed": speed}
 
 
+def python_source(base=None):
+    """Where the Python the Lab runs on lives: "the Lab's own" for the python folder setup.bat fetched, else its folder.
+    The service runs in .venv, so this is the Python .venv was built from, which every model's environment is built from too."""
+    folder = Path(base or getattr(sys, "_base_executable", sys.executable)).resolve().parent
+    try:
+        own = folder == LAB_PYTHON.resolve()
+    except OSError:
+        own = False
+    return "the Lab's own" if own else str(folder)
+
+
 def hardware_facts():
     """The processor and graphics cards, as Windows names them (hardware.py): what a hardware report needs."""
     import hardware
@@ -93,7 +107,8 @@ def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, l
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "app": {"name": app, "version": version},
-        "system": {"python": platform.python_version(), "platform": platform.platform(), "device": device,
+        "system": {"python": platform.python_version(), "python_source": python_source(), "platform": platform.platform(),
+                   "device": device,
                    "free_ram_gb": round(free_ram, 1), "total_ram_gb": None if total_ram is None else round(total_ram, 1),
                    "processor": facts.get("processor"), "graphics_cards": facts.get("graphics_cards") or []},
         "library": {"path": str(root), "schemas": library_backup.schema_versions(root),
@@ -105,6 +120,11 @@ def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, l
         "backups": {"folder": str(root / library_backup.BACKUP_FOLDER), "count": len(backups),
                     "latest": backups[0] if backups else None},
     }
+
+
+def python_words(system):
+    source = system.get("python_source")
+    return f" ({source})" if source == "the Lab's own" else f" (from {source})" if source else ""
 
 
 def _gb(count):
@@ -134,7 +154,7 @@ def diagnostics_text(report):
     total = f" of {system['total_ram_gb']} GB" if system.get("total_ram_gb") else ""
     lines = [
         f"{app['name']} {app['version']} diagnostics, {report['generated_at']}",
-        f"System: Python {system['python']}, {system['platform']}, device {system['device']}, "
+        f"System: Python {system['python']}{python_words(system)}, {system['platform']}, device {system['device']}, "
         f"{system['free_ram_gb']} GB RAM free{total}",
     ]
     if system.get("processor"):

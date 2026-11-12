@@ -43,6 +43,15 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   started with `serve.py` or the desktop app was not affected, because it resolves its own folder.
 - The Clone page's note on Common Voice no longer says Cast cannot take MP3.
 
+### Setup
+
+- **No Python to install.** On a computer with no Python 3.12, `setup.bat` now downloads one for the Lab alone: Python
+  3.12.10 from nuget.org, where python.org publishes it as a package (about 14 MB), checked against its SHA-256 and unpacked
+  into the Lab's `python` folder. It installs nothing into Windows, and every environment the Lab makes is built on it. A
+  computer with Python 3.12 keeps using it and downloads nothing. **System & backups** says which Python the Lab runs on.
+  Keep the `python` folder. After moving a Lab set up this way, delete its `.venv` folders and run `setup.bat` again
+  ([Moving the Lab](docs/SETUP.md#moving-the-lab)).
+
 ### Releases
 
 - **A release is published only after its checks pass.** 0.2.0 was published by hand while three of its tests failed on

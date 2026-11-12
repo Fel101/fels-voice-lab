@@ -39,6 +39,11 @@ shell uses pywebview (BSD-3-Clause), Python.NET (MIT), and Microsoft Edge WebVie
 (Microsoft terms). They retain their own dependency licenses. This repository
 does not redistribute Python, FFmpeg, WebView2 or a frozen executable.
 
+On a computer with no Python 3.12, `setup.bat` downloads Python 3.12.10 into the Lab's `python` folder
+(`tools/get_python.ps1`): the package `python` that the Python Software Foundation publishes on nuget.org, checked against
+the SHA-256 in `catalog/python_runtime.json`. Python is under the PSF License Agreement, whose text, with the licenses of
+the libraries Python bundles, is in that folder's `LICENSE.txt`. The repository holds none of it.
+
 Every model installer makes an environment of its own and installs into it the core packages above at the same versions, with
 the model's own.
 

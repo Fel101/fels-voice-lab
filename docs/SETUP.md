@@ -1,7 +1,7 @@
 # Setup
 
 This is an early Windows release that runs from source, not a bundled
-installer with every model. Python 3.12 x64 is the supported starting point.
+installer with every model. It runs on Python 3.12 (64-bit), and `setup.bat` brings its own when the computer has none.
 `setup.bat` sets up the core, the desktop window and the speech models you choose, in one go: [Kokoro](#kokoro-on-the-cpu),
 [Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu), which all speak on an ordinary CPU;
 Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher of its own too (`setup-kokoro.bat`,
@@ -25,10 +25,18 @@ Desktop and Documents folders to OneDrive, which would upload the gigabytes of p
 models the Lab installs and can lock its databases while it syncs them; `setup.bat` warns
 when the folder is inside OneDrive.
 
-Install Python 3.12 (64-bit) with its launcher. The newer Python that python.org offers
-first does not work with the Lab yet: 3.12.10 is the last 3.12 release with a Windows
-installer ([python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)),
-and `setup.bat` gives that link when `py -3.12` cannot start.
+You do not need to install Python. When this computer has no Python 3.12, `setup.bat` downloads one for the Lab alone into
+its `python` folder: Python 3.12.10 from nuget.org, where python.org publishes each Windows release as a package (about 14 MB,
+checked against its SHA-256 in [catalog/python_runtime.json](../catalog/python_runtime.json)). It installs nothing into
+Windows, and nothing else on the computer uses it. When Python 3.12 is installed already (`py -3.12` starts it), setup uses
+that and downloads nothing. The newer Python that python.org offers first does not work with the Lab yet; 3.12.10 is the last
+3.12 release with a Windows installer
+([python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)), if you would rather
+install it yourself.
+
+**Keep the `python` folder, and keep the Lab where it is.** Every environment the Lab makes (`.venv`, `.venv-desktop` and each
+model's) is built on that Python and records its full path, so they stop working if the folder is deleted or the Lab's folder
+is moved or renamed. `update.bat` never touches it. To move the Lab, see [Moving the Lab](#moving-the-lab).
 
 Run `setup.bat`. It does three things, in order:
 
@@ -791,6 +799,18 @@ Chatterbox. The model files you already have are kept. Only the lists an environ
 change to `requirements/amd-rocm.txt` names only models installed with AMD's build. A model whose files changed is named when
 its installer would fetch some of them, and Drama 3 when its receipt names other files than its installer pins.
 
+## Moving the Lab
+
+Every environment records the full path of the Python it was built from, and the Lab's own Python lives in its folder. After
+the Lab's folder is moved or renamed, its environments cannot start that Python, and the Lab does not start. Move it back, or:
+
+1. In the moved folder, delete `.venv`, `.venv-desktop` and every other `.venv-` folder. Keep `python`, `hf-cache` and `data`.
+2. Run `setup.bat`, choosing the models you had. The installers keep the model files already in `hf-cache` once they match
+   their SHA-256, and download only what is missing; pip usually has the packages in its own cache.
+
+A Lab set up with a Python you installed yourself still builds on that Python after a move, so this is needed only when the
+Lab's own `python` folder moved with it.
+
 ## Removing the Lab
 
 The Lab has no installer and writes nothing to the registry, so it does not appear in Settings, Apps. Nearly everything it
@@ -805,7 +825,7 @@ adds sits in its own folder, and deleting that folder removes it. In this order:
 3. **Delete the shortcut.** `setup.bat` (or `setup-desktop.bat`) put **Fel's Voice Lab** on your Desktop, outside the folder, and
    it would otherwise be left pointing at nothing.
 4. **Delete the Lab folder.** The environments (`.venv`, `.venv-desktop`, `.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and
-   any other `.venv-` folder), `hf-cache`, `data` and `out` go with it. A library that `state_root` moved elsewhere stays where it
+   any other `.venv-` folder), the Lab's own `python`, `hf-cache`, `data` and `out` go with it. A library that `state_root` moved elsewhere stays where it
    is: delete that folder too if you want it gone.
 
 Three things are outside the folder:
@@ -813,8 +833,9 @@ Three things are outside the folder:
 - **pip's download cache,** `%LOCALAPPDATA%\pip\Cache`, which can hold a gigabyte or more of PyTorch downloads. pip shares it
   with every other Python project on the computer, so clearing it only makes the next download fresh. Run
   `.venv\Scripts\python.exe -m pip cache purge` before step 4, or delete that folder afterwards.
-- **Programs you installed separately:** Python 3.12, FFmpeg (`winget uninstall Gyan.FFmpeg`) and the Microsoft Visual C++
-  Redistributable, which other programs use too. Remove them from Settings, Apps when nothing else needs them.
+- **Programs you installed separately:** Python 3.12 if you installed it yourself (the Lab's own is in its `python` folder
+  and goes with it), FFmpeg (`winget uninstall Gyan.FFmpeg`) and the Microsoft Visual C++ Redistributable, which other
+  programs use too. Remove them from Settings, Apps when nothing else needs them.
 - **[Fel's Voice Slate](https://github.com/Fel101/fels-voice-slate),** the companion recorder, which is a separate program in
   its own folder.
 

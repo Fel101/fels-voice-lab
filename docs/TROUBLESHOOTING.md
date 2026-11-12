@@ -36,10 +36,17 @@ or the model's worker may stop.
 
 ## Setup stops
 
-**`py -3.12` could not start.** The Lab needs Python 3.12 (64-bit). The newest Python on python.org is a later version, which
-the Lab does not support yet. Install
-[python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe), the last 3.12 release with a
-Windows installer, and run `setup.bat` again. Setup keeps what is already done.
+**Setup could not get Python 3.12.** When the computer has no Python 3.12, `setup.bat` downloads the Lab's own (about 14 MB,
+from nuget.org) into its `python` folder. If that download stopped, check the internet connection and run `setup.bat` again;
+it keeps what is already done. If the file did not match its SHA-256, it was deleted: run setup again, and if it happens
+again, a proxy or security program is changing downloads. Or install
+[python-3.12.10-amd64.exe](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) yourself, the last 3.12
+release with a Windows installer, and run `setup.bat` again: it uses an installed Python 3.12 and downloads nothing. The
+newest Python on python.org is a later version, which the Lab does not support yet.
+
+**The Lab stopped starting after its folder was moved or renamed.** A console that says `No Python at` a path in the old
+folder means the environments were built on the Lab's own Python, which moved. Move the folder back, or follow
+[Moving the Lab](SETUP.md#moving-the-lab): delete the `.venv` folders and run `setup.bat` again.
 
 **Windows asks before it runs `setup.bat`.** Files extracted from a ZIP downloaded from the internet carry a mark that makes
 Windows ask before running them. Choose to run it, or, before you extract the ZIP, right-click it, choose **Properties**, tick

@@ -29,7 +29,7 @@ def install(command):
 
 def main():
     if sys.version_info[:2] != (3, 12):
-        raise SystemExit("Use Python 3.12: py -3.12 tools/setup_core.py")
+        raise SystemExit("Use Python 3.12: run setup.bat, which finds or fetches it.")
     folder = onedrive_folder(ROOT)
     if folder:
         print(f"This folder is inside OneDrive ({folder}). OneDrive would upload the gigabytes of packages and models the Lab "

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "about": "The Python setup.bat fetches into python\\ when this computer has no Python 3.12 (tools/get_python.ps1). python.org publishes each Windows release on nuget.org as a package named python: a full Python, with venv and pip, that installs nothing into Windows. 3.12.10 is the last 3.12 release published there.",
+  "version": "3.12.10",
+  "url": "https://api.nuget.org/v3-flatcontainer/python/3.12.10/python.3.12.10.nupkg",
+  "bytes": 14515433,
+  "sha256": "0eb85c2dfccccf1b17352de4c397f69194035b7d37149eacc16f1147d93de3b8",
+  "folder": "tools"
+}

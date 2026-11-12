@@ -3,7 +3,9 @@ __pycache__/
 *.py[cod]
 *.log
 
-# Existing per-engine Python environments and model caches
+# The Lab's own Python (setup.bat), per-engine Python environments and model caches
+/python/
+/python.partial/
 /.venv/
 /.venv-*/
 /hf-cache/
