@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 import breeze_worker  # noqa: E402
 import engine_checks  # noqa: E402
 import engine_install  # noqa: E402
-from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_7600  # noqa: E402
+from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_5600_XT, RX_7600  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
 from tools import install_breeze as ib  # noqa: E402
@@ -50,6 +50,7 @@ def loader_constants():
 
 LOADER = loader_constants()
 RTX_4080 = {"name": "NVIDIA GeForce RTX 4080", "capability": (8, 9), "driver": (581, 57), "memory_mib": 16376}
+RTX_4050_LAPTOP = {"name": "NVIDIA GeForce RTX 4050 Laptop GPU", "capability": (8, 9), "driver": (581, 57), "memory_mib": 6141}
 
 
 def sha(data):
@@ -109,30 +110,32 @@ class ShippedFilesTests(unittest.TestCase):
 
 
 class ProblemAndPlanTests(unittest.TestCase):
-    def test_an_8_gb_card_is_refused_before_anything_is_downloaded_and_a_16_gb_one_passes(self):
+    def test_a_6_gb_card_is_refused_before_anything_is_downloaded_and_an_8_gb_one_passes(self):
+        # The owner allowed 8 GB cards on 2026-11-12: Breeze passed Test on this laptop's card at 7.4 GB.
         laptop = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (581, 57), "memory_mib": 8151}
-        problems = ib.nvidia_problems(present=True, cards=[laptop])
-        self.assertEqual(len(problems), 1)
-        self.assertIn(
-            "needs a graphics card with at least 10 GB of memory, and the NVIDIA GeForce RTX 5070 Laptop GPU has 8.0 GB",
-            problems[0],
-        )
+        self.assertEqual(ib.nvidia_problems(present=True, cards=[laptop]), [])
         self.assertEqual(ib.nvidia_problems(present=True, cards=[RTX_4080]), [])
+        [small] = ib.nvidia_problems(present=True, cards=[RTX_4050_LAPTOP])
+        self.assertIn(
+            "needs a graphics card with at least 7.5 GB of memory, and the NVIDIA GeForce RTX 4050 Laptop GPU has 6.0 GB", small
+        )
+        self.assertIn("Breeze TTS 2 cannot run on this card in the Lab.", small)
         self.assertEqual(ib.nvidia_problems(present=False), [ib.NO_NVIDIA_DRIVER])
         self.assertEqual(ib.gpu_problems(None, []), [ib.NO_NVIDIA_DRIVER])
         self.assertIn("an NVIDIA card or an AMD Radeon", " ".join(ib.NO_NVIDIA_DRIVER.split()))
 
-    def test_an_8_gb_amd_card_is_refused_and_a_32_gb_one_passes(self):
+    def test_a_6_gb_amd_card_is_refused_and_8_and_32_gb_ones_pass(self):
         with tempfile.TemporaryDirectory() as folder:
             (Path(folder) / "requirements").mkdir()
             (Path(folder) / amd.LOCK).write_bytes((ROOT / amd.LOCK).read_bytes())
             with mock.patch.dict(os.environ):
                 os.environ.pop(amd.VARIABLE, None)
                 self.assertEqual(ib.gpu_problems("amd", [RADEON_780M, R9700], folder), [])
-                [small] = ib.gpu_problems("amd", [RX_7600], folder)
+                self.assertEqual(ib.gpu_problems("amd", [RX_7600], folder), [])
+                [small] = ib.gpu_problems("amd", [RX_5600_XT], folder)
                 [old] = ib.amd_card_problems([RADEON_VII], root=folder)
         self.assertIn(
-            "Breeze TTS 2 needs a graphics card with at least 10 GB of memory, and the AMD Radeon RX 7600 has 8.0 GB", small
+            "Breeze TTS 2 needs a graphics card with at least 7.5 GB of memory, and the AMD Radeon RX 5600 XT has 6.0 GB", small
         )
         self.assertIn("has no code for the AMD Radeon VII (gfx906)", old)
 
@@ -180,7 +183,8 @@ class ProblemAndPlanTests(unittest.TestCase):
         self.assertIn(f"{len(packages)} of {len(packages)} to install there", flat)
         self.assertIn("the 7.0 GB BF16 model, the 0.7 GB audio tokenizer", flat)
         self.assertIn("into breeze\\models\\breezetts2\\drbaph_Breeze-TTS-2-comfyui", flat)
-        self.assertIn("at least 10 GB of memory", flat)
+        self.assertIn("needs a graphics card with 8 GB of memory, and 10 GB or more is better", flat)
+        self.assertIn("on an 8 GB card a long line may run out of memory, so keep lines to a sentence or two there", flat)
         self.assertIn("INT8 builds are left out", flat)
         text.encode("ascii")
 
@@ -226,7 +230,7 @@ class SpeechCheckTests(unittest.TestCase):
         def runner(command, **kwargs):
             return subprocess.CompletedProcess(command, 1, "", "torch.OutOfMemoryError: CUDA out of memory.")
 
-        with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(ib.InstallError, "needs about 10 GB of it"):
+        with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(ib.InstallError, "needs about 7.5 GB of it"):
             ib.run_speech_check(folder, runner=runner)
 
     def test_the_names_the_check_script_uses_exist_in_the_lab(self):
@@ -356,10 +360,10 @@ class RunTests(unittest.TestCase):
         self.assertEqual(engine_checks.installation(ENTRY, self.base)["missing"], [])
 
     def test_a_card_that_cannot_take_it_stops_it_before_any_change(self):
-        self.nvidia = ["Breeze TTS 2's NVIDIA build needs a graphics card with at least 10 GB of memory."]
+        self.nvidia = ["Breeze TTS 2's NVIDIA build needs a graphics card with at least 7.5 GB of memory."]
         status, _out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
-        self.assertIn("at least 10 GB of memory", err)
+        self.assertIn("at least 7.5 GB of memory", err)
         self.assertEqual((self.calls, self.server.requests), ([], []))
 
     def test_on_an_amd_card_amds_build_goes_in_and_the_card_is_noted_for_the_lab(self):
@@ -377,12 +381,12 @@ class RunTests(unittest.TestCase):
             (receipt["build"], receipt["gpu"]["chip"], receipt["gpu"]["hip_visible_devices"]), ("rocm", "gfx1201", 1)
         )
 
-    def test_an_8_gb_amd_card_is_refused_before_any_change(self):
-        self.graphics = ("amd", [RX_7600])
+    def test_a_6_gb_amd_card_is_refused_before_any_change(self):
+        self.graphics = ("amd", [RX_5600_XT])
         status, out, err = self.run_main("--yes")
         self.assertEqual(status, 1)
         self.assertIn("Breeze TTS 2 on an AMD graphics card", out)
-        self.assertIn("at least 10 GB of memory, and the AMD Radeon RX 7600 has 8.0 GB", " ".join(err.split()))
+        self.assertIn("at least 7.5 GB of memory, and the AMD Radeon RX 5600 XT has 6.0 GB", " ".join(err.split()))
         self.assertEqual((self.calls, self.server.requests), ([], []))
 
 

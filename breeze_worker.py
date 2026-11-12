@@ -24,6 +24,10 @@ REFERENCE_SUFFIXES = {".wav", ".flac", ".ogg"}
 PROFILES = {"eager", "cuda_graphs"}
 DEFAULT_DESCRIPTION = "A warm, clear, natural speaking voice."
 MAX_REFERENCE_CACHE_ENTRIES = 8
+# Breeze used 7.4 of 8 GB for a short line on an 8 GB laptop card, and a 29-second take allocated 9.5 GB elsewhere, so on an
+# 8 GB card (allowed since 2026-11-12) a long line can run out of memory. PyTorch's own message names allocator settings.
+OUT_OF_MEMORY = ("The graphics card ran out of memory for this line. A longer line needs more of it: split it into shorter "
+                 "lines, or close other programs that use the card, and try again.")
 
 
 def _number(params, name, default, low, high):
@@ -52,6 +56,16 @@ def _integer(params, name, default, low, high):
     if converted < low or converted > high:
         raise ValueError(f"{name} must be between {low} and {high}.")
     return converted
+
+
+def _release_cached_memory():
+    """Hand the memory a failed take left cached back to the card, so the next, shorter line has it."""
+    try:
+        import torch
+
+        torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001 - a card that cannot be asked keeps its cache; the error above still reaches the user
+        pass
 
 
 class BreezeWorker:
@@ -221,20 +235,27 @@ class BreezeWorker:
         }
         started = time.perf_counter()
         reference_meta = None
-        if mode == "design":
-            wav, sample_rate = self.module.design_speech(text.strip(), instruction, **sampling)
-        else:
+        if mode != "design":
             reference_text = params.get("reference_text")
             if not isinstance(reference_text, str) or not reference_text.strip():
                 raise ValueError("Clone and direction modes require the reference transcript in reference_text.")
             if len(reference_text) > 1200:
                 raise ValueError("Reference transcript must be 1200 characters or fewer.")
-            ref_codes, reference_meta = self._cached_reference(params.get("reference_path"))
-            wav, sample_rate = self.module.clone_speech(
-                text.strip(), ref_codes, reference_text.strip(),
-                direction if mode == "direction" else None,
-                **sampling,
-            )
+        try:
+            if mode == "design":
+                wav, sample_rate = self.module.design_speech(text.strip(), instruction, **sampling)
+            else:
+                ref_codes, reference_meta = self._cached_reference(params.get("reference_path"))
+                wav, sample_rate = self.module.clone_speech(
+                    text.strip(), ref_codes, reference_text.strip(),
+                    direction if mode == "direction" else None,
+                    **sampling,
+                )
+        except Exception as exc:
+            if "out of memory" not in str(exc).lower():
+                raise
+            _release_cached_memory()
+            raise RuntimeError(OUT_OF_MEMORY) from exc
 
         info = {
             "total_s": time.perf_counter() - started,

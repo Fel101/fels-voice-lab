@@ -408,7 +408,7 @@ gives each the build that runs on the card, and says why when one gets its CPU b
 
 On a computer with an NVIDIA driver, the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 get the same PyTorch and torchaudio files,
 and their installers make the same checks. VoxCPM2's and Breeze's also refuse a card with less graphics memory than the model
-needs, 7 and 10 GB, which `nvidia-smi` or the driver reports; when neither can say, they stop rather than guess. On a
+needs, 7 GB and 8 GB, which `nvidia-smi` or the driver reports; when neither can say, they stop rather than guess. On a
 computer whose card is an AMD Radeon they get AMD's build instead ([AMD Radeon cards](#amd-radeon-cards)).
 
 What the models did on the RTX 5070 Laptop GPU, from the Models page's **Test** with the model already loaded (memory is what
@@ -426,9 +426,9 @@ What the models did on the RTX 5070 Laptop GPU, from the Models page's **Test** 
 | VoxCPM2 | 4.0 s in 9.7 s | 5.7 GB |
 | Breeze TTS 2 | 2.6 s in 17 s | 7.4 of 8 GB |
 
-Chatterbox Voice Conversion passed its installer's check there too (2.0 s of audio said again in 1.8 s). Breeze's installer
-refuses a card under 10 GB; its **Test** passed on this one, where the NVIDIA card drives no display, for the short check
-sentence only. Loading took 26 to 84 seconds, much of it PyTorch's CUDA 13.0 build preparing code for the RTX 50 card.
+Chatterbox Voice Conversion passed its installer's check there too (2.0 s of audio said again in 1.8 s). Breeze's **Test**
+passed on this card, where it drives no display, for the short check sentence; its installer takes an 8 GB card and warns
+that a long line may run out of memory on one. Loading took 26 to 84 seconds, much of it PyTorch's CUDA 13.0 build preparing code for the RTX 50 card.
 
 On a laptop, a power-saving, Eco or iGPU-only mode can switch the NVIDIA card off while its driver stays installed. The
 installers then stop before they download anything and say so; [Troubleshooting](TROUBLESHOOTING.md#graphics-cards) has
@@ -648,8 +648,10 @@ what you make with them on your own computer are under the
 commercial use needs written permission from RESONIA, INC. Read it before you install; the installer's plan says this first,
 and installing the weights means accepting it. Breeze's code, in `breeze\` in this folder, is Apache-2.0.
 
-The Lab runs Breeze only on a graphics card, with its BF16 weights, and it needs one with **at least 10 GB of memory**: it
-peaked at 7.5 GB (on an RTX 5090, by its model card, and on the AMD card below), so an 8 GB card is too small. The repository's
+The Lab runs Breeze only on a graphics card, with its BF16 weights, and it needs one with **8 GB of memory**, and 10 GB or
+more is better: it peaked at 7.5 GB for a short line (on an RTX 5090, by its model card, and on the AMD card below), and a
+29-second take allocated 9.5 GB. On an 8 GB card keep lines to a sentence or two; a longer one may run out of memory, and the
+Lab then says to split it. The repository's
 smaller INT8 builds need ComfyUI's own kernels, which the Lab does not have. **Install** on its card appears when the computer
 has an NVIDIA card big enough and a driver the build runs on, or an AMD card big enough that [AMD's build](#amd-radeon-cards)
 has code for, or:
@@ -674,9 +676,9 @@ It prints its plan and asks first, and installs into this folder, in `.venv-bree
    in `out\breeze`.
 
 It stops before anything is downloaded on a computer with neither an NVIDIA driver nor an AMD card, or with a card, driver or
-amount of graphics memory the build cannot run with. Its installer refuses a GeForce RTX 5070 Laptop GPU, which has 8 GB; with
-the files already in place, **Test** passed there, speaking 2.6 seconds in 17 with 7.4 of the 8 GB in use, too close to the
-limit for longer lines. Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61
+amount of graphics memory the build cannot run with (under 7.5 GB, as a 6 GB card has; an 8 GB card reports a little under
+8). On a GeForce RTX 5070 Laptop GPU, which has 8 GB, **Test** passed, speaking 2.6 seconds in 17 with 7.4 of the 8 GB in use,
+close to the limit for longer lines. Installed with AMD's build on a computer with an AMD Radeon AI PRO R9700 (32 GB), it loaded in 61
 seconds, spoke 3.0 seconds in 14.5 seconds and used at most 7.5 GB of graphics memory. With MIOpen switched off ([AMD Radeon
 cards](#amd-radeon-cards)), **Test** there loaded it in 31 seconds and spoke the check sentence, 3.0 seconds, in 9.3: Breeze
 takes about three times as long as the speech it makes. A 29-second take of 400 characters took 93 seconds and allocated up to
@@ -701,7 +703,7 @@ tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the export
 | Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
 | Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned runtime for this computer's NVIDIA or AMD card and one model's checkpoint ([above](#qwen3-tts-on-a-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
 | VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned runtime for this computer's NVIDIA or AMD card, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-a-graphics-card)); needs a card with 7 GB of memory. |
-| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 10 GB of memory. Its weights are for research and non-commercial use only. |
+| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 8 GB of memory, and 10 GB is better. Its weights are for research and non-commercial use only. |
 | Drama 3 | Core environment plus speech.cpp | `setup-drama3.bat` installs the pinned native runtime and the Q4_K model ([below](#drama-3-on-the-cpu)); runs on the CPU with 26 GB of free RAM. |
 
 Do not install a model's dependencies into the core environment. Runtime dependency conflicts are why every model has an

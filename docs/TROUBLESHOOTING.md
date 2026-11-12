@@ -17,7 +17,7 @@ than the computer has in all, more with a browser full of tabs open.
 | Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | 3.2 GB, and Turbo's environment | `setup-chatterbox.bat --original` |
 | Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `setup-qwen.bat --model` (NVIDIA or AMD) |
 | VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `setup-voxcpm.bat` (NVIDIA or AMD) |
-| Breeze TTS 2 | 12 GB, and a graphics card with 10 GB | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA or AMD) |
+| Breeze TTS 2 | 12 GB, and a graphics card with 8 GB (10 GB is better) | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA or AMD) |
 | Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `setup-drama3.bat` |
 
 The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, an NVIDIA card or an AMD Radeon
@@ -86,7 +86,7 @@ table above for what fits your computer, and `min_free_ram_gb` to change a need.
 
 **"not installed".** The card on **Models & features** lists the files that are missing, and its **Install** button installs
 them. The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only for a graphics card their build runs on, an NVIDIA card and
-driver or an AMD Radeon whose chip AMD's build has code for (VoxCPM2 needs a card with 7 GB of memory, Breeze one with 10 GB);
+driver or an AMD Radeon whose chip AMD's build has code for (VoxCPM2 needs a card with 7 GB of memory, Breeze one with 8 GB);
 on another computer their card says why it has no **Install** ([Model runtimes](SETUP.md#model-runtimes)).
 
 **"Installed, test out of date".** A package or a checkpoint changed since the last test. Press **Test**.
@@ -115,11 +115,13 @@ puts in their NVIDIA build. Every NVIDIA build was checked on a laptop with a Ge
 
 - Every NVIDIA build is CUDA 13.0 (PyTorch 2.12): a GeForce GTX 16 or RTX 20 series card or newer (RTX 50 included), and an
   NVIDIA driver of version 580 or later. On an older card, setup gives Kokoro and Chatterbox their CPU builds.
-- **"needs a graphics card with at least 10 GB of memory".** VoxCPM2 needs 7 GB of graphics memory and Breeze TTS 2 10 GB, so
-  their installers refuse a smaller card before they download anything. Breeze used 7.5 GB at most for the check sentence, too
-  much for most 8 GB cards once Windows and other programs have taken their share (on a laptop whose NVIDIA card drives no
-  display, **Test** passed at 7.4 of 8 GB), and a 29-second take allocated 9.5 GB: on a card with 10 or 12 GB, keep
-  Breeze's lines short. When neither `nvidia-smi` nor the driver can say how much memory the card has, they stop and say so.
+- **"needs a graphics card with at least 7 GB of memory".** VoxCPM2 needs 7 GB of graphics memory and Breeze TTS 2 8 GB (its
+  installer asks for 7.5, as an 8 GB card reports a little under 8), so their installers refuse a smaller card before they
+  download anything. When neither `nvidia-smi` nor the driver can say how much memory the card has, they stop and say so.
+- **"The graphics card ran out of memory for this line".** Breeze used 7.5 GB at most for a short line (on a laptop whose
+  NVIDIA card drives no display, **Test** passed at 7.4 of 8 GB), and a 29-second take allocated 9.5 GB. On an 8 GB card,
+  split a long line into lines of a sentence or two; on any card, close games and other programs that use it, and unload
+  another model the Lab has loaded.
 - **Models & features** has a **Runs on GPU | CPU** switch on each card. A model installed for the CPU offers **Install GPU
   build** when it is switched to GPU; GPU is greyed out, with the reason, where it cannot work.
 - **"needs NVIDIA driver 580 or later".** The CUDA 13.0 builds need a 2025 driver. Update it from nvidia.com or the NVIDIA

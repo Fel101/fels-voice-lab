@@ -65,9 +65,16 @@ OTHER_DOWNLOAD_MB = 60
 OTHER_DISK_MB = 400
 LONGEST_PACKAGE_PATH = 140
 SPACE_MARGIN_MB = 500
-# The BF16 weights alone are 6.5 GiB, and Breeze peaked at 7.5 GiB, on an RTX 5090 (its model card) as on the AMD card the Lab
-# checked this installer on, so an 8 GB card, which reports a little under 8 GiB and shares it with the screen, is too small.
-GPU_MEMORY_GB = 10
+# The BF16 weights alone are 6.5 GiB, and Breeze peaked at 7.5 GiB for a short line, on an RTX 5090 (its model card) as on the
+# AMD card the Lab checked this installer on. It passed Test on an 8 GB laptop card at 7.4 GiB (the owner chose to allow such a
+# card, with a warning, on 2026-11-12), and an 8 GB card reports a little under 8 GiB, hence 7.5. A 29-second take allocated
+# 9.5 GiB, so the plan says to keep lines short on an 8 GB card.
+GPU_MEMORY_GB = 7.5
+MEMORY_NOTE = (
+    "Breeze TTS 2 needs a graphics card with 8 GB of memory, and 10 GB or more is better. It used 7.4 of 8 GB to speak a short "
+    "line on a GeForce RTX 5070 Laptop GPU, and a 29-second take used 9.5 GB elsewhere: on an 8 GB card a long line may run "
+    "out of memory, so keep lines to a sentence or two there. It also wants 12 GB of free RAM before it loads."
+)
 NVIDIA_BUILD = "Breeze TTS 2's NVIDIA build (PyTorch 2.12 with CUDA 13.0)"
 NVIDIA_CARDS = base.NVIDIA_CARDS
 NVIDIA_LOWEST_CAPABILITY = base.NVIDIA_LOWEST_CAPABILITY
@@ -147,7 +154,7 @@ def pinned_packages(root, card=None):
 
 def card_problems(cards):
     """Why Breeze's NVIDIA build would not run on these NVIDIA cards: a card older than the GTX 16 series, a driver older than
-    580, or less than 10 GB of graphics memory. The Models page asks this too before it offers Install."""
+    580, or less than 8 GB of graphics memory (GPU_MEMORY_GB). The Models page asks this too before it offers Install."""
     return base.nvidia_card_problems(
         cards,
         build=NVIDIA_BUILD,
@@ -170,7 +177,7 @@ def graphics():
 
 def amd_card_problems(cards, *, root=None, environ=None):
     """Why Breeze could not run on this computer's AMD cards with AMD's build: no card with a chip the build has code for, a
-    setting that names a card that is not there, or less than 10 GB of graphics memory. The Models page asks this too before
+    setting that names a card that is not there, or less than 8 GB of graphics memory. The Models page asks this too before
     it offers Install."""
     return amd.card_problems(
         cards, model="Breeze TTS 2", root=ROOT if root is None else root, memory_gb=GPU_MEMORY_GB, environ=environ
@@ -254,18 +261,14 @@ def plan_text(manifest, packages, todo, pending, *, environment_exists, checkpoi
         "network (the load itself speaks a short line) and speaks one sentence in a voice made from a short description, "
         "which you can play afterwards. It takes a few minutes."
     )
-    notes = [
-        f"Breeze TTS 2 needs a graphics card with at least {GPU_MEMORY_GB} GB of memory: it peaked at 7.5 GB, so an 8 GB card "
-        "is too small. It also wants 12 GB of free RAM before it loads."
-    ]
+    notes = [MEMORY_NOTE]
     if card:
         notes.append(amd.plan_note(card, cards))
     elif not checkpoint_only:
         notes.append(
             "The CUDA 13.0 builds need a GeForce GTX 16 or RTX 20 series card or newer, RTX 50 included, and an NVIDIA "
             "driver of version 580 or later. They carry NVIDIA's CUDA libraries inside them, under NVIDIA's own licence "
-            "terms. Breeze passed Test on a GeForce RTX 5070 Laptop GPU even with its 8 GB, for a short line, and its first "
-            "load took 75 seconds there. On another NVIDIA card, a hardware report on GitHub helps the next person, whether "
+            "terms. Breeze's first load took 75 seconds on a GeForce RTX 5070 Laptop GPU. On another NVIDIA card, a hardware report on GitHub helps the next person, whether "
             "it works or not."
         )
     notes.append(
@@ -315,8 +318,8 @@ def install_packages(root, *, card=None, runner=subprocess.run):
 def check_failure_hint(output, *, amd_card=False):
     """A sentence for the most likely cause of a speech check that failed on the graphics card, from what it printed."""
     memory = (
-        f"The graphics card ran out of memory: Breeze needs about {GPU_MEMORY_GB} GB of it. Close other programs that use it "
-        "(games, or another model loaded in the Lab) and run the installer again."
+        "The graphics card ran out of memory: Breeze needs about 7.5 GB of it for the check's short sentence. Close other "
+        "programs that use it (games, or another model loaded in the Lab) and run the installer again."
     )
     return base.check_failure_hint(output, nvidia=not amd_card, amd_card=amd_card, cuda_needs=CUDA_NEEDS, memory=memory)
 

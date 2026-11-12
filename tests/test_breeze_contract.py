@@ -17,7 +17,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from breeze_worker import BreezeWorker, _integer, _number
+from breeze_worker import OUT_OF_MEMORY, BreezeWorker, _integer, _number
 import serve
 from cast_store import CastStore
 from library_fixture import temp_cast
@@ -45,6 +45,26 @@ class BreezeContractTests(unittest.TestCase):
                     _integer(params, name, 1, 1, 100)
                 else:
                     _number(params, name, 1, 0.01, 1)
+
+    def test_a_line_that_runs_the_card_out_of_memory_says_to_split_it(self):
+        class Module:
+            def __init__(self, error):
+                self.error = error
+
+            def design_speech(self, *_args, **_kwargs):
+                raise self.error
+
+        worker = BreezeWorker("cuda")
+        worker.bundle, worker.profile = object(), "eager"
+        request = {"text": "A long line.", "voice_description": "A calm voice."}
+        worker.module = Module(RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB (GPU 0; 7.96 GiB total)"))
+        with self.assertRaises(RuntimeError) as caught:
+            worker.generate(request)
+        self.assertEqual(str(caught.exception), OUT_OF_MEMORY)
+        self.assertIn("split it into shorter lines", OUT_OF_MEMORY)
+        worker.module = Module(RuntimeError("HIP error: invalid device function"))
+        with self.assertRaisesRegex(RuntimeError, "^HIP error: invalid device function$"):
+            worker.generate(request)
 
     def test_reference_paths_are_confined_to_local_reference_folder(self):
         sample = owned_reference(self, ROOT)

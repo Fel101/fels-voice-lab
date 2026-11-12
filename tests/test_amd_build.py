@@ -39,6 +39,14 @@ R9700 = {
     "driver": "32.0.31041.1004",
 }
 RX_7600 = {"name": "AMD Radeon RX 7600", "chip": "gfx1102", "memory_mib": 8176, "integrated": False, "bus": 8, "driver": None}
+RX_5600_XT = {
+    "name": "AMD Radeon RX 5600 XT",
+    "chip": "gfx1010",
+    "memory_mib": 6128,
+    "integrated": False,
+    "bus": 8,
+    "driver": None,
+}
 RADEON_VII = {"name": "AMD Radeon VII", "chip": "gfx906", "memory_mib": 16368, "integrated": False, "bus": 4, "driver": None}
 # PyTorch's list on that computer: it numbers the card built into the processor first.
 DEVICES = [

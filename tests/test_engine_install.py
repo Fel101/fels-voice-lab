@@ -33,7 +33,7 @@ import worker_pool
 import worker_runtime
 from cast_store import CastStore
 from engine_install import EngineInstaller, paragraphs
-from tests.test_amd_build import R9700, RADEON_780M, RADEON_VII, RX_7600
+from tests.test_amd_build import R9700, RADEON_780M, RADEON_VII, RX_5600_XT, RX_7600
 from worker_pool import EnginePool, WorkerBusy
 
 PLAN = """Fel's Voice Lab: Kokoro 82M on the CPU
@@ -523,12 +523,14 @@ class GpuBuildTests(unittest.TestCase):
             ok, reason = self.installer(present=False, amd=[RADEON_VII], builds=builds, root=lab).gpu_build("kokoro")
             self.assertFalse(ok)
             self.assertIn("has no code for the AMD Radeon VII (gfx906)", reason)
-            small = self.installer(present=False, amd=[RX_7600], builds=builds, root=lab)
-            self.assertEqual(small.gpu_build("qwen3-tts-1.7b-voice-design"), (True, None))
+            eight = self.installer(present=False, amd=[RX_7600], builds=builds, root=lab)
+            self.assertEqual(eight.gpu_build("qwen3-tts-1.7b-voice-design"), (True, None))
+            self.assertEqual(eight.gpu_build("breeze-tts-2"), (True, None))    # 8 GB, allowed with a warning in the plan
+            small = self.installer(present=False, amd=[RX_5600_XT], builds=builds, root=lab)
             ok, reason = small.gpu_build("breeze-tts-2")
             self.assertFalse(ok)
-            self.assertIn("Breeze TTS 2 needs a graphics card with at least 10 GB of memory, and the AMD Radeon RX 7600 has "
-                          "8.0 GB", reason)
+            self.assertIn("Breeze TTS 2 needs a graphics card with at least 7.5 GB of memory, and the AMD Radeon RX 5600 XT has "
+                          "6.0 GB", reason)
             ok, reason = self.installer(present=False, amd=[RADEON_VII], builds=builds, root=lab).gpu_build("voxcpm2")
             self.assertFalse(ok)
             self.assertIn("has no code for the AMD Radeon VII (gfx906)", reason)

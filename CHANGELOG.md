@@ -17,7 +17,7 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
 - **PyTorch is asked to start CUDA after pip.** On NVIDIA's build each installer has the PyTorch it just installed start CUDA
   and list the card before it fetches the model files, and stops with PyTorch's own error, or when the build has no code for
   the card.
-- **A memory check is never skipped.** VoxCPM2 and Breeze TTS 2 need 7 and 10 GB of graphics memory. When neither
+- **A memory check is never skipped.** VoxCPM2 and Breeze TTS 2 need 7 and 8 GB of graphics memory. When neither
   `nvidia-smi` nor the driver could say how much the card has, the check was skipped without a word; the installers now stop
   and say so.
 - **Failures say what happened.** A failed check now shows the error it ended on first, leaves out the warning the sox package
@@ -25,6 +25,10 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   under it matches the error: no card PyTorch can use (with what to check on a laptop), a driver too old for CUDA 13.0, a
   build with no code for the card, or a card out of memory; it no longer says to update the driver for every error that
   mentions CUDA, and it offers the CPU build only for Kokoro and Chatterbox.
+- **Breeze TTS 2 on an 8 GB card.** Its installer refused a card with less than 10 GB, yet Breeze passed **Test** on the
+  laptop's 8 GB card with 7.4 GB in use. It now takes an 8 GB card, and its plan says that a long line may run out of memory
+  there, as a 29-second take allocated 9.5 GB elsewhere. When a line does, Breeze says to split it into shorter lines instead
+  of showing PyTorch's error.
 - **Models & features notices a card switched on.** The service read the NVIDIA cards once and kept the answer until it
   restarted; it now reads them again after half a minute. A model that ran on the CPU because the card was not available
   when it loaded no longer blames its PyTorch.
