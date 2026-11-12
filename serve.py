@@ -1591,6 +1591,18 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def select_scene_take(self, parsed, req, scene_id):
         self._json(200, {"scene": scenes.select_take(scene_id, req.get("line_id"), req.get("take_id"), req.get("segment_id"))})
 
+    @router.get("/api/scenes/{scene_id}/lines")
+    def scene_lines(self, parsed, req, scene_id):
+        try:
+            self._json(200, scenes.line_states(scene_id))
+        except (ValueError, KeyError, RuntimeError) as exc:
+            self._json(404, {"error": str(exc)})
+
+    @router.post("/api/scenes/{scene_id}/choose-newest")
+    def choose_newest_scene_takes(self, parsed, req, scene_id):
+        scene, chosen, lines = scenes.choose_newest_takes(scene_id, req.get("line_ids"))
+        self._json(200, {"scene": scene, "chosen": chosen, "lines": lines})
+
     @router.post("/api/scenes/{scene_id}/preview")
     def scene_preview(self, parsed, req, scene_id):
         preview = scenes.assemble_preview(scene_id)

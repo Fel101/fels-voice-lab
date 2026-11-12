@@ -321,5 +321,81 @@ class SceneTests(unittest.TestCase):
         self.scenes.assemble_preview(scene["scene_id"])
 
 
+    def line_states(self, scene_id):
+        _, states, _ = self.request(f"/api/scenes/{scene_id}/lines")
+        return {line["line_id"]: line for line in states["lines"]}
+
+    def test_line_states_follow_each_line_through_waiting_failed_chosen_and_out_of_date(self):
+        base = self.scene_payload()["lines"][0]
+        scene = self.scenes.create_scene(self.scene_payload(lines=[
+            dict(base, line_id="one", text="The road is clear."),
+            dict(base, line_id="two", text="Then we go now."),
+            dict(base, line_id="long", text=("Dr. Vale paused. " + "quiet words, " * 150).strip()),
+        ]))
+        scene_id = scene["scene_id"]
+        states = self.line_states(scene_id)
+        self.assertEqual(list(states), ["one", "two", "long"], "lines come in script order")
+        self.assertEqual({line["status"] for line in states.values()}, {"not_rendered"})
+        self.assertEqual(states["one"]["segments"][0]["takes"], [])
+
+        job = self.scenes.create_job(scene_id, ["one", "two"])
+        states = self.line_states(scene_id)
+        self.assertEqual((states["one"]["status"], states["two"]["status"], states["long"]["status"]),
+                         ("waiting", "waiting", "not_rendered"))
+        self.engines.fail_once_for.add("Then we go now.")
+        self.runner.start()
+        self.wait_job(job["id"], {"failed"})
+        states = self.line_states(scene_id)
+        self.assertEqual(states["one"]["status"], "choose_take")
+        self.assertEqual([take["fits"] for take in states["one"]["segments"][0]["takes"]], [True])
+        self.assertEqual(states["two"]["status"], "failed")
+        self.assertIn("injected one-shot generation failure", states["two"]["reason"])
+
+        self.scenes.retry_failed(job["id"])
+        self.runner.wake()
+        self.wait_job(job["id"], {"completed"})
+        self.assertEqual(self.line_states(scene_id)["two"]["status"], "choose_take", "a retried row is no longer failed")
+        _, chosen, _ = self.request(f"/api/scenes/{scene_id}/choose-newest", {"line_ids": ["one"]})
+        self.assertEqual((chosen["chosen"], chosen["lines"]), (1, 1))
+        states = self.line_states(scene_id)
+        self.assertEqual((states["one"]["status"], states["two"]["status"]), ("done", "choose_take"))
+        first_take = states["one"]["segments"][0]["chosen_take_id"]
+        self.assertEqual(chosen["scene"]["lines"][0]["selected_takes"], {"seg-001": first_take})
+        _, chosen, _ = self.request(f"/api/scenes/{scene_id}/choose-newest", {})
+        self.assertEqual(chosen["chosen"], 1, "only the line without a chosen take gets one")
+        _, again, _ = self.request(f"/api/scenes/{scene_id}/choose-newest", {})
+        self.assertEqual((again["chosen"], again["scene"]["revision"]), (0, chosen["scene"]["revision"]),
+                         "with nothing to choose, the scene keeps its revision")
+
+        current = self.scenes.get_scene(scene_id)
+        current["lines"][0]["text"] = "The road is closed."
+        self.scenes.update_scene(scene_id, current, expected_revision=current["revision"])
+        states = self.line_states(scene_id)
+        self.assertEqual(states["one"]["status"], "out_of_date")
+        self.assertEqual(states["one"]["reason"], "The text changed after this take was made.")
+        self.assertEqual([take["fits"] for take in states["one"]["segments"][0]["takes"]], [False])
+        self.assertEqual(states["two"]["status"], "done")
+
+        segment_job = self.scenes.create_job(scene_id, segment_ids=["long/seg-002"])
+        self.runner.wake()
+        self.wait_job(segment_job["id"], {"completed"})
+        long_line = self.line_states(scene_id)["long"]
+        self.assertEqual(len(long_line["segments"]), 2)
+        self.assertEqual([part["status"] for part in long_line["segments"][:2]], ["not_rendered", "choose_take"])
+        self.assertEqual((long_line["status"], long_line["segments_done"]), ("not_rendered", 0))
+
+        rerender = self.scenes.create_job(scene_id, ["one"])
+        self.runner.wake()
+        self.wait_job(rerender["id"], {"completed"})
+        takes = self.line_states(scene_id)["one"]["segments"][0]["takes"]
+        self.assertEqual([take["fits"] for take in takes], [True, False], "newest first; the old text's take is marked")
+        self.assertEqual(takes[1]["reason"], "The text changed after this take was made.")
+        self.cast.retire("take", takes[0]["id"], reason="test")
+        retired = self.line_states(scene_id)["one"]
+        self.assertEqual([take["id"] for take in retired["segments"][0]["takes"]], [takes[1]["id"]],
+                         "a retired take that is not chosen is left out")
+        self.assertEqual(retired["status"], "out_of_date")
+
+
 if __name__ == "__main__":
     unittest.main()

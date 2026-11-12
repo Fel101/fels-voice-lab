@@ -190,14 +190,32 @@ gain change no time. Retiring a take blocks its edits too, and purging it delete
 like any other take for its line. An exported package names the take it used and does not list the edit steps; look the take
 up in Cast to see them. This is not the Drama model's own previous-take editing, which the backend does not offer.
 
-**Scenes & batch** imports CSV/JSON or uses the editor. Map each line to an
-approved identity; preview segmentation before rendering. Jobs run sequentially
-with pause/resume/cancel/retry. A batch renders all of one model's lines before it loads the next model, so a scene that
-switches between voices on two models loads each model once; while it runs, the status line says the order, such as
-"Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8". The scene is still assembled in script order. Each rendered row shows the same waveform checks as
-Perform beside its audition. Editing effective words, identity, pronunciation,
-language or controls invalidates stale selections without deleting old takes.
-Preview assembles ordered speech and pauses; a timing target is advisory.
+**Scenes & batch** imports CSV/JSON or starts from Perform. The script is a table, one row per line: its number, character,
+the start of its text, its voice and model, and its status. **Open** on a row shows the line's takes, then its full form
+(character, voice, text, language, pauses and settings) and its line ID, which exports and the API use. The status says where
+the line stands:
+
+- **Not rendered**: it has no take yet.
+- **Waiting** and **Rendering**: a batch has it.
+- **Failed**: the last batch to try it failed, and the reason is under the status.
+- **Choose a take**: it has a take that fits, and none is chosen. Open the row and press **Use this take**, or press **Use the
+  newest take where none is chosen** above the table to do it for every such line at once.
+- **Done**: its chosen take fits the line as it is now.
+- **Out of date**: its text, voice, language, pronunciations or settings changed after its take was made. The old takes stay
+  in Cast, marked with what changed.
+- **Not saved yet**: the line has edits you have not saved.
+
+**Render** on a row renders that line. Tick lines and press **Render ticked** to render several, **Render all** for every
+line, or **Render what is missing or out of date** for the lines that are not rendered, failed or out of date. Each saves the
+scene first. The filters show one character's lines, or the lines with one status; **Tick all shown** ticks what they show,
+and **Render ticked** renders the ticked lines that are shown. A long line is split into parts, and its row opens to show each
+part with its own takes and **Render this part**. **Preview segments** shows how each line splits before you render.
+
+Jobs run one take at a time, with pause, resume, cancel and retry. A batch renders all of one model's lines before it loads
+the next model, so a scene that switches between voices on two models loads each model once; while it runs, the status line
+says the order, such as "Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8". The scene is still assembled in script order. A
+take whose waveform checks flag something says so under it, and **Audition rendered takes** lists one batch's takes with
+the same checks as Perform. Preview assembles ordered speech and pauses; a timing target is advisory.
 See [the scene schema](scenes/scene-schema-v1.md).
 
 Undo (Ctrl+Z) and redo (Ctrl+Y or Ctrl+Shift+Z) reverse script edits, including typing, line changes, moves and

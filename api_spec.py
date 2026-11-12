@@ -539,6 +539,21 @@ ROUTES = [
       body=(F("line_id", "string", "The line.", True), F("take_id", "string", "The take.", True),
             F("segment_id", "string", "For a line with several segments.")),
       reply="`scene`."),
+    R("GET", "/api/scenes/{scene_id}/lines", "Scenes", "Say where every line of a scene stands, in one answer.",
+      reply="`scene_id`, `revision` and `lines`, in script order, each with its `line_id`, `status`, `reason`, "
+            "`segments_done` and `segments`. A status is `not_rendered`, `waiting` (a batch will reach it), `rendering`, "
+            "`failed` (the latest batch to try its current text failed; `reason` says why), `choose_take` (a take fits its "
+            "current text, voice and settings, and none is chosen), `out_of_date` (its chosen take, or every take it has, "
+            "was made before its text, voice or settings changed; `reason` says what changed) or `done` (its chosen take "
+            "still fits). A line has the first of `rendering`, `waiting`, `failed`, `out_of_date`, `not_rendered`, "
+            "`choose_take` and `done` that one of its segments has. Each segment has its `segment_id`, `status`, `reason`, "
+            "`chosen_take_id` and `takes`, newest first and without retired takes that are not chosen, each with `id`, "
+            "`created_at`, `duration_seconds`, `audio_url`, `waveform_checks`, `chosen`, `fits` and `reason`."),
+    R("POST", "/api/scenes/{scene_id}/choose-newest", "Scenes",
+      "Choose the newest take that fits for every segment without one.",
+      body=(F("line_ids", "string[]", "Only these lines. Default: every line."),),
+      reply="`scene`, at a new revision when it chose any, `chosen` (how many segments got a take) and `lines` (how many "
+            "lines they are in)."),
     R("POST", "/api/scenes/{scene_id}/preview", "Scenes", "Assemble the selected takes into one preview.", status=201,
       body_kind="none",
       reply="`preview`: `audio_url` for the raw assembly, `mastered_audio_url` for the loudness-normalized copy, and the "

@@ -76,12 +76,14 @@ take**. The original is never changed, and the new take records what was done to
 
 ### Scenes and batch
 
-![Scenes and batch: one line with its character, voice, language and settings, then the buttons, a finished batch job and the assembled scene](docs/images/scene.png)
+![Scenes and batch: a scene as a table of lines with their status, one line open with its two takes and its form, then a finished batch job and the assembled scene](docs/images/scene.png)
 
-A scene is a script of lines with stable ids, each with its own character, voice, reference version,
-language, pauses and settings. **Render scene** makes the takes as a batch that runs one take at a
-time, can be paused, cancelled and retried, and picks up again after a restart. You choose the take
-for each line and assemble a preview. Undo, redo and the usual shortcuts work on the script.
+A scene is a script of lines, shown as a table: each line has its own character, voice, reference
+version, language, pauses and settings, and a status that says whether it is rendered, chosen, failed
+or out of date. **Render all**, **Render ticked** or a row's **Render** makes the takes as a batch that
+runs one take at a time, can be paused, cancelled and retried, and picks up again after a restart. You
+choose the take for each line, or the newest for every line at once, and assemble a preview. Undo, redo
+and the usual shortcuts work on the script.
 
 ### Export package
 

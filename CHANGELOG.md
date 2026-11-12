@@ -86,6 +86,20 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
 
 ### Scenes
 
+- **Scenes as a table.** A scene opens as a table, one row per line: a tick box, its number, character, the start of its
+  text, its voice and model, its status, and **Play** (its chosen take), **Render** and **Open**. **Open** shows the line's
+  takes, each with **Use this take**, and the line's full form, which is built only then, so a 300-line scene opens in about
+  a tenth of a second. A line split into parts lists each part with its own takes and **Render this part**. The statuses are
+  not rendered, waiting, rendering, failed (with the reason), choose a take, done, and out of date (with what changed after
+  the take was made); a row with unsaved edits says so. Above the table: **Tick all shown**, **Render ticked**, **Render
+  all**, **Render what is missing or out of date**, **Use the newest take where none is chosen**, and filters by character
+  and by status. The box for typing line ids to render is gone; a line's id is in its details. Rendered takes are still
+  listed by batch under **Audition rendered takes**.
+- **Two scene routes.** `GET /api/scenes/{scene_id}/lines` says where every line and segment stands, with its takes, in one
+  answer. `POST /api/scenes/{scene_id}/choose-newest` chooses the newest take that fits for every segment without one, in one
+  new revision.
+- **Saving a long scene is quicker.** Saving read each line's voice, reference and chosen take on its own: 1.8 s for a
+  300-line scene with chosen takes. It reads each voice once now, and the takes together: 0.13 s.
 - **A batch says its order.** A batch has always rendered all of one model's lines before it loads the next model (it sorts
   its lines by model, then reference, then script order), but nothing said so and no test held it. While a batch runs, the
   status line now names the model rendering and the ones to come, with how many lines each has, and a test fails if a scene

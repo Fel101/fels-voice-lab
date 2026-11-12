@@ -607,7 +607,8 @@ class BrowserFlowTests(unittest.TestCase):
                 self.assertIn("Created with Qwen Base 1.7B", page.evaluate("document.getElementById('voiceGallery').textContent"))
                 page.screenshot("cast-library", "#cast", to="#voiceGallery")
 
-                # Scene: start from the performer, save, render, select the take and assemble.
+                # Scene: start from the performer, save, edit, render from the table, choose the takes, re-render a ticked
+                # line, and assemble.
                 page.show("scenes")
                 page.click("#sceneStarter")
                 page.click("#sceneSave")
@@ -641,7 +642,7 @@ class BrowserFlowTests(unittest.TestCase):
                 page.evaluate(f"document.querySelector({json.dumps(dialogue)}).focus()")
                 page.press("ArrowDown", "ArrowDown", 40, ALT)
                 page.wait_until(scene_line_ids_are("line-002,line-001"))
-                page.wait_until("document.activeElement && document.activeElement.tagName === 'SUMMARY'")
+                page.wait_until("document.activeElement && document.activeElement.classList.contains('scene-open')")
                 page.press("s", "KeyS", 83, CTRL)
                 page.wait_until("document.getElementById('sceneStatus').textContent.includes('revision')")
                 self.assertEqual(page.evaluate(SAVED_LINE_IDS), "line-002,line-001")
@@ -662,12 +663,31 @@ class BrowserFlowTests(unittest.TestCase):
                 page.set_value(dialogue, original)
                 page.wait_until(scene_text_is(original))
 
+                # The table: a second line, Render all, the newest take chosen for both, then only the ticked second line
+                # rendered again. It gets a second take; the first line keeps its one.
+                page.click("#sceneLineAdd")
+                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line').length === 2")
                 page.click("#sceneStart")
-                page.wait_until("[...document.querySelectorAll('#sceneJobRows button')].some((b) => b.textContent === 'Select for scene')")
-                page.evaluate("[...document.querySelectorAll('#sceneJobRows button')].find((b) => b.textContent === 'Select for scene').click()")
-                page.wait_until("JSON.parse(document.getElementById('sceneEditor').value).lines[0].selected_take_id !== null")
+                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line[data-status=\"choose_take\"]').length === 2")
+                page.click("#sceneChooseNewest")
+                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line[data-status=\"done\"]').length === 2")
+                self.assertTrue(page.evaluate("JSON.parse(document.getElementById('sceneEditor').value).lines"
+                                              ".every((l) => l.selected_take_id)"))
+                prefix = page.evaluate("JSON.parse(document.getElementById('sceneEditor').value).scene_id")[:12]
+                page.click('input[aria-label="Tick line 2"]')
+                page.wait_until("document.getElementById('sceneRenderTicked').textContent === 'Render ticked (1)'")
+                page.click("#sceneRenderTicked")
+                page.wait_until("document.getElementById('sceneStatus').textContent.startsWith('completed / 1 completed')")
+                page.wait_until("document.querySelectorAll('#sceneLineEditor .scene-line[data-status=\"done\"]').length === 2")
+                self.assertEqual({line: len(server.cast.list_takes(line_id=f"{prefix}:{line}")) for line in ("line-001", "line-002")},
+                                 {"line-001": 1, "line-002": 2})
+                self.assertEqual(page.evaluate("document.querySelectorAll('#sceneRegenerateIds').length"), 0,
+                                 "no line id is typed anywhere")
                 page.click("#scenePreview")
                 page.wait_until("document.getElementById('scenePreviewPlayer').getAttribute('src')")
+                self.assertTrue(page.evaluate("document.getElementById('sceneJobSelect').selectedOptions[0].textContent"
+                                              ".startsWith('completed / 1/1 / ')"), "the job list follows the batch it started")
+                page.click('button[aria-label="Line 1 details"]')
                 page.screenshot("scene", "label:has(#sceneName)", to="#scenePreviewPlayer")
 
                 # Export: write the package, then verify it. (Without FFmpeg the page says so, and that is checked instead.)

@@ -17,7 +17,7 @@ function harness(text) {
   const clock = {now: 0};
   const fields = {sceneEditor: {value: text}, sceneStatus: {textContent: ''}, sceneError: {textContent: ''},
     sceneUndo: {disabled: true}, sceneRedo: {disabled: true}};
-  const c = vm.createContext({$: (id) => fields[id], Date: {now: () => clock.now}, renderSceneForm() {}});
+  const c = vm.createContext({$: (id) => fields[id], Date: {now: () => clock.now}, renderSceneForm() {}, paintSceneRow() {}});
   vm.runInContext(sourceBetween('function showSceneError(', 'function editSceneSetting('), c);
   vm.runInContext(sourceBetween('function updateSceneEditor(', 'function stableSceneLineId('), c);
   return {c, fields, clock, name: () => JSON.parse(fields.sceneEditor.value).name};
@@ -113,4 +113,33 @@ test('while a batch runs, the status line says which model renders now and which
   assert.equal(c.batchOrderText({models: [kokoro]}), 'Rendering with Kokoro 82M: 7 of 12. ');
   assert.equal(c.batchOrderText({models: [{...kokoro, done: 12}]}), '');    // finished: the counts that follow say so
   assert.equal(c.batchOrderText({}), '');    // a job from before the service listed its models
+});
+
+test('a row waits for a save while its line differs from the saved scene, then shows the server status', () => {
+  const c = vm.createContext({});
+  vm.runInContext(sourceBetween('function savedSceneLines(', 'function resetSceneHistory('), c);
+  vm.runInContext(sourceBetween('function sceneRowState(', 'function sceneButton('), c);
+  c.sceneSavedLines = c.savedSceneLines(JSON.stringify({lines: [{line_id: 'a', text: 'One.'}, {line_id: 'b', text: 'Two.'}]}));
+  c.sceneLineStates = {a: {status: 'done', reason: ''}, b: {status: 'out_of_date', reason: 'The text changed.'}};
+  assert.equal(c.sceneRowState({line_id: 'a', text: 'One.'}).status, 'done');
+  assert.equal(c.sceneRowState({line_id: 'b', text: 'Two.'}).reason, 'The text changed.');
+  assert.equal(c.sceneRowState({line_id: 'a', text: 'One, edited.'}).status, 'unsaved');
+  assert.equal(c.sceneRowState({line_id: 'c', text: 'New.'}).status, 'unsaved');    // a line added since the save
+  assert.equal(JSON.stringify(c.savedSceneLines('not a scene')), '{}');
+  assert.equal(JSON.stringify(c.savedSceneLines(null)), '{}');    // a starter scene that was never saved
+});
+
+test('Render what is missing takes the lines not rendered, failed or out of date, in script order', () => {
+  const fields = {sceneStatus: {textContent: ''}};
+  const c = vm.createContext({$: (id) => fields[id]});
+  vm.runInContext(sourceBetween('var sceneNeedsRender', 'function sceneModelName('), c);
+  vm.runInContext(sourceBetween('function sceneOrderedRows(', 'function sceneButton('), c);
+  vm.runInContext(sourceBetween('function missingSceneLines(', 'function chooseNewestSceneTakes('), c);
+  const row = (id, index, state) => ({line: {line_id: id}, index, state});
+  c.sceneRows = {z: row('z', 2, 'failed'), a: row('a', 0, 'not_rendered'), m: row('m', 1, 'done'),
+    '7': row('7', 3, 'out_of_date'), q: row('q', 4, 'choose_take')};
+  assert.equal(JSON.stringify(c.missingSceneLines()), JSON.stringify({line_ids: ['a', 'z', '7']}));
+  c.sceneRows = {m: row('m', 0, 'done'), q: row('q', 1, 'choose_take')};
+  assert.equal(c.missingSceneLines(), null);
+  assert.match(fields.sceneStatus.textContent, /^Nothing is missing or out of date/);
 });

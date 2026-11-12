@@ -3490,6 +3490,99 @@
         }
       }
     },
+    "/api/scenes/{scene_id}/lines": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_lines",
+        "summary": "Say where every line of a scene stands, in one answer.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`scene_id`, `revision` and `lines`, in script order, each with its `line_id`, `status`, `reason`, `segments_done` and `segments`. A status is `not_rendered`, `waiting` (a batch will reach it), `rendering`, `failed` (the latest batch to try its current text failed; `reason` says why), `choose_take` (a take fits its current text, voice and settings, and none is chosen), `out_of_date` (its chosen take, or every take it has, was made before its text, voice or settings changed; `reason` says what changed) or `done` (its chosen take still fits). A line has the first of `rendering`, `waiting`, `failed`, `out_of_date`, `not_rendered`, `choose_take` and `done` that one of its segments has. Each segment has its `segment_id`, `status`, `reason`, `chosen_take_id` and `takes`, newest first and without retired takes that are not chosen, each with `id`, `created_at`, `duration_seconds`, `audio_url`, `waveform_checks`, `chosen`, `fits` and `reason`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/choose-newest": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_choose_newest",
+        "summary": "Choose the newest take that fits for every segment without one.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "line_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only these lines. Default: every line."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`scene`, at a new revision when it chose any, `chosen` (how many segments got a take) and `lines` (how many lines they are in).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/scenes/{scene_id}/preview": {
       "post": {
         "operationId": "post_api_scenes_scene_id_preview",

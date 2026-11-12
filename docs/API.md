@@ -1046,6 +1046,8 @@ Ordered scripts rendered line by line through the same performance call. The man
 | POST | [`/api/scenes/jobs/{job_id}/cancel`](#post-api-scenes-jobs-job_id-cancel) | Cancel a job. A take already being made is not undone. |
 | POST | [`/api/scenes/jobs/{job_id}/retry`](#post-api-scenes-jobs-job_id-retry) | Queue the failed rows of a job again. |
 | POST | [`/api/scenes/{scene_id}/select`](#post-api-scenes-scene_id-select) | Choose which take a line, or one of its segments, uses. |
+| GET | [`/api/scenes/{scene_id}/lines`](#get-api-scenes-scene_id-lines) | Say where every line of a scene stands, in one answer. |
+| POST | [`/api/scenes/{scene_id}/choose-newest`](#post-api-scenes-scene_id-choose-newest) | Choose the newest take that fits for every segment without one. |
 | POST | [`/api/scenes/{scene_id}/preview`](#post-api-scenes-scene_id-preview) | Assemble the selected takes into one preview. |
 | GET | [`/api/scenes/{scene_id}/previews/{preview_file}.wav`](#get-api-scenes-scene_id-previews-preview_file-wav) | Download a preview's WAV. |
 
@@ -1309,6 +1311,34 @@ Choose which take a line, or one of its segments, uses.
 | `segment_id` | string | For a line with several segments. |
 
 **Answer:** `200`, JSON. `scene`.
+
+<a id="get-api-scenes-scene_id-lines"></a>
+
+#### `GET /api/scenes/{scene_id}/lines`
+
+Say where every line of a scene stands, in one answer.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+**Answer:** `200`, JSON. `scene_id`, `revision` and `lines`, in script order, each with its `line_id`, `status`, `reason`, `segments_done` and `segments`. A status is `not_rendered`, `waiting` (a batch will reach it), `rendering`, `failed` (the latest batch to try its current text failed; `reason` says why), `choose_take` (a take fits its current text, voice and settings, and none is chosen), `out_of_date` (its chosen take, or every take it has, was made before its text, voice or settings changed; `reason` says what changed) or `done` (its chosen take still fits). A line has the first of `rendering`, `waiting`, `failed`, `out_of_date`, `not_rendered`, `choose_take` and `done` that one of its segments has. Each segment has its `segment_id`, `status`, `reason`, `chosen_take_id` and `takes`, newest first and without retired takes that are not chosen, each with `id`, `created_at`, `duration_seconds`, `audio_url`, `waveform_checks`, `chosen`, `fits` and `reason`.
+
+<a id="post-api-scenes-scene_id-choose-newest"></a>
+
+#### `POST /api/scenes/{scene_id}/choose-newest`
+
+Choose the newest take that fits for every segment without one.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `line_ids` | string[] | Only these lines. Default: every line. |
+
+**Answer:** `200`, JSON. `scene`, at a new revision when it chose any, `chosen` (how many segments got a take) and `lines` (how many lines they are in).
 
 <a id="post-api-scenes-scene_id-preview"></a>
 

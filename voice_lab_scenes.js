@@ -31,8 +31,22 @@ function sceneHistoryState() {
   $('sceneUndo').disabled = !sceneUndo.length;
   $('sceneRedo').disabled = !sceneRedo.length;
 }
+// Each saved line as JSON, by line id: a row whose line differs has unsaved edits, and its status waits for a save.
+var sceneSavedLines = {};
+function savedSceneLines(savedText) {
+  var lines = {};
+  try {
+    (JSON.parse(savedText || 'null') || { lines: [] }).lines.forEach(function (line) {
+      lines[line.line_id] = JSON.stringify(line);
+    });
+  } catch (error) {
+    return {};
+  }
+  return lines;
+}
 function resetSceneHistory(savedText) {
   sceneSavedText = savedText;
+  sceneSavedLines = savedSceneLines(savedText);
   sceneLiveText = $('sceneEditor').value;
   sceneUndo = [];
   sceneRedo = [];
@@ -140,10 +154,14 @@ function updateSceneEditor(scene, group) {
   markSceneDirty();
 }
 function changeSceneField(index, key, value) {
-  updateSceneEditor(editSceneField(sceneBody(), index, key, value), 'field:' + index + ':' + key);
+  var scene = editSceneField(sceneBody(), index, key, value);
+  updateSceneEditor(scene, 'field:' + index + ':' + key);
+  if (index !== null) paintSceneRow(scene.lines[index]);
 }
 function changeSceneSetting(index, key, value) {
-  updateSceneEditor(editSceneSetting(sceneBody(), index, key, value), 'setting:' + index + ':' + key);
+  var scene = editSceneSetting(sceneBody(), index, key, value);
+  updateSceneEditor(scene, 'setting:' + index + ':' + key);
+  paintSceneRow(scene.lines[index]);
 }
 function stableSceneLineId(lines) {
   var used = new Set(
@@ -292,7 +310,9 @@ function addSceneLine() {
     identity = character && character.identities[0];
   }
   if (!character || !identity) throw new Error('Create a character voice in Cast before adding dialogue.');
-  scene.lines.push(sceneDefaultLine(character, identity, stableSceneLineId(scene.lines)));
+  var lineId = stableSceneLineId(scene.lines);
+  scene.lines.push(sceneDefaultLine(character, identity, lineId));
+  sceneOpenLines.add(lineId); // A new line opens, ready to write.
   updateSceneEditor(scene);
   renderSceneForm();
 }
@@ -542,12 +562,73 @@ function renderSceneLineEditor(line, index, article) {
     actions.appendChild(button);
   });
   article.appendChild(actions);
+  var lineId = document.createElement('p');
+  lineId.className = 'meta';
+  lineId.textContent = 'Line ID: ' + line.line_id + '. Exports and the API name the line by it.';
+  article.appendChild(lineId);
+}
+// The scenes table: one row per line, its status from GET /api/scenes/{id}/lines (one answer for the whole scene). A row's
+// takes and form are built the first time it opens, so a long scene opens at once.
+var sceneLineStates = {},
+  sceneTicked = new Set(),
+  sceneOpenLines = new Set(),
+  sceneRows = {},
+  sceneJobSignature = null,
+  scenePlayer = null,
+  scenePlayerButton = null;
+var sceneStatusWords = {
+  unsaved: 'Not saved yet',
+  not_rendered: 'Not rendered',
+  waiting: 'Waiting',
+  rendering: 'Rendering',
+  failed: 'Failed',
+  out_of_date: 'Out of date',
+  choose_take: 'Choose a take',
+  done: 'Done',
+};
+var sceneNeedsRender = ['not_rendered', 'out_of_date', 'failed'];
+function sceneModelName(engineId) {
+  var entry = ((catalog && catalog.engines) || []).find(function (item) {
+    return item.id === engineId;
+  });
+  return entry ? entry.name : engineId || 'No model';
+}
+function sceneShortText(text) {
+  var value = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return value.length > 90 ? value.slice(0, 89) + '…' : value || 'Empty line';
+}
+function sceneRowState(line) {
+  var server = sceneLineStates[line.line_id] || null;
+  if (sceneSavedLines[line.line_id] !== JSON.stringify(line)) return { status: 'unsaved', reason: '', server: server };
+  return server ? { status: server.status, reason: server.reason, server: server } : { status: '', reason: '', server: null };
+}
+function sceneOrderedRows() {
+  return Object.keys(sceneRows)
+    .map(function (key) {
+      return sceneRows[key];
+    })
+    .sort(function (a, b) {
+      return a.index - b.index;
+    });
+}
+function sceneButton(text, label, handler) {
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = text;
+  if (label) button.setAttribute('aria-label', label);
+  button.addEventListener('click', handler);
+  return button;
 }
 function renderSceneForm() {
   var container = $('sceneLineEditor');
   container.textContent = '';
+  sceneRows = {};
+  stopScenePlayer();
   $('sceneName').disabled = true;
   $('sceneLineAdd').disabled = true;
+  $('sceneTableTools').hidden = true;
   if (!$('sceneEditor').value.trim()) {
     $('sceneName').value = '';
     container.textContent = 'Open a scene or start one from the current performer.';
@@ -569,40 +650,389 @@ function renderSceneForm() {
     container.textContent = 'This script has no dialogue lines. Add a line to continue.';
     return;
   }
+  var wrap = document.createElement('div'),
+    table = document.createElement('table'),
+    head = table.createTHead().insertRow();
+  wrap.className = 'scene-table-wrap';
+  table.className = 'scene-table';
+  [
+    ['tick', 'Ticked'],
+    ['number', '#'],
+    ['character', 'Character'],
+    ['line', 'Line'],
+    ['voice', 'Voice'],
+    ['status', 'Status'],
+    ['actions', 'Actions'],
+  ].forEach(function (column) {
+    var cell = document.createElement('th'),
+      name = column[1];
+    cell.scope = 'col';
+    cell.className = 'scene-col-' + column[0];
+    if (column[0] === 'tick' || column[0] === 'actions') {
+      var hidden = document.createElement('span');
+      hidden.className = 'visually-hidden';
+      hidden.textContent = name;
+      cell.appendChild(hidden);
+    } else cell.textContent = name;
+    head.appendChild(cell);
+  });
+  if (scene.lines.length === 1) sceneOpenLines.add(scene.lines[0].line_id); // A one-line script shows its form.
   scene.lines.forEach(function (line, index) {
-    var article = document.createElement('details'),
-      heading = document.createElement('summary'),
-      identity = document.createElement('p');
-    article.className = 'scene-line';
-    article.open = index === 0;
-    heading.textContent = index + 1 + '. ' + line.line_id + ' — ' + String(line.text || 'Empty line').slice(0, 90);
-    article.appendChild(heading);
-    var character = castCharacters.find(function (item) {
-        return item.id === line.character_id;
-      }),
-      identityInfo = sceneIdentityById(line.identity_id);
-    identity.className = 'meta';
-    identity.textContent =
-      (character ? character.name : 'Character ' + (line.character_id || 'unassigned').slice(0, 8)) +
-      ' · ' +
-      (identityInfo
-        ? identityInfo.identity.engine_id + ' / ' + identityInfo.identity.label
-        : line.engine_id || 'Voice identity missing') +
-      ' · ' +
-      (line.language || 'English');
-    article.appendChild(identity);
-    var built = false;
-    function build() {
-      if (!built) {
-        built = true;
-        renderSceneLineEditor(line, index, article);
-      }
-    }
-    if (article.open) build();
-    article.addEventListener('toggle', function () {
-      if (article.open) build();
+    table.appendChild(buildSceneRow(line, index));
+  });
+  wrap.appendChild(table);
+  container.appendChild(wrap);
+  $('sceneTableTools').hidden = false;
+  fillSceneCharacterFilter(scene);
+  applySceneFilters();
+}
+function buildSceneRow(line, index) {
+  var body = document.createElement('tbody'),
+    main = body.insertRow(),
+    detail = body.insertRow(),
+    number = index + 1;
+  body.className = 'scene-line';
+  main.className = 'scene-row';
+  var tick = document.createElement('input');
+  tick.type = 'checkbox';
+  tick.checked = sceneTicked.has(line.line_id);
+  tick.setAttribute('aria-label', 'Tick line ' + number);
+  tick.addEventListener('change', function () {
+    if (this.checked) sceneTicked.add(line.line_id);
+    else sceneTicked.delete(line.line_id);
+    updateSceneTools();
+  });
+  main.insertCell().appendChild(tick);
+  var count = main.insertCell();
+  count.className = 'scene-number';
+  count.textContent = String(number);
+  var who = main.insertCell(),
+    character = castCharacters.find(function (item) {
+      return item.id === line.character_id;
+    }),
+    identityInfo = sceneIdentityById(line.identity_id),
+    words = main.insertCell(),
+    voice = main.insertCell();
+  who.className = 'scene-character';
+  who.textContent = character ? character.name : 'No character';
+  who.title = who.textContent;
+  voice.className = 'meta scene-voice';
+  voice.textContent =
+    (identityInfo ? identityInfo.identity.label + ' · ' : '') +
+    sceneModelName(line.engine_id || (identityInfo && identityInfo.identity.engine_id));
+  voice.title = voice.textContent;
+  var status = main.insertCell(),
+    actions = main.insertCell();
+  words.className = 'scene-text';
+  status.className = 'scene-status';
+  actions.className = 'scene-actions';
+  var play = sceneButton('Play', 'Play line ' + number, function () {
+      playSceneLine(line.line_id, play, number);
+    }),
+    render = sceneButton('Render', 'Render line ' + number, function () {
+      startSceneBatch({ line_ids: [line.line_id] }).catch(showSceneError);
+    }),
+    open = sceneButton('Open', 'Line ' + number + ' details', function () {
+      setOpen(detail.hidden);
     });
-    container.appendChild(article);
+  play.className = 'scene-play';
+  open.className = 'scene-open';
+  open.setAttribute('aria-expanded', 'false');
+  actions.appendChild(play);
+  actions.appendChild(render);
+  actions.appendChild(open);
+  detail.className = 'scene-detail';
+  detail.hidden = true;
+  var panel = detail.insertCell();
+  panel.colSpan = 7;
+  var row = {
+    body: body,
+    line: line,
+    index: index,
+    tick: tick,
+    words: words,
+    status: status,
+    play: play,
+    panel: panel,
+    state: '',
+    takes: null,
+    takesShown: '',
+  };
+  function setOpen(value) {
+    detail.hidden = !value;
+    open.textContent = value ? 'Close' : 'Open';
+    open.setAttribute('aria-expanded', String(value));
+    if (value) sceneOpenLines.add(line.line_id);
+    else sceneOpenLines.delete(line.line_id);
+    if (value && !row.takes) {
+      row.takes = document.createElement('div');
+      row.takes.className = 'scene-takes';
+      panel.appendChild(row.takes);
+      renderSceneLineEditor(row.line, index, panel);
+      paintSceneRow(row.line);
+    }
+  }
+  sceneRows[line.line_id] = row;
+  paintSceneRow(line);
+  if (sceneOpenLines.has(line.line_id)) setOpen(true);
+  return body;
+}
+function paintSceneRow(line) {
+  var row = line && sceneRows[line.line_id];
+  if (!row) return;
+  var state = sceneRowState(line),
+    segments = (state.server && state.server.segments) || [];
+  row.line = line;
+  row.state = state.status;
+  row.body.setAttribute('data-status', state.status);
+  row.words.textContent = sceneShortText(line.text);
+  row.words.title = line.text || '';
+  row.status.textContent = '';
+  var word = document.createElement('span');
+  word.className = 'scene-status-word';
+  word.textContent = sceneStatusWords[state.status] || 'Checking…';
+  row.status.appendChild(word);
+  if (segments.length > 1 && state.status !== 'done' && state.status !== 'unsaved')
+    row.status.appendChild(
+      document.createTextNode(' (' + state.server.segments_done + ' of ' + segments.length + ' parts done)'),
+    );
+  if (state.reason) {
+    var why = document.createElement('span');
+    why.className = 'meta scene-reason';
+    why.textContent = state.reason;
+    row.status.appendChild(why);
+  }
+  row.play.disabled = !segments.some(function (segment) {
+    return segment.chosen_take_id;
+  });
+  // An open row's takes are drawn again only when they change, so a take being played is not cut off by a poll.
+  var shown = state.status + JSON.stringify(state.server);
+  if (row.takes && row.takesShown !== shown) {
+    row.takesShown = shown;
+    renderSceneTakes(row.takes, line, state);
+  }
+}
+function paintSceneRows() {
+  var scene;
+  try {
+    scene = sceneBody();
+  } catch (error) {
+    return;
+  }
+  scene.lines.forEach(paintSceneRow);
+  applySceneFilters();
+}
+function sceneTakeTime(value) {
+  var date = new Date(value);
+  return isNaN(date.getTime()) ? String(value || '') : date.toLocaleString();
+}
+function renderSceneTakes(container, line, state) {
+  container.textContent = '';
+  var heading = document.createElement('h3');
+  heading.textContent = 'Takes';
+  container.appendChild(heading);
+  if (!state.server) {
+    var none = document.createElement('p');
+    none.className = 'meta';
+    none.textContent = state.status === 'unsaved' ? 'Save the scene to see this line’s takes.' : 'Checking…';
+    container.appendChild(none);
+    return;
+  }
+  var segments = state.server.segments || [];
+  segments.forEach(function (segment, part) {
+    var block = document.createElement('div');
+    block.className = 'scene-part';
+    if (segments.length > 1) {
+      var source = (line.segments || []).find(function (item) {
+          return item.id === segment.segment_id;
+        }),
+        title = document.createElement('p');
+      title.textContent =
+        'Part ' +
+        (part + 1) +
+        ' of ' +
+        segments.length +
+        ': ' +
+        (sceneStatusWords[segment.status] || segment.status) +
+        (segment.reason ? '. ' + segment.reason : '') +
+        (source ? ' “' + sceneShortText(source.text) + '”' : '');
+      block.appendChild(title);
+      block.appendChild(
+        sceneButton('Render this part', 'Render part ' + (part + 1) + ' of line ' + (line.line_id || ''), function () {
+          startSceneBatch({ segment_ids: [line.line_id + '/' + segment.segment_id] }).catch(showSceneError);
+        }),
+      );
+    }
+    if (!segment.takes.length) {
+      var empty = document.createElement('p');
+      empty.className = 'meta';
+      empty.textContent = 'No takes yet. Render makes one.';
+      block.appendChild(empty);
+    }
+    segment.takes.forEach(function (take) {
+      var item = document.createElement('div'),
+        audio = document.createElement('audio'),
+        about = document.createElement('p');
+      item.className = 'scene-take';
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.src = take.audio_url;
+      item.appendChild(audio);
+      about.className = 'meta';
+      about.textContent =
+        (take.chosen ? 'Chosen. ' : '') +
+        'Made ' +
+        sceneTakeTime(take.created_at) +
+        ', ' +
+        Number(take.duration_seconds).toFixed(1) +
+        ' s.' +
+        (take.reason ? ' ' + take.reason : '');
+      item.appendChild(about);
+      if (take.waveform_checks && (take.waveform_checks.flags || []).length) appendTakeChecks(item, take.waveform_checks);
+      if (take.fits && !take.chosen)
+        item.appendChild(
+          sceneButton('Use this take', '', function () {
+            useSceneTake(line.line_id, segment.segment_id, take.id);
+          }),
+        );
+      block.appendChild(item);
+    });
+    container.appendChild(block);
+  });
+}
+function useSceneTake(lineId, segmentId, takeId) {
+  if (sceneDirty) {
+    showSceneError(new Error('Save or discard unsaved script edits before choosing a take.'));
+    return;
+  }
+  fetchJson('/api/scenes/' + activeSceneId + '/select', { line_id: lineId, segment_id: segmentId, take_id: takeId })
+    .then(function (value) {
+      return renderScene(value.scene).then(function () {
+        $('sceneStatus').textContent = 'Take chosen. The scene is saved at revision ' + value.scene.revision + '.';
+      });
+    })
+    .catch(showSceneError);
+}
+function stopScenePlayer() {
+  if (scenePlayer) scenePlayer.pause();
+  if (scenePlayerButton) {
+    scenePlayerButton.textContent = 'Play';
+    scenePlayerButton.setAttribute('aria-label', scenePlayerButton.getAttribute('aria-label').replace(/^Stop/, 'Play'));
+  }
+  scenePlayer = null;
+  scenePlayerButton = null;
+}
+// Play plays a line's chosen takes one after another (a long line has one per part); pressing it again stops.
+function playSceneLine(lineId, button, number) {
+  var again = scenePlayerButton === button;
+  stopScenePlayer();
+  if (again) return;
+  var state = sceneLineStates[lineId],
+    urls = ((state && state.segments) || [])
+      .map(function (segment) {
+        return segment.chosen_take_id ? '/api/takes/' + segment.chosen_take_id + '/audio' : null;
+      })
+      .filter(Boolean);
+  if (!urls.length) return;
+  var audio = new Audio(),
+    at = 0;
+  scenePlayer = audio;
+  scenePlayerButton = button;
+  button.textContent = 'Stop';
+  button.setAttribute('aria-label', 'Stop line ' + number);
+  audio.addEventListener('ended', function () {
+    if (scenePlayer !== audio) return;
+    at += 1;
+    if (at >= urls.length) {
+      stopScenePlayer();
+      return;
+    }
+    audio.src = urls[at];
+    audio.play().catch(showSceneError);
+  });
+  audio.src = urls[0];
+  audio.play().catch(function (error) {
+    stopScenePlayer();
+    showSceneError(error);
+  });
+}
+function fillSceneCharacterFilter(scene) {
+  var select = $('sceneFilterCharacter'),
+    keep = select.value,
+    seen = {};
+  select.textContent = '';
+  option(select, '', 'Everyone');
+  scene.lines.forEach(function (line) {
+    if (!line.character_id || seen[line.character_id]) return;
+    seen[line.character_id] = true;
+    var character = castCharacters.find(function (item) {
+      return item.id === line.character_id;
+    });
+    option(select, line.character_id, character ? character.name : 'Character ' + line.character_id.slice(0, 8));
+  });
+  select.value = seen[keep] ? keep : '';
+}
+function applySceneFilters() {
+  var character = $('sceneFilterCharacter').value,
+    status = $('sceneFilterStatus').value,
+    rows = sceneOrderedRows(),
+    counts = {},
+    shown = 0;
+  rows.forEach(function (row) {
+    row.body.hidden = !!((character && row.line.character_id !== character) || (status && row.state !== status));
+    if (!row.body.hidden) shown += 1;
+    if (row.state) counts[row.state] = (counts[row.state] || 0) + 1;
+  });
+  var parts = Object.keys(sceneStatusWords)
+    .filter(function (key) {
+      return counts[key];
+    })
+    .map(function (key) {
+      return counts[key] + ' ' + sceneStatusWords[key].toLowerCase();
+    });
+  $('sceneTableSummary').textContent =
+    rows.length +
+    (rows.length === 1 ? ' line' : ' lines') +
+    (parts.length ? ': ' + parts.join(', ') : '') +
+    '.' +
+    (shown < rows.length ? ' Showing ' + shown + '.' : '');
+  updateSceneTools();
+}
+function updateSceneTools() {
+  var rows = sceneOrderedRows(),
+    shown = rows.filter(function (row) {
+      return !row.body.hidden;
+    }),
+    ticked = shown.filter(function (row) {
+      return sceneTicked.has(row.line.line_id);
+    }),
+    missing = rows.filter(function (row) {
+      return sceneNeedsRender.indexOf(row.state) >= 0;
+    }).length,
+    choose = rows.filter(function (row) {
+      return row.state === 'choose_take';
+    }).length;
+  $('sceneRenderTicked').textContent = 'Render ticked (' + ticked.length + ')';
+  $('sceneRenderTicked').disabled = !ticked.length;
+  $('sceneTickAll').checked = !!shown.length && ticked.length === shown.length;
+  $('sceneTickAll').indeterminate = !!ticked.length && ticked.length < shown.length;
+  $('sceneRenderMissing').textContent = 'Render what is missing or out of date' + (missing ? ' (' + missing + ')' : '');
+  $('sceneChooseNewest').textContent = 'Use the newest take where none is chosen' + (choose ? ' (' + choose + ')' : '');
+}
+function refreshSceneLineStates() {
+  if (!activeSceneId) {
+    sceneLineStates = {};
+    paintSceneRows();
+    return Promise.resolve();
+  }
+  var sceneId = activeSceneId;
+  return fetchJson('/api/scenes/' + sceneId + '/lines').then(function (result) {
+    if (sceneId !== activeSceneId) return;
+    sceneLineStates = {};
+    (result.lines || []).forEach(function (line) {
+      sceneLineStates[line.line_id] = line;
+    });
+    paintSceneRows();
   });
 }
 $('sceneName').addEventListener('input', function () {
@@ -620,8 +1050,17 @@ $('sceneEditor').addEventListener('input', function () {
   $('sceneStatus').textContent = 'Unsaved scene JSON changes.';
   sceneHistoryState();
 });
+function sceneJobLabel(job) {
+  return job.status + ' / ' + job.completed + '/' + job.total + ' / ' + job.id.slice(0, 8);
+}
 function renderScene(scene) {
+  if (scene.scene_id !== activeSceneId) {
+    sceneTicked = new Set();
+    sceneOpenLines = new Set();
+    sceneLineStates = {};
+  }
   activeSceneId = scene.scene_id;
+  sceneJobSignature = null;
   sceneDirty = false;
   $('sceneEditor').value = JSON.stringify(scene, null, 2);
   resetSceneHistory($('sceneEditor').value);
@@ -633,12 +1072,12 @@ function renderScene(scene) {
   $('sceneExportCsv').href = '/api/scenes/' + scene.scene_id + '/export.csv';
   $('sceneExportJson').hidden = false;
   $('sceneExportCsv').hidden = false;
-  return fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
+  var jobs = fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
     var select = $('sceneJobSelect'),
       previous = activeSceneJobId;
     select.textContent = '';
     (result.jobs || []).forEach(function (job) {
-      option(select, job.id, job.status + ' / ' + job.completed + '/' + job.total + ' / ' + job.id.slice(0, 8));
+      option(select, job.id, sceneJobLabel(job));
     });
     if (
       previous &&
@@ -651,6 +1090,7 @@ function renderScene(scene) {
     activeSceneJobId = select.value || null;
     return activeSceneJobId ? refreshSceneJob() : Promise.resolve();
   });
+  return Promise.all([jobs, refreshSceneLineStates()]).then(function () {});
 }
 function refreshSceneList(preferred) {
   return fetchJson('/api/scenes').then(function (result) {
@@ -674,6 +1114,7 @@ function refreshSceneList(preferred) {
       });
     activeSceneId = null;
     activeSceneJobId = null;
+    sceneLineStates = {};
     $('sceneEditor').value = '';
     resetSceneHistory('');
     renderSceneForm();
@@ -773,6 +1214,9 @@ function refreshSceneJob() {
       ' total / ' +
       Math.round(job.progress * 100) +
       '%';
+    Array.prototype.forEach.call($('sceneJobSelect').options, function (item) {
+      if (item.value === job.id) item.textContent = sceneJobLabel(job);
+    });
     $('sceneJobManifest').href = '/api/scenes/jobs/' + job.id + '/manifest.json';
     $('sceneJobManifest').hidden = false;
     var container = $('sceneJobRows');
@@ -845,6 +1289,9 @@ function refreshSceneJob() {
       }
       container.appendChild(article);
     });
+    var signature = [job.id, job.status, job.queued, job.running, job.completed, job.failed, job.cancelled].join(':');
+    if (sceneJobSignature !== null && signature !== sceneJobSignature) refreshSceneLineStates().catch(showSceneError);
+    sceneJobSignature = signature;
     if (['queued', 'running'].indexOf(job.status) >= 0) {
       clearTimeout(scenePollTimer);
       scenePollTimer = setTimeout(refreshSceneJob, 1000);
@@ -885,17 +1332,51 @@ function saveAndGetScene() {
     return scene;
   });
 }
-function startSceneBatch(lineIds) {
+// Saves the scene, then queues a batch: `request` is the body (line_ids or segment_ids, or nothing for every line), or a
+// function that works it out from the saved scene's line statuses and may return null for nothing to render.
+function startSceneBatch(request) {
   return saveAndGetScene()
     .then(function (scene) {
-      return refreshSceneList(scene.scene_id).then(function () {
-        return fetchJson('/api/scenes/' + scene.scene_id + '/jobs', lineIds && lineIds.length ? { line_ids: lineIds } : {});
+      return refreshSceneList(scene.scene_id);
+    })
+    .then(function () {
+      var body = typeof request === 'function' ? request() : request || {};
+      if (!body) return null;
+      return fetchJson('/api/scenes/' + activeSceneId + '/jobs', body).then(function (result) {
+        var select = $('sceneJobSelect'),
+          item = document.createElement('option');
+        activeSceneJobId = result.job.id;
+        item.value = result.job.id;
+        item.textContent = sceneJobLabel(result.job);
+        select.insertBefore(item, select.firstChild);
+        select.value = activeSceneJobId;
+        return Promise.all([refreshSceneJob(), refreshSceneLineStates()]);
       });
+    });
+}
+function missingSceneLines() {
+  var ids = sceneOrderedRows()
+    .filter(function (row) {
+      return sceneNeedsRender.indexOf(row.state) >= 0;
+    })
+    .map(function (row) {
+      return row.line.line_id;
+    });
+  if (ids.length) return { line_ids: ids };
+  $('sceneStatus').textContent = 'Nothing is missing or out of date: every line has a take that fits.';
+  return null;
+}
+function chooseNewestSceneTakes() {
+  return saveAndGetScene()
+    .then(function (scene) {
+      return fetchJson('/api/scenes/' + scene.scene_id + '/choose-newest', {});
     })
     .then(function (result) {
-      activeSceneJobId = result.job.id;
-      $('sceneJobSelect').value = activeSceneJobId;
-      return refreshSceneJob();
+      return refreshSceneList(result.scene.scene_id).then(function () {
+        $('sceneStatus').textContent = result.lines
+          ? 'Chose the newest take for ' + result.lines + (result.lines === 1 ? ' line.' : ' lines.')
+          : 'No line was waiting for a take: each one has a take chosen, or no take that fits.';
+      });
     });
 }
 function sceneAction(action) {
@@ -982,17 +1463,19 @@ function sceneTextEntry(element) {
 function moveSceneLineFrom(element, action) {
   var article = element && element.closest ? element.closest('.scene-line') : null;
   if (!article) return false;
-  var container = $('sceneLineEditor'),
-    index = Array.prototype.indexOf.call(container.children, article);
+  var rows = function () {
+      return $('sceneLineEditor').querySelectorAll('tbody.scene-line');
+    },
+    index = Array.prototype.indexOf.call(rows(), article);
   try {
     mutateSceneLine(index, action);
   } catch (error) {
     showSceneError(error);
     return true;
   }
-  var moved = container.children[action === 'up' ? index - 1 : index + 1],
-    heading = moved && moved.querySelector('summary');
-  if (heading) heading.focus();
+  var moved = rows()[action === 'up' ? index - 1 : index + 1],
+    button = moved && moved.querySelector('.scene-open');
+  if (button) button.focus();
   return true;
 }
 document.addEventListener('keydown', function (event) {
@@ -1057,45 +1540,39 @@ $('sceneSegments').addEventListener('click', function () {
   }
 });
 $('sceneStart').addEventListener('click', function () {
-  startSceneBatch(null).catch(showSceneError);
+  startSceneBatch({}).catch(showSceneError);
 });
-$('sceneRegenerate').addEventListener('click', function () {
-  var ids = $('sceneRegenerateIds')
-    .value.split(',')
-    .map(function (value) {
-      return value.trim();
+$('sceneRenderTicked').addEventListener('click', function () {
+  var ids = sceneOrderedRows()
+    .filter(function (row) {
+      return !row.body.hidden && sceneTicked.has(row.line.line_id);
     })
-    .filter(Boolean);
-  if (!ids.length) {
-    showSceneError(new Error('Enter one or more stable line IDs or line_id/segment_id selectors.'));
-    return;
-  }
-  var lines = ids.filter(function (value) {
-      return value.indexOf('/') < 0;
-    }),
-    segments = ids.filter(function (value) {
-      return value.indexOf('/') >= 0;
+    .map(function (row) {
+      return row.line.line_id;
     });
-  if (lines.length && segments.length) {
-    showSceneError(new Error('Regenerate either whole lines or individual segments in one batch.'));
-    return;
-  }
-  saveAndGetScene()
-    .then(function (scene) {
-      return refreshSceneList(scene.scene_id).then(function () {
-        var body = {};
-        if (lines.length) body.line_ids = lines;
-        if (segments.length) body.segment_ids = segments;
-        return fetchJson('/api/scenes/' + scene.scene_id + '/jobs', body);
-      });
-    })
-    .then(function (result) {
-      activeSceneJobId = result.job.id;
-      $('sceneJobSelect').value = activeSceneJobId;
-      return refreshSceneJob();
-    })
-    .catch(showSceneError);
+  if (ids.length) startSceneBatch({ line_ids: ids }).catch(showSceneError);
 });
+$('sceneRenderMissing').addEventListener('click', function () {
+  startSceneBatch(missingSceneLines).catch(showSceneError);
+});
+$('sceneChooseNewest').addEventListener('click', function () {
+  chooseNewestSceneTakes().catch(showSceneError);
+});
+$('sceneTickAll').addEventListener('change', function () {
+  var on = this.checked;
+  sceneOrderedRows().forEach(function (row) {
+    if (row.body.hidden) return;
+    if (on) sceneTicked.add(row.line.line_id);
+    else sceneTicked.delete(row.line.line_id);
+    row.tick.checked = on;
+  });
+  updateSceneTools();
+});
+Object.keys(sceneStatusWords).forEach(function (key) {
+  option($('sceneFilterStatus'), key, sceneStatusWords[key]);
+});
+$('sceneFilterCharacter').addEventListener('change', applySceneFilters);
+$('sceneFilterStatus').addEventListener('change', applySceneFilters);
 ['pause', 'resume', 'cancel', 'retry'].forEach(function (action) {
   $('scene' + action.charAt(0).toUpperCase() + action.slice(1)).addEventListener('click', function () {
     try {

@@ -90,12 +90,28 @@ details > .meta { margin-bottom:0; }
 pre { white-space:pre-wrap; }
 [role=alert] { color:var(--err); }
 [role=alert]:empty { display:none; }
-.scene-line { padding:20px; background:var(--bg); border:1px solid var(--line); border-radius:12px; margin:16px 0; }
-.scene-line h3 { margin:0 0 8px; }
-.scene-line summary { overflow-wrap:anywhere; }
-.scene-line[open] summary { margin-bottom:16px; }
-.scene-line .row { margin-bottom:0; }
-.scene-line textarea { background:var(--card); }
+.scene-table-wrap { overflow-x:auto; margin:12px 0; container-type:inline-size; }
+.scene-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:.9rem; }
+.scene-table th { text-align:left; font-size:.82rem; font-weight:600; color:var(--muted); padding:4px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.scene-table td { padding:4px 6px; vertical-align:middle; border-bottom:1px solid var(--line); }
+.scene-col-tick { width:1.6rem; } .scene-col-number { width:2.4rem; } .scene-col-character { width:6.5rem; } .scene-col-voice { width:11rem; }
+.scene-col-status { width:8rem; } .scene-col-actions { width:11.2rem; }
+.scene-table .scene-number { color:var(--muted); text-align:right; }
+.scene-table .scene-character, .scene-table .scene-text, .scene-table .scene-voice { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.scene-table .scene-voice { font-size:.82rem; }
+.scene-reason { display:block; font-size:.8rem; line-height:1.3; }
+.scene-status-word { font-weight:600; }
+.scene-table .scene-actions button { padding:2px 8px; min-height:0; font-size:.84rem; }
+@container (max-width:780px) { .scene-col-voice, .scene-table .scene-voice { display:none; } }
+@container (max-width:640px) { .scene-col-character, .scene-table .scene-character { display:none; } }
+.scene-line[data-status="failed"] .scene-status-word, .scene-line[data-status="out_of_date"] .scene-status-word { color:var(--err); }
+.scene-line[data-status="done"] .scene-status-word { color:var(--accent); }
+.scene-table .scene-actions { white-space:nowrap; } .scene-actions button + button { margin-left:4px; }
+.scene-detail > td { background:var(--bg); padding:14px 16px 18px; }
+.scene-detail h3 { margin:0 0 6px; font-size:1rem; }
+.scene-detail .row { margin-bottom:0; } .scene-detail textarea { background:var(--card); }
+.scene-takes { margin-bottom:14px; } .scene-take { border-top:1px solid var(--line); padding:8px 0; } .scene-take audio { margin-top:0; }
+.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .model-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:14px; margin:22px 0; }
 .model-card { min-width:0; overflow-wrap:anywhere; border:1px solid var(--line); border-radius:10px; padding:18px; display:flex; flex-direction:column; }
 .model-card h3 { margin:0 0 10px; }
@@ -130,7 +146,7 @@ pre { white-space:pre-wrap; }
 .reference-details,#cloneSourceInfo { white-space:pre-line; }
 fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:900px){main{grid-template-columns:170px minmax(0,1fr);gap:20px;padding:0 20px 40px}.workspace{padding:22px}.workspace-nav a{padding:10px}}
-@media(max-width:700px){main{display:block;padding:0 16px 40px}.app-header{padding:22px 0 18px}.local-badge{display:none}.workspace-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px;margin:16px 0}.workspace-nav .eyebrow{display:none}.workspace-nav a{padding:8px 10px;font-size:.85rem}.workspace-nav .nav-secondary{margin:0;padding-top:8px;border:0}.workspace{margin:18px 0;padding:20px}.workspace h2{font-size:1.35rem}.field.compact{flex:1 1 140px}.scene-line{padding:14px}}
+@media(max-width:700px){main{display:block;padding:0 16px 40px}.app-header{padding:22px 0 18px}.local-badge{display:none}.workspace-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px;margin:16px 0}.workspace-nav .eyebrow{display:none}.workspace-nav a{padding:8px 10px;font-size:.85rem}.workspace-nav .nav-secondary{margin:0;padding-top:8px;border:0}.workspace{margin:18px 0;padding:20px}.workspace h2{font-size:1.35rem}.field.compact{flex:1 1 140px}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
@@ -313,11 +329,17 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. Advanced JSON includes identity assignments and model settings.</div>
   <p class="meta" id="sceneShortcuts">Keyboard: Ctrl+Z undo · Ctrl+Y or Ctrl+Shift+Z redo · Ctrl+S save · Alt+↑ or Alt+↓ moves the line you are in. In a text box, Ctrl+Z is that box's own undo.</p>
   <label class="field">Scene name<input id="sceneName" type="text" maxlength="120" disabled></label>
+  <div id="sceneTableTools" hidden>
+    <div class="row"><label><input type="checkbox" id="sceneTickAll"> Tick all shown</label>
+      <button type="button" id="sceneRenderTicked" disabled>Render ticked (0)</button><button class="go" type="button" id="sceneStart">Render all</button>
+      <button type="button" id="sceneRenderMissing">Render what is missing or out of date</button><button type="button" id="sceneChooseNewest">Use the newest take where none is chosen</button></div>
+    <div class="row"><label class="field compact">Character<select id="sceneFilterCharacter"><option value="">Everyone</option></select></label>
+      <label class="field compact">Status<select id="sceneFilterStatus"><option value="">Any status</option></select></label>
+      <p class="meta" id="sceneTableSummary"></p></div></div>
   <div id="sceneLineEditor"><p class="meta">Open a scene or start one from the current performer.</p></div>
   <details id="sceneAdvanced"><summary>Advanced scene JSON</summary><p class="meta">Edits here update the script form. Identity IDs, reference versions, model settings, and take selections are retained.</p><label class="field">Scene manifest JSON<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="Import a scene or start from the current performer."></textarea></label></details>
   <div class="cast-actions"><button type="button" id="sceneLineAdd">Add dialogue line</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="Undo the last script change (Ctrl+Z)">Undo</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="Redo the change you undid (Ctrl+Y or Ctrl+Shift+Z)">Redo</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">Validate and save scene</button><button type="button" id="sceneSegments">Preview segments</button>
-    <button class="go" type="button" id="sceneStart">Render scene</button><label class="field compact">Regenerate line or segment IDs<input id="sceneRegenerateIds" type="text" placeholder="line-004, long-line/seg-002"></label>
-    <button type="button" id="sceneRegenerate">Render selected rows</button><button type="button" id="scenePreview">Assemble selected takes</button></div>
+    <button type="button" id="scenePreview">Assemble selected takes</button></div>
   <p id="sceneError" role="alert"></p><p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
   <div class="row"><label class="field compact">Batch job<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh job</button>
     <button type="button" id="scenePause">Pause</button><button type="button" id="sceneResume">Resume</button>

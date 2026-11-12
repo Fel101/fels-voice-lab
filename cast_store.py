@@ -1315,6 +1315,26 @@ class CastStore:
         rows = self._rows("SELECT t.id FROM takes t" + where + " ORDER BY t.created_at,t.id", args)
         return self.get_takes([row[0] for row in rows])
 
+    def list_takes_with_line_prefix(self, prefix):
+        """Full take records whose line_id starts with this text, oldest first: a scene's takes, by its id's prefix."""
+        prefix = str(prefix)
+        rows = self._rows("SELECT id FROM takes WHERE substr(line_id,1,?)=? ORDER BY created_at,id", (len(prefix), prefix))
+        return self.get_takes([row[0] for row in rows])
+
+    def mark_takes_selected(self, take_ids):
+        """Mark each take selected, as the one selected take of its identity and line, all in one transaction. Retired
+        and unknown takes are left as they are."""
+        ids = [_validate_id(item, "take id") for item in take_ids]
+        with self._connect() as db:
+            reader = RetirementReader(db)
+            for take_id in ids:
+                row = db.execute("SELECT identity_id,line_id FROM takes WHERE id=?", (take_id,)).fetchone()
+                if row is None or reader.state("take", take_id) is not None:
+                    continue
+                db.execute("UPDATE takes SET status='candidate' WHERE identity_id=? AND line_id=? AND status='selected' "
+                           "AND id<>?", (row[0], row[1], take_id))
+                db.execute("UPDATE takes SET status='selected' WHERE id=?", (take_id,))
+
     def all_take_ids(self):
         return [row[0] for row in self._rows("SELECT id FROM takes ORDER BY created_at,id")]
 
@@ -1654,10 +1674,12 @@ class CastStore:
                            (pronunciation_id, character_id, source, replacement, notes, stamp, stamp))
         return next(item for item in self.list_pronunciations(character_id) if item["id"] == pronunciation_id)
 
-    def apply_pronunciations(self, text, character_id=None):
+    def apply_pronunciations(self, text, character_id=None, entries=None):
+        """The text as the model should read it, with this character's pronunciations (and everyone's) put in. `entries`,
+        when given, is list_pronunciations(character_id) already read, for a caller that applies it many times."""
         import re
         result = text
-        for item in self.list_pronunciations(character_id):
+        for item in self.list_pronunciations(character_id) if entries is None else entries:
             pattern = re.compile(r"(?<!\w)" + re.escape(item["source"]) + r"(?!\w)", re.IGNORECASE)
             result = pattern.sub(lambda _match, value=item["replacement"]: value, result)
         return result

@@ -23,12 +23,12 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 import synthetic_label
-from cast_store import CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
+from cast_store import ID_RE, CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
 from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
 from drama3_production import LANGUAGES as DRAMA_LANGUAGES
 from performance_settings import effective_settings
-from scene_selection import validate_selected_take
+from scene_selection import take_problem, validate_selected_take
 
 
 SCHEMA_VERSION = 1
@@ -62,6 +62,26 @@ CSV_FIELDS = [
     "take_count", "selected_take_id", "selected_takes_json", "target_duration_ms", "settings_json",
     "use_pronunciations",
 ]
+# What changed after a take was made, in the words the scenes table shows (scene_selection.take_problem names the part).
+STALE_REASONS = {
+    "segments": "The text changed after this take was made.",
+    "text": "The text changed after this take was made.",
+    "line_id": "This take was made for another line.",
+    "identity_id": "The voice changed after this take was made.",
+    "character_id": "The character changed after this take was made.",
+    "reference_version_id": "The voice recording changed after this take was made.",
+    "voice_identity": "The voice's settings changed after this take was made.",
+    "direction": "The acting direction changed after this take was made.",
+    "rejected": "This take was rejected.",
+    "language": "The language changed after this take was made.",
+    "pronunciations": "Pronunciations were turned on or off after this take was made.",
+    "settings": "The model settings changed after this take was made.",
+    "spoken_text": "The pronunciation dictionary changed after this take was made.",
+}
+# A line has the status of its segments that comes first here.
+LINE_STATUS_ORDER = ("rendering", "waiting", "failed", "out_of_date", "not_rendered", "choose_take", "done")
+ACTIVE_JOB_STATUSES = ("queued", "running", "paused")
+
 _PATH_LOCKS = {}
 _PATH_LOCKS_GUARD = threading.Lock()
 
@@ -94,6 +114,17 @@ def batch_models(rows, entries):
         parts[-1]["total"] += 1
         parts[-1]["done"] += item["status"] in ("completed", "failed", "cancelled")
     return parts
+
+
+def _chosen_take_ids(lines):
+    """The take ids a scene's lines name as chosen, once each, leaving out anything that is not a take id."""
+    found = []
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        chosen = line.get("selected_takes")
+        found += [line.get("selected_take_id"), *(chosen.values() if isinstance(chosen, dict) else ())]
+    return list(dict.fromkeys(item for item in found if isinstance(item, str) and ID_RE.fullmatch(item)))
 
 
 def canonical_json(value):
@@ -380,6 +411,9 @@ class SceneStore:
         if not isinstance(source_lines, list) or not source_lines or len(source_lines) > MAX_SCENE_LINES:
             raise ValueError(f"A scene must contain 1–{MAX_SCENE_LINES} ordered lines.")
         normalized, seen = [], set()
+        # A scene's lines share a few voices and characters: read each once per save, not once per line.
+        identities, pronunciation_lists = {}, {}
+        known_takes = {take["id"]: take for take in self.cast.get_takes(_chosen_take_ids(source_lines))}
         for index, source in enumerate(source_lines):
             if not isinstance(source, dict):
                 raise ValueError(f"Scene line {index + 1} must be an object.")
@@ -398,7 +432,10 @@ class SceneStore:
             text = text.strip()
             identity_id = source.get("identity_id")
             try:
-                identity = self.cast.get_generation_identity(identity_id, source.get("reference_version_id"))
+                identity_key = canonical_json([identity_id, source.get("reference_version_id")])
+                if identity_key not in identities:
+                    identities[identity_key] = self.cast.get_generation_identity(identity_id, source.get("reference_version_id"))
+                identity = identities[identity_key]
             except (ValueError, KeyError) as exc:
                 message = str(exc)
                 if "not found" in message.lower():
@@ -422,14 +459,16 @@ class SceneStore:
             use_pronunciations = source.get("use_pronunciations", False)
             if not isinstance(use_pronunciations, bool):
                 raise ValueError(f"Line {line_id}: use_pronunciations must be a boolean.")
-            pronunciations = self.cast.list_pronunciations(character_id) if use_pronunciations else []
+            if use_pronunciations and character_id not in pronunciation_lists:
+                pronunciation_lists[character_id] = self.cast.list_pronunciations(character_id)
+            pronunciations = pronunciation_lists[character_id] if use_pronunciations else []
             pronunciation_sources = [item["source"] for item in pronunciations]
             segment_limit = MAX_SEGMENT_TEXT
             while True:
                 segments = segment_text(text, segment_limit, pronunciation_sources)
                 if not use_pronunciations:
                     break
-                expanded_lengths = [len(self.cast.apply_pronunciations(part, character_id)) for part in segments]
+                expanded_lengths = [len(self.cast.apply_pronunciations(part, character_id, pronunciations)) for part in segments]
                 overflow = max(expanded_lengths, default=0) - MAX_SEGMENT_TEXT
                 if overflow <= 0:
                     break
@@ -478,13 +517,14 @@ class SceneStore:
                     raise ValueError(f"Line {line_id}: selected take refers to unknown segment {segment_id!r}.")
                 _validate_id(take_id, "selected take id")
                 try:
-                    selected_take = self.cast.get_take(take_id)
+                    selected_take = known_takes.get(take_id) or self.cast.get_take(take_id)
                 except KeyError as exc:
                     raise ValueError(f"Line {line_id}: selected take {take_id} does not exist.") from exc
                 if selected_take["retired"] and old_selected.get(segment_id) != take_id:
                     raise ValueError(f"Line {line_id}: selected take {take_id} is retired; choose another take.")
                 segment = next(item for item in segments_value if item["id"] == segment_id)
-                spoken = self.cast.apply_pronunciations(segment["text"], character_id) if use_pronunciations else segment["text"]
+                spoken = (self.cast.apply_pronunciations(segment["text"], character_id, pronunciations)
+                          if use_pronunciations else segment["text"])
                 try:
                     validate_selected_take(scene_id, candidate_line, segment, selected_take, spoken)
                 except ValueError:
@@ -952,6 +992,146 @@ class SceneStore:
         line["selected_take_id"] = take_id if len(segments) == 1 else None
         self.cast.set_take_state(take_id, status="selected")
         return self.update_scene(scene_id, scene, expected_revision=scene["revision"])
+
+    def line_states(self, scene_id):
+        """Where every line of a scene stands, in one answer for the scenes table.
+
+        Each line, and each of its segments, has a status: not_rendered; waiting (a batch will reach it); rendering;
+        failed (the latest batch to try its current text failed, and `reason` says why); choose_take (it has a take that
+        fits its current text, voice and settings, and none is chosen); out_of_date (its chosen take, or every take it
+        has, was made before its text, voice or settings changed, and `reason` says what changed); or done (its chosen
+        take still fits). A line has the first of rendering, waiting, failed, out_of_date, not_rendered, choose_take and
+        done that one of its segments has. Each segment lists its takes newest first, leaving out retired ones that are
+        not chosen."""
+        scene = self.get_scene(scene_id)
+        prefix = scene_id[:12] + ":"
+        takes_by_line = {}
+        for take in self.cast.list_takes_with_line_prefix(prefix):
+            takes_by_line.setdefault(take["line_id"], []).append(take)
+        known = {take["id"] for takes in takes_by_line.values() for take in takes}
+        others = {take["id"]: take for take in self.cast.get_takes(
+            [take_id for line in scene["lines"] for take_id in (line.get("selected_takes") or {}).values()
+             if take_id not in known])}
+        attempts = self._segment_attempts(scene_id)
+        pronunciation_lists = {}
+        lines = []
+        for line in scene["lines"]:
+            segments = []
+            if line["use_pronunciations"] and line["character_id"] not in pronunciation_lists:
+                pronunciation_lists[line["character_id"]] = self.cast.list_pronunciations(line["character_id"])
+            for index, segment in enumerate(line["segments"]):
+                cast_line_id = prefix + line["line_id"] + (f":{index + 1:03d}" if len(line["segments"]) > 1 else "")
+                spoken = (self.cast.apply_pronunciations(segment["text"], line["character_id"],
+                                                         pronunciation_lists[line["character_id"]])
+                          if line["use_pronunciations"] else segment["text"])
+                segments.append(self._segment_state(scene_id, line, segment, spoken, takes_by_line.get(cast_line_id, []),
+                                                    others, attempts.get((line["line_id"], segment["id"]))))
+            status = next(item for item in LINE_STATUS_ORDER if any(part["status"] == item for part in segments))
+            reason = next((part["reason"] for part in segments if part["status"] == status and part["reason"]), "")
+            lines.append({"line_id": line["line_id"], "status": status, "reason": reason,
+                          "segments_done": sum(part["status"] == "done" for part in segments), "segments": segments})
+        return {"scene_id": scene_id, "revision": scene["revision"], "lines": lines}
+
+    def _segment_attempts(self, scene_id):
+        """For each (line id, segment id) a batch of this scene has held: `active` (rendering, waiting or None) and `rows`,
+        the rows of the newest batch that tried it, leaving out cancelled ones."""
+        with self._connect() as db:
+            rows = db.execute("""SELECT r.line_id,r.segment_id,r.text,r.identity_id,r.status,r.error,r.job_id,
+                                        j.status AS job_status
+                                 FROM job_rows r JOIN jobs j ON j.id=r.job_id WHERE j.scene_id=?
+                                 ORDER BY j.created_at DESC,j.rowid DESC,r.ordinal""", (scene_id,)).fetchall()
+        found = {}
+        for row in rows:
+            entry = found.setdefault((row["line_id"], row["segment_id"]), {"active": None, "job_id": None, "rows": []})
+            if row["job_status"] in ACTIVE_JOB_STATUSES and row["status"] == "running":
+                entry["active"] = "rendering"
+            elif row["job_status"] in ACTIVE_JOB_STATUSES and row["status"] == "queued" and entry["active"] is None:
+                entry["active"] = "waiting"
+            if row["status"] == "cancelled":
+                continue
+            if entry["job_id"] is None:
+                entry["job_id"] = row["job_id"]
+            if entry["job_id"] == row["job_id"]:
+                entry["rows"].append(row)
+        return found
+
+    @staticmethod
+    def _segment_state(scene_id, line, segment, spoken, takes, others, attempt):
+        chosen_id = (line.get("selected_takes") or {}).get(segment["id"])
+        listed, newest_problem = [], None
+        for take in reversed(takes):
+            if take["retired"] and take["id"] != chosen_id:
+                continue
+            problem = take_problem(scene_id, line, segment, take, spoken)
+            fits = problem is None and not take["retired"]
+            if problem is not None and newest_problem is None:
+                newest_problem = problem
+            listed.append({"id": take["id"], "created_at": take["created_at"],
+                           "duration_seconds": take["duration_seconds"], "audio_url": take["audio_url"],
+                           "waveform_checks": take["waveform_checks"], "chosen": take["id"] == chosen_id, "fits": fits,
+                           "reason": ("This take is retired." if take["retired"] else
+                                      STALE_REASONS.get(problem[0], problem[1]) if problem else "")})
+        chosen = next((take for take in takes if take["id"] == chosen_id), None) or others.get(chosen_id)
+        chosen_problem = None
+        if chosen_id and chosen is None:
+            chosen_problem = "The chosen take is no longer in Cast."
+        elif chosen is not None and chosen["retired"]:
+            chosen_problem = "The chosen take was retired."
+        elif chosen is not None:
+            problem = take_problem(scene_id, line, segment, chosen, spoken)
+            chosen_problem = STALE_REASONS.get(problem[0], problem[1]) if problem else None
+        tried = [row for row in (attempt or {}).get("rows", [])
+                 if row["text"] == segment["text"] and row["identity_id"] == line["identity_id"]]
+        failed = next((row for row in tried if row["status"] == "failed"), None)
+        if any(row["status"] == "completed" for row in tried):
+            failed = None
+        state = {"segment_id": segment["id"], "status": "not_rendered", "reason": "",
+                 "chosen_take_id": chosen["id"] if chosen is not None else None, "takes": listed}
+        if attempt and attempt["active"]:
+            state["status"] = attempt["active"]
+        elif failed is not None:
+            state.update(status="failed", reason=failed["error"] or "The model could not make this take.")
+        elif chosen is not None and chosen_problem is None:
+            state["status"] = "done"
+        elif any(item["fits"] for item in listed):
+            state.update(status="choose_take", reason=chosen_problem or "")
+        elif chosen_problem:
+            state.update(status="out_of_date", reason=chosen_problem)
+        elif newest_problem is not None:
+            state.update(status="out_of_date", reason=STALE_REASONS.get(newest_problem[0], newest_problem[1]))
+        return state
+
+    def choose_newest_takes(self, scene_id, line_ids=None):
+        """For every segment with no chosen take that fits, choose its newest take that does, all in one new revision.
+        Only the given lines when line_ids is a list. Returns (scene, how many segments got a take, how many lines)."""
+        scene = self.get_scene(scene_id)
+        if line_ids is not None:
+            if not isinstance(line_ids, list) or any(not isinstance(item, str) for item in line_ids):
+                raise ValueError("line_ids must be a list of scene line IDs.")
+            unknown = set(line_ids) - {line["line_id"] for line in scene["lines"]}
+            if unknown:
+                raise ValueError(f"Unknown scene line IDs: {', '.join(sorted(unknown))}.")
+        states = {item["line_id"]: item for item in self.line_states(scene_id)["lines"]}
+        picked, lines = [], set()
+        for line in scene["lines"]:
+            if line_ids is not None and line["line_id"] not in line_ids:
+                continue
+            for segment in states[line["line_id"]]["segments"]:
+                if any(take["chosen"] and take["fits"] for take in segment["takes"]):
+                    continue
+                newest = next((take for take in segment["takes"] if take["fits"]), None)
+                if newest is None:
+                    continue
+                line["selected_takes"] = {**(line.get("selected_takes") or {}), segment["segment_id"]: newest["id"]}
+                if len(line["segments"]) == 1:
+                    line["selected_take_id"] = newest["id"]
+                picked.append(newest["id"])
+                lines.add(line["line_id"])
+        if not picked:
+            return scene, 0, 0
+        scene = self.update_scene(scene_id, scene, expected_revision=scene["revision"])
+        self.cast.mark_takes_selected(picked)
+        return scene, len(picked), len(lines)
 
     def assemble_preview(self, scene_id):
         scene = self.get_scene(scene_id)
