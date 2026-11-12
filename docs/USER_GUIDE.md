@@ -192,7 +192,9 @@ up in Cast to see them. This is not the Drama model's own previous-take editing,
 
 **Scenes & batch** imports CSV/JSON or uses the editor. Map each line to an
 approved identity; preview segmentation before rendering. Jobs run sequentially
-with pause/resume/cancel/retry. Each rendered row shows the same waveform checks as
+with pause/resume/cancel/retry. A batch renders all of one model's lines before it loads the next model, so a scene that
+switches between voices on two models loads each model once; while it runs, the status line says the order, such as
+"Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8". The scene is still assembled in script order. Each rendered row shows the same waveform checks as
 Perform beside its audition. Editing effective words, identity, pronunciation,
 language or controls invalidates stale selections without deleting old takes.
 Preview assembles ordered speech and pauses; a timing target is advisory.

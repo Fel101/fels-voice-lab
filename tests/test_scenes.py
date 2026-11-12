@@ -219,6 +219,39 @@ class SceneTests(unittest.TestCase):
         self.assertNotEqual(regenerated["rows"][0]["take_id"], retried["rows"][1]["take_id"])
         self.assertEqual(len(self.engines.calls), 5)
 
+    def test_a_batch_renders_one_models_lines_before_the_next_and_assembles_in_script_order(self):
+        # Correction 1 of the plan: create_job sorts a batch by model, then reference, then script order, so one model renders
+        # all of its lines before the next model loads. Without the sort these lines would alternate between the two models.
+        other = self.cast.create_identity(self.character["id"], "turbo", "Mira Turbo")
+        reference = self.cast.add_reference(other["id"], "mira-turbo.wav", tone_wav(), transcript="A clear reference line.",
+                                            origin="local test fixture", allowed_use="tests only",
+                                            edits={"target_sample_rate": 24_000})
+        self.cast.update_identity(other["id"], {"status": "approved", "reference_version_id": reference["id"]})
+        base = self.scene_payload()["lines"][0]
+        lines = []
+        for index in range(1, 7):
+            turbo = index % 2 == 0
+            lines.append(dict(base, line_id=f"line-{index:03d}", text=f"Line number {index}.",
+                              identity_id=other["id"] if turbo else self.identity["id"],
+                              reference_version_id=reference["id"] if turbo else self.reference["id"],
+                              settings={} if turbo else base["settings"]))    # Turbo has no seed
+        scene = self.scenes.create_scene(self.scene_payload(lines=lines))
+        job = self.scenes.create_job(scene["scene_id"])
+        self.assertEqual([row["engine_id"] for row in job["rows"]], ["qwen3-tts-1.7b-base"] * 3 + ["turbo"] * 3)
+        self.assertEqual([part["engine_id"] for part in job["models"]], ["qwen3-tts-1.7b-base", "turbo"])
+        self.assertEqual([(part["total"], part["done"]) for part in job["models"]], [(3, 0), (3, 0)])
+        self.runner.start()
+        completed = self.wait_job(job["id"], {"completed"})
+        self.assertEqual([call["engine"] for call in self.engines.calls], ["qwen3-tts-1.7b-base"] * 3 + ["turbo"] * 3)
+        self.assertEqual([call["text"] for call in self.engines.calls],
+                         ["Line number 1.", "Line number 3.", "Line number 5.",
+                          "Line number 2.", "Line number 4.", "Line number 6."])
+        self.assertEqual([(part["total"], part["done"]) for part in completed["models"]], [(3, 3), (3, 3)])
+        for row in completed["rows"]:
+            self.scenes.select_take(scene["scene_id"], row["line_id"], row["take_id"], row["segment_id"])
+        preview = self.scenes.assemble_preview(scene["scene_id"])
+        self.assertEqual([entry["line_id"] for entry in preview["lines"]], [line["line_id"] for line in lines])
+
     def test_cancel_queued_job_marks_every_pending_row_cancelled_without_generation(self):
         lines = [dict(self.scene_payload()["lines"][0], line_id=f"cancel-{index}", text=f"Do not render {index}.")
                  for index in range(3)]

@@ -84,6 +84,14 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   [Quick start](README.md#quick-start) with measured times, and [Setup](docs/SETUP.md) with the quick way.
   `GET /api/engines/status` gives each model that is not installed an `install_size`, from its installer's own numbers.
 
+### Scenes
+
+- **A batch says its order.** A batch has always rendered all of one model's lines before it loads the next model (it sorts
+  its lines by model, then reference, then script order), but nothing said so and no test held it. While a batch runs, the
+  status line now names the model rendering and the ones to come, with how many lines each has, and a test fails if a scene
+  that alternates two models makes them take turns. The scene is still assembled in script order. Each row of
+  `GET /api/scenes/jobs/{job_id}` gains `engine_id`, and the job gains `models`.
+
 ### Releases
 
 - **A release is published only after its checks pass.** 0.2.0 was published by hand while three of its tests failed on

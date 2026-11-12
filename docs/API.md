@@ -1226,7 +1226,7 @@ Read a job's progress.
 |---|---|
 | `job_id` | A job's id, from the call that started it. |
 
-**Answer:** `200`, JSON. `job`: its `status` (`queued`, `running`, `paused`, `completed`, `failed` or `cancelled`), the counts `total`, `queued`, `running`, `completed`, `failed` and `cancelled`, `progress` from 0 to 1, and `rows`: one per segment to render, with its `status`, `take_id`, `attempts` and `error`.
+**Answer:** `200`, JSON. `job`: its `status` (`queued`, `running`, `paused`, `completed`, `failed` or `cancelled`), the counts `total`, `queued`, `running`, `completed`, `failed` and `cancelled`, `progress` from 0 to 1, and `rows`: one per segment to render, with its `status`, `take_id`, `attempts`, `error` and `engine_id`, in the order they render. A batch renders all of one model's rows before the next model loads: `models` lists them in that order, each with `engine_id`, `name`, `total` and `done` (rows finished, failed or cancelled).
 
 <a id="get-api-scenes-jobs-job_id-manifest-json"></a>
 

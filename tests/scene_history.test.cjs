@@ -100,3 +100,17 @@ test('saving or loading a scene clears undo, so an undo cannot restore an older 
   assert.equal(h.c.sceneUndo.length, 0);
   assert.equal(h.fields.sceneUndo.disabled, true);
 });
+
+test('while a batch runs, the status line says which model renders now and which come after it', () => {
+  const c = vm.createContext({});
+  vm.runInContext(sourceBetween('function batchOrderText(', 'function refreshSceneJob('), c);
+  const kokoro = {engine_id: 'kokoro', name: 'Kokoro 82M', total: 12, done: 7};
+  const qwen = {engine_id: 'qwen3-tts-1.7b-base', name: 'Qwen3-TTS 1.7B Base', total: 8, done: 0};
+  assert.equal(c.batchOrderText({models: [kokoro, qwen]}),
+    'Rendering one model at a time: Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8. ');
+  assert.equal(c.batchOrderText({models: [{...kokoro, done: 12}, {...qwen, done: 3}]}),
+    'Rendering one model at a time: Qwen3-TTS 1.7B Base: 3 of 8. ');
+  assert.equal(c.batchOrderText({models: [kokoro]}), 'Rendering with Kokoro 82M: 7 of 12. ');
+  assert.equal(c.batchOrderText({models: [{...kokoro, done: 12}]}), '');    // finished: the counts that follow say so
+  assert.equal(c.batchOrderText({}), '');    // a job from before the service listed its models
+});

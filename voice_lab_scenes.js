@@ -192,8 +192,18 @@ function startSceneFromPerformer(){var character=performanceCharacter(),identity
   activeSceneId=null;sceneDirty=true;$('sceneEditor').value=JSON.stringify(payload,null,2);resetSceneHistory(null);renderSceneForm();$('sceneStatus').textContent='Starter scene is ready; validate and save it before rendering.';}
 function importSceneFile(file){if(sceneDirty&&!window.confirm('Discard unsaved scene edits and import this script?'))return Promise.resolve(null);var format=file.name.toLowerCase().endsWith('.csv')?'csv':'json';return file.text().then(function(content){return fetchJson('/api/scenes/import',{format:format,content:content});})
   .then(function(result){return result?refreshSceneList(result.scene.scene_id):null;});}
+// A batch renders one model's lines before the next model loads (scene_store.create_job), and job.models lists the models in
+// that order, so the status line can say which is rendering and what comes next.
+function batchOrderText(job){
+  var parts=job.models||[],current=-1;
+  parts.some(function(part,index){if(part.done<part.total){current=index;return true;}return false;});
+  if(current<0)return '';
+  var text=parts[current].name+': '+parts[current].done+' of '+parts[current].total;
+  parts.slice(current+1).forEach(function(part){text+=', then '+part.name+': '+part.total;});
+  return (parts.length>1?'Rendering one model at a time: ':'Rendering with ')+text+'. ';
+}
 function refreshSceneJob(){if(!activeSceneJobId)return Promise.resolve();return fetchJson('/api/scenes/jobs/'+activeSceneJobId).then(function(result){var job=result.job;
-  $('sceneProgress').value=job.progress;$('sceneStatus').textContent=job.status+' / '+job.completed+' completed / '+job.failed+' failed / '+job.queued+' queued / '+job.total+' total / '+Math.round(job.progress*100)+'%';
+  $('sceneProgress').value=job.progress;$('sceneStatus').textContent=(['queued','running'].indexOf(job.status)>=0?batchOrderText(job):'')+job.status+' / '+job.completed+' completed / '+job.failed+' failed / '+job.queued+' queued / '+job.total+' total / '+Math.round(job.progress*100)+'%';
   $('sceneJobManifest').href='/api/scenes/jobs/'+job.id+'/manifest.json';$('sceneJobManifest').hidden=false;var container=$('sceneJobRows');container.textContent='';
   job.rows.forEach(function(row){var article=document.createElement('article'),title=document.createElement('strong');title.textContent='Render '+(row.ordinal+1)+' / scene '+(row.scene_order+1)+' — '+row.line_id+' / '+row.segment_id+' / take '+row.take_index+' / '+row.status;article.appendChild(title);
     if(row.error){var failure=document.createElement('p');failure.className='meta';failure.textContent=row.error;article.appendChild(failure);}

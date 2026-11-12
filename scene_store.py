@@ -80,6 +80,22 @@ def new_id():
     return uuid.uuid4().hex
 
 
+def batch_models(rows, entries):
+    """The models a batch renders, in the order it renders them: [{engine_id, name, total, done}], `done` counting finished,
+    failed and cancelled rows. create_job sorts a batch's rows by model, then reference, then script order, so each model
+    renders all of its lines before the next one loads; a model whose rows are apart (none are, as create_job makes them)
+    would show twice."""
+    parts = []
+    for item in rows:
+        engine = item.get("engine_id")
+        if not parts or parts[-1]["engine_id"] != engine:
+            name = (entries.get(engine) or {}).get("name") or engine or "An unknown model"
+            parts.append({"engine_id": engine, "name": name, "total": 0, "done": 0})
+        parts[-1]["total"] += 1
+        parts[-1]["done"] += item["status"] in ("completed", "failed", "cancelled")
+    return parts
+
+
 def canonical_json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -708,7 +724,17 @@ class SceneStore:
             item["loudness"] = summary.get("loudness")
             item["retirement"] = summary.get("retirement")
             item["purged"] = bool(summary.get("purged"))
+        engine_of = {}
+        for item in rows:
+            identity_id = item["identity_id"]
+            if identity_id not in engine_of:
+                try:
+                    engine_of[identity_id] = self.cast.get_identity(identity_id)["engine_id"]
+                except KeyError:
+                    engine_of[identity_id] = None
+            item["engine_id"] = engine_of[identity_id]
         result["rows"] = rows
+        result["models"] = batch_models(rows, self.entries)
         result["total"] = len(rows)
         result["completed"] = sum(item["status"] == "completed" for item in rows)
         result["failed"] = sum(item["status"] == "failed" for item in rows)
