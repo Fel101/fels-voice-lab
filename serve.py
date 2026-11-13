@@ -37,10 +37,8 @@ import engine_adapters
 import job_queue
 from routes import Router
 import route_groups
-import housekeeping
 import library_backup
 import synthetic_label
-import system_report
 import updates
 from app_version import APP_NAME, VERSION
 from housekeeping import run_startup_sweep
@@ -707,9 +705,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     lab = Lab(engines, port, cast_store, scene_store, batch_runner, evaluation_store, request_log, engine_installer,
               update_checks)
     # The parts of the Lab the routes below read by name.
-    log, cast, library_root, preferences, checks = lab.log, lab.cast, lab.library_root, lab.preferences, lab.checks
-    scenes, batches, evaluations, installer = lab.scenes, lab.batches, lab.evaluations, lab.installer
-    backups_folder, backup_task, logged, drama = lab.backups_folder, lab.backup_task, lab.logged, lab.drama
+    cast, scenes, batches, evaluations, installer = lab.cast, lab.scenes, lab.batches, lab.evaluations, lab.installer
+    drama = lab.drama
     router = Router()  # the rows of api_spec.ROUTES, each answered by a route group's function or one below
     for group in route_groups.GROUPS:
         group.register(router, lab)
@@ -750,21 +747,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         except ValueError as exc:
             raise ValueError("Send the file's name and role as base64url JSON in the X-Reference-Metadata header.") from exc
         self._json(201, {"upload": save_conversion_upload(body, metadata)})
-
-    @router.post("/api/system/use-library")
-    def use_library(self, parsed, req):
-        self._json(200, library_backup.use_library(APP_ROOT, library_backup.restore_target(library_root, req.get("folder"))))
-
-    @router.get("/api/updates")
-    def update_state(self, parsed, req):
-        self._json(200, checks.state(preferences.get()["check_updates"]))
-
-    @router.post("/api/updates/check")
-    def update_check(self, parsed, req):
-        try:
-            self._json(200, checks.check_now())
-        except updates.UpdateError as exc:
-            self._json(502, {"error": str(exc)})
 
     # ------------------------------------------------------------------------------------------------ service and models
 
@@ -1691,75 +1673,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     @router.post("/api/evaluations/items/{item_id}/transcript")
     def item_transcript(self, parsed, req, item_id):
         self._json(200, evaluations.add_transcript(item_id, req.get("heard_text"), req.get("evaluator")))
-
-    # ------------------------------------------------------------------------------------------------ system and backups
-
-    @router.get("/api/system")
-    def system(self, parsed, req):
-        recheck = parse_qs(parsed.query).get("recheck") == ["1"]
-        ram = ram_report()
-        report = system_report.build(
-            app=APP_NAME, version=VERSION, state_root=library_root, out_dir=OUT, device=engines.device,
-            ffmpeg=export_panel.ffmpeg_report(refresh=recheck), engine_status=engines.engine_status(),
-            log_path=getattr(log, "path", None), free_ram=ram["free_gb"], total_ram=ram["total_gb"])
-        report["diagnostics"] = system_report.diagnostics_text(report)
-        self._json(200, report)
-
-    @router.get("/api/system/storage")
-    def storage(self, parsed, req):
-        self._json(200, system_report.storage(library_root, OUT))
-
-    @router.get("/api/system/backups")
-    def backups(self, parsed, req):
-        self._json(200, {"folder": str(backups_folder), "backups": library_backup.list_backups(backups_folder),
-                         "plan": library_backup.plan(library_root), "task": backup_task.status(),
-                         "suggested_folder": library_backup.suggested_folder(library_root)})
-
-    @router.get("/api/system/task")
-    def task(self, parsed, req):
-        self._json(200, {"task": backup_task.status()})
-
-    def start_task(self, kind, label, work):
-        """Run a backup, check or restore in the background; one at a time, and the page polls /api/system/task."""
-        try:
-            state = backup_task.start(kind, label, work)
-        except library_backup.BackupBusy as exc:
-            return self._json(409, {"error": str(exc)})
-        return self._json(202, {"task": state})
-
-    @router.post("/api/system/backups")
-    def back_up(self, parsed, req):
-        include = req.get("include", list(library_backup.OPTIONAL))
-        if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
-            raise ValueError("include must be a list of section names.")
-        library_backup.chosen_sections(include)  # an unknown name is refused now, not after the thread starts
-        start_task(self, "backup", "Backing up the library", logged(
-            "backup", lambda progress: library_backup.create(
-                library_root, backups_folder, include=include, app=APP_NAME, version=VERSION, progress=progress),
-            lambda result: f"{result['name']}, {result['files']} files, {result['bytes']} bytes"))
-
-    @router.post("/api/system/backups/verify")
-    def check_backup(self, parsed, req):
-        source = library_backup.backup_path(backups_folder, req.get("name"))
-        start_task(self, "check", f"Checking {source.name}", logged(
-            "check", lambda progress: library_backup.verify(source, progress=progress),
-            lambda result: f"{result['name']} {'passed' if result['ok'] else 'did not pass'}"))
-
-    @router.post("/api/system/backups/restore")
-    def restore_backup(self, parsed, req):
-        source = library_backup.backup_path(backups_folder, req.get("name"))
-        target = library_backup.restore_target(library_root, req.get("folder"))
-        start_task(self, "restore", f"Restoring {source.name}", logged(
-            "restore", lambda progress: {**library_backup.restore(source, target, progress=progress), "folder": target.name},
-            lambda result: f"{result['folder']}, {result['files']} files"))
-
-    @router.post("/api/system/cleanup")
-    def cleanup(self, parsed, req):
-        log_file = getattr(log, "path", None)
-        result = housekeeping.apply(housekeeping.plan(OUT, keep=[log_file] if log_file else []), OUT)
-        log.event(f"cleanup on request removed {result['removed']} items ({result['bytes']} bytes)"
-                  + (f"; {len(result['errors'])} could not be removed" if result["errors"] else ""))
-        self._json(200, result)
 
     # ------------------------------------------------------------------------------------------------ Drama studio
 
