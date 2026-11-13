@@ -32,16 +32,21 @@ waits its turn for the model instead of being turned away. [Every change in deta
 - **NVIDIA cards.** An installer now checks that the card is switched on before it downloads anything, and a failed check
   says what happened. Breeze TTS 2 runs on an 8 GB card, and says to split a line that does not fit.
 - **Headroom.** A clip that reaches full scale is turned down to a -1 dBFS peak instead of being clipped.
+- **The README shows the real Lab:** an animation of the whole path on a fresh Lab, and pictures with Kokoro speaking.
 
 ### Fixed
 
 - Players can seek in a scene line, on the Compare page and in the voice library.
 - The voice conversion lists work in a Lab whose folder has a short name such as `RUNNER~1`.
 - A voice card's report stays on screen after **Retire**, **Restore** or **Delete … for good**.
+- A Kokoro voice made in the Cast editor keeps the preset voices chosen for it. Since 0.1.0 it was saved as `af_heart`
+  whatever was chosen, so no blend could be made in the page.
+- A new preset voice's card names its model instead of "Source model not recorded".
 
 ### After updating
 
-Nothing to do: the library opens as it was, and no model needs installing again.
+Nothing to do: the library opens as it was, and no model needs installing again. A Kokoro voice made in the Cast editor
+before 0.3.0 speaks with `af_heart`, whatever was chosen for it: add it again to give it the voices you meant.
 
 ### For scripts and contributors
 
