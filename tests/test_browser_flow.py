@@ -775,6 +775,33 @@ class GenerateAfterInstallTests(unittest.TestCase):
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class InstallWindowTests(unittest.TestCase):
+    def test_the_install_window_shows_while_model_studio_is_open(self):
+        """The first-run note in Model studio opens the same install window as a model's card, while Models & features is
+        hidden. A modal dialog inside a hidden section opens with no size, and the page behind it stops answering."""
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            page = None
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#studio")
+                page.wait_until("document.getElementById('models').hidden && !document.getElementById('studio').hidden")
+                page.evaluate("openInstallDialog('kokoro', false, 'plan', 'Install Kokoro 82M') && true")
+                size = page.evaluate("(() => { const box = document.getElementById('installDialog').getBoundingClientRect();"
+                                     " return [box.width, box.height]; })()")
+                self.assertTrue(page.evaluate("document.getElementById('installDialog').matches(':modal')"))
+                self.assertGreater(size[0], 0)
+                self.assertGreater(size[1], 0)
+                page.click("#installClose")
+                page.wait_until("!document.getElementById('installDialog').open")
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class ScriptImportPageTests(unittest.TestCase):
     """A Fountain file and a pasted plain-text script each become a scene, with the speakers matched to Cast by name."""
 
