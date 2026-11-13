@@ -9,13 +9,6 @@ import re
 import engine_adapters
 
 ENGINE_LICENSE_NOTES = {
-    "breeze-tts-2": {
-        "code_license": "Apache-2.0; retained upstream notices in licenses/ and THIRD_PARTY_NOTICES.md.",
-        "weights_license": "BreezeBlue Research and Non-Commercial License 1.1; covers derived checkpoints.",
-        "output_use": "Restricted: self-hosted outputs subject to research/non-commercial terms; review the complete model license.",
-        "status": "restricted",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
     "drama-3": {
         "code_license": "MIT speech.cpp runtime, separately installed; runtime dependencies retain their own terms.",
         "weights_license": "Fish Audio Community License 1.0, including Q4 derivative.",

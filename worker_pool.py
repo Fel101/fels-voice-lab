@@ -400,7 +400,7 @@ class EnginePool:
         self._acquire_job(key, "Load")
         try:
             self.last_used = time.time()
-            load_params = {"profile": profile or "eager"} if key == "breeze-tts-2" else None
+            load_params = {"profile": profile or "eager"} if getattr(engine_adapters.get(key), "profiles", False) else None
             worker = self._ensure_loaded_locked(key, load_params)
             record = self.workers[key]
             result = record.get("load_result") or {}
@@ -491,14 +491,12 @@ class EnginePool:
             reference = self._resolve_reference_path(key, path)
             if key=='drama-3' and (not isinstance(reference_text,str) or not reference_text.strip()):
                 raise ValueError('Drama 3 reference preparation requires the exact transcript.')
-            load_params = {"profile": profile or "eager"} if key == "breeze-tts-2" else None
+            load_params = {"profile": profile or "eager"} if getattr(engine_adapters.get(key), "profiles", False) else None
             worker = self._ensure_loaded_locked(key, load_params)
             adapter = engine_adapters.get(key)
             if adapter is not None:
                 return worker.call("prepare_reference",
                                    **adapter.reference_call(reference, reference_text, xvec_only, exaggeration))
-            if key == "breeze-tts-2":
-                return worker.call("prepare_reference", path=str(reference))
             if key == 'drama-3':
                 return worker.call('prepare_reference', path=str(reference), reference_text=reference_text)
             return worker.call("prepare_reference", path=str(reference), exaggeration=exaggeration)
@@ -542,7 +540,7 @@ class EnginePool:
         output_file = None
         try:
             self.last_used = time.time()
-            profile = str(req.get("profile", "eager") or "eager") if key == "breeze-tts-2" else None
+            profile = str(req.get("profile", "eager") or "eager") if adapter is not None and adapter.profiles else None
             load_params = {"profile": profile} if profile is not None else None
             worker = self._ensure_loaded_locked(key, load_params)
             params = {"text": text.strip()}
@@ -552,30 +550,6 @@ class EnginePool:
                 params.update({name:value for name,value in req.items() if name not in ('engine','text','language')})
                 if params.get('mode')=='clone':
                     params['reference_path']=str(self._resolve_reference_path(key,params.get('reference_path')))
-            elif key == "breeze-tts-2":
-                mode = str(req.get("mode", "design"))
-                params.update({
-                    "mode": mode,
-                    "profile": profile,
-                    "voice_description": req.get("voice_description", ""),
-                    "direction": req.get("direction", ""),
-                    "cfg_scale": req.get("cfg_scale", 1.0 if mode == "clone" else 4.0),
-                    "seed": req.get("seed", 42),
-                    "max_new_tokens": req.get("max_new_tokens", 1500),
-                    "temperature": req.get("temperature", 0.9),
-                    "top_k": req.get("top_k", 50),
-                    "top_p": req.get("top_p", 1.0),
-                    "repetition_penalty": req.get("repetition_penalty", 1.1),
-                    "depth_temperature": req.get("depth_temperature", 0.9),
-                    "depth_top_k": req.get("depth_top_k", 50),
-                    "depth_top_p": req.get("depth_top_p", 1.0),
-                })
-                if mode in {"clone", "direction"}:
-                    reference_path = req.get("reference_path") or (LAB / "reference" / "af_heart.wav")
-                    reference = self._resolve_reference_path(key, reference_path)
-                    params["reference_path"] = str(reference)
-                    params["reference_text"] = req.get("reference_text", "")
-                    worker.call("prepare_reference", path=str(reference))
 
             runtime_pid = self.workers[key].get("runtime_pid", worker.pid)
             worker_root = OUT / "workers" / f"{key}-{runtime_pid}"

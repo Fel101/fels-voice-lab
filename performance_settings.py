@@ -5,9 +5,6 @@ import engine_adapters
 
 DEFAULTS = {
     'drama-3': {'seed':42,'temperature':1.,'top_k':30,'top_p':.9,'max_seconds':47.6},
-    "breeze-tts-2": {"profile": "eager", "seed": 42, "cfg_scale": 1.0,
-        "max_new_tokens": 1500, "temperature": 0.9, "top_k": 50, "top_p": 1.0,
-        "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0},
 }
 
 # Presentation metadata for the values already accepted by effective_settings(). The
@@ -17,14 +14,6 @@ CONTROL_UI = {
     'drama-3': {'seed':('Seed',0,2147483647,1),'temperature':('Temperature',.05,2.,.05),
                 'top_k':('Top-k',1,4097,1),'top_p':('Top-p',.05,1.,.01),
                 'max_seconds':('Maximum seconds per chunk',.5,95.1,.1)},
-    "breeze-tts-2": {"profile": ("Runtime profile", "eager", "cuda_graphs"),
-                     "seed": ("Seed", 0, 2147483647, 1), "cfg_scale": ("CFG scale", 0.0, 20.0, 0.1),
-                     "max_new_tokens": ("Maximum new tokens", 8, 2048, 1),
-                     "temperature": ("Temperature", 0.05, 2.0, 0.05), "top_k": ("Top-k", 0, 200, 1),
-                     "top_p": ("Top-p", 0.05, 1.0, 0.01),
-                     "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05),
-                     "depth_temperature": ("Depth temperature", 0.05, 2.0, 0.05),
-                     "depth_top_k": ("Depth top-k", 0, 200, 1), "depth_top_p": ("Depth top-p", 0.05, 1.0, 0.01)},
 }
 # The engines whose adapters say (engine_adapters/).
 for _engine, _adapter in engine_adapters.ADAPTERS.items():

@@ -630,22 +630,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             if identity["kind"] == "reference":
                 reference = identity["reference"]
                 backend_request["reference_path"] = reference["audio_path"]
-                if engine_id == "breeze-tts-2" or getattr(adapter, "takes_transcript", False):
+                if getattr(adapter, "takes_transcript", False):
                     backend_request["reference_text"] = reference["transcript"]
             if adapter is not None:
                 backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
-            elif engine_id == "breeze-tts-2":
-                backend_request.update({"mode": "direction" if direction.strip() else "clone",
-                                        "profile": settings.get("profile", "eager"),
-                                        "direction": direction, "seed": settings.get("seed", 42),
-                                        "cfg_scale": settings.get("cfg_scale", 1.0),
-                                        "max_new_tokens": settings.get("max_new_tokens", 1500),
-                                        "temperature": settings.get("temperature", 0.9),
-                                        "top_k": settings.get("top_k", 50), "top_p": settings.get("top_p", 1.0),
-                                        "repetition_penalty": settings.get("repetition_penalty", 1.1),
-                                        "depth_temperature": settings.get("depth_temperature", 0.9),
-                                        "depth_top_k": settings.get("depth_top_k", 50),
-                                        "depth_top_p": settings.get("depth_top_p", 1.0)})
             elif engine_id == 'drama-3':
                 backend_request.update(mode='clone', reference_text=identity['reference']['transcript'],
                                        direction=direction, language=language, **applied_settings)
@@ -685,8 +673,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             voice_options = identity.get("engine_options") or {}
             if adapter is not None:
                 generation_mode = adapter.mode_for(backend_request)
-            elif engine_id == "breeze-tts-2":
-                generation_mode = backend_request["mode"]
             elif engine_id == "drama-3":
                 generation_mode = backend_request["mode"]
             else:
@@ -1006,7 +992,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         save_path = None
         if save_name not in (None, ""):
             save_engine = req.get("engine", engine_adapters.DEFAULT_ENGINE)
-            designs = {"breeze-tts-2", *engine_adapters.engines_where("saves_designs")}
+            designs = engine_adapters.engines_where("saves_designs")
             can_save_design = save_engine in designs and req.get("mode", "design") == "design"
             if not can_save_design:
                 return self._json(400, {"error": "Reusable voice assets can be saved from Breeze, Qwen VoiceDesign, or VoxCPM2 "

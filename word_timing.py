@@ -38,7 +38,6 @@ ROUND_TAG = re.compile(r"\([^()\n]*\)")
 MARKUP = {"square": SQUARE_TAG, "round": ROUND_TAG}
 ENGINE_MARKUP = {
     "drama-3": (SQUARE_TAG,),      # [whispers] and other delivery cues, with <|speaker:N|> markers
-    "breeze-tts-2": (ROUND_TAG,),  # (laugh) (sigh) (cough)
     # Chatterbox Turbo's [laugh] [chuckle] [cough], and the other engines whose adapters say (engine_adapters/)
     **{engine: (MARKUP[kind],) for engine, kind in engine_adapters.table("acted_markup").items()},
 }

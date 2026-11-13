@@ -32,7 +32,6 @@ CPU_ONLY = {
 # Models that run only on a graphics card in the Lab, and what their card says about the CPU. Their workers refuse the CPU.
 GPU_ONLY = {
     **engine_adapters.table("gpu_only"),
-    "breeze-tts-2": "Breeze TTS 2 runs only on a graphics card in the Lab.",
 }
 NO_GPU = (
     "This service runs every model on the CPU: it found no NVIDIA graphics card driver and no AMD card that AMD's ROCm build "

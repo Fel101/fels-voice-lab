@@ -18,14 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _breeze(root, _nvidia, card):
-    from tools import install_breeze as ib
-
-    files = _files_bytes(ib.base.load_manifest(root / ib.MANIFEST))
-    download, disk = ib.packages_mb(card)
-    return download * 10**6 + files, disk * 10**6 + files
-
-
 def _drama3(_root, _nvidia, _card):
     from tools import install_drama3 as idr
 
@@ -41,7 +33,6 @@ def _sizers():
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        "breeze-tts-2": _breeze,
         "drama-3": _drama3,
         **{engine: adapted(adapter) for engine, adapter in engine_adapters.ADAPTERS.items() if adapter.sizes_install},
     }

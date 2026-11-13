@@ -20,6 +20,7 @@ class Adapter:
     borrowed_packages = None  # the Python of another environment whose packages it may borrow when its own lacks them
     min_free_ram_gb = None  # free RAM, in GB, the Lab wants before it loads the model
     sizes_install = False  # install_size() says what its Install downloads
+    profiles = False  # it loads in one of several runtime profiles, which a load names; another one restarts its worker
     uses_torch = True  # its worker runs on PyTorch, so it can be asked for the graphics card
     cpu_only = None  # why the model never uses the graphics card in the Lab, for its card on the Models page
     gpu_only = None  # why the model never runs on the CPU in the Lab, for its card on the Models page
@@ -40,6 +41,7 @@ class Adapter:
     voice_per_language = False  # each of its voices speaks one language (the language matrix picks one per column)
     languages = None  # the languages a scene line may ask of it
     upstream_languages = None  # the languages its makers list, beyond those the Lab has checked (the language matrix)
+    documented_languages = None  # the languages its documentation says were checked, beyond the scene picker's
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
     output_license = None  # what its code, weights and clips allow, for each take's licence profile
@@ -97,6 +99,10 @@ class Adapter:
     def info(self):
         """Fields it adds to GET /api/info."""
         return {}
+
+    def checkpoint_missing(self, root):
+        """(its checkpoint folder, the files missing from it) when its files are not a snapshot in hf-cache, else None."""
+        return None
 
     def install_size(self, root, nvidia, card, files_bytes):
         """(download bytes, disk bytes) of a first install, when sizes_install."""

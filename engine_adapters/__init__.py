@@ -20,6 +20,7 @@ FAMILIES = (
     "engine_adapters.chatterbox",
     "engine_adapters.qwen",
     "engine_adapters.voxcpm",
+    "engine_adapters.breeze",
 )
 # The engine a speak or load request that names none gets.
 DEFAULT_ENGINE = "kokoro"

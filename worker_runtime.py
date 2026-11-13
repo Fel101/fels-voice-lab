@@ -10,7 +10,7 @@ import engine_adapters
 from common import LAB, free_ram_gb, release_gpu, require_ram, to_numpy, torch_runtime
 from ram_needs import MIN_FREE_RAM_GB
 
-ENGINE_IDS = {"breeze-tts-2", 'drama-3', *engine_adapters.ADAPTERS}
+ENGINE_IDS = {'drama-3', *engine_adapters.ADAPTERS}
 # The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
 # its own device.
 TORCH_ENGINE_IDS = ENGINE_IDS - {"drama-3"} - {engine for engine, adapter in engine_adapters.ADAPTERS.items()
@@ -81,7 +81,6 @@ class EngineWorkerRuntime:
             print(f"The service asked for the graphics card, but {self.device_note}, so {engine_id} runs on the CPU.",
                   flush=True)
         self.engine = None
-        self.breeze = None
         self.backend = None  # the worker object an adapter keeps across loads (engine_adapters/)
         self.drama3 = None
         self.model_info = None
@@ -124,7 +123,7 @@ class EngineWorkerRuntime:
     def load(self, params=None):
         params = params or {}
         if self.engine is not None:
-            if self.engine_id == "breeze-tts-2" and params.get("profile", self.profile) != self.profile:
+            if getattr(self.adapter, "profiles", False) and params.get("profile", self.profile) != self.profile:
                 raise ValueError(f"Breeze worker is loaded with profile {self.profile!r}; unload it before changing profiles.")
             return {"already_loaded": True, **self.health()}
         if self.adapter is not None:
@@ -140,18 +139,6 @@ class EngineWorkerRuntime:
             self.loaded_at = time.time()
             self.model_info = result
             return {**result, 'pid':os.getpid(), 'parent_pid':os.getppid()}
-        if self.engine_id == "breeze-tts-2":
-            require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
-            from breeze_worker import BreezeWorker
-            if self.breeze is None:
-                self.breeze = BreezeWorker(self.device)
-            result = self.breeze.load(params.get("profile", "eager"))
-            self.engine = self.breeze.bundle
-            self.sample_rate = int(result["sample_rate"])
-            self.profile = result["profile"]
-            self.loaded_at = time.time()
-            self.last_memory = self._memory()
-            return {**result, "pid": os.getpid(), "parent_pid": os.getppid(), "memory": self.last_memory}
         raise ValueError(f"{self.engine_id} has no worker.")
 
     @staticmethod
@@ -180,9 +167,6 @@ class EngineWorkerRuntime:
             return self.adapter.worker_prepare_reference(self, params)
         if self.engine_id == 'drama-3':
             return self.drama3.prepare_reference(params)
-        path = Path(params.get("path", "")).expanduser().resolve()
-        if self.engine_id == "breeze-tts-2":
-            return self.breeze.prepare_reference(str(path))
         raise ValueError(f"{self.engine_id} does not take a voice recording.")
 
     def generate(self, params):
@@ -198,8 +182,6 @@ class EngineWorkerRuntime:
             wav, sr, info = self.adapter.worker_generate(self, text, params)
         elif self.engine_id == 'drama-3':
             wav, sr, info = self.drama3.generate(params)
-        elif self.engine_id == "breeze-tts-2":
-            wav, sr, info = self.breeze.generate(params)
 
         audio = to_numpy(wav)
         if audio.size == 0 or not np.isfinite(audio).all():
@@ -242,9 +224,6 @@ class EngineWorkerRuntime:
         if self.drama3 is not None:
             self.drama3.unload()
             self.drama3 = None
-        breeze_result = None
-        if self.engine_id == "breeze-tts-2" and self.breeze is not None:
-            breeze_result = self.breeze.unload()
         adapter_result = self.adapter.worker_unload(self) if self.adapter is not None else {}
         self.engine = None
         self.sample_rate = None
@@ -259,7 +238,6 @@ class EngineWorkerRuntime:
             "memory_before": before,
             "memory_after": after,
             "allocated_bytes_released": max(0, before.get("allocated_bytes", 0) - after.get("allocated_bytes", 0)),
-            **({"breeze": breeze_result} if breeze_result is not None else {}),
             **adapter_result,
         }
 

@@ -36,14 +36,13 @@ BORROWED_PACKAGES = engine_adapters.table("borrowed_packages")
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
-GUIDED_INSTALLERS = {"breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
+GUIDED_INSTALLERS = {"drama-3": "setup-drama3.bat",
                      **engine_adapters.table("guided_installer")}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
 # into it.
-REQUIRED_PACKAGES = {"breeze-tts-2": ("transformers", "accelerate"),
-                     **engine_adapters.table("required_packages")}
+REQUIRED_PACKAGES = engine_adapters.table("required_packages")
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
 REQUIRED_FILES = engine_adapters.table("required_files")
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
@@ -51,7 +50,7 @@ BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 # ones it cannot load without.
 BREEZE_FOLDER = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
 BREEZE_FILES = (BREEZE_WEIGHTS, "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors")
-DESIGN_ENGINES = {"breeze-tts-2", "drama-3"}
+DESIGN_ENGINES = {"drama-3"}
 # The engines whose Test clones the bundled clip; the evaluation compares their voices with it.
 CLONE_ENGINES = engine_adapters.engines_where("clone_check")
 
@@ -107,12 +106,14 @@ def installation(entry, root=LAB):
                        if not _has_package(root, environment, package)
                        and not (borrowed and not _has_package(root, environment, "torch")
                                 and _has_package(root, borrowed, package)))
+    adapter = engine_adapters.get(engine)
+    own = adapter.checkpoint_missing(root) if adapter is not None else None
     if engine == "drama-3":
         checkpoint = "out/drama3"
         missing.extend(_drama_missing(root))
-    elif engine == "breeze-tts-2":
-        checkpoint = BREEZE_FOLDER
-        missing.extend(f"{BREEZE_FOLDER}/{name}" for name in BREEZE_FILES if not (root / BREEZE_FOLDER / name).is_file())
+    elif own is not None:  # files of its own, such as Breeze's in breeze/models
+        checkpoint, files = own
+        missing.extend(files)
     else:
         cache = root / "hf-cache" if engine in TOP_LEVEL_CACHE else root / "hf-cache" / "hub"
         repo = entry["checkpoint"].replace("/", "--")

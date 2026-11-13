@@ -12,7 +12,7 @@ import engine_adapters
 from common import runtime_setting
 
 DEFAULT_MIN_FREE_RAM_GB = {
-    "breeze-tts-2": 12, "drama-3": 26,
+    "drama-3": 26,
     # The engines whose adapters say (engine_adapters/).
     **engine_adapters.table("min_free_ram_gb"),
 }
