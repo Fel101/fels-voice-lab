@@ -194,6 +194,14 @@ Open `http://127.0.0.1:8768/`. Closing a browser tab does not stop a foreground 
 launcher owns a separate backend on a free port and never closes independently started services.
 Read [desktop and state behavior](docs/SETUP.md).
 
+## Roadmap
+
+What is planned, and what anyone can pick up, is in the pinned
+[Roadmap issue](https://github.com/Fel101/fels-voice-lab/issues?q=label%3Aroadmap) and the issues labelled
+[help wanted](https://github.com/Fel101/fels-voice-lab/labels/help%20wanted) and
+[good first issue](https://github.com/Fel101/fels-voice-lab/labels/good%20first%20issue). Questions and ideas go to
+[Discussions](https://github.com/Fel101/fels-voice-lab/discussions).
+
 ## Documentation
 
 | Guide | Purpose |
