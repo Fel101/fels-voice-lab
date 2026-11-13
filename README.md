@@ -40,19 +40,26 @@ and the file's SHA-256. Like every file the Lab makes, the clip says inside it t
 
 ## A look at it
 
-The pictures below are the real page and the real service with Kokoro 82M speaking, made by
-[`tools/readme_shots.py`](tools/readme_shots.py) on a library of its own. Mira and Tobin are characters
-that exist only there, each with one of Kokoro's preset voices (`af_heart` and `bm_george`), so no
-person's recording was used or cloned. The waveforms, lengths and loudness readings are the model's.
+Everything below is the real page and the real service with Kokoro 82M speaking. Mira and Tobin are characters that
+exist only in a library made for it, and their voices are Kokoro's preset voices, so no person's recording was used or
+cloned. The waveforms, lengths and loudness readings are the model's.
+
+### The whole path
+
+![A Lab fresh from setup installs Kokoro 82M from Model studio and says its first words, gives two characters Kokoro voices (one a blend of two), performs a line, then imports a four-line script as a scene, renders it and plays it](docs/images/lab-tour.gif)
+
+A Lab fresh from setup, in a minute and a half: install a model, make a voice, perform a line, render a scene. The page
+was driven by a script, and the waits for the install and the model's first load are sped up. The pictures that follow
+are made by [`tools/readme_shots.py`](tools/readme_shots.py), with `af_heart` for Mira and `bm_george` for Tobin.
 
 ### Cast library
 
 ![The Cast library with two approved Kokoro voice cards, Mira and Tobin, each with its audition player and buttons](docs/images/cast-library.png)
 
-Every saved voice is a card that shows how it was made, which model will speak for it, a saved
-audition to play, and either the preset voices it uses or how many saved versions its voice recording
-has. A version of a recording never changes once saved, and keeps its transcript, origin and allowed use. Approving a voice records your
-decision to use it; it cannot prove that you have the right to.
+Every saved voice is a card that shows how it was made, which model will speak for it, a saved audition
+to play, and either the preset voices it uses or how many saved versions its voice recording has. A
+version of a recording never changes once saved, and keeps its transcript, origin and allowed use.
+Approving a voice records your decision to use it; it cannot prove that you have the right to.
 
 ### Perform lines
 
