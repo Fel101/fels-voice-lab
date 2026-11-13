@@ -40,16 +40,14 @@ and the file's SHA-256. Like every file the Lab makes, the clip says inside it t
 
 ## A look at it
 
-The pictures below are made by the project's own browser test
-([`tests/test_browser_flow.py`](tests/test_browser_flow.py)), which drives the real page in headless
-Microsoft Edge or Google Chrome. Its engines are stand-ins that return a plain tone, so no model is
-loaded and nobody's voice appears. Mira is a character that exists only in that test, every waveform
-is a test tone, and the red note in the second picture is the automatic check noticing that a
-half-second tone is shorter than its sentence.
+The pictures below are the real page and the real service with Kokoro 82M speaking, made by
+[`tools/readme_shots.py`](tools/readme_shots.py) on a library of its own. Mira and Tobin are characters
+that exist only there, each with one of Kokoro's preset voices (`af_heart` and `bm_george`), so no
+person's recording was used or cloned. The waveforms, lengths and loudness readings are the model's.
 
 ### Cast library
 
-![The Cast library with one approved voice card: its audition player, reference count and buttons](docs/images/cast-library.png)
+![The Cast library with two approved Kokoro voice cards, Mira and Tobin, each with its audition player and buttons](docs/images/cast-library.png)
 
 Every saved voice is a card that shows how it was made, which model will speak for it, a saved
 audition to play and how many saved reference versions it has. A reference version never changes
@@ -58,7 +56,7 @@ decision to use it; it cannot prove that you have the right to.
 
 ### Perform lines
 
-![Perform lines: a character, a voice, a line of dialogue and the first of two takes, with its loudness and waveform check](docs/images/perform.png)
+![Perform lines: Mira's Kokoro voice, a line of dialogue and its take, with its loudness and waveform check](docs/images/perform.png)
 
 Pick a character and voice, write or paste a line, optionally add an acting instruction, and make a
 set of takes on consecutive seeds. Every take is saved with the text, model, reference and settings
@@ -68,7 +66,7 @@ words, the likeness or the acting: you still listen.
 
 ### Edit a take
 
-![The take editor open under a take: a waveform with the kept part tinted, trim times, silence, fades and gain](docs/images/take-editor.png)
+![The take editor open under a take: a waveform of speech with the kept part tinted, trim times, silence, fades and gain, and the edited clip's length](docs/images/take-editor.png)
 
 **Edit take…** opens an editor under the take. Drag across the waveform or type times to trim, cut
 the silence at both ends, add fades and a gain, listen with **Hear the edit**, then **Save as new
@@ -76,7 +74,7 @@ take**. The original is never changed, and the new take records what was done to
 
 ### Scenes and batch
 
-![Scenes and batch: a scene as a table of lines with their status, one line open with its two takes and its form, then a finished batch job and the assembled scene](docs/images/scene.png)
+![Scenes and batch: a four-line scene for Mira and Tobin with every line done, the first open with its chosen take and its form, then the finished batch and the assembled scene](docs/images/scene.png)
 
 A scene is a script of lines, shown as a table: each line has its own character, voice, voice
 recording, language, pauses and settings, and a status that says whether it is rendered, chosen, failed
@@ -218,8 +216,9 @@ The last command checks the repository's files: it fails on obvious secrets, per
 model files, and on Markdown links to pages that are not in the repository.
 The browser flow test in `tests/test_browser_flow.py` drives the page in headless Microsoft Edge or Google Chrome
 when one is installed, and is skipped otherwise. Set `VOICE_LAB_BROWSER` to a browser path, and
-`VOICE_LAB_BROWSER_SHOTS` to a folder to keep a picture of the working part of the page at each stage;
-the screenshots above, in `docs/images/`, were made that way.
+`VOICE_LAB_BROWSER_SHOTS` to a folder to keep a picture of the working part of the page at each stage.
+The screenshots above, in `docs/images/`, are made by `tools/readme_shots.py`, which drives the same page
+against the real service with Kokoro installed.
 See [contributing](CONTRIBUTING.md) and [security](SECURITY.md). Optional-model tests report skips when assets are absent;
 passing contract tests do not establish voice quality on every device/language.
 
