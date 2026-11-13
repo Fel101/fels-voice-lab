@@ -18,15 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _kokoro(root, nvidia, card):
-    from tools import install_kokoro as ik
-
-    manifest = ik.load_manifest(root / ik.MANIFEST)
-    files = _files_bytes(manifest, ik.checkpoint_files(manifest, ik.choose_voices(manifest, ["supported"])))
-    download, disk = ik.packages_mb(nvidia=nvidia, card=card)
-    return download * 10**6 + files, disk * 10**6 + files
-
-
 def _chatterbox(manifest_name):
     def size(root, nvidia, card):
         from tools import install_chatterbox as ic
@@ -82,7 +73,6 @@ def _sizers():
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        "kokoro": _kokoro,
         TURBO_ENGINE_ID: _chatterbox("MANIFEST"),
         ORIGINAL_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),
         VC_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),

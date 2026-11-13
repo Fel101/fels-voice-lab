@@ -51,13 +51,6 @@ ENGINE_LICENSE_NOTES = {
         "status": "unknown",
         "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
     },
-    "kokoro": {
-        "code_license": "Apache-2.0 Kokoro, separately installed.",
-        "weights_license": "Apache-2.0 Kokoro-82M; preserve upstream model/voice notices when redistributing weights.",
-        "output_use": "Unknown; review voice/reference rights before redistribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
     "orig": {
         "code_license": "MIT Chatterbox runtime, separately installed.",
         "weights_license": "MIT upstream Chatterbox checkpoint.",

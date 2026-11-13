@@ -12,6 +12,7 @@ class Adapter:
     # Installing and checking: engine_checks.py, engine_install.py, install_sizes.py, ram_needs.py, engine_devices.py
     guided_installer = None  # the launcher in the lab folder that puts its files back, with its arguments
     installer = None  # the script, or the script and its arguments, the Models page's Install runs
+    gpu_build = None  # the installer module whose --gpu puts in the GPU build of PyTorch for it
     required_packages = None  # Python packages its environment must hold
     min_free_ram_gb = None  # free RAM, in GB, the Lab wants before it loads the model
     sizes_install = False  # install_size() says what its Install downloads
@@ -20,7 +21,11 @@ class Adapter:
 
     # Voices, takes and scenes: cast_store.py, serve.py, scene_store.py, performance_settings.py, output_license.py
     direction_refusal = None  # what a line with an acting direction is told, when the model takes none
-    preset_voices = False  # a voice of it is one of the model's own fixed voices (identity_options)
+    preset_voices = False  # a voice of it is one of the model's preset voices (identity_options)
+    fixed_voices = False  # a voice of it is one or more of the model's fixed voice packs (identity_options)
+    takes_voice_recordings = True  # it reads voice recordings from the library, not only the bundled one
+    phonemizes = False  # its worker shows the phonemes it would speak (worker_phonemize)
+    voice_per_language = False  # each of its voices speaks one language (the language matrix picks one per column)
     languages = None  # the languages a scene line may ask of it
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
@@ -41,6 +46,10 @@ class Adapter:
 
     def mode_for(self, backend_request):
         return self.generation_mode
+
+    def take_record(self, voice_options):
+        """What a take of this voice records about its voice, besides the voice itself."""
+        return {}
 
     def identity_options(self, capabilities, req, controls, pool):
         """The options a voice of it keeps for good, from the request that creates it."""

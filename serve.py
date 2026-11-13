@@ -62,7 +62,7 @@ from evaluation_cast import import_cast_takes
 from evaluation_suites import list_suites
 from ui_preferences import UiPreferences
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio, save_designed_reference
-from kokoro_support import discover_kokoro_voices, kokoro_languages, normalize_kokoro_voices
+from kokoro_support import discover_kokoro_voices
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from performance_settings import DEFAULTS, effective_settings, performance_controls
 from language_matrix import unscreened_languages
@@ -635,10 +635,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     backend_request["reference_text"] = reference["transcript"]
             if adapter is not None:
                 backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
-            elif engine_id == "kokoro":
-                backend_request.update(identity["engine_options"])
-                backend_request["speed"] = settings.get("speed", 1.0)
-                backend_request["language"] = language
             elif engine_id == "turbo":
                 sampling = {key: settings[key] for key in CHATTERBOX_SAMPLING_FIELDS[engine_id] if key in settings}
                 backend_request.update({"clone": True, **normalize_chatterbox_sampling(engine_id, sampling)})
@@ -746,8 +742,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 "effective_settings": applied_settings,
                 "voice_identity": voice_identity,
             }
-            if engine_id == "kokoro":
-                model["fixed_voice"] = voice_options.get("voice", "af_heart")
+            if adapter is not None:
+                model.update(adapter.take_record(voice_options))
             take = cast.create_take(
                 identity, line_id=line_id.strip(), text=original_text.strip(), spoken_text=spoken_text.strip(),
                 language=language, direction=direction.strip(),
@@ -962,8 +958,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     @router.get("/api/info")
     def info(self, parsed, req):
         self._json(200, {"device": engines.device, "loaded": engines.loaded,
-                         "voices": discover_kokoro_voices(), "kokoro_languages": kokoro_languages(),
-                         **engine_adapters.info(), "free_ram_gb": round(free_ram_gb(), 1)})
+                         "voices": discover_kokoro_voices(), **engine_adapters.info(), "free_ram_gb": round(free_ram_gb(), 1)})
 
     @router.get("/api/catalog")
     def catalog(self, parsed, req):
@@ -1015,7 +1010,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def load(self, parsed, req):
         if self._no_query(parsed):
             return self._json(404, {"error": "not found"})
-        self._json(200, engines.load(req.get("engine", "kokoro"), profile=req.get("profile")))
+        self._json(200, engines.load(req.get("engine", engine_adapters.DEFAULT_ENGINE), profile=req.get("profile")))
 
     @router.post("/api/prepare-reference")
     def prepare_reference(self, parsed, req):
@@ -1051,7 +1046,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         save_name = req.get("save_voice_as")
         save_path = None
         if save_name not in (None, ""):
-            save_engine = req.get("engine", "kokoro")
+            save_engine = req.get("engine", engine_adapters.DEFAULT_ENGINE)
             can_save_design = (save_engine == "breeze-tts-2" and req.get("mode", "design") == "design") or (
                 save_engine in {"qwen3-tts-1.7b-voice-design", "voxcpm2"} and req.get("mode", "design") == "design")
             if not can_save_design:
@@ -1061,7 +1056,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 save_path = voice_asset_path(save_name)
             except FileExistsError as exc:
                 return self._json(409, {"error": str(exc)})
-        self._note(engine=req.get("engine", "kokoro"))
+        self._note(engine=req.get("engine", engine_adapters.DEFAULT_ENGINE))
         try:
             wav, sr, info = engines.speak(req)
         except (ValueError, MemoryError) as exc:
@@ -1070,7 +1065,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             return self._json(exc.status_code, {"error": str(exc)})
         except Exception as exc:
             return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
-        audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", "kokoro"))
+        audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", engine_adapters.DEFAULT_ENGINE))
         headers = {
             "X-Gen-Seconds": f"{info['total_s']:.2f}",
             "X-Audio-Seconds": f"{len(wav) / sr:.2f}",
@@ -1321,13 +1316,12 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         fixed_voice = capabilities.get("voice_selection", {}).get("status") == "supported"
         preset_voice = (engine_id in PRESET_VOICE_ENGINES and
                         capabilities.get("voice_selection", {}).get("status") in {"supported", "worker_verified"})
-        if clone_status not in {"supported", "worker_verified"} and not (engine_id == "kokoro" and fixed_voice) and not preset_voice:
+        adapter = engine_adapters.get(engine_id)
+        fixed_voices = adapter is not None and adapter.fixed_voices and fixed_voice
+        if clone_status not in {"supported", "worker_verified"} and not fixed_voices and not preset_voice:
             raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
-        if engine_id == "kokoro":
-            options = {"voice": ",".join(normalize_kokoro_voices(req.get("voice", "af_heart"), discover_kokoro_voices()))}
-        elif getattr(engine_adapters.get(engine_id), "preset_voices", False):
-            options = engine_adapters.get(engine_id).identity_options(capabilities, req,
-                                                                       performance_controls(engine_id, capabilities), engines)
+        if adapter is not None and (adapter.fixed_voices or adapter.preset_voices):
+            options = adapter.identity_options(capabilities, req, performance_controls(engine_id, capabilities), engines)
         elif preset_voice:
             loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
             if not loaded_info:

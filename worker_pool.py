@@ -476,15 +476,16 @@ class EnginePool:
         if len(text) > 1200:
             raise ValueError("Keep it under 1200 characters.")
         resolve_kokoro_language(language, [])
-        self._acquire_job("kokoro", "Pronunciation preview")
+        key = engine_adapters.only("phonemizes")
+        self._acquire_job(key, "Pronunciation preview")
         try:
             self.last_used = time.time()
-            worker = self._ensure_loaded_locked("kokoro")
+            worker = self._ensure_loaded_locked(key)
             return worker.call("phonemize", text=text, language=language)
         except (WorkerUnavailable, WorkerTimeout):
-            record = self.workers.get("kokoro")
+            record = self.workers.get(key)
             if record:
-                self._discard_locked("kokoro", record["worker"])
+                self._discard_locked(key, record["worker"])
             raise
         finally:
             self._release_job()
@@ -523,7 +524,7 @@ class EnginePool:
     def speak(self, req):
         if not isinstance(req, dict):
             raise ValueError("Request body must be a JSON object.")
-        key = req.get("engine", "kokoro")
+        key = req.get("engine", engine_adapters.DEFAULT_ENGINE)
         self._require_api_engine(key)
         adapter = engine_adapters.get(key)
         if key == "chatterbox-vc":
@@ -621,10 +622,6 @@ class EnginePool:
             params = {"text": text.strip()}
             if adapter is not None:
                 params.update(adapter.speak_params(req, self, worker, checked))
-            elif key == "kokoro":
-                params["voice"] = str(req.get("voice", "af_heart"))
-                params["speed"] = req.get("speed", 1.0)
-                params["language"] = req.get("language", "English")
             elif key == 'drama-3':
                 params.update({name:value for name,value in req.items() if name not in ('engine','text','language')})
                 if params.get('mode')=='clone':

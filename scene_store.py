@@ -43,8 +43,6 @@ SCENE_ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 LINE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\Z")
 SUPPORTED_LANGUAGES = {
     'drama-3':{*DRAMA_LANGUAGES.values(),'Auto'},
-    "kokoro": {"English", "American English", "British English", "Spanish", "French", "Hindi",
-                "Italian", "Brazilian Portuguese"},
     "turbo": {"English"},
     "orig": {"English"},
     "breeze-tts-2": {"English"},  # Only English has been verified on the local service path.

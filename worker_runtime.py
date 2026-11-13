@@ -18,7 +18,7 @@ QWEN_ENGINE_IDS = {
 }
 VOXCPM_ENGINE_ID = "voxcpm2"
 CHATTERBOX_VC_ENGINE_ID = "chatterbox-vc"
-ENGINE_IDS = {"kokoro", "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
+ENGINE_IDS = {"turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
               CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS, *engine_adapters.ADAPTERS}
 # The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
 # its own device.
@@ -217,8 +217,7 @@ class EngineWorkerRuntime:
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
                     "memory": self.last_memory,
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if (self.engine_id != "kokoro" and not DEFAULT_REFERENCE.is_file()
-                and find_spec("kokoro") is not None):
+        if not DEFAULT_REFERENCE.is_file() and find_spec("kokoro") is not None:
             # An environment you built yourself may hold Kokoro beside another engine; the guided ones never do (Kokoro has
             # .venv-kokoro to itself), so there the Kokoro worker makes the clip and this engine warms up with its own voice.
             from engines import ensure_reference
@@ -231,11 +230,9 @@ class EngineWorkerRuntime:
         model = build_engine(self.engine_id, self.device)
         self.engine = model
         self.sample_rate = int(model.sr)
-        if self.engine_id == "kokoro" and not DEFAULT_REFERENCE.is_file():
-            self._make_default_reference(model)
         print("Warming up the model ...", flush=True)
         try:
-            if self.engine_id == "kokoro" or not DEFAULT_REFERENCE.is_file():
+            if not DEFAULT_REFERENCE.is_file():
                 model.speak("Hello there.")
             elif self.engine_id == "orig":
                 model.prepare_reference(str(DEFAULT_REFERENCE), exaggeration=0.5)
@@ -274,10 +271,9 @@ class EngineWorkerRuntime:
 
     def phonemize(self, params):
         """The phonemes Kokoro would speak for a text, from its installed language rules. Needs no loaded model."""
-        if self.engine_id != "kokoro":
+        if not getattr(self.adapter, "phonemizes", False):
             raise ValueError("Only Kokoro shows its phonemes.")
-        from kokoro_support import phonemize_kokoro
-        return phonemize_kokoro(params.get("text", ""), params.get("language", "English"))
+        return self.adapter.worker_phonemize(self, params)
 
     def prepare_reference(self, params):
         if self.engine is None:
@@ -286,8 +282,6 @@ class EngineWorkerRuntime:
             return self.adapter.worker_prepare_reference(self, params)
         if self.engine_id == 'drama-3':
             return self.drama3.prepare_reference(params)
-        if self.engine_id == "kokoro":
-            raise ValueError("Kokoro uses fixed voice IDs and does not accept reference audio.")
         path = Path(params.get("path", "")).expanduser().resolve()
         if self.engine_id == "breeze-tts-2":
             return self.breeze.prepare_reference(str(path))
@@ -328,11 +322,6 @@ class EngineWorkerRuntime:
         elif self.engine_id == VOXCPM_ENGINE_ID:
             voxcpm_params = {key: value for key, value in params.items() if key != "output_file"}
             wav, sr, info = self.voxcpm.generate(voxcpm_params)
-        elif self.engine_id == "kokoro":
-            voice = str(params.get("voice", "af_heart"))
-            speed = min(2.0, max(0.5, float(params.get("speed", 1.0))))
-            wav, sr, info = self.engine.speak(strip_tags(text.strip()), voice=voice, speed=speed,
-                                              language=params.get("language", "English"))
         elif self.engine_id == "turbo":
             clone = params.get("clone", True)
             ref_wav = str(params.get("ref_wav") or DEFAULT_REFERENCE) if clone else None

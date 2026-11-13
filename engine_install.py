@@ -45,8 +45,7 @@ from qwen_support import QWEN_INSTALLER, QWEN_MODELS
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
 # that choose the engine's checkpoint. tests/test_engine_install.py keeps this in step with engine_checks.GUIDED_INSTALLERS and
 # with the launchers themselves.
-INSTALLERS = {"kokoro": "tools/install_kokoro.py",
-              TURBO_ENGINE_ID: "tools/install_chatterbox.py",
+INSTALLERS = {TURBO_ENGINE_ID: "tools/install_chatterbox.py",
               ORIGINAL_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
               VC_ENGINE_ID: ("tools/install_chatterbox.py", "--original"),
               **{engine: (QWEN_INSTALLER, "--model", model) for engine, model in QWEN_MODELS.items()},
@@ -56,10 +55,10 @@ INSTALLERS = {"kokoro": "tools/install_kokoro.py",
 # card_problems(cards) says why it would not run on this computer's NVIDIA cards, or on a computer whose card is an AMD Radeon,
 # AMD's ROCm build, which its amd_card_problems(cards) judges. Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so
 # their installers always put in the GPU build.
-GPU_BUILDS = {"kokoro": "tools.install_kokoro",
-              **{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
+GPU_BUILDS = {**{engine: "tools.install_chatterbox" for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
               **{engine: "tools.install_qwen" for engine in QWEN_MODELS},
-              "voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze"}
+              "voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze",
+              **engine_adapters.table("gpu_build")}
 NO_GPU = ("The app installs the GPU build of {name} for an NVIDIA graphics card or an AMD Radeon, and this computer has neither "
           "an NVIDIA driver nor an AMD card that Windows lists.")
 # What the installers take for their GPU build.

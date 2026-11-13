@@ -12,10 +12,8 @@ import engine_adapters
 from common import runtime_setting
 
 DEFAULT_MIN_FREE_RAM_GB = {
-    # Measured on the CPU, one worker speaking a long line. Kokoro held 1.2 GB once loaded and peaked at 1.8 GB (3.2 GB
-    # committed) on 1,019 characters; Chatterbox Turbo peaked at 6.1 GB while it loaded and held 5.0 GB after 1,200, so 8 GB
-    # leaves about 2 GB to spare.
-    "kokoro": 3,
+    # Measured on the CPU, one worker speaking a long line: Chatterbox Turbo peaked at 6.1 GB while it loaded and held 5.0 GB
+    # after 1,200 characters, so 8 GB leaves about 2 GB to spare.
     "turbo": 8, "orig": 10, "chatterbox-vc": 10, "breeze-tts-2": 12, "voxcpm2": 10, "drama-3": 26,
     "qwen3-tts-1.7b-voice-design": 10, "qwen3-tts-1.7b-base": 10, "qwen3-tts-0.6b-base": 10, "qwen3-tts-1.7b-custom-voice": 10,
     # The engines whose adapters say (engine_adapters/).

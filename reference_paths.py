@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+import engine_adapters
+
 LAB = Path(__file__).resolve().parent
 REFERENCE_ROOTS_ENV = "VOICE_LAB_REFERENCE_ROOTS_JSON"
 CONVERSION_SOURCE_ROOTS_ENV = "VOICE_LAB_CONVERSION_SOURCE_ROOTS_JSON"
@@ -25,14 +27,16 @@ def resolve_reference_path(key, path, *, extra_roots=None):
         raise ValueError("Reference path must be a non-empty path.")
     reference = Path(path).expanduser().resolve()
     roots = [(LAB / "reference").resolve()]
-    if key != "kokoro":
+    # A model with only voices of its own reads no voice recording but the bundled one.
+    own_voices = not getattr(engine_adapters.get(key), "takes_voice_recordings", True)
+    if not own_voices:
         roots.extend(((LAB / "data" / "voices").resolve(),
                       (LAB / "data" / "cast" / "media" / "references").resolve()))
         roots.extend(Path(root).expanduser().resolve() for root in
                      (configured_worker_roots() if extra_roots is None else extra_roots))
     if not reference.is_file() or not any(root in reference.parents for root in roots):
         allowed = ("voice-lab/reference/, voice-lab/data/voices/, or voice-lab/data/cast/media/references/"
-                   if key != "kokoro" else "voice-lab/reference/")
+                   if not own_voices else "voice-lab/reference/")
         raise ValueError(f"Reference audio must be an existing file under {allowed}.")
     if key == "turbo":
         import soundfile as sf

@@ -54,7 +54,7 @@ CONSTANTS = (
     "QWEN_MODES",
 )
 # How many times the shared Python, and the page's scripts, name an engine. Each may only go down.
-PYTHON_LIMIT = 322
+PYTHON_LIMIT = 280
 SCRIPTS_LIMIT = 101
 
 

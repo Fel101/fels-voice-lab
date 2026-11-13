@@ -47,6 +47,7 @@ SUPPORTED_AUDIO = {".wav", ".flac", ".ogg", ".mp3"} | FFMPEG_AUDIO
 ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 REFERENCE_ENGINES = {"turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "voxcpm2", 'drama-3'}
 PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice", *engine_adapters.engines_where("preset_voices")}
+FIXED_VOICE_ENGINES = engine_adapters.engines_where("fixed_voices")
 TRANSCRIPT_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", 'drama-3'}
 DIRECTION_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base",
                      "qwen3-tts-1.7b-custom-voice", "voxcpm2", 'drama-3'}
@@ -611,7 +612,7 @@ class CastStore:
             raise KeyError("Character not found.")
         if self.retirement_state("character", char_id):
             raise ValueError("This character is retired; restore it before adding voices.")
-        if engine_id not in REFERENCE_ENGINES and engine_id not in PRESET_VOICE_ENGINES and engine_id != "kokoro":
+        if engine_id not in REFERENCE_ENGINES and engine_id not in PRESET_VOICE_ENGINES and engine_id not in FIXED_VOICE_ENGINES:
             raise ValueError("A voice identity must use a reference-cloning engine or Kokoro's fixed voice selection.")
         label = str(label or "").strip()
         if not label or len(label) > 80 or len(str(notes or "")) > 2000:
@@ -619,7 +620,7 @@ class CastStore:
         options = engine_options or {}
         if not isinstance(options, dict):
             raise ValueError("engine_options must be an object.")
-        kind = ("fixed_voice" if engine_id == "kokoro" else
+        kind = ("fixed_voice" if engine_id in FIXED_VOICE_ENGINES else
                 "preset_voice" if engine_id in PRESET_VOICE_ENGINES else "reference")
         if kind == "preset_voice":
             options = self._validate_preset_voice_options(options)

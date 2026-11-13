@@ -20,6 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import engine_adapters
 import engine_checks
 import language_matrix as lm
 import speaker_similarity
@@ -49,10 +50,11 @@ def plan_suite(suite, engine, *, repeats=None, voices=()):
     plan = []
     for case in suite["cases"]:
         code = lm.COLUMN_OF_LABEL[case["language"]]
-        voice = lm.kokoro_voice(code, voices) if engine == "kokoro" else None
+        per_language = getattr(engine_adapters.get(engine), "voice_per_language", False)
+        voice = lm.kokoro_voice(code, voices) if per_language else None
         if code not in claimed:
             skip = f"{engine} does not claim {case['language']}"
-        elif engine == "kokoro" and voice is None:
+        elif per_language and voice is None:
             skip = "no Kokoro voice pack for this language in the installed snapshot"
         else:
             skip = None

@@ -188,7 +188,7 @@ def kokoro_voice(column, voices):
 
 def engine_label(engine, column):
     """The language name an engine's request takes. Engines that take none get the suite's name, which is unused."""
-    if engine == "kokoro":
+    if getattr(engine_adapters.get(engine), "voice_per_language", False):
         return KOKORO_LABEL.get(column)
     return COLUMN_LABEL[column]
 
@@ -206,8 +206,9 @@ def build_plan(*, suite, engines=None, columns=None, repeats=None, voices=()):
             if code not in claimed or (columns and code not in columns):
                 continue
             case = sentences[code]
-            voice = kokoro_voice(code, voices) if engine == "kokoro" else None
-            skip = "no Kokoro voice pack for this language in the installed snapshot" if engine == "kokoro" and voice is None else None
+            per_language = getattr(engine_adapters.get(engine), "voice_per_language", False)
+            voice = kokoro_voice(code, voices) if per_language else None
+            skip = "no Kokoro voice pack for this language in the installed snapshot" if per_language and voice is None else None
             for repeat in range(1, repeats + 1):
                 plan.append({"id": f"{engine}:{code}:{repeat}", "engine": engine, "column": code,
                              "label": engine_label(engine, code), "case_id": case["case_id"], "text": case["text"],
@@ -222,8 +223,6 @@ def request_for(clip, loaded, *, root=LAB):
     adapter = engine_adapters.get(engine)
     if adapter is not None:
         return adapter.matrix_request(request, clip, loaded, root=root)
-    if engine == "kokoro":
-        return {**request, "voice": clip["voice"], "language": clip["label"]}
     if engine in {"turbo", "orig"}:
         return request
     if engine == "qwen3-tts-1.7b-custom-voice":
