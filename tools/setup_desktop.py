@@ -3,6 +3,7 @@
 setup-desktop.bat and first setup run it as it is. Setup.exe runs it with --wheels, from the packages it carries, and with
 --no-shortcut, because the installer makes the Start menu and desktop shortcuts itself."""
 import argparse
+import os
 import pathlib
 import subprocess
 import sys
@@ -24,8 +25,11 @@ def main(argv=()):
     if args.no_shortcut:
         print("Desktop window ready.")
         return
+    # Without PSModulePath, so that Windows PowerShell uses its own module path, not one inherited from PowerShell 7
+    # (setup_core.windows_powershell_env says why).
+    env = {name: value for name, value in os.environ.items() if name.upper() != "PSMODULEPATH"}
     subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                    str(ROOT / "tools/create-shortcut.ps1")], check=True)
+                    str(ROOT / "tools/create-shortcut.ps1")], check=True, env=env)
     print("Fel's Voice Lab desktop shortcut created. Closing its window stops its own backend.")
 
 

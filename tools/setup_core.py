@@ -29,6 +29,13 @@ def onedrive_folder(root, environ=os.environ):
     return None
 
 
+def windows_powershell_env(environ=os.environ):
+    """The environment to start Windows PowerShell (powershell.exe) with: this one without PSModulePath, so that it uses its
+    own module path. One inherited from PowerShell 7, as when PowerShell 7 started this program, names PowerShell 7's
+    modules, which Windows PowerShell cannot load, and their commands (Get-FileHash among them) are then not found."""
+    return {name: value for name, value in environ.items() if name.upper() != "PSMODULEPATH"}
+
+
 def install(command):
     if subprocess.run(command, cwd=ROOT).returncode:
         raise SystemExit("pip stopped before the core packages were installed; its message is above. Check the internet "

@@ -173,6 +173,16 @@ class SetupBatchTests(unittest.TestCase):
         self.assertLess(computer, fetch)
         self.assertLess(fetch, core)
         self.assertEqual(lines[fetch + 1], "if errorlevel 1 goto no_python")
+        # Windows PowerShell's own module path, not one inherited from PowerShell 7 (the next test says why).
+        self.assertLess(lines.index('set "PSModulePath="'), fetch)
+
+    def test_the_script_hashes_with_dotnet_not_get_filehash(self):
+        # Windows PowerShell loads Get-FileHash from a module. Started by way of PowerShell 7 (cmd /c setup.bat on GitHub's
+        # runners, or setup.bat from a PowerShell 7 window) it inherits PowerShell 7's module path, and on GitHub's runner
+        # Get-FileHash was then "not recognized" while the other commands worked. The SHA-256 tests above check the hash.
+        script = SCRIPT.read_text(encoding="ascii")
+        self.assertNotIn("Get-FileHash -", script)
+        self.assertIn("[Security.Cryptography.SHA256]::Create()", script)
 
     def test_the_script_keeps_crlf_line_ends_and_plain_ascii(self):
         data = SCRIPT.read_bytes()

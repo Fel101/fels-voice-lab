@@ -122,6 +122,14 @@ class OneDriveTests(unittest.TestCase):
                 self.assertEqual(setup_core.onedrive_folder(lab, environ), expected)
 
 
+class WindowsPowerShellTests(unittest.TestCase):
+    def test_windows_powershell_starts_without_an_inherited_module_path(self):
+        # PowerShell 7's module path names modules Windows PowerShell cannot load (tests/test_get_python.py says more).
+        environ = {"PATH": "C:\\Windows", "PSModulePath": "C:\\Program Files\\PowerShell\\7\\Modules", "TEMP": "C:\\Temp"}
+        self.assertEqual(setup_core.windows_powershell_env(environ), {"PATH": "C:\\Windows", "TEMP": "C:\\Temp"})
+        self.assertNotIn("psmodulepath", [name.lower() for name in setup_core.windows_powershell_env({"PSMODULEPATH": "x"})])
+
+
 class SetupBatchTests(unittest.TestCase):
     def test_setup_bat_says_which_python_to_install_when_it_cannot_get_one(self):
         # The order it tries Pythons in is tests/test_get_python.py's.

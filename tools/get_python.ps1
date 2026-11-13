@@ -46,7 +46,14 @@ try {
     Stop-Setup "The download of Python stopped: $($_.Exception.Message) Check the internet connection, then run setup.bat again."
 }
 
-$hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+# .NET's own SHA-256 rather than Get-FileHash: Windows PowerShell loads that command from a module, and started by way of
+# PowerShell 7 (setup.bat run from a PowerShell 7 window) it inherits PowerShell 7's module path and cannot find it.
+$stream = [IO.File]::OpenRead($package)
+try {
+    $hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)) -replace "-", "").ToLowerInvariant()
+} finally {
+    $stream.Dispose()
+}
 if ($hash -ne $runtime.sha256.ToLowerInvariant()) {
     Stop-Setup ("The downloaded Python does not match its published SHA-256, so it was deleted and nothing was installed. " +
         "Run setup.bat again; if it happens again, something between this computer and $(([Uri]$runtime.url).Host) is changing the file.")

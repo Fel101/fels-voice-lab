@@ -7,6 +7,9 @@ rem Every environment the Lab makes is built from one Python: the Lab's own in p
 rem Python 3.12, else the Lab's own, fetched now (tools\get_python.ps1). stdin is closed so that a py launcher that offers to
 rem install a missing version cannot wait for an answer.
 set "PYTHON="
+rem Windows PowerShell gets its own module path: one inherited from PowerShell 7 (setup.bat run from a PowerShell 7 window)
+rem names PowerShell 7's modules, which it cannot load.
+set "PSModulePath="
 if exist "python\python.exe" set "PYTHON=python\python.exe"
 if not defined PYTHON (
   py -3.12 -c "import sys" <nul >nul 2>&1

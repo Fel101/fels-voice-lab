@@ -91,7 +91,8 @@ def stage_app(ref, target):
 
 def stage_python(target):
     done = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                           str(ROOT / "tools" / "get_python.ps1"), "-Destination", str(target)])  # fmt: skip
+                           str(ROOT / "tools" / "get_python.ps1"), "-Destination", str(target)],
+                          env=setup_core.windows_powershell_env())  # fmt: skip
     if done.returncode or not (target / "python.exe").is_file():
         raise BuildError("tools\\get_python.ps1 did not fetch the Lab's own Python; its message is above.")
 
