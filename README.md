@@ -50,8 +50,8 @@ person's recording was used or cloned. The waveforms, lengths and loudness readi
 ![The Cast library with two approved Kokoro voice cards, Mira and Tobin, each with its audition player and buttons](docs/images/cast-library.png)
 
 Every saved voice is a card that shows how it was made, which model will speak for it, a saved
-audition to play and how many saved reference versions it has. A reference version never changes
-once saved, and keeps its transcript, origin and allowed use. Approving a voice records your
+audition to play, and either the preset voices it uses or how many saved versions its voice recording
+has. A version of a recording never changes once saved, and keeps its transcript, origin and allowed use. Approving a voice records your
 decision to use it; it cannot prove that you have the right to.
 
 ### Perform lines
