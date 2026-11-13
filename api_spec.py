@@ -496,9 +496,34 @@ ROUTES = [
       reply="A manifest with placeholder ids."),
     R("GET", "/api/scenes/template.csv", "Scenes", "Download the scene CSV header and one sample row.", reply_kind="csv",
       reply="The CSV."),
-    R("POST", "/api/scenes/import", "Scenes", "Create a scene from JSON or CSV text.", status=201,
-      body=(F("format", "string", "`json` or `csv`.", True), F("content", "string", "The text, up to 2 MiB.", True)),
-      reply="`scene`.", errors=((413, "The request is over 2 MiB."),)),
+    R("POST", "/api/scenes/import/preview", "Scenes", "Read a script without creating anything.",
+      body=(F("format", "string", "`text` (one `NAME: words` line per speech) or `fountain`.", True),
+            F("content", "string", "The script, up to 2 MiB.", True)),
+      reply="`script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the "
+            "script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many "
+            "`lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`).",
+      errors=((400, "The format is not `text` or `fountain`."), (413, "The request is over 2 MiB.")),
+      notes="The import below reads the script the same way. Plain text: a direction in brackets or parentheses at the "
+            "start of the words, or after the name, is the line's acting direction, and a line with no name is narration. "
+            "Fountain: a parenthetical is the direction of the words after it; extensions such as (V.O.) and (CONT'D) are "
+            "taken off names; scene headings, transitions, notes and boneyard are left out; action is narration."),
+    R("POST", "/api/scenes/import", "Scenes", "Create a scene from JSON, CSV, a plain-text script or a Fountain script.",
+      status=201,
+      body=(F("format", "string", "`json`, `csv`, `text` or `fountain`.", True), F("content", "string", "The text, up to 2 MiB.", True),
+            F("speakers", "object", "For `text` and `fountain`: every speaker the script names, mapped to "
+                                    "`{\"identity_id\": ...}` or to null to leave their lines out. A speaker missing from the "
+                                    "map is refused."),
+            F("narrator", "object", "For `text` and `fountain`: `{\"identity_id\": ...}` for the lines with no speaker. "
+                                    "Without it they are left out."),
+            F("name", "string", "For `text` and `fountain`: the scene's name. Without it, the title page's Title, or "
+                                "\"Imported script\".")),
+      reply="`scene`; for a script also `report`: `lines` (how many were imported), `left_out` and `directions_left_out` "
+            "(each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.",
+      errors=((400, "A speaker has no voice and is not left out, a voice cannot be used, or every line is left out."),
+              (413, "The request is over 2 MiB.")),
+      notes="A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the "
+            "script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model "
+            "that takes none is left out and listed in `directions_left_out`."),
     R("GET", "/api/scenes/{scene_id}", "Scenes", "Read a scene.", reply="`scene`."),
     R("POST", "/api/scenes/{scene_id}", "Scenes", "Replace a scene's name and lines.",
       body=(F("name", "string", "1 to 120 characters."), F("lines", "object[]", "The full list of lines.", True),

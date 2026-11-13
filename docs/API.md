@@ -1031,7 +1031,8 @@ Ordered scripts rendered line by line through the same performance call. The man
 | POST | [`/api/scenes`](#post-api-scenes) | Create a scene from a manifest. |
 | GET | [`/api/scenes/template.json`](#get-api-scenes-template-json) | Download a scene manifest template. |
 | GET | [`/api/scenes/template.csv`](#get-api-scenes-template-csv) | Download the scene CSV header and one sample row. |
-| POST | [`/api/scenes/import`](#post-api-scenes-import) | Create a scene from JSON or CSV text. |
+| POST | [`/api/scenes/import/preview`](#post-api-scenes-import-preview) | Read a script without creating anything. |
+| POST | [`/api/scenes/import`](#post-api-scenes-import) | Create a scene from JSON, CSV, a plain-text script or a Fountain script. |
 | GET | [`/api/scenes/{scene_id}`](#get-api-scenes-scene_id) | Read a scene. |
 | POST | [`/api/scenes/{scene_id}`](#post-api-scenes-scene_id) | Replace a scene's name and lines. |
 | GET | [`/api/scenes/{scene_id}/export.json`](#get-api-scenes-scene_id-export-json) | Download a scene as a manifest. |
@@ -1095,22 +1096,48 @@ Download the scene CSV header and one sample row.
 
 **Answer:** `200`, `text/csv`. The CSV.
 
+<a id="post-api-scenes-import-preview"></a>
+
+#### `POST /api/scenes/import/preview`
+
+Read a script without creating anything.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `format` (required) | string | `text` (one `NAME: words` line per speech) or `fountain`. |
+| `content` (required) | string | The script, up to 2 MiB. |
+
+**Answer:** `200`, JSON. `script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`).
+
+| Also answers | When |
+|---|---|
+| `400` | The format is not `text` or `fountain`. |
+| `413` | The request is over 2 MiB. |
+
+The import below reads the script the same way. Plain text: a direction in brackets or parentheses at the start of the words, or after the name, is the line's acting direction, and a line with no name is narration. Fountain: a parenthetical is the direction of the words after it; extensions such as (V.O.) and (CONT'D) are taken off names; scene headings, transitions, notes and boneyard are left out; action is narration.
+
 <a id="post-api-scenes-import"></a>
 
 #### `POST /api/scenes/import`
 
-Create a scene from JSON or CSV text.
+Create a scene from JSON, CSV, a plain-text script or a Fountain script.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `format` (required) | string | `json` or `csv`. |
+| `format` (required) | string | `json`, `csv`, `text` or `fountain`. |
 | `content` (required) | string | The text, up to 2 MiB. |
+| `speakers` | object | For `text` and `fountain`: every speaker the script names, mapped to `{"identity_id": ...}` or to null to leave their lines out. A speaker missing from the map is refused. |
+| `narrator` | object | For `text` and `fountain`: `{"identity_id": ...}` for the lines with no speaker. Without it they are left out. |
+| `name` | string | For `text` and `fountain`: the scene's name. Without it, the title page's Title, or "Imported script". |
 
-**Answer:** `201`, JSON. `scene`.
+**Answer:** `201`, JSON. `scene`; for a script also `report`: `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.
 
 | Also answers | When |
 |---|---|
+| `400` | A speaker has no voice and is not left out, a voice cannot be used, or every line is left out. |
 | `413` | The request is over 2 MiB. |
+
+A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`.
 
 <a id="get-api-scenes-scene_id"></a>
 

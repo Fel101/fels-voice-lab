@@ -1176,6 +1176,200 @@ function importSceneFile(file) {
       return result ? refreshSceneList(result.scene.scene_id) : null;
     });
 }
+// A script in plain text or Fountain: read it (POST /api/scenes/import/preview), give each speaker a voice, then create the
+// scene. Create the scene stays off while a speaker has no voice and is not left out, and the server refuses that too.
+var sceneScript = null,
+  sceneScriptFile = '';
+function sceneCount(count, one, many) {
+  return count + ' ' + (count === 1 ? one : many);
+}
+function sceneScriptFormatOf(name) {
+  var lower = String(name).toLowerCase();
+  if (/\.(fountain|spmd)$/.test(lower)) return 'fountain';
+  return /\.txt$/.test(lower) ? 'text' : null;
+}
+function sceneScriptVoices() {
+  var groups = [];
+  castCharacters.forEach(function (character) {
+    var voices = (character.identities || []).filter(function (identity) {
+      return !identity.retired && identity.status !== 'rejected';
+    });
+    if (voices.length) groups.push({ character: character, voices: voices });
+  });
+  return groups;
+}
+function sceneScriptKey(name) {
+  return String(name).replace(/\s+/g, ' ').trim().toLowerCase();
+}
+// A speaker whose name is a Cast character's starts on that character's approved voice, or its first one.
+function sceneScriptGuess(name) {
+  var match = sceneScriptVoices().find(function (group) {
+    return sceneScriptKey(group.character.name) === sceneScriptKey(name);
+  });
+  if (!match) return '';
+  var approved = match.voices.find(function (voice) {
+    return voice.status === 'approved';
+  });
+  return (approved || match.voices[0]).id;
+}
+function sceneScriptPicker(name, narration) {
+  var select = document.createElement('select');
+  select.dataset.speaker = narration ? '' : name;
+  select.setAttribute('aria-label', narration ? 'Voice for the lines with no speaker' : 'Voice for ' + name);
+  option(select, '', 'Choose a voice…');
+  option(select, '-', 'Leave these lines out');
+  sceneScriptVoices().forEach(function (group) {
+    var choices = document.createElement('optgroup');
+    choices.label = group.character.name;
+    group.voices.forEach(function (voice) {
+      var item = document.createElement('option');
+      item.value = voice.id;
+      item.textContent =
+        voice.label + ' · ' + sceneModelName(voice.engine_id) + (voice.status === 'approved' ? '' : ' (' + voice.status + ')');
+      choices.appendChild(item);
+    });
+    select.appendChild(choices);
+  });
+  select.value = narration ? '-' : sceneScriptGuess(name);
+  select.addEventListener('change', sceneScriptReady);
+  return select;
+}
+function sceneScriptRow(label, count, picker) {
+  var row = document.createElement('tr');
+  [label, String(count)].forEach(function (text) {
+    var cell = document.createElement('td');
+    cell.textContent = text;
+    row.appendChild(cell);
+  });
+  var cell = document.createElement('td');
+  cell.appendChild(picker);
+  row.appendChild(cell);
+  return row;
+}
+function sceneScriptReady() {
+  var waiting = [];
+  $('sceneScriptSpeakers')
+    .querySelectorAll('select')
+    .forEach(function (select) {
+      if (!select.value) waiting.push(select.dataset.speaker || 'the lines with no speaker');
+    });
+  $('sceneScriptCreate').disabled = !sceneScript || waiting.length > 0;
+  $('sceneScriptWaiting').textContent = waiting.length
+    ? 'Choose a voice for ' + waiting.join(', ') + ', or leave their lines out.'
+    : '';
+}
+function clearSceneScript() {
+  sceneScript = null;
+  $('sceneScriptMatch').hidden = true;
+  $('sceneScriptSpeakers').textContent = '';
+  sceneScriptReady();
+}
+function renderSceneScript() {
+  var script = sceneScript,
+    fountain = script.format === 'fountain',
+    parts = [sceneCount(script.lines.length, 'line', 'lines'), sceneCount(script.speakers.length, 'speaker', 'speakers')];
+  if (script.narration)
+    parts.push(
+      sceneCount(
+        script.narration,
+        fountain ? 'line of action' : 'line with no name',
+        fountain ? 'lines of action' : 'lines with no name',
+      ),
+    );
+  parts.push(sceneCount(script.unread.length, 'line not understood', 'lines not understood'));
+  $('sceneScriptSummary').textContent = parts.join(', ') + '.';
+  var unread = $('sceneScriptUnread');
+  unread.textContent = '';
+  script.unread.forEach(function (item) {
+    var entry = document.createElement('li');
+    entry.textContent = 'Line ' + item.number + ': ' + item.text + ' (' + item.reason + ')';
+    unread.appendChild(entry);
+  });
+  $('sceneScriptUnreadBox').hidden = !script.unread.length;
+  var body = $('sceneScriptSpeakers');
+  body.textContent = '';
+  script.speakers.forEach(function (speaker) {
+    body.appendChild(sceneScriptRow(speaker.name, speaker.lines, sceneScriptPicker(speaker.name, false)));
+  });
+  if (script.narration)
+    body.appendChild(
+      sceneScriptRow(
+        fountain ? 'Action, read by a narrator' : 'Lines with no name, read by a narrator',
+        script.narration,
+        sceneScriptPicker('', true),
+      ),
+    );
+  if (!$('sceneScriptName').value.trim()) $('sceneScriptName').value = script.title || sceneScriptFile;
+  $('sceneScriptMatch').hidden = false;
+  sceneScriptReady();
+}
+function readSceneScript() {
+  var content = $('sceneScriptText').value;
+  $('sceneError').textContent = '';
+  $('sceneScriptReport').textContent = '';
+  if (!content.trim()) return Promise.reject(new Error('Paste a script, or choose a file.'));
+  return fetchJson('/api/scenes/import/preview', { format: $('sceneScriptFormat').value, content: content }).then(
+    function (result) {
+      sceneScript = result.script;
+      renderSceneScript();
+    },
+  );
+}
+function loadSceneScriptFile(file) {
+  return file.text().then(function (content) {
+    $('sceneScriptFormat').value = sceneScriptFormatOf(file.name);
+    $('sceneScriptText').value = content;
+    $('sceneScriptName').value = '';
+    sceneScriptFile = file.name.replace(/\.[^.]+$/, '');
+    $('sceneScriptImport').open = true;
+    return readSceneScript();
+  });
+}
+function sceneScriptReportText(scene, report) {
+  var rows = ['Created “' + scene.name + '” with ' + sceneCount(report.lines, 'line', 'lines') + '.'];
+  function note(title, items, describe) {
+    if (!items.length) return;
+    rows.push(title + ':');
+    items.slice(0, 12).forEach(function (item) {
+      rows.push('• Line ' + item.number + (item.speaker ? ' (' + item.speaker + ')' : '') + ': ' + describe(item));
+    });
+    if (items.length > 12) rows.push('• and ' + (items.length - 12) + ' more.');
+  }
+  note('Left out', report.left_out, function (item) {
+    return item.reason + '. “' + sceneShortText(item.text) + '”';
+  });
+  note('Acting directions left out, because the voice’s model takes none', report.directions_left_out, function (item) {
+    return '(' + item.direction + ')';
+  });
+  note('Not understood', report.unread, function (item) {
+    return item.reason + '. “' + item.text + '”';
+  });
+  return rows.join('\n');
+}
+function createSceneFromScript() {
+  if (!sceneScript) return Promise.resolve(null);
+  if (sceneDirty && !window.confirm('Discard unsaved scene edits and import this script?')) return Promise.resolve(null);
+  var speakers = {},
+    narrator = null;
+  $('sceneScriptSpeakers')
+    .querySelectorAll('select')
+    .forEach(function (select) {
+      var choice = select.value === '-' ? null : { identity_id: select.value };
+      if (select.dataset.speaker) speakers[select.dataset.speaker] = choice;
+      else narrator = choice;
+    });
+  var body = { format: sceneScript.format, content: $('sceneScriptText').value, speakers: speakers, narrator: narrator },
+    name = $('sceneScriptName').value.trim();
+  if (name) body.name = name;
+  $('sceneScriptCreate').disabled = true;
+  return fetchJson('/api/scenes/import', body)
+    .then(function (result) {
+      clearSceneScript(); // A second press would make the scene twice.
+      $('sceneScriptReport').textContent = sceneScriptReportText(result.scene, result.report);
+      return refreshSceneList(result.scene.scene_id);
+    })
+    .finally(sceneScriptReady);
+}
 // A batch renders one model's lines before the next model loads (scene_store.create_job), and job.models lists the models in
 // that order, so the status line can say which is rendering and what comes next.
 function batchOrderText(job) {
@@ -1431,8 +1625,17 @@ $('sceneJobSelect').addEventListener('change', function () {
 });
 $('sceneImportFile').addEventListener('change', function () {
   var file = this.files && this.files[0];
-  if (file) importSceneFile(file).catch(showSceneError);
+  if (file) (sceneScriptFormatOf(file.name) ? loadSceneScriptFile(file) : importSceneFile(file)).catch(showSceneError);
   this.value = '';
+});
+$('sceneScriptRead').addEventListener('click', function () {
+  readSceneScript().catch(showSceneError);
+});
+$('sceneScriptCreate').addEventListener('click', function () {
+  createSceneFromScript().catch(showSceneError);
+});
+['sceneScriptText', 'sceneScriptFormat'].forEach(function (id) {
+  $(id).addEventListener(id === 'sceneScriptText' ? 'input' : 'change', clearSceneScript);
 });
 $('sceneStarter').addEventListener('click', function () {
   try {

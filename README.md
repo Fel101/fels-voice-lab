@@ -78,12 +78,13 @@ take**. The original is never changed, and the new take records what was done to
 
 ![Scenes and batch: a scene as a table of lines with their status, one line open with its two takes and its form, then a finished batch job and the assembled scene](docs/images/scene.png)
 
-A scene is a script of lines, shown as a table: each line has its own character, voice, reference
-version, language, pauses and settings, and a status that says whether it is rendered, chosen, failed
+A scene is a script of lines, shown as a table: each line has its own character, voice, voice
+recording, language, pauses and settings, and a status that says whether it is rendered, chosen, failed
 or out of date. **Render all**, **Render ticked** or a row's **Render** makes the takes as a batch that
 runs one take at a time, can be paused, cancelled and retried, and picks up again after a restart. You
 choose the take for each line, or the newest for every line at once, and assemble a preview. Undo, redo
-and the usual shortcuts work on the script.
+and the usual shortcuts work on the script. A script you already have, in plain text (`NAME: words`)
+or Fountain, becomes a scene once you give each speaker a voice.
 
 ### Export package
 
@@ -104,7 +105,8 @@ package back and checks every hash, the captions, and each file's codec and leng
   immutable reference versions with transcripts and provenance, approvals, pronunciation, saved
   performances, seed variants, take review with loudness and peak readings, and a take editor that
   saves each edit as a new take.
-- **Scenes and batch:** stable line ids, segmentation, sequential jobs with pause, resume, cancel
+- **Scenes and batch:** script import from plain text and Fountain, line names, long lines split
+  into parts, sequential jobs with pause, resume, cancel
   and retry, stale-take protection, undo and redo, and previews.
 - **Compare and export:** blind A/B listening on saved Cast takes, measurements, optional transcript
   and speaker proxies, packages in five formats with manifests and captions, and lip-sync tracks.

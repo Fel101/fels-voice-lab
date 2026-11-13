@@ -191,7 +191,7 @@ gain change no time. Retiring a take blocks its edits too, and purging it delete
 like any other take for its line. An exported package names the take it used and does not list the edit steps; look the take
 up in Cast to see them. This is not the Drama model's own previous-take editing, which the model does not offer.
 
-**Scenes & batch** imports CSV/JSON or starts from Perform. The script is a table, one row per line: its number, character,
+**Scenes & batch** imports a script (plain text, Fountain, JSON or CSV) or starts from Perform. The script is a table, one row per line: its number, character,
 the start of its text, its voice and model, and its status. **Open** on a row shows the line's takes, then its full form
 (character, voice, text, language, pauses and settings) and its line name, which exports and the API use. The status says where
 the line stands:
@@ -221,6 +221,22 @@ the same checks as Perform, each with **Use this take**. **Build the scene from 
 the pauses together in script order, as **Scene, exactly as rendered** and **Scene, evened out in loudness**; a timing target
 is advisory.
 See [the scene schema](scenes/scene-schema-v1.md).
+
+**Import a script from text or Fountain** takes a script you already have, from a `.txt` or `.fountain` file or pasted
+in. Plain text has one speech per line, written `NAME: words`. A direction in brackets or parentheses at the start of the
+words, or after the name (`MARA (quietly): words`), becomes the line's acting direction. Fountain is the screenplay format,
+with each name in capitals above its lines: a parenthetical is the direction of the words after it, extensions such as
+(V.O.) and (CONT'D) come off the names, and the title page's Title names the scene. Scene headings, transitions, notes,
+sections and the boneyard are left out. **Read the script** says how many lines and speakers it found, and lists by line
+number the lines it could not read, such as a name with no words or a direction on its own.
+
+Then each speaker gets a voice. A speaker with the same name as a Cast character starts on that character's approved voice;
+the others start on **Choose a voice…**, and **Create the scene** stays off until every speaker has a voice or **Leave these
+lines out**. Lines with no name (plain text) and action (Fountain) are left out unless you choose a voice to read them as
+narration. Each line gets what a new line gets: the voice's default acting direction when the script gives none, 250 ms
+after it and one take. A direction for a model that takes none is left out. Once the scene is made, the panel lists every
+line it left out and why. The [HTTP API](API.md#post-api-scenes-import) imports a script the same way, and
+[a preview route](API.md#post-api-scenes-import-preview) reads one without making anything.
 
 Undo (Ctrl+Z) and redo (Ctrl+Y or Ctrl+Shift+Z) reverse script edits, including typing, line changes, moves and
 removals. Saving, opening another scene, importing, starting from Perform and choosing a take (which reloads the saved

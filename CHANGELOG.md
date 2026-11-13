@@ -93,6 +93,16 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
 
 ### Scenes
 
+- **A script becomes a scene.** **Import a script from text or Fountain** takes a `.txt` or `.fountain` file, or a pasted
+  script. Plain text has one speech per line, `NAME: words`, with a direction in brackets or parentheses as the acting
+  direction; Fountain's character cues, dialogue and parentheticals become lines, its extensions come off the names, its
+  title names the scene, and its headings, transitions, notes and boneyard are left out. **Read the script** counts the
+  lines and speakers and lists, by line number, what it could not read. Each speaker then gets a voice, set already when a
+  Cast character has the same name, or is left out; **Create the scene** stays off while a speaker has neither, and the
+  service refuses it too. Lines with no name and Fountain action are narration, spoken only when a narrator voice is
+  chosen. After the import the panel lists every line left out and why, with any acting direction left out because the
+  voice's model takes none. `POST /api/scenes/import` takes `text` and `fountain` with a `speakers` map, and
+  `POST /api/scenes/import/preview` reads a script without making anything.
 - **Scenes as a table.** A scene opens as a table, one row per line: a tick box, its number, character, the start of its
   text, its voice and model, its status, and **Play** (its chosen take), **Render** and **Open**. **Open** shows the line's
   takes, each with **Use this take**, and the line's full form, which is built only then, so a 300-line scene opens in about

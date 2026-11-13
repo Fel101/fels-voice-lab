@@ -48,6 +48,7 @@ from engine_install import EngineInstaller
 from cast_store import (CastStore, DIRECTION_ENGINES, MAX_UPLOAD_BYTES,
                         PRESET_VOICE_ENGINES, decode_audio, generation_identity_snapshot)
 from scene_store import SceneBatchRunner, SceneStore, SUPPORTED_LANGUAGES, csv_template, json_template
+from script_import import parse_script
 import export_panel
 import speaker_similarity
 import transcript_suggest
@@ -1512,12 +1513,24 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         self._send(200, csv_template(), "text/csv; charset=utf-8",
                    {"Content-Disposition": "attachment; filename=voice-lab-scene-template.csv"})
 
-    @router.post("/api/scenes/import")
-    def import_scene(self, parsed, req):
-        fmt = req.get("format")
+    def _import_content(req):
         content = req.get("content")
         if not isinstance(content, str) or len(content.encode("utf-8")) > MAX_SCENE_REQUEST_BYTES:
             raise ValueError("Scene import content must be UTF-8 text up to 2 MiB.")
+        return content
+
+    @router.post("/api/scenes/import/preview")
+    def preview_script(self, parsed, req):
+        self._json(200, {"script": parse_script(_import_content(req), req.get("format"))})
+
+    @router.post("/api/scenes/import")
+    def import_scene(self, parsed, req):
+        fmt = req.get("format")
+        content = _import_content(req)
+        if fmt in ("text", "fountain"):
+            manifest, report = scenes.script_manifest(content, fmt, req.get("speakers"), req.get("narrator"), req.get("name"))
+            self._json(201, {"scene": scenes.create_scene(manifest), "report": report})
+            return
         if fmt == "json":
             try:
                 manifest = json.loads(content)
@@ -1526,7 +1539,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         elif fmt == "csv":
             manifest = scenes.import_csv(content.encode("utf-8"))
         else:
-            raise ValueError("Scene import format must be json or csv.")
+            raise ValueError("Scene import format must be json, csv, text or fountain.")
         self._json(201, {"scene": scenes.create_scene(manifest)})
 
     @router.get("/api/scenes/{scene_id}")

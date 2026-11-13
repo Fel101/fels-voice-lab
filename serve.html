@@ -91,6 +91,11 @@ pre { white-space:pre-wrap; }
 [role=alert] { color:var(--err); }
 [role=alert]:empty { display:none; }
 .scene-table-wrap { overflow-x:auto; margin:12px 0; container-type:inline-size; }
+.script-speakers { border-collapse:collapse; font-size:.9rem; }
+.script-speakers th { text-align:left; font-size:.82rem; font-weight:600; color:var(--muted); padding:4px 8px; border-bottom:1px solid var(--line); }
+.script-speakers td { padding:4px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+.script-speakers td:nth-child(2) { text-align:right; color:var(--muted); }
+#sceneScriptReport { white-space:pre-line; }
 .scene-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:.9rem; }
 .scene-table th { text-align:left; font-size:.82rem; font-weight:600; color:var(--muted); padding:4px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
 .scene-table td { padding:4px 6px; vertical-align:middle; border-bottom:1px solid var(--line); }
@@ -325,8 +330,22 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <p class="meta">Write dialogue, render a batch, and choose the takes for your scene. Jobs run one take at a time and can resume after a restart.</p>
   <div class="row"><label class="field compact">Saved scene<select id="sceneSelect"></select></label>
     <button type="button" id="sceneRefresh">Refresh scenes</button>
-    <label class="field compact">Import a script (JSON or CSV)<input id="sceneImportFile" type="file" accept=".json,.csv,application/json,text/csv"></label>
+    <label class="field compact">Import a script (text, Fountain, JSON or CSV)<input id="sceneImportFile" type="file" accept=".txt,.fountain,.json,.csv,text/plain,application/json,text/csv"></label>
     <button type="button" id="sceneStarter">Start from the Perform line</button></div>
+  <details id="sceneScriptImport"><summary>Import a script from text or Fountain</summary>
+    <p class="meta">Plain text has one speech per line, written <code>NAME: words</code>. A direction in brackets or parentheses at the start of the words becomes the line's acting direction. Fountain is the screenplay format, with each name in capitals above its lines. Choose a file above, or paste the script here, then read it and choose a voice for each speaker.</p>
+    <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option></select></label>
+      <button type="button" id="sceneScriptRead">Read the script</button></div>
+    <label class="field">Script<textarea id="sceneScriptText" rows="8" spellcheck="false" placeholder="MARA: I kept the light on.&#10;TOMAS: (quietly) I saw it from the boat."></textarea></label>
+    <div id="sceneScriptMatch" hidden>
+      <p class="meta" id="sceneScriptSummary"></p>
+      <details id="sceneScriptUnreadBox" hidden><summary>Lines not understood</summary><ul class="meta" id="sceneScriptUnread"></ul></details>
+      <div class="scene-table-wrap"><table class="script-speakers"><thead><tr><th>Speaker</th><th>Lines</th><th>Voice</th></tr></thead><tbody id="sceneScriptSpeakers"></tbody></table></div>
+      <label class="field compact">Scene name<input id="sceneScriptName" type="text" maxlength="120" placeholder="Imported script"></label>
+      <div class="row"><button class="go" type="button" id="sceneScriptCreate" disabled>Create the scene</button><span class="meta" id="sceneScriptWaiting"></span></div>
+    </div>
+    <p class="meta" id="sceneScriptReport"></p>
+  </details>
   <div class="cast-actions"><a href="/api/scenes/template.json">JSON template</a><a href="/api/scenes/template.csv">CSV template</a>
     <a id="sceneExportJson" href="#" hidden>Export JSON</a><a id="sceneExportCsv" href="#" hidden>Export CSV</a></div>
   <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. The scene as JSON includes each line’s voice and model settings.</div>

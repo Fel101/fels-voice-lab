@@ -772,3 +772,73 @@ class GenerateAfterInstallTests(unittest.TestCase):
                 if page is not None:
                     page.close()
                 server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class ScriptImportPageTests(unittest.TestCase):
+    """A Fountain file and a pasted plain-text script each become a scene, with the speakers matched to Cast by name."""
+
+    def test_a_fountain_file_and_a_pasted_script_become_scenes_in_the_page(self):
+        from tests.test_scenes import tone_wav
+
+        scripts = ROOT / "tests" / "fixtures" / "scripts"
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            for name, engine in (("Mara", "qwen3-tts-1.7b-base"), ("Tomas", "turbo")):
+                character = server.cast.create_character(name, "")
+                identity = server.cast.create_identity(character["id"], engine, f"{name} voice")
+                ref = server.cast.add_reference(identity["id"], f"{name.lower()}.wav", tone_wav(6.0),
+                                                transcript="A clear reference line.", origin="test", allowed_use="tests",
+                                                edits={"target_sample_rate": 24_000})
+                server.cast.update_identity(identity["id"], {"status": "approved", "reference_version_id": ref["id"]})
+            page = None
+            speakers = ("[...document.querySelectorAll('#sceneScriptSpeakers tr')].map((row) => row.cells[0].textContent + '='"
+                        " + row.querySelector('select').selectedOptions[0].textContent).join('|')")
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#scenes")
+                page.wait_until("document.querySelectorAll('#sceneScriptFormat option').length === 2 && castCharacters.length === 2")
+                page.set_files("#sceneImportFile", scripts / "harbour.fountain")
+                page.wait_until("!document.getElementById('sceneScriptMatch').hidden")
+                self.assertEqual(page.evaluate("document.getElementById('sceneScriptSummary').textContent"),
+                                 "14 lines, 3 speakers, 4 lines of action, 0 lines not understood.")
+                self.assertEqual(page.evaluate(speakers), "MARA=Mara voice · Qwen3-TTS 1.7B Base|TOMAS=Tomas voice · Chatterbox "
+                                 "Turbo 350M|McCLANE=Choose a voice…|Action, read by a narrator=Leave these lines out")
+                # A speaker with no voice, and not left out, keeps the button off.
+                self.assertTrue(page.evaluate("document.getElementById('sceneScriptCreate').disabled"))
+                self.assertEqual(page.evaluate("document.getElementById('sceneScriptWaiting').textContent"),
+                                 "Choose a voice for McCLANE, or leave their lines out.")
+                page.set_value("#sceneScriptSpeakers tr:nth-child(3) select", "-")
+                page.wait_until("!document.getElementById('sceneScriptCreate').disabled")
+                page.click("#sceneScriptCreate")
+                page.wait_until("document.getElementById('sceneName').value === 'The Harbour Light'"
+                                " && document.querySelectorAll('.scene-table tbody tr.scene-row').length === 9")
+                self.assertTrue(page.evaluate("document.getElementById('sceneScriptMatch').hidden"))
+                report = page.evaluate("document.getElementById('sceneScriptReport').textContent")
+                self.assertTrue(report.startswith("Created “The Harbour Light” with 9 lines.\nLeft out:\n"), report)
+                self.assertIn("• Line 46 (McCLANE): its speaker is left out.", report)
+                self.assertIn("• Line 31 (TOMAS): (beat)", report)
+
+                page.set_value("#sceneScriptFormat", "text")
+                page.set_value("#sceneScriptText", (scripts / "harbour.txt").read_text(encoding="utf-8"))
+                page.click("#sceneScriptRead")
+                page.wait_until("!document.getElementById('sceneScriptMatch').hidden")
+                self.assertEqual(page.evaluate("document.getElementById('sceneScriptSummary').textContent"),
+                                 "8 lines, 3 speakers, 1 line with no name, 2 lines not understood.")
+                self.assertEqual(page.evaluate("[...document.querySelectorAll('#sceneScriptUnread li')].map((li) => li.textContent)"),
+                                 ["Line 8: (They watch the water.) (a direction with no words to say)",
+                                  "Line 11: Tomas: (a name with no words to say)"])
+                page.set_value("#sceneScriptSpeakers tr:nth-child(3) select", "-")
+                page.set_value("#sceneScriptName", "Harbour, plain text")
+                page.click("#sceneScriptCreate")
+                page.wait_until("document.getElementById('sceneName').value === 'Harbour, plain text'"
+                                " && document.querySelectorAll('.scene-table tbody tr.scene-row').length === 6")
+                characters = page.evaluate("[...document.querySelectorAll('.scene-table tbody tr.scene-row .scene-character')]"
+                                           ".map((cell) => cell.textContent)")
+                self.assertEqual(characters, ["Mara", "Tomas", "Mara", "Tomas", "Mara", "Mara"])
+                self.assertEqual(len(server.scenes.list_scenes()), 2)
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()

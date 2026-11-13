@@ -2791,13 +2791,14 @@
         }
       }
     },
-    "/api/scenes/import": {
+    "/api/scenes/import/preview": {
       "post": {
-        "operationId": "post_api_scenes_import",
-        "summary": "Create a scene from JSON or CSV text.",
+        "operationId": "post_api_scenes_import_preview",
+        "summary": "Read a script without creating anything.",
         "tags": [
           "Scenes"
         ],
+        "description": "The import below reads the script the same way. Plain text: a direction in brackets or parentheses at the start of the words, or after the name, is the line's acting direction, and a line with no name is narration. Fountain: a parenthetical is the direction of the words after it; extensions such as (V.O.) and (CONT'D) are taken off names; scene headings, transitions, notes and boneyard are left out; action is narration.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2807,11 +2808,92 @@
                 "properties": {
                   "format": {
                     "type": "string",
-                    "description": "`json` or `csv`."
+                    "description": "`text` (one `NAME: words` line per speech) or `fountain`."
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "The script, up to 2 MiB."
+                  }
+                },
+                "required": [
+                  "format",
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The format is not `text` or `fountain`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request is over 2 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/import": {
+      "post": {
+        "operationId": "post_api_scenes_import",
+        "summary": "Create a scene from JSON, CSV, a plain-text script or a Fountain script.",
+        "tags": [
+          "Scenes"
+        ],
+        "description": "A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "description": "`json`, `csv`, `text` or `fountain`."
                   },
                   "content": {
                     "type": "string",
                     "description": "The text, up to 2 MiB."
+                  },
+                  "speakers": {
+                    "type": "object",
+                    "description": "For `text` and `fountain`: every speaker the script names, mapped to `{\"identity_id\": ...}` or to null to leave their lines out. A speaker missing from the map is refused."
+                  },
+                  "narrator": {
+                    "type": "object",
+                    "description": "For `text` and `fountain`: `{\"identity_id\": ...}` for the lines with no speaker. Without it they are left out."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "For `text` and `fountain`: the scene's name. Without it, the title page's Title, or \"Imported script\"."
                   }
                 },
                 "required": [
@@ -2824,11 +2906,21 @@
         },
         "responses": {
           "201": {
-            "description": "`scene`.",
+            "description": "`scene`; for a script also `report`: `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A speaker has no voice and is not left out, a voice cannot be used, or every line is left out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

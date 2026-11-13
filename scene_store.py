@@ -29,6 +29,7 @@ from local_ownership import LocalOwnership
 from drama3_production import LANGUAGES as DRAMA_LANGUAGES
 from performance_settings import effective_settings
 from scene_selection import take_problem, validate_selected_take
+from script_import import parse_script
 
 
 SCHEMA_VERSION = 1
@@ -670,6 +671,73 @@ class SceneStore:
                 "use_pronunciations": pronunciation_flag == "true",
             })
         return {"schema_version": SCHEMA_VERSION, "name": rows[0].get("scene_name") or "Imported scene", "lines": lines}
+
+    def script_manifest(self, content, fmt, speakers, narrator=None, name=None):
+        """A scene manifest from a plain-text or Fountain script (script_import.parse_script), and a report of what it left out.
+
+        speakers maps every speaker the script names to {"identity_id": ...}, or to None to leave that speaker's lines out; a
+        speaker missing from the map is refused, so no line goes to a voice nobody chose. narrator is the voice for the lines
+        with no speaker (plain-text lines with no name, Fountain action), or None to leave them out. Each line gets the
+        defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after
+        it, one take, and the model's own settings. A direction for a model that takes none is left out and reported."""
+        script = parse_script(content, fmt)
+        if not script["lines"]:
+            unread = len(script["unread"])
+            raise ValueError("The script has no lines to import." + (f" {unread} line(s) could not be read." if unread else ""))
+        if not isinstance(speakers, dict) or any(not isinstance(key, str) for key in speakers):
+            raise ValueError("speakers must map each speaker's name to a voice, or to null to leave their lines out.")
+        chosen = {" ".join(key.split()).casefold(): value for key, value in speakers.items()}
+        named = {speaker["name"].casefold() for speaker in script["speakers"]}
+        missing = [speaker["name"] for speaker in script["speakers"] if speaker["name"].casefold() not in chosen]
+        if missing:
+            raise ValueError("Choose a voice for each speaker, or leave their lines out: " + ", ".join(missing) + ".")
+        strangers = sorted(key for key in chosen if key not in named)
+        if strangers:
+            raise ValueError("These names are not speakers in the script: " + ", ".join(strangers) + ".")
+        identities = {}
+
+        def voice(choice, label):
+            if choice is None:
+                return None
+            if not isinstance(choice, dict) or not isinstance(choice.get("identity_id"), str):
+                raise ValueError(f"The voice for {label} must be an object with an identity_id, or null to leave the lines out.")
+            identity_id = choice["identity_id"]
+            if identity_id not in identities:
+                try:
+                    identities[identity_id] = self.cast.get_generation_identity(identity_id, None)
+                except (ValueError, KeyError) as exc:
+                    raise ValueError(f"The voice for {label}: {exc}") from exc
+            return identities[identity_id]
+
+        width = max(3, len(str(len(script["lines"]))))
+        lines, left_out, directions = [], [], []
+        for line in script["lines"]:
+            speaker = line["speaker"]
+            identity = voice(chosen[speaker.casefold()] if speaker else narrator, speaker or "narration")
+            where = {"number": line["number"], "speaker": speaker, "text": line["text"][:200]}
+            if identity is None:
+                left_out.append({**where, "reason": "its speaker is left out" if speaker else "no narrator voice was chosen"})
+                continue
+            if len(line["text"]) > MAX_LINE_TEXT:
+                left_out.append({**where, "reason": f"longer than {MAX_LINE_TEXT:,} characters"})
+                continue
+            direction = line["direction"] or (identity.get("engine_options") or {}).get("default_direction") or ""
+            if direction and identity["engine_id"] not in DIRECTION_ENGINES:
+                if line["direction"]:
+                    directions.append({**where, "direction": line["direction"]})
+                direction = ""
+            lines.append({"line_id": f"line-{len(lines) + 1:0{width}d}", "line_type": line["kind"],
+                          "character_id": identity["character_id"], "identity_id": identity["id"], "text": line["text"],
+                          "direction": direction, "pause_before_ms": 0, "pause_after_ms": 250, "take_count": 1,
+                          "settings": {}, "use_pronunciations": False})
+        if not lines:
+            raise ValueError("Every line of the script is left out; choose a voice for at least one speaker.")
+        if len(lines) > MAX_SCENE_LINES:
+            raise ValueError(f"The script has {len(lines)} lines to import, and a scene holds at most {MAX_SCENE_LINES}. "
+                             "Split the script, or leave some speakers out.")
+        title = " ".join(str(name or script["title"] or "Imported script").split())[:120]
+        report = {"lines": len(lines), "left_out": left_out, "unread": script["unread"], "directions_left_out": directions}
+        return {"schema_version": SCHEMA_VERSION, "name": title, "lines": lines}, report
 
     def segment_preview(self, scene_id, line_id=None):
         scene = self.get_scene(scene_id)
