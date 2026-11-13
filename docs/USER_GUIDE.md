@@ -131,7 +131,8 @@ for another model to clone does not change the preset.
 
 **Cast library** opens with named saved-voice cards. Search by name, character
 role or model, and play each card's saved audition.
-**Created with** identifies the model that produced the audition when recorded.
+**Created with** identifies the model that produced the audition when recorded; a preset voice
+with no takes yet names its own model.
 **Generate dialogue with** appears when the saved voice uses another model,
 such as a Qwen VoiceDesign sample reused through Qwen Base.
 

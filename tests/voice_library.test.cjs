@@ -83,6 +83,15 @@ test('the library shows all ten named cards and previews, including the fixed bl
   const text=h.el('voiceGallery').textContent;assert.match(text,/Created with Qwen VoiceDesign 1.7B/);assert.match(text,/Generate dialogue with Qwen Base 1.7B/);
   assert.match(text,/Saved Kokoro blend: bf_alice,bf_emma/);assert.match(h.el('voiceLibraryStatus').textContent,/^10 voices\nListen below/);
 });
+test('a new preset voice names its own model and is not called a blend',async()=>{
+  // Before any take, the service gives no model for a voice's audition; a preset voice's model is its own.
+  const h=harness();h.data.voices=[{...h.data.voices[8],generation_engine_id:null,generation_engine_name:null,engine_name:'Kokoro 82M',
+    engine_options:{voice:'af_heart'},audition:null}];
+  await h.ctx.VoiceLabLibrary.refresh();
+  const text=h.el('voiceGallery').textContent;
+  assert.match(text,/candidate · preset voice/);assert.match(text,/Created with Kokoro 82M/);assert.match(text,/Kokoro preset voice: af_heart\./);
+  assert.doesNotMatch(text,/Source model not recorded|Generate dialogue with|blend/);
+});
 test('search matches model and role, and a refresh keeps every voice',async()=>{
   const h=harness();await h.ctx.VoiceLabLibrary.refresh();h.el('voiceSearch').value='Fish';h.ctx.VoiceLabLibrary.render();
   assert.equal(h.el('voiceGallery').children.length,5);h.el('voiceSearch').value='clockwork';h.ctx.VoiceLabLibrary.render();assert.equal(h.el('voiceGallery').children.length,1);

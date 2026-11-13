@@ -109,17 +109,20 @@
     status(summary+(voices.length?'\nListen below, then choose where to use a voice.':'\nNo voices match. Clear the search to see more.'));
     voices.forEach(function(voice){
       var card=node('article',undefined,'saved-voice'),parts=voice.character_name.split(' · ');
-      card.appendChild(node('span',(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?' · speaker blend':''),'voice-kind'));
+      // A preset voice is its model's own: until a take says which model made its audition, that model made it.
+      var preset=voice.identity_kind==='fixed_voice'||voice.identity_kind==='preset_voice',blend=String((voice.engine_options||{}).voice||'').split(',').filter(Boolean);
+      var maker=voice.generation_engine_id||(preset?voice.engine_id:null),makerName=voice.generation_engine_id?voice.generation_engine_name:(preset?voice.engine_name:null);
+      card.appendChild(node('span',(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?' · speaker blend':' · preset voice'):''),'voice-kind'));
       card.appendChild(node('h3',parts[0]));card.appendChild(node('p',parts.slice(1).join(' · ')||voice.identity_label,'voice-role'));
-      card.appendChild(node('p','Created with '+engineName(voice.generation_engine_id,voice.generation_engine_name)));
-      if(voice.generation_engine_id!==voice.engine_id)card.appendChild(node('p','Generate dialogue with '+engineName(voice.engine_id,voice.engine_name),'meta'));
+      card.appendChild(node('p','Created with '+engineName(maker,makerName)));
+      if(maker!==voice.engine_id)card.appendChild(node('p','Generate dialogue with '+engineName(voice.engine_id,voice.engine_name),'meta'));
       var audition=voice.audition;
       if(audition&&audition.audio_url){
         var audio=node('audio');audio.controls=true;audio.preload='none';audio.src=audition.audio_url;
         audio.setAttribute('aria-label','Listen to '+voice.character_name);
         audio.addEventListener('play',function(){gallery.querySelectorAll('audio').forEach(function(other){if(other!==audio)other.pause();});});card.appendChild(audio);
       }else card.appendChild(node('p','No saved audition yet. Generate one in Perform lines.','meta'));
-      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p','Saved Kokoro blend: '+(voice.engine_options.voice||'')+'. No voice recording needed.','meta'));
+      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p',(blend.length>1?'Saved Kokoro blend: ':'Kokoro preset voice: ')+blend.join(',')+'. No voice recording needed.','meta'));
       else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+' saved recording '+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?'Ready to use.':'Voice recording unavailable.'),'meta'));
       var buttons=node('div',undefined,'cast-actions');
       var studio=action(voice,'Use in Model studio','studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
