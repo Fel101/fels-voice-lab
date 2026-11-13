@@ -66,7 +66,9 @@ def catalog_ids():
 
 
 def shared_files():
-    return [path for path in sorted(ROOT.glob("*.py")) + sorted(ROOT.glob("*.js")) if path.name not in FAMILY_MODULES]
+    """The top-level modules and page scripts other than the families' own, and the route groups (route_groups/)."""
+    top = [path for path in sorted(ROOT.glob("*.py")) + sorted(ROOT.glob("*.js")) if path.name not in FAMILY_MODULES]
+    return top + sorted(ROOT.glob("route_groups/*.py"))
 
 
 def names(text):

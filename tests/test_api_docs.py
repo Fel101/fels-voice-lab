@@ -1,7 +1,7 @@
 """The API reference tells the truth about serve.py.
 
-serve.py answers exactly the rows of api_spec.ROUTES. routes.py builds the service's dispatch from that table and serve.py
-registers one handler for each row, so a route cannot be answered without a row nor listed without an answer: make_handler
+serve.py answers exactly the rows of api_spec.ROUTES. routes.py builds the service's dispatch from that table and the route
+groups serve.py registers (route_groups/) give one handler for each row, so a route cannot be answered without a row nor listed without an answer: make_handler
 refuses to build either way. These tests build the request handler on stand-in stores and hold its table to api_spec, check
 that a request made from each row's examples reaches that row and only it, and that openapi.json and docs/API.md hold what the
 table says.
@@ -25,7 +25,8 @@ import api_spec  # noqa: E402
 import routes  # noqa: E402
 from tools import build_api_docs  # noqa: E402
 
-SERVE = ROOT / "serve.py"
+# The service: serve.py and its route groups.
+SERVICE = (ROOT / "serve.py", *sorted((ROOT / "route_groups").glob("*.py")))
 GUIDE = ROOT / "docs" / "API.md"
 
 
@@ -105,7 +106,7 @@ class RouteTableTests(unittest.TestCase):
                 self.assertRegex(example_value, f"^(?:{pattern})$")
 
     def test_query_fields_and_answer_headers_are_names_serve_uses(self):
-        names = strings_in(SERVE)
+        names = set().union(*map(strings_in, SERVICE))
         for row in api_spec.documented():
             for field in row.query + row.headers:
                 with self.subTest(f"{row.method} {row.path} {field.name}"):
@@ -113,7 +114,7 @@ class RouteTableTests(unittest.TestCase):
 
     def test_request_fields_are_names_the_lab_reads(self):
         names = set()
-        for path in ROOT.glob("*.py"):
+        for path in (*ROOT.glob("*.py"), *ROOT.glob("route_groups/*.py")):
             if path.name != "api_spec.py":
                 names |= strings_in(path)
         for row in api_spec.documented():
