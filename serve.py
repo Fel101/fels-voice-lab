@@ -706,7 +706,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
               update_checks)
     # The parts of the Lab the routes below read by name.
     cast, scenes, batches, evaluations, installer = lab.cast, lab.scenes, lab.batches, lab.evaluations, lab.installer
-    drama = lab.drama
     router = Router()  # the rows of api_spec.ROUTES, each answered by a route group's function or one below
     for group in route_groups.GROUPS:
         group.register(router, lab)
@@ -1673,40 +1672,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     @router.post("/api/evaluations/items/{item_id}/transcript")
     def item_transcript(self, parsed, req, item_id):
         self._json(200, evaluations.add_transcript(item_id, req.get("heard_text"), req.get("evaluator")))
-
-    # ------------------------------------------------------------------------------------------------ Drama studio
-
-    @router.get("/api/drama3/*", "/api/drama3/info", "/api/drama3/jobs/{job_id}", "/api/drama3/jobs/{job_id}/audio",
-                "/api/drama3/jobs/{job_id}/metadata", "/api/drama3/jobs/{job_id}/package")
-    def drama_read(self, parsed, req, job_id=None, rest=None):
-        from drama3_production import capabilities
-        try:
-            studio = drama()
-            suffix = parsed.path[len("/api/drama3/"):]
-            if suffix == "info":
-                return self._json(200, {**capabilities(), "sources": studio.sources(), "jobs": studio.list()})
-            match = re.fullmatch(r"jobs/([a-f0-9]{32})(?:/(audio|metadata|package))?", suffix)
-            if not match:
-                return self._json(404, {"error": "Drama endpoint not found"})
-            if match.group(2):
-                data, ctype = studio.artifact(*match.groups())
-                disposition = ("inline" if match.group(2) == "audio" else
-                               "attachment; filename=drama-take." + ("zip" if match.group(2) == "package" else "json"))
-                return self._send(200, data, ctype, {"Content-Disposition": disposition})
-            offset = int(parse_qs(parsed.query).get("offset", ["0"])[0])
-            self._json(200, studio.get(match.group(1), offset))
-        except KeyError as exc:
-            self._json(404, {"error": str(exc)})
-        except (ValueError, RuntimeError) as exc:
-            self._json(400, {"error": str(exc)})
-
-    @router.post("/api/drama3/jobs")
-    def start_drama_job(self, parsed, req):
-        self._json(202, {"job": drama().start(req)})
-
-    @router.post("/api/drama3/jobs/{job_id}/cancel")
-    def cancel_drama_job(self, parsed, req, job_id):
-        self._json(200, {"job": drama().cancel(job_id)})
 
     router.check()
     return type("Handler", (Handler,), {"lab": lab, "router": router})
