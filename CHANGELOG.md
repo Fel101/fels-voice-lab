@@ -45,8 +45,8 @@ waits its turn for the model instead of being turned away. [Every change in deta
 
 ### After updating
 
-Nothing to do: the library opens as it was, and no model needs installing again. A Kokoro voice made in the Cast editor
-before 0.3.0 speaks with `af_heart`, whatever was chosen for it: add it again to give it the voices you meant.
+The library opens as it was, and no model needs installing again. One thing to check: a Kokoro voice made in the Cast
+editor before 0.3.0 speaks with `af_heart`, whatever was chosen for it. Add it again to give it the voices you meant.
 
 ### For scripts and contributors
 
