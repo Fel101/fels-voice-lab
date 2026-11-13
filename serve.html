@@ -62,6 +62,11 @@ main { max-width:1440px; padding:0 28px 60px; display:grid; grid-template-column
 .workspace-nav a[aria-current=page] { background:var(--soft); color:var(--accent); box-shadow:inset 3px 0 var(--accent); }
 .workspace-nav .eyebrow { padding:0 14px 9px; }
 .workspace-nav .nav-secondary { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+.queue-panel { margin-top:18px; padding:14px 14px 4px; border-top:1px solid var(--line); }
+.queue-panel .eyebrow { display:block; padding:0 0 6px; }
+.queue-item { margin:0 0 10px; font-size:.88rem; } .queue-item .queue-text { display:block; }
+.queue-item button { margin:6px 8px 0 0; padding:4px 12px; }
+.queue-item .meta { display:block; font-size:.8rem; } .queue-panel #queueError:empty { display:none; }
 .workspace { grid-column:2; grid-row:2; align-self:start; min-width:0; margin:28px 0; padding:28px; border-radius:16px; }
 html:not(.workspace-ready) .workspace { grid-row:auto; }
 .workspace h2 { font-size:1.5rem; letter-spacing:-.035em; margin-bottom:8px; }
@@ -153,10 +158,11 @@ pre { white-space:pre-wrap; }
 fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:900px){main{grid-template-columns:170px minmax(0,1fr);gap:20px;padding:0 20px 40px}.workspace{padding:22px}.workspace-nav a{padding:10px}}
 @media(max-width:700px){main{display:block;padding:0 16px 40px}.app-header{padding:22px 0 18px}.local-badge{display:none}.workspace-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px;margin:16px 0}.workspace-nav .eyebrow{display:none}.workspace-nav a{padding:8px 10px;font-size:.85rem}.workspace-nav .nav-secondary{margin:0;padding-top:8px;border:0}.workspace{margin:18px 0;padding:20px}.workspace h2{font-size:1.35rem}.field.compact{flex:1 1 140px}}
+@media(max-width:700px){.queue-panel{flex-basis:100%;margin-top:8px;padding:10px 0 0}.workspace-nav .queue-panel .eyebrow{display:block}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -365,7 +371,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <p id="sceneError" role="alert"></p><p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
   <div class="row"><label class="field compact">Batch<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh batch</button>
     <button type="button" id="scenePause">Pause</button><button type="button" id="sceneResume">Resume</button>
-    <button type="button" id="sceneCancel">Cancel</button><button type="button" id="sceneRetry">Try the failed lines again</button>
+    <button type="button" id="sceneCancel">Cancel after this line</button><button type="button" id="sceneStopNow">Stop now</button><button type="button" id="sceneRetry">Try the failed lines again</button>
     <a id="sceneJobManifest" href="#" hidden>Batch record (JSON)</a></div>
   <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="Batch progress"></progress><details><summary>Takes from this batch</summary><div id="sceneJobRows" class="take"></div></details>
   <label class="field">Scene, exactly as rendered<audio id="scenePreviewPlayer" controls></audio></label>
@@ -657,6 +663,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 </main>
 <footer class="app-footer">Fel's Voice Lab <span id="appVersion">__APP_VERSION__</span></footer>
+<script src="/voice_lab_queue.js"></script>
 <script src="/voice_workflows.js"></script>
 <script src="/voice_library.js"></script>
 <script src="/voice_lab_studio.js"></script>

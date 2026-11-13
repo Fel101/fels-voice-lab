@@ -123,6 +123,24 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   that alternates two models makes them take turns. The scene is still assembled in script order. Each row of
   `GET /api/scenes/jobs/{job_id}` gains `engine_id`, and the job gains `models`.
 
+### Waiting for the model
+
+- **Requests wait in line instead of being turned away.** The model worker still does one thing at a time, and a request
+  that needed it while it was busy was refused, so **Make takes** during a scene batch failed with "busy". The page's
+  requests now wait their turn, ahead of the batch's next line: the take comes after the line being rendered, and the batch
+  carries on. At most 20 requests wait.
+- **Model worker.** At the foot of the navigation, while the worker is busy: what runs and for how long, with **Stop**, and
+  where each of the page's waiting requests stands, such as "Waiting: 2 ahead of you (a scene batch is rendering)", with
+  **Cancel**. **Stop** ends the model's process, so a long clip or take ends within moments and the next request loads the
+  model again. An install and an unload cannot be stopped.
+- **Stop now for a batch.** **Cancel after this line** is what **Cancel** did: the line being rendered finishes. **Stop now**
+  also stops that line, and marks it cancelled.
+- **For scripts.** A model route's JSON body takes `wait_seconds` (up to 3600) and `wait_priority` (`low` waits behind the
+  others, as a batch's lines do); without `wait_seconds` a busy worker still answers 409 at once. `GET /api/queue` says what
+  runs and what waits, `POST /api/queue/{request_id}/cancel` takes a request out of the line or stops it, and the cancelled
+  request answers 499. A request's id is the `X-Request-Id` it sends. `POST /api/scenes/jobs/{job_id}/cancel` takes
+  `stop_current`.
+
 ### Plain words on the page
 
 - **One word for one thing.** The page used several words for one thing, and some that only a programmer would know.

@@ -159,7 +159,7 @@ function requestSpeech() {
   }).catch(function (e) {
     clearInterval(ticker);
     if (request.stopped) {
-      $('status').textContent = 'Stopped waiting. The model may still be finishing that line, and a new request is turned away as busy until it does.'
+      $('status').textContent = 'Stopped waiting. If the model had started that line it finishes it, and your next request waits until it does: Stop under Model worker ends it at once.'
         + (body.save_voice_as ? ' The reusable voice is still saved when it finishes.' : '');
     } else { $('err').textContent = e.message; $('status').textContent = ''; }
   }).then(function () {

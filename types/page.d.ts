@@ -2,6 +2,8 @@
 // scripts as classic scripts sharing one global scope, as the check does; these are the names they share through `window`.
 
 interface Window {
+  /** voice_lab_queue.js: the line for the model worker, and the Model worker panel. */
+  VoiceLabQueue: any;
   /** voice_workflows.js: the cloning page's reference list and helpers. */
   VoiceLabWorkflows: any;
   /** voice_library.js: the saved-voices library. */

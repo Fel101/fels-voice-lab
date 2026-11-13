@@ -211,6 +211,8 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
 | GET | [`/api/performance/settings`](#get-api-performance-settings) | Describe the settings each engine's performance takes, and the languages its picker offers. |
+| GET | [`/api/queue`](#get-api-queue) | Say what the model worker is doing, and what waits for it, in order. |
+| POST | [`/api/queue/{request_id}/cancel`](#post-api-queue-request_id-cancel) | Take a request out of the line, or stop it while it runs. |
 | GET | [`/api/openapi.json`](#get-api-openapi-json) | Return this API as an OpenAPI 3.1 document. |
 
 <a id="get-api-health"></a>
@@ -255,12 +257,18 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 |---|---|
 | `engine_id` | An engine id from `GET /api/catalog`. |
 
+| Request field | Type | Meaning |
+|---|---|---|
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
+
 **Answer:** `200`, JSON. `check`: `status` (`passed`, `failed` or `not_installed`), `device`, `ran_on`, `checked_at`, `reason`, `load_seconds`, `total_s`, `audio_seconds`, `real_time_factor` and, for a missing install, `missing`. Takes seconds to minutes; the result is kept and shows in `GET /api/engines/status`.
 
 | Also answers | When |
 |---|---|
 | `400` | The engine is unknown, or is not a speech engine. |
-| `409` | The GPU worker is busy. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-engines-engine_id-install"></a>
 
@@ -315,13 +323,16 @@ Load an engine into memory ahead of its first use.
 |---|---|---|
 | `engine` | string | An engine id. Default `kokoro`. |
 | `profile` | string | Breeze only: its decode profile. Default `eager`. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, JSON. `engine`, `loaded`, `load_seconds`, `sample_rate`, `memory`, `backend`, `checkpoint`, `checkpoint_revision`, `supported_speakers` and `supported_languages`.
 
 | Also answers | When |
 |---|---|
-| `409` | The GPU worker is busy. |
 | `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-unload"></a>
 
@@ -329,11 +340,17 @@ Load an engine into memory ahead of its first use.
 
 Unload every engine and free the GPU.
 
+| Request field | Type | Meaning |
+|---|---|---|
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
+
 **Answer:** `200`, JSON. `{"ok": true}`.
 
 | Also answers | When |
 |---|---|
-| `409` | The GPU worker is busy. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-prepare-reference"></a>
 
@@ -349,12 +366,15 @@ Prepare a reference recording for an engine so its first clone is quick.
 | `exaggeration` | number | Chatterbox: how strongly to act. Default 0.5. |
 | `profile` | string | Breeze only: its decode profile. |
 | `xvec_only` | boolean | Qwen Base only: use the speaker embedding alone, without a transcript. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, JSON. What the engine reports about the prepared reference.
 
 | Also answers | When |
 |---|---|
-| `409` | The GPU worker is busy. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="get-api-performance-settings"></a>
 
@@ -363,6 +383,35 @@ Prepare a reference recording for an engine so its first clone is quick.
 Describe the settings each engine's performance takes, and the languages its picker offers.
 
 **Answer:** `200`, JSON. `engines`: for each engine its controls (name, type, range, default), whether it takes a direction, and its `languages`; and `unscreened_languages`: per engine, the languages the language screen did not clear.
+
+<a id="get-api-queue"></a>
+
+#### `GET /api/queue`
+
+Say what the model worker is doing, and what waits for it, in order.
+
+**Answer:** `200`, JSON. `running`: null, or the request using the worker; `waiting`: the requests in line, first first; and `max_waiting`. Each request has `id` (its `X-Request-Id`), `what` (such as `Take`, `Clip`, `Model test` or `Install`), `engine` (null when it is not one model's work), `priority` (`normal`, or `low` for a scene batch), `since` (when it started running, or joined the line), `seconds` (how long ago), `can_stop` and, for an install, `detail` (what it is installing).
+
+The worker does one load, clip, take, test or install at a time. A request that needs it while it is busy is refused with 409 at once, unless it sent `wait_seconds` in its JSON body: then it waits in line, at most that many seconds (up to 3600). Requests with `wait_priority` `low`, as a scene batch's lines send, wait behind the others, and each priority keeps its order. At most 20 wait. A waiting request leaves the line when it is cancelled, when its caller closes the connection, or when its time is up (409).
+
+<a id="post-api-queue-request_id-cancel"></a>
+
+#### `POST /api/queue/{request_id}/cancel`
+
+Take a request out of the line, or stop it while it runs.
+
+| Path parameter | Meaning |
+|---|---|
+| `request_id` | A request's id: the `X-Request-Id` it sent, or the one its answer names; an entry of `GET /api/queue`. |
+
+**Answer:** `200`, JSON. `cancelled`: `waiting` (it left the line, and answers 499 at once) or `running` (its model's process was ended: it answers 499 within moments, and the next request loads the model again).
+
+| Also answers | When |
+|---|---|
+| `400` | The running request cannot be stopped: an install, or an unload. |
+| `404` | No request with that id is waiting or running. |
+
+Send your own `X-Request-Id` with the request you may want to stop, so you know its id before it answers.
 
 <a id="get-api-openapi-json"></a>
 
@@ -405,6 +454,8 @@ Speak text with one engine and answer with the finished WAV file.
 | `temperature` | number | Phonon: how much the delivery varies, 0 to 1. Default 0.3. The other engines that take a temperature list theirs under `capabilities` in `GET /api/catalog`. |
 | `duration_delta` | number | Phonon: shift the pace, from -0.5 (faster) to 0.5 (slower). Default 0. |
 | `save_voice_as` | string | Design mode only: keep the invented voice as a reusable reference under this name, letters, digits, `_` and `-`, up to two folders deep. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, `audio/wav`. The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is finished; there is no streaming and no partial answer. Other engine-specific fields are listed under each engine's `capabilities` in `GET /api/catalog`.
 
@@ -421,10 +472,11 @@ Speak text with one engine and answer with the finished WAV file.
 
 | Also answers | When |
 |---|---|
-| `409` | `save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued. |
 | `413` | The request is over 64 KiB. |
 | `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
+| `409` | `save_voice_as` names a voice that already exists; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).
 
@@ -445,8 +497,15 @@ Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made.
 | `speaker` | string | CustomVoice: a speaker the loaded checkpoint reports. |
 | `language` | string | The language. Default `English`. |
 | `save_voice_as` | string | VoiceDesign only: keep the voice as a reusable reference under this name. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, `application/x-ndjson`. Newline-delimited JSON: one `start` line, `audio` lines (`sequence`, `sample_start`, `sample_count`, `sample_rate`, `sample_format` `pcm_s16le` and the PCM as base64 in `data`) and a closing `complete` line with the timings. A failure after the first line arrives as an `error` line, not a status code.
+
+| Also answers | When |
+|---|---|
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Use `POST /api/speak` when you want a file.
 
@@ -468,6 +527,8 @@ Speak a line as a Cast voice and save it as a take.
 | `use_pronunciations` | boolean | Apply the character's pronunciation dictionary to the spoken text. The take keeps both texts. Default false. |
 | `idempotency_key` | string | 1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again. |
 | `identity_snapshot` | object | Used by scene batches: the voice's `identity_type`, `engine_id` and `engine_options` as the scene saved them. The call is refused if the voice has changed since. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, `audio/wav`. The take's 16-bit WAV file, in one response. The call blocks until the clip is finished and saved.
 
@@ -489,8 +550,9 @@ Speak a line as a Cast voice and save it as a take.
 |---|---|
 | `400` | The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit of a take. |
 | `404` | The identity or the recording does not exist. |
-| `409` | The GPU worker is busy. One generation runs at a time; a second request is refused, not queued. |
 | `504` | The engine did not answer in time. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.
 
@@ -504,8 +566,15 @@ Show the phonemes Kokoro would speak for a text.
 |---|---|---|
 | `text` (required) | string | 1 to 1200 characters. |
 | `language` | string | Default `English`. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, JSON. `language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.
+
+| Also answers | When |
+|---|---|
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot take is refused with a 400 before anything loads.
 
@@ -1307,6 +1376,10 @@ Cancel a job. A take already being made is not undone.
 |---|---|
 | `job_id` | A job's id, from the call that started it. |
 
+| Request field | Type | Meaning |
+|---|---|---|
+| `stop_current` | boolean | True also stops the line the job is rendering now, by ending its model's process, instead of letting it finish; that line is marked cancelled, and the next request loads the model again. |
+
 **Answer:** `200`, JSON. `job`.
 
 <a id="post-api-scenes-jobs-job_id-retry"></a>
@@ -1709,12 +1782,15 @@ Say a recording again in another voice, with Chatterbox voice conversion.
 | `source_path` (required) | string | The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's reference, saved-voice, Cast, scene or conversion folders, such as a file kept with `POST /api/conversion/uploads`. |
 | `target_reference_path` (required) | string | The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in the reference, saved-voice, Cast reference or conversion folders. A file kept with `POST /api/conversion/uploads` must have been sent as a target. |
 | `target_reference_id` | string | A Cast reference version; its recording must be the target file. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `201`, JSON. `conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both inputs by checksum, and for a file chosen from this computer its original name and, for the target, the origin and allowed use it was given.
 
 | Also answers | When |
 |---|---|
-| `409` | The GPU worker is busy. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-conversion-uploads"></a>
 
@@ -1851,6 +1927,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/compare` | The Compare page. |
 | GET | `/compare.html` | The Compare page. |
 | GET | `/theme.js` | The appearance script. |
+| GET | `/voice_lab_queue.js` | A page script. |
 | GET | `/voice_workflows.js` | A page script. |
 | GET | `/voice_library.js` | A page script. |
 | GET | `/drama3-studio.js` | The Drama studio script. |

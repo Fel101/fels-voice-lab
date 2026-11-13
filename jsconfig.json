@@ -22,6 +22,7 @@
   "files": [
     "types/page.d.ts",
     "theme.js",
+    "voice_lab_queue.js",
     "voice_workflows.js",
     "voice_library.js",
     "voice_lab_studio.js",

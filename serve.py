@@ -9,12 +9,15 @@ The /api/speak endpoint keeps a simple request and WAV response shape for extern
 
 import argparse
 import base64
+import contextlib
 from datetime import datetime
 import functools
 import hashlib
 import json
 import os
 import re
+import select
+import socket
 import sys
 import threading
 import time
@@ -30,6 +33,7 @@ from ram_needs import MIN_FREE_RAM_GB
 import soundfile as sf
 
 import api_spec
+import job_queue
 from routes import Router
 import housekeeping
 import library_backup
@@ -83,7 +87,7 @@ def _page(name):
 
 PAGE = _page("serve.html")
 # Scripts that serve.html loads from this folder. Only these names are served, never arbitrary paths.
-PAGE_SCRIPTS = frozenset({"voice_lab_studio.js", "voice_lab_cast.js", "voice_lab_take_edit.js", "voice_lab_scenes.js",
+PAGE_SCRIPTS = frozenset({"voice_lab_queue.js", "voice_lab_studio.js", "voice_lab_cast.js", "voice_lab_take_edit.js", "voice_lab_scenes.js",
                           "voice_lab_cast_bindings.js", "voice_lab_generate.js", "voice_lab_system.js", "voice_lab_app.js",
                           "voice_lab_drama.js"})
 # The folder that holds desktop.local.json, which tells the desktop app which library to open. The tests point it elsewhere.
@@ -369,6 +373,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 drama_box.append(create(engines,cast))
             return drama_box[0]
     router = Router()  # the rows of api_spec.ROUTES, each answered by a function below the class
+    # What the queue (GET /api/queue) calls the work a route asks of the model worker.
+    queue_labels = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
+                    "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
+                    "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview"}
 
     class Handler(BaseHTTPRequestHandler):
         _request_id = None
@@ -792,7 +800,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 if method == "POST" and route.body_kind != "audio":
                     scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
                     req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES)
-                return handler(self, parsed, req, **params)
+                with self._place_in_line(route, req):
+                    return handler(self, parsed, req, **params)
             except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
                 raise
             except Exception as exc:
@@ -804,6 +813,33 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 if status is None:
                     raise
                 return self._json(status, {"error": str(exc)})
+
+        def _place_in_line(self, route, req):
+            """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and
+            wait_priority are taken out of it here, for every route: without wait_seconds a busy worker is refused with 409
+            at once, as before; with it the request waits in line, as this request's id, until its turn, a cancel, its
+            time, or its caller going away."""
+            wait = req.pop("wait_seconds", None) if isinstance(req, dict) else None
+            priority = req.pop("wait_priority", "normal") if isinstance(req, dict) else "normal"
+            wait = job_queue.parse_wait(wait)
+            if priority not in job_queue.PRIORITIES:
+                raise ValueError("wait_priority must be normal or low.")
+            queued = getattr(engines, "queued", None)
+            if queued is None:
+                return contextlib.nullcontext()
+            what = queue_labels.get(route.path)
+            if what and priority == "low":
+                what += " for a scene batch"
+            return queued(request_id=self._rid(), what=what, wait_seconds=wait, priority=priority,
+                          alive=self._caller_present if wait else None)
+
+        def _caller_present(self):
+            """False once the caller has closed the connection, so a request waiting in line for it leaves the line."""
+            try:
+                readable, _, _ = select.select([self.connection], [], [], 0)
+                return not readable or bool(self.connection.recv(1, socket.MSG_PEEK))
+            except (OSError, ValueError):
+                return False
 
         def _no_query(self, parsed):
             """True when the request named a query string, which the model routes refuse with a 404 (docs/API.md says so)."""
@@ -906,6 +942,17 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             self._json(502, {"error": str(exc)})
 
     # ------------------------------------------------------------------------------------------------ service and models
+
+    @router.get("/api/queue")
+    def queue(self, parsed, req):
+        empty = {"running": None, "waiting": [], "max_waiting": job_queue.MAX_WAITING}
+        self._json(200, engines.queue() if hasattr(engines, "queue") else empty)
+
+    @router.post("/api/queue/{request_id}/cancel")
+    def cancel_queued(self, parsed, req, request_id):
+        if not hasattr(engines, "cancel_request"):
+            raise KeyError("No request with that id is waiting or running.")
+        self._json(200, {"cancelled": engines.cancel_request(request_id)})
 
     @router.get("/api/health")
     def health(self, parsed, req):
@@ -1648,6 +1695,14 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         action = parsed.path.rsplit("/", 1)[1]
         job = {"pause": scenes.request_pause, "resume": scenes.resume, "cancel": scenes.cancel,
                "retry": scenes.retry_failed}[action](job_id)
+        if action == "cancel" and (req or {}).get("stop_current") is True:
+            # Cancel also stops the line the batch is rendering now, instead of letting it finish.
+            request_id = batches.current_request(job_id)
+            if request_id and hasattr(engines, "cancel_request"):
+                try:
+                    engines.cancel_request(request_id)
+                except (KeyError, ValueError):
+                    pass  # it finished, or had not reached the worker, in the meantime
         batches.wake()
         self._json(200, {"job": job})
 

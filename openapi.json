@@ -158,6 +158,26 @@
         "tags": [
           "Service"
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "name": "engine_id",
@@ -193,7 +213,17 @@
             }
           },
           "409": {
-            "description": "The GPU worker is busy.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -382,6 +412,14 @@
                   "profile": {
                     "type": "string",
                     "description": "Breeze only: its decode profile. Default `eager`."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 }
               }
@@ -399,8 +437,8 @@
               }
             }
           },
-          "409": {
-            "description": "The GPU worker is busy.",
+          "500": {
+            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -409,8 +447,18 @@
               }
             }
           },
-          "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
+          "409": {
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -432,6 +480,26 @@
         "tags": [
           "Service"
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "`{\"ok\": true}`.",
@@ -444,7 +512,17 @@
             }
           },
           "409": {
-            "description": "The GPU worker is busy.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -496,6 +574,14 @@
                   "xvec_only": {
                     "type": "boolean",
                     "description": "Qwen Base only: use the speaker embedding alone, without a transcript."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -518,7 +604,17 @@
             }
           },
           "409": {
-            "description": "The GPU worker is busy.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -547,6 +643,89 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/queue": {
+      "get": {
+        "operationId": "get_api_queue",
+        "summary": "Say what the model worker is doing, and what waits for it, in order.",
+        "tags": [
+          "Service"
+        ],
+        "description": "The worker does one load, clip, take, test or install at a time. A request that needs it while it is busy is refused with 409 at once, unless it sent `wait_seconds` in its JSON body: then it waits in line, at most that many seconds (up to 3600). Requests with `wait_priority` `low`, as a scene batch's lines send, wait behind the others, and each priority keeps its order. At most 20 wait. A waiting request leaves the line when it is cancelled, when its caller closes the connection, or when its time is up (409).",
+        "responses": {
+          "200": {
+            "description": "`running`: null, or the request using the worker; `waiting`: the requests in line, first first; and `max_waiting`. Each request has `id` (its `X-Request-Id`), `what` (such as `Take`, `Clip`, `Model test` or `Install`), `engine` (null when it is not one model's work), `priority` (`normal`, or `low` for a scene batch), `since` (when it started running, or joined the line), `seconds` (how long ago), `can_stop` and, for an install, `detail` (what it is installing).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/queue/{request_id}/cancel": {
+      "post": {
+        "operationId": "post_api_queue_request_id_cancel",
+        "summary": "Take a request out of the line, or stop it while it runs.",
+        "tags": [
+          "Service"
+        ],
+        "description": "Send your own `X-Request-Id` with the request you may want to stop, so you know its id before it answers.",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "description": "A request's id: the `X-Request-Id` it sent, or the one its answer names; an entry of `GET /api/queue`.",
+            "example": "take-1a2b3c",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`cancelled`: `waiting` (it left the line, and answers 499 at once) or `running` (its model's process was ended: it answers 499 within moments, and the next request loads the model again).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The running request cannot be stopped: an install, or an unload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No request with that id is waiting or running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -651,6 +830,14 @@
                   "save_voice_as": {
                     "type": "string",
                     "description": "Design mode only: keep the invented voice as a reusable reference under this name, letters, digits, `_` and `-`, up to two folders deep."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -722,16 +909,6 @@
               }
             }
           },
-          "409": {
-            "description": "`save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. One generation runs at a time; a second request is refused, not queued.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "413": {
             "description": "The request is over 64 KiB.",
             "content": {
@@ -754,6 +931,26 @@
           },
           "504": {
             "description": "The engine did not answer in time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`save_voice_as` names a voice that already exists; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -818,6 +1015,14 @@
                   "save_voice_as": {
                     "type": "string",
                     "description": "VoiceDesign only: keep the voice as a reusable reference under this name."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -836,6 +1041,26 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -900,6 +1125,14 @@
                   "identity_snapshot": {
                     "type": "object",
                     "description": "Used by scene batches: the voice's `identity_type`, `engine_id` and `engine_options` as the scene saved them. The call is refused if the voice has changed since."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -1011,8 +1244,8 @@
               }
             }
           },
-          "409": {
-            "description": "The GPU worker is busy. One generation runs at a time; a second request is refused, not queued.",
+          "504": {
+            "description": "The engine did not answer in time.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1021,8 +1254,18 @@
               }
             }
           },
-          "504": {
-            "description": "The engine did not answer in time.",
+          "409": {
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1059,6 +1302,14 @@
                   "language": {
                     "type": "string",
                     "description": "Default `English`."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -1075,6 +1326,26 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -3450,6 +3721,22 @@
         "tags": [
           "Scenes"
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "stop_current": {
+                    "type": "boolean",
+                    "description": "True also stops the line the job is rendering now, by ending its model's process, instead of letting it finish; that line is marked cancelled, and the next request loads the model again."
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "name": "job_id",
@@ -4670,6 +4957,14 @@
                   "target_reference_id": {
                     "type": "string",
                     "description": "A Cast reference version; its recording must be the target file."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
                   }
                 },
                 "required": [
@@ -4692,7 +4987,17 @@
             }
           },
           "409": {
-            "description": "The GPU worker is busy.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5112,6 +5417,7 @@
     "GET /voice_lab_cast_bindings.js",
     "GET /voice_lab_drama.js",
     "GET /voice_lab_generate.js",
+    "GET /voice_lab_queue.js",
     "GET /voice_lab_scenes.js",
     "GET /voice_lab_studio.js",
     "GET /voice_lab_system.js",

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app_version import APP_NAME, VERSION
 
@@ -77,6 +77,8 @@ PATH_PARAMS = {
                   "[A-Za-z0-9][A-Za-z0-9._-]{0,89}", "panel-20261025T120000Z-1a2b3c4d"),
     "engine_id": ("An engine id from `GET /api/catalog`.", "[a-z0-9][a-z0-9.-]{0,80}", "kokoro"),
     "preview_file": ("The file name in a preview answer's `audio_url`, without its `.wav`.", "[A-Za-z0-9._-]+", "preview"),
+    "request_id": ("A request's id: the `X-Request-Id` it sent, or the one its answer names; an entry of `GET /api/queue`.",
+                   "[A-Za-z0-9._-]{1,64}", "take-1a2b3c"),
 }
 
 # The groups in the order the reference shows them, each with the sentence that opens its section.
@@ -223,6 +225,24 @@ ROUTES = [
       "Describe the settings each engine's performance takes, and the languages its picker offers.",
       reply="`engines`: for each engine its controls (name, type, range, default), whether it takes a direction, and its "
             "`languages`; and `unscreened_languages`: per engine, the languages the language screen did not clear."),
+    R("GET", "/api/queue", "Service", "Say what the model worker is doing, and what waits for it, in order.",
+      reply="`running`: null, or the request using the worker; `waiting`: the requests in line, first first; and "
+            "`max_waiting`. Each request has `id` (its `X-Request-Id`), `what` (such as `Take`, `Clip`, `Model test` or "
+            "`Install`), `engine` (null when it is not one model's work), `priority` (`normal`, or `low` for a scene batch), "
+            "`since` (when it started running, or joined the line), `seconds` (how long ago), `can_stop` and, for an install, "
+            "`detail` (what it is installing).",
+      notes="The worker does one load, clip, take, test or install at a time. A request that needs it while it is busy is "
+            "refused with 409 at once, unless it sent `wait_seconds` in its JSON body: then it waits in line, at most that "
+            "many seconds (up to 3600). Requests with `wait_priority` `low`, as a scene batch's lines send, wait behind the "
+            "others, and each priority keeps its order. At most 20 wait. A waiting request leaves the line when it is "
+            "cancelled, when its caller closes the connection, or when its time is up (409)."),
+    R("POST", "/api/queue/{request_id}/cancel", "Service", "Take a request out of the line, or stop it while it runs.",
+      body_kind="none",
+      reply="`cancelled`: `waiting` (it left the line, and answers 499 at once) or `running` (its model's process was ended: "
+            "it answers 499 within moments, and the next request loads the model again).",
+      errors=((400, "The running request cannot be stopped: an install, or an unload."),
+              (404, "No request with that id is waiting or running.")),
+      notes="Send your own `X-Request-Id` with the request you may want to stop, so you know its id before it answers."),
     R("GET", "/api/openapi.json", "Service", "Return this API as an OpenAPI 3.1 document.",
       reply="The same document as `openapi.json` in the program folder, built from the route table."),
 
@@ -256,8 +276,7 @@ ROUTES = [
                F("X-Model-Checkpoint", "string", "The checkpoint, when reported."),
                F("X-Checkpoint-Revision", "string", "The checkpoint's pinned revision, when reported."),
                F("X-Voice-Asset-Path", "string", "With `save_voice_as`: the file the voice was saved to.")),
-      errors=((409, "`save_voice_as` names a voice that already exists, or the GPU worker is busy with another request. "
-                    "One generation runs at a time; a second request is refused, not queued."),
+      errors=((409, "`save_voice_as` names a voice that already exists."),
               (413, "The request is over 64 KiB."), (500, ENGINE_NOT_INSTALLED),
               (504, "The engine did not answer in time.")),
       notes="Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and "
@@ -557,7 +576,10 @@ ROUTES = [
       reply="`job`."),
     R("POST", "/api/scenes/jobs/{job_id}/resume", "Scenes", "Resume a paused job.", body_kind="none", reply="`job`."),
     R("POST", "/api/scenes/jobs/{job_id}/cancel", "Scenes", "Cancel a job. A take already being made is not undone.",
-      body_kind="none", reply="`job`."),
+      body=(F("stop_current", "boolean", "True also stops the line the job is rendering now, by ending its model's process, "
+                                         "instead of letting it finish; that line is marked cancelled, and the next request "
+                                         "loads the model again."),),
+      reply="`job`."),
     R("POST", "/api/scenes/jobs/{job_id}/retry", "Scenes", "Queue the failed rows of a job again.", body_kind="none",
       reply="`job`."),
     R("POST", "/api/scenes/{scene_id}/select", "Scenes", "Choose which take a line, or one of its segments, uses.",
@@ -734,6 +756,7 @@ ROUTES = [
           ("/", "The Lab's main page.", "html"), ("/index.html", "The Lab's main page.", "html"),
           ("/compare", "The Compare page.", "html"), ("/compare.html", "The Compare page.", "html"),
           ("/theme.js", "The appearance script.", "javascript"),
+          ("/voice_lab_queue.js", "A page script.", "javascript"),
           ("/voice_workflows.js", "A page script.", "javascript"), ("/voice_library.js", "A page script.", "javascript"),
           ("/drama3-studio.js", "The Drama studio script.", "javascript"),
           ("/voice_lab_studio.js", "A page script.", "javascript"), ("/voice_lab_cast.js", "A page script.", "javascript"),
@@ -783,6 +806,31 @@ ROUTES = [
     R("POST", "/api/drama3/jobs", "Drama", "Start a Drama job.", internal=True, status=202),
     R("POST", "/api/drama3/jobs/{job_id}/cancel", "Drama", "Cancel a Drama job.", internal=True),
 ]
+
+# The routes that use the model worker. serve.py takes wait_seconds and wait_priority out of every POST's JSON body; these are
+# the routes where they matter.
+WAIT_FIELDS = (
+    F("wait_seconds", "number", "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead "
+                                "of the 409 answered at once without it. See `GET /api/queue`."),
+    F("wait_priority", "string", "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."),
+)
+WAIT_ERRORS = ((409, "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 "
+                     "requests already waiting."),
+               (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran."))
+WAITING_ROUTES = {"/api/engines/{engine_id}/check", "/api/load", "/api/unload", "/api/prepare-reference", "/api/speak",
+                  "/api/stream", "/api/performance", "/api/kokoro/phonemize", "/api/convert"}
+
+
+def _waits(route):
+    """A worker route's row with the wait fields, and its 409 and 499 said once: a 409 of its own comes first."""
+    own = [meaning for status, meaning in route.errors if status == 409 and "worker is busy" not in meaning]
+    busy = WAIT_ERRORS[0][1]
+    conflict = (409, own[0].rstrip(".") + "; or t" + busy[1:] if own else busy)
+    others = tuple(item for item in route.errors if item[0] not in (409, 499))
+    return replace(route, body=route.body + WAIT_FIELDS, body_kind="json", errors=others + (conflict, WAIT_ERRORS[1]))
+
+
+ROUTES = [_waits(route) if route.method == "POST" and route.path in WAITING_ROUTES else route for route in ROUTES]
 
 
 # ------------------------------------------------------------------------------------------------ the table, read

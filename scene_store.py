@@ -1305,7 +1305,13 @@ class SceneStore:
 
 
 class SceneBatchRunner:
-    """One sequential local HTTP client driving the same guarded performance API as the UI."""
+    """One sequential local HTTP client driving the same guarded performance API as the UI.
+
+    Each row asks to wait for the model worker as a low-priority request (job_queue.py): a person's Perform or Generate goes
+    ahead of the next row, and the batch then carries on. A row's request id is "scene-row-" and the row's id, so cancelling
+    the batch can also stop the row it is rendering (current_request)."""
+
+    ROW_WAIT_SECONDS = 3600
 
     def __init__(self, store: SceneStore, service_url):
         self.store = store
@@ -1314,6 +1320,12 @@ class SceneBatchRunner:
         self._wake = threading.Event()
         self._thread = None
         self._ownership = LocalOwnership(store.ownership_path)
+        self._current = None  # (job id, request id) of the row being rendered
+
+    def current_request(self, job_id):
+        """The request id of the row this job is rendering now, or None."""
+        current = self._current
+        return current[1] if current and current[0] == job_id else None
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -1366,14 +1378,17 @@ class SceneBatchRunner:
                         "line_id": row["cast_line_id"], "text": row["text"], "language": row["language"],
                         "direction": row["direction"], "settings": row["settings"],
                         "use_pronunciations": row["use_pronunciations"], "idempotency_key": row["request_key"],
+                        "wait_seconds": self.ROW_WAIT_SECONDS, "wait_priority": "low",
                     }
                     scene_line = snapshot_lines.get(row["line_id"])
                     if scene_line and scene_line.get("voice_identity"):
                         request["identity_snapshot"] = scene_line["voice_identity"]
                     body = json.dumps(request, ensure_ascii=False).encode("utf-8")
+                    request_id = f"scene-row-{row_id}"
                     api_request = urllib.request.Request(self.service_url + "/api/performance", data=body,
-                        headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(api_request, timeout=1800) as response:
+                        headers={"Content-Type": "application/json", "X-Request-Id": request_id})
+                    self._current = (job_id, request_id)
+                    with urllib.request.urlopen(api_request, timeout=self.ROW_WAIT_SECONDS + 1800) as response:
                         wav = response.read()
                         take_id = response.headers.get("X-Take-Id")
                         if not wav.startswith(b"RIFF") or not take_id:
@@ -1382,12 +1397,21 @@ class SceneBatchRunner:
                 except urllib.error.HTTPError as exc:
                     details = exc.read().decode("utf-8", "replace")[:1500]
                     if exc.code == 409:
+                        # Another service owns the model, or the line was full or too slow: try the row again shortly.
                         self.store._update_job_row(row_id, "queued", error="Waiting for model ownership: " + details)
                         self._stop.wait(0.5)
+                        continue
+                    if exc.code == 499 and self.store.get_job(job_id)["cancel_requested"]:
+                        self.store._update_job_row(row_id, "cancelled", error="Stopped when the batch was cancelled.")
+                        continue
+                    if exc.code == 499:
+                        self.store.mark_row_failed(row_id, "Stopped before it finished. Try the failed lines again to render it.")
                         continue
                     self.store.mark_row_failed(row_id, f"HTTP {exc.code}: {details}")
                 except Exception as exc:
                     self.store.mark_row_failed(row_id, f"{type(exc).__name__}: {exc}")
+                finally:
+                    self._current = None
             if self._stop.is_set():
                 return
             job = self.store.get_job(job_id)

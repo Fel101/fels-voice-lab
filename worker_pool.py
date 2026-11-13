@@ -1,7 +1,9 @@
 """Broker-side scheduler, worker lifecycle, and audio handoff for the local HTTP service."""
 
+import contextlib
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -14,6 +16,7 @@ from kokoro_support import resolve_kokoro_language
 from phonon_support import PHONON_ENGINE_ID, check_request as check_phonon_request
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
 from local_ownership import LocalOwnership
+from job_queue import JobQueue, Ticket, WorkerBusy  # noqa: F401 (WorkerBusy is imported from here)
 import engine_checks
 import engine_devices
 
@@ -59,10 +62,6 @@ def drop_scratch(key, pid):
             (OUT / "workers" / f"{key}-{pid}").rmdir()
         except OSError:
             pass
-
-
-class WorkerBusy(WorkerError):
-    status_code = 409
 
 
 def read_catalog():
@@ -115,8 +114,10 @@ class EnginePool:
         self.device_store = device_store
         self.build_probe = build_probe or self._torch_build
         self.gpu_install = None
-        self._gpu_job = threading.Lock()
-        self._held_for = None
+        # One load, clip, test or install at a time; the others wait in line or are refused (job_queue.py).
+        self._queue = JobQueue()
+        self._context = threading.local()  # the current request's place in line, from queued()
+        self._hold_ticket = None
         # Model residency, not just individual calls, is exclusive across local services.
         lock_path = residency_lock_path or (OUT / "runtime-locks" / "model-residency.lock")
         self._residency = LocalOwnership(lock_path) if worker_factory is None or residency_lock_path else None
@@ -130,7 +131,29 @@ class EnginePool:
 
     @property
     def busy(self):
-        return self._gpu_job.locked()
+        return self._queue.busy
+
+    @contextlib.contextmanager
+    def queued(self, request_id=None, what=None, wait_seconds=0, priority="normal", alive=None):
+        """Within this block, work this thread asks of the pool takes its place in line as this request: its id (for
+        cancel_request), what it is, how long it will wait (0 refuses at once with WorkerBusy, as before), its priority
+        ("low" for scene batch rows), and a function that says whether its caller is still there."""
+        previous = getattr(self._context, "spec", None)
+        self._context.spec = {"request_id": request_id, "what": what, "wait_seconds": wait_seconds,
+                              "priority": priority, "alive": alive}
+        try:
+            yield
+        finally:
+            self._context.spec = previous
+
+    def queue(self):
+        """What is running and what is waiting, in order (GET /api/queue)."""
+        return self._queue.snapshot()
+
+    def cancel_request(self, request_id):
+        """Take a waiting request out of the line, or stop a running one by ending its model's process. Answers "waiting" or
+        "running"; raises KeyError when no request has that id, ValueError when the running one cannot be stopped."""
+        return self._queue.cancel(request_id)
 
     def _resolve_reference_path(self, key, path):
         resolved = resolve_reference_path(key, path, extra_roots=self.reference_roots)
@@ -192,7 +215,7 @@ class EnginePool:
             raise ValueError(engine_devices.NO_GPU)
         if self.device_store is None:
             raise ValueError("This service does not keep device choices.")
-        self._acquire_job()
+        self._acquire_job(what="Device switch", can_stop=False)
         try:
             self.device_store.set(key, choice)
             with self._state_lock:
@@ -201,7 +224,7 @@ class EnginePool:
                 self._unload_locked()
                 self.last_used = time.time()
         finally:
-            self._gpu_job.release()
+            self._release_job()
         return {"engine": key, "choice": choice, "device": self.device_for(key), "unloaded": loaded}
 
     def _new_worker(self, key, entry):
@@ -328,25 +351,63 @@ class EnginePool:
         if release_ownership and not self.workers and self._residency:
             self._residency.release()
 
-    def _acquire_job(self):
-        if not self._gpu_job.acquire(blocking=False):
-            held = self._held_for
-            raise WorkerBusy(f"The GPU worker is busy while {held}." if held
-                             else "The GPU worker is busy with another load or generation request.")
+    @staticmethod
+    def _refusal(running):
+        if running is not None and running.held_for:
+            return f"The GPU worker is busy while {running.held_for}."
+        return "The GPU worker is busy with another load or generation request."
 
-    def hold(self, reason):
+    def _acquire_job(self, engine=None, what="Model work", can_stop=True):
+        """Take the worker for this thread's request, in its place in line (see queued()). The ticket's stop ends the
+        engine's process, so cancel_request can stop it while it runs."""
+        spec = getattr(self._context, "spec", None) or {}
+        ticket = Ticket(spec.get("request_id"), spec.get("what") or what, priority=spec.get("priority") or "normal",
+                        engine=engine, can_stop=can_stop and engine is not None, alive=spec.get("alive"))
+        self._queue.take(ticket, spec.get("wait_seconds") or 0, refusal=self._refusal)
+        if ticket.can_stop:
+            ticket.stop = lambda: self._stop_ticket(ticket)
+        stack = getattr(self._context, "tickets", None)
+        if stack is None:
+            stack = self._context.tickets = []
+        stack.append(ticket)
+        return ticket
+
+    def _release_job(self):
+        """Give the worker back. Called in a finally block: when the request was stopped (cancel_request) and is failing
+        because its process was ended, it ends as WorkerCancelled (499) instead of the error the ended process caused."""
+        ticket = self._context.tickets.pop()
+        self._queue.finish(ticket)
+        failing = sys.exc_info()[1]
+        if ticket.cancelled and failing is not None and not isinstance(failing, WorkerCancelled):
+            self._last_error = {"engine": ticket.engine, "message": "stopped by request; the next request loads the model again"}
+            raise WorkerCancelled("Stopped. The model will load again for the next request.") from failing
+
+    def _stop_ticket(self, ticket):
+        """End the processes of the request that holds the worker: the engine's worker, or one still starting."""
+        with self._state_lock:
+            owned = list(self._starting_workers)
+            record = self.workers.get(ticket.engine)
+            if record:
+                owned.append(record["worker"])
+        for worker in owned:
+            worker.close(force=True)
+
+    def hold(self, reason, request_id=None):
         """Keep every load, test and clip out while something long changes what is installed, such as an install from the
-        Models page. `reason` finishes the sentence "The GPU worker is busy while ..." in the refusals. Raises WorkerBusy when a
-        request already holds the worker; release_hold() gives it back."""
-        self._acquire_job()
-        self._held_for = reason
+        Models page. `reason` finishes the sentence "The GPU worker is busy while ..." in the refusals, and the queue shows it
+        to those waiting. Raises WorkerBusy at once when a request already holds the worker; release_hold() gives it back."""
+        ticket = Ticket(request_id, "Install", can_stop=False)
+        ticket.held_for = reason
+        self._queue.take(ticket, 0, refusal=self._refusal)
+        self._hold_ticket = ticket
 
     def release_hold(self):
-        self._held_for = None
-        self._gpu_job.release()
+        ticket, self._hold_ticket = self._hold_ticket, None
+        if ticket is not None:
+            self._queue.finish(ticket)
 
     def load(self, key, profile=None):
-        self._acquire_job()
+        self._acquire_job(key, "Load")
         try:
             self.last_used = time.time()
             load_params = {"profile": profile or "eager"} if key == "breeze-tts-2" else None
@@ -364,7 +425,7 @@ class EnginePool:
                     "supported_speakers": result.get("supported_speakers", []),
                     "supported_languages": result.get("supported_languages", [])}
         finally:
-            self._gpu_job.release()
+            self._release_job()
 
     def check(self, key):
         """Ask whether one engine can speak now on this device: its files first, then a real load and one short clip."""
@@ -415,7 +476,7 @@ class EnginePool:
         if len(text) > 1200:
             raise ValueError("Keep it under 1200 characters.")
         resolve_kokoro_language(language, [])
-        self._acquire_job()
+        self._acquire_job("kokoro", "Pronunciation preview")
         try:
             self.last_used = time.time()
             worker = self._ensure_loaded_locked("kokoro")
@@ -426,11 +487,11 @@ class EnginePool:
                 self._discard_locked("kokoro", record["worker"])
             raise
         finally:
-            self._gpu_job.release()
+            self._release_job()
 
     def prepare_reference(self, key, path, *, exaggeration=0.5, profile=None,
                           reference_text="", xvec_only=False):
-        self._acquire_job()
+        self._acquire_job(key, "Voice recording")
         try:
             self.last_used = time.time()
             self._require_api_engine(key)
@@ -457,7 +518,7 @@ class EnginePool:
                 self._discard_locked(key, record["worker"])
             raise
         finally:
-            self._gpu_job.release()
+            self._release_job()
 
     def speak(self, req):
         if not isinstance(req, dict):
@@ -549,7 +610,7 @@ class EnginePool:
                 self._resolve_reference_path(key, reference)
         elif key == PHONON_ENGINE_ID:
             phonon_params = check_phonon_request(req)
-        self._acquire_job()
+        self._acquire_job(key, "Clip")
         output_file = None
         try:
             self.last_used = time.time()
@@ -687,7 +748,7 @@ class EnginePool:
                     output_file.unlink(missing_ok=True)
                 except OSError:
                     pass
-            self._gpu_job.release()
+            self._release_job()
 
     def stream_drama3(self, req, references, on_audio, cancel):
         """CPU production path, with owned-worker cancellation during load or prefill."""
@@ -697,7 +758,7 @@ class EnginePool:
         controls(req.get('settings'))
         refs=[{'path':str(self._resolve_reference_path('drama-3',ref['path'])),
                'text':ref['text'],'speaker':ref['speaker']} for ref in references]
-        self._acquire_job()
+        self._acquire_job('drama-3', 'Drama studio take')
         watching=threading.Event()
         def watch():
             while not watching.wait(.1):
@@ -724,7 +785,7 @@ class EnginePool:
         finally:
             watching.set();monitor.join(6)
             try:self._unload_locked()
-            finally:self._gpu_job.release()
+            finally:self._release_job()
 
     def stream_qwen(self, req, on_start, on_chunk):
         """Stream a faster-Qwen native generator through the existing serialized worker."""
@@ -794,7 +855,7 @@ class EnginePool:
             params["speaker"] = req.get("speaker", "")
             params["direction"] = req.get("direction", "")
 
-        self._acquire_job()
+        self._acquire_job(key, "Live clip")
         try:
             self.last_used = time.time()
             worker = self._ensure_loaded_locked(key)
@@ -822,7 +883,7 @@ class EnginePool:
             self._last_error = {"engine": key, "message": "worker exited or timed out; next request will restart it"}
             raise
         finally:
-            self._gpu_job.release()
+            self._release_job()
 
     def convert(self, source_path, target_reference_path):
         """Run the isolated Chatterbox VC task with distinct source and target assets."""
@@ -830,7 +891,7 @@ class EnginePool:
         self._require_api_engine(key)
         if str(source_path) == str(target_reference_path):
             raise ValueError("Source performance and target voice reference must be separate files.")
-        self._acquire_job()
+        self._acquire_job(key, "Voice conversion")
         output_file = None
         try:
             self.last_used = time.time()
@@ -868,7 +929,7 @@ class EnginePool:
                     output_file.unlink(missing_ok=True)
                 except OSError:
                     pass
-            self._gpu_job.release()
+            self._release_job()
 
     def _unload_locked(self, release_ownership=True):
         with self._state_lock:
@@ -900,12 +961,12 @@ class EnginePool:
             self._residency.release()
 
     def unload(self):
-        self._acquire_job()
+        self._acquire_job(what="Unload", can_stop=False)
         try:
             self._unload_locked()
             self.last_used = time.time()
         finally:
-            self._gpu_job.release()
+            self._release_job()
 
     def health(self):
         with self._state_lock:
@@ -933,7 +994,10 @@ class EnginePool:
         while not self._closed.wait(self.idle_poll_seconds):
             if not self.idle or time.time() - self.last_used <= self.idle:
                 continue
-            if not self._gpu_job.acquire(blocking=False):
+            ticket = Ticket(None, "Idle unload", can_stop=False)
+            try:
+                self._queue.take(ticket, 0)
+            except WorkerBusy:
                 continue
             try:
                 if time.time() - self.last_used > self.idle and self.workers:
@@ -943,7 +1007,7 @@ class EnginePool:
                     except WorkerError as exc:
                         self._last_error = {"message": str(exc)}
             finally:
-                self._gpu_job.release()
+                self._queue.finish(ticket)
 
     def close(self):
         if self._closed.is_set():

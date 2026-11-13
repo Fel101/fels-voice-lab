@@ -284,5 +284,203 @@ class WorkerTests(unittest.TestCase):
         self.assertFalse(process_is_running(runtime_pid))
 
 
+
+class QueueTests(unittest.TestCase):
+    """The line for the model worker over HTTP, with stand-in workers that take `delay` seconds to make a clip: waiting in
+    order, the 409 for a caller that does not wait, cancelling while waiting, and stopping a running clip, after which the next
+    request loads the model again. Then a scene batch with a person's take in the middle of it, and a cancel that stops the
+    line the batch is rendering."""
+
+    def setUp(self):
+        self.delays = []        # the delay of each new worker, in order; 0 once the list is used up
+        self.workers = []
+        self.marker = Path(tempfile.gettempdir()) / f"voice-lab-queue-{os.getpid()}-{time.time_ns()}.started"
+        self.addCleanup(self.marker.unlink, missing_ok=True)
+
+        def factory(entry):
+            delay = self.delays.pop(0) if self.delays else 0
+            log_path = Path(tempfile.gettempdir()) / "voice-lab-worker-tests" / f"queue-{os.getpid()}-{time.time_ns()}.log"
+            worker = WorkerProcess([sys.executable, "-u", str(FAKE_WORKER), "--engine", entry["id"], "--delay", str(delay),
+                                    "--started-marker", str(self.marker)], log_path, cwd=ROOT, timeouts={"generate": 120})
+            self.workers.append(worker)
+            return worker
+
+        self.pool = EnginePool("cpu", 0, worker_factory=factory, idle_poll_seconds=0.1)
+        self.addCleanup(self.pool.close)
+
+    def serve(self, cast=None, scenes=None):
+        """The service's address, and its scene batch runner when there are scenes."""
+        from scene_store import SceneBatchRunner
+
+        server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
+        port = server.server_address[1]
+        base = f"http://127.0.0.1:{port}"
+        runner = SceneBatchRunner(scenes, base) if scenes is not None else None
+        server.RequestHandlerClass = serve.make_handler(self.pool, port, cast or temp_cast(self), scenes, runner)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def stop():
+            if runner is not None:
+                runner.close(timeout=20)
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=10)
+
+        self.addCleanup(stop)
+        return (base, runner) if scenes is not None else base
+
+    @staticmethod
+    def call(base, path, body=None, request_id=None, timeout=60):
+        headers = {"Content-Type": "application/json"}
+        if request_id:
+            headers["X-Request-Id"] = request_id
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        request = urllib.request.Request(base + path, data=data, headers=headers, method="POST" if data is not None else "GET")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+                return response.status, (raw if raw.startswith(b"RIFF") else json.loads(raw))
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def in_thread(self, base, path, body, request_id):
+        result = {}
+
+        def run():
+            started = time.monotonic()
+            result["status"], result["body"] = self.call(base, path, body, request_id)
+            result["seconds"] = time.monotonic() - started
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        return thread, result
+
+    def wait_for(self, condition, what, timeout=20):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if condition():
+                return
+            time.sleep(0.02)
+        self.fail(f"timed out waiting for {what}")
+
+    def queue(self, base):
+        return self.call(base, "/api/queue")[1]
+
+    def test_a_request_that_asks_to_wait_runs_after_the_one_running_and_one_that_does_not_is_refused(self):
+        self.delays = [1.5]
+        base = self.serve()
+        first, first_result = self.in_thread(base, "/api/speak", {"engine": "kokoro", "text": "slow"}, "slow-a")
+        self.wait_for(self.marker.exists, "the first clip to start")
+        second, second_result = self.in_thread(base, "/api/speak", {"engine": "kokoro", "text": "next", "wait_seconds": 30},
+                                               "wait-b")
+        self.wait_for(lambda: [item["id"] for item in self.queue(base)["waiting"]] == ["wait-b"], "the second to wait")
+        running = self.queue(base)["running"]
+        self.assertEqual({key: running[key] for key in ("id", "what", "engine", "priority", "can_stop")},
+                         {"id": "slow-a", "what": "Clip", "engine": "kokoro", "priority": "normal", "can_stop": True})
+        status, body = self.call(base, "/api/speak", {"engine": "kokoro", "text": "now"}, "no-wait")
+        self.assertEqual(status, 409)
+        self.assertIn("busy", body["error"])
+        first.join(30)
+        second.join(30)
+        self.assertEqual((first_result["status"], second_result["status"]), (200, 200))
+        self.assertTrue(second_result["body"].startswith(b"RIFF"))
+        self.assertEqual(self.queue(base), {"running": None, "waiting": [], "max_waiting": 20})
+        self.assertEqual(self.call(base, "/api/speak", {"engine": "kokoro", "text": "x", "wait_seconds": -1})[0], 400)
+
+    def test_a_waiting_request_can_be_cancelled_and_answers_at_once(self):
+        self.delays = [3]
+        base = self.serve()
+        first, first_result = self.in_thread(base, "/api/speak", {"engine": "kokoro", "text": "slow"}, "slow-a")
+        self.wait_for(self.marker.exists, "the first clip to start")
+        second, second_result = self.in_thread(base, "/api/speak", {"engine": "kokoro", "text": "next", "wait_seconds": 30},
+                                               "wait-b")
+        self.wait_for(lambda: self.queue(base)["waiting"], "the second to wait")
+        self.assertEqual(self.call(base, "/api/queue/wait-b/cancel", {}), (200, {"cancelled": "waiting"}))
+        second.join(5)
+        self.assertEqual(second_result["status"], 499)
+        self.assertIn("did not run", second_result["body"]["error"])
+        self.assertLess(second_result["seconds"], 3)
+        first.join(30)
+        self.assertEqual(first_result["status"], 200)
+        self.assertEqual(self.call(base, "/api/queue/wait-b/cancel", {})[0], 404)
+
+    def test_stopping_a_running_clip_ends_it_in_moments_and_the_next_request_loads_the_model_again(self):
+        self.delays = [60]
+        base = self.serve()
+        first, first_result = self.in_thread(base, "/api/speak", {"engine": "kokoro", "text": "long"}, "long-a")
+        self.wait_for(self.marker.exists, "the long clip to start")
+        stopped_at = time.monotonic()
+        self.assertEqual(self.call(base, "/api/queue/long-a/cancel", {}), (200, {"cancelled": "running"}))
+        first.join(10)
+        self.assertLess(time.monotonic() - stopped_at, 5)
+        self.assertEqual(first_result["status"], 499)
+        self.assertEqual(first_result["body"]["error"], "Stopped. The model will load again for the next request.")
+        self.assertFalse(self.workers[0].alive)
+        status, body = self.call(base, "/api/speak", {"engine": "kokoro", "text": "after"})
+        self.assertEqual(status, 200)
+        self.assertTrue(body.startswith(b"RIFF"))
+        self.assertEqual(len(self.workers), 2)
+        self.assertIsNone(self.queue(base)["running"])
+
+    def scene_service(self, lines):
+        """A service with scenes, one Kokoro voice (it needs no recording), and a saved scene of `lines` lines for it."""
+        from scene_store import SceneStore
+
+        cast = temp_cast(self)
+        character = cast.create_character("Nell", "")
+        identity = cast.create_identity(character["id"], "kokoro", "Warm", {"voice": "af_heart"})
+        cast.update_identity(identity["id"], {"status": "approved"})
+        root = Path(tempfile.mkdtemp(prefix="voice-lab-queue-scenes-"))
+        scenes = SceneStore(cast, self.pool.entries, root=root)
+        base, runner = self.serve(cast, scenes)
+        scene = scenes.create_scene({"schema_version": 1, "name": "Queue", "lines": [
+            {"line_id": f"line-{n}", "line_type": "dialogue", "identity_id": identity["id"], "text": f"Line {n} of the batch.",
+             "language": "English", "pause_after_ms": 0, "take_count": 1, "settings": {}} for n in range(1, lines + 1)]})
+        return cast, identity, scenes, runner, scene, base
+
+    def test_a_take_asked_for_during_a_batch_comes_after_the_current_line_and_the_batch_carries_on(self):
+        self.delays = [0.8]
+        cast, identity, scenes, runner, scene, base = self.scene_service(4)
+        status, body = self.call(base, f"/api/scenes/{scene['scene_id']}/jobs", {})
+        self.assertEqual(status, 202, body)
+        job_id = body["job"]["id"]
+        runner.start()
+        self.wait_for(self.marker.exists, "the batch's first line to start")
+        person, person_result = self.in_thread(base, "/api/performance", {
+            "identity_id": identity["id"], "line_id": "a-person-asks", "text": "A take in the middle of the batch.",
+            "language": "English", "wait_seconds": 60}, "person-take")
+        person.join(60)
+        self.assertEqual(person_result["status"], 200, person_result["body"])
+        self.wait_for(lambda: scenes.get_job(job_id)["status"] == "completed", "the batch to finish", timeout=60)
+        takes = sorted(cast.list_takes(), key=lambda take: take["created_at"])
+        order = [take["line_id"].rsplit(":", 1)[-1] for take in takes]
+        self.assertEqual(order[1], "a-person-asks", order)  # after the line being rendered, before the batch's next
+        self.assertEqual(len(order), 5)
+        self.assertEqual(scenes.get_job(job_id)["completed"], 4)
+
+    def test_cancelling_a_batch_can_stop_the_line_it_is_rendering(self):
+        self.delays = [60]
+        cast, identity, scenes, runner, scene, base = self.scene_service(3)
+        job_id = self.call(base, f"/api/scenes/{scene['scene_id']}/jobs", {})[1]["job"]["id"]
+        runner.start()
+        self.wait_for(self.marker.exists, "the batch's first line to start")
+        self.wait_for(lambda: self.queue(base)["running"] is not None, "the line to hold the worker")
+        running = self.queue(base)["running"]
+        self.assertEqual((running["what"], running["priority"]), ("Take for a scene batch", "low"))
+        self.assertTrue(running["id"].startswith("scene-row-"))
+        stopped_at = time.monotonic()
+        status, body = self.call(base, f"/api/scenes/jobs/{job_id}/cancel", {"stop_current": True})
+        self.assertEqual(status, 200, body)
+        self.wait_for(lambda: scenes.get_job(job_id)["status"] == "cancelled", "the batch to be cancelled", timeout=15)
+        self.assertLess(time.monotonic() - stopped_at, 10)
+        rows = scenes.get_job(job_id)["rows"]
+        self.assertEqual([row["status"] for row in rows], ["cancelled"] * 3)
+        self.assertEqual(rows[0]["error"], "Stopped when the batch was cancelled.")
+        self.assertEqual(cast.list_takes(), [])
+        status, body = self.call(base, "/api/speak", {"engine": "kokoro", "text": "after"})
+        self.assertEqual(status, 200)
+
+
 if __name__ == "__main__":
     unittest.main()

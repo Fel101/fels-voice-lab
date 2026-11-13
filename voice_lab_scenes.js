@@ -1575,7 +1575,10 @@ function chooseNewestSceneTakes() {
 }
 function sceneAction(action) {
   if (!activeSceneJobId) throw new Error('Choose a batch job first.');
-  return fetchJson('/api/scenes/jobs/' + activeSceneJobId + '/' + action, {}).then(function (result) {
+  // Stop now cancels the batch and also stops the line it is rendering, where Cancel lets that line finish.
+  var stopNow = action === 'stopNow';
+  var path = '/api/scenes/jobs/' + activeSceneJobId + '/' + (stopNow ? 'cancel' : action);
+  return fetchJson(path, stopNow ? { stop_current: true } : {}).then(function (result) {
     return refreshSceneJob();
   });
 }
@@ -1776,7 +1779,7 @@ Object.keys(sceneStatusWords).forEach(function (key) {
 });
 $('sceneFilterCharacter').addEventListener('change', applySceneFilters);
 $('sceneFilterStatus').addEventListener('change', applySceneFilters);
-['pause', 'resume', 'cancel', 'retry'].forEach(function (action) {
+['pause', 'resume', 'cancel', 'retry', 'stopNow'].forEach(function (action) {
   $('scene' + action.charAt(0).toUpperCase() + action.slice(1)).addEventListener('click', function () {
     try {
       sceneAction(action).catch(showSceneError);

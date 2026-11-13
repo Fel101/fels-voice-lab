@@ -331,7 +331,7 @@ class InstallTests(InstallerCase):
         self.assertEqual((done["state"], done["exit_code"], done["lines"]), ("finished", 0, ["first line", "last line"]))
         self.assertIsNotNone(done["ended_at"])
         self.assertFalse(self.pool.busy)
-        self.assertIsNone(self.pool._held_for)
+        self.assertIsNone(self.pool.queue()["running"])
 
     def test_a_failed_install_keeps_the_end_of_its_output_and_frees_the_service(self):
         self.stub("""

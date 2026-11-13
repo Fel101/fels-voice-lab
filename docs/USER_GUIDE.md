@@ -23,7 +23,8 @@ window, whose local port can change. Compare uses the same preference when opene
 Choose **Voice cloning** to upload or record a voice, save it under a name and
 hear a test straight away. **Cast library** is where you edit a voice's recordings and approve
 them; **Perform lines** makes repeatable dialogue and acting. On narrow screens the
-navigation wraps above the workspace and sample cards stack.
+navigation wraps above the workspace and sample cards stack. While a model is busy, **Model worker** at the foot of the
+navigation says what it is doing and what waits for it; see [One thing at a time](#one-thing-at-a-time).
 
 ## Clone your own voice
 
@@ -99,9 +100,9 @@ are withheld or rejected, not silently advertised as effective.
 
 While **Generate** works, the status line counts the seconds, and the first request
 of a session also loads and warms the model. **Stop waiting** gives the page back at once.
-It cannot interrupt the model: that line may still be finishing, and a new request is
-turned away as busy until it does. A stopped request adds nothing to Recent clips, but a
-voice you asked to save as a reusable asset is still saved when the model finishes.
+If the model had started that line it finishes it, and your next request waits until it
+does; **Stop** under **Model worker** ends it at once. A request stopped either way adds nothing to Recent clips, but a
+voice you asked to save as a reusable asset is still saved when the model finishes, unless **Stop** ended it.
 
 A list of voice recordings shows a playable preview, and under **Source, use notes and
 recording details** the kind of source, the length, where it comes from and who may use
@@ -213,7 +214,9 @@ and **Render ticked** renders the ticked lines that are shown. A long line is sp
 part with its own takes and **Render this part**. **Show the parts of long lines** shows how each line splits before you
 render.
 
-A batch renders one take at a time, and **Pause**, **Resume**, **Cancel** and **Try the failed lines again** work on it. A batch renders all of one model's lines before it loads
+A batch renders one take at a time, and **Pause**, **Resume**, **Cancel after this line**, **Stop now** and **Try the failed
+lines again** work on it. **Stop now** cancels the batch and also stops the line it is rendering, so its model loads again
+for the next request. A batch renders all of one model's lines before it loads
 the next model, so a scene that switches between voices on two models loads each model once; while it runs, the status line
 says the order, such as "Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8". The scene is still assembled in script order. A
 take whose waveform checks flag something says so under it, and **Takes from this batch** lists one batch's takes with
@@ -259,6 +262,15 @@ pick up an FFmpeg you have just installed yourself. MP3 is written as variable b
 honours it plays exactly the take's length; one that does not adds a few tens of milliseconds of silence at
 the start, and captions follow the take, not that silence.
 Verifying a package checks each file's codec as well as its hash.
+
+## One thing at a time
+
+The model worker does one thing at a time: one load, clip, take, test or install. What you ask for while it is busy waits
+its turn, and **Model worker**, at the foot of the navigation, says what runs and for how long, and where each of your
+waiting requests stands, such as "Waiting: 2 ahead of you (a scene batch is rendering)". **Cancel** takes your request out
+of the line. **Stop** ends what runs at once by ending its model's process, so the next request loads the model again. An
+install and an unload cannot be stopped; an install runs until it is done. Your requests go ahead of a scene batch's
+next line: **Make takes** during a batch makes its take after the line being rendered, and the batch then carries on.
 
 ## Compare and diagnose
 
@@ -440,6 +452,9 @@ The pages talk to a local web service, and a script or another program can too: 
 finished WAV file, and `POST /api/performance` speaks a line as one of your Cast voices and saves it as a take. Start
 `serve.py` (the desktop app picks a port of its own) and try `tools\lab_cli.py health`, `speak` or `perform`. The
 [HTTP API page](API.md) lists every call, and [`openapi.json`](../openapi.json) describes them for tools that read OpenAPI.
+While the model worker is busy, a request that needs it is refused with 409 at once, unless its JSON body has
+`wait_seconds`: then it waits in line, `GET /api/queue` shows where it stands, and `POST /api/queue/{request_id}/cancel`
+takes it out of the line or stops it.
 The same page shows how a script [edits a saved take](API.md#edit-a-saved-take): look, hear, save.
 
 ## Stop and back up

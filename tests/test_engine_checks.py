@@ -675,12 +675,12 @@ class EngineCheckTests(TempTree):
     def test_a_busy_service_refuses_the_check_and_records_nothing(self):
         store = EngineCheckStore(self.root / "checks.json")
         pool = self.pool(FakeWorker(), store=store)
-        self.assertTrue(pool._gpu_job.acquire(blocking=False))
+        pool.hold("a test holds the worker")
         try:
             with self.assertRaises(WorkerBusy):
                 pool.check("kokoro")
         finally:
-            pool._gpu_job.release()
+            pool.release_hold()
         self.assertEqual(store.checks_for("kokoro"), {})
 
     def test_custom_voice_check_uses_the_speaker_the_checkpoint_reported(self):
@@ -780,12 +780,12 @@ class FailedLoadTests(TempTree):
         self.addCleanup(pool.close)
         with self.assertRaisesRegex(MemoryError, "^Only 1.0 GB"):
             pool.load("kokoro")
-        self.assertTrue(pool._gpu_job.acquire(blocking=False))
+        pool.hold("a test holds the worker")
         try:
             with self.assertRaisesRegex(WorkerBusy, "^The GPU worker is busy"):
                 pool.speak({"engine": "kokoro", "text": "Hello there."})
         finally:
-            pool._gpu_job.release()
+            pool.release_hold()
         self.assertEqual(asked, [])
 
     def test_a_probe_that_fails_does_not_hide_the_load_error(self):
@@ -859,11 +859,11 @@ class EngineStatusHttpTests(TempTree):
         self.assertEqual(self.call("POST", "/api/engines/not-an-engine/check", {})[0], 400)
 
     def test_a_busy_service_answers_409(self):
-        self.assertTrue(self.engines._gpu_job.acquire(blocking=False))
+        self.engines.hold("a test holds the worker")
         try:
             self.assertEqual(self.call("POST", "/api/engines/kokoro/check", {})[0], 409)
         finally:
-            self.engines._gpu_job.release()
+            self.engines.release_hold()
 
     def test_speaking_or_loading_before_kokoro_is_installed_leads_with_the_launcher(self):
         self.worker.load_error = WorkerRequestError(FailedLoadTests.WORKER_ERROR)

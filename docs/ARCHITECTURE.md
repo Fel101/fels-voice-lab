@@ -22,6 +22,10 @@ a model worker           engine_worker.py in that model's own environment: .venv
 - **`worker_pool.EnginePool`** keeps at most one model loaded, checks free RAM first ([ram_needs.py](../ram_needs.py)), and
   talks to the worker in JSON lines over stdin and stdout ([worker_protocol.py](../worker_protocol.py)). Audio comes back as a
   temporary `.npy` file under `out/workers/<engine>-<pid>`. `worker_runtime.py` is the worker's side: load, generate, unload.
+- **[job_queue.py](../job_queue.py) is the line for the worker.** One request uses it at a time. The others wait in order,
+  a person's ahead of a scene batch's lines, when they sent `wait_seconds`, and are refused with 409 otherwise; any can be
+  cancelled, and a running one is stopped by ending its worker's process. `serve._place_in_line` puts every request that
+  needs the worker in line under its `X-Request-Id`, and the page's `voice_lab_queue.js` makes all of the page's ask to wait.
 - **The device.** The service asks for `cpu` or `cuda` (`common.pick_device`: `runtime.local.json`, then an NVIDIA driver,
   then an AMD card that AMD's ROCm build of PyTorch has code for, then the CPU). A worker whose own PyTorch cannot use the card
   runs on the CPU and says so (`worker_runtime.usable_device`). On a computer with more than one AMD card, `common.py` sets
@@ -52,7 +56,7 @@ a model worker           engine_worker.py in that model's own environment: .venv
 
 ## The page
 
-`serve.html` loads ten classic scripts in order (`voice_workflows.js` first, `voice_lab_app.js` last) that share one global
+`serve.html` loads eleven classic scripts in order (`voice_lab_queue.js` first, `voice_lab_app.js` last) that share one global
 scope, plus the Drama studio as a module. The first line of each script says what it owns. The Node tests run a script in a
 `vm` context with a stand-in page, and `tests/page_source.cjs` gives them the whole page as one text. `theme.js` sets the
 appearance before the page paints.
