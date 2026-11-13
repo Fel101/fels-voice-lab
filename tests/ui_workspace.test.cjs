@@ -35,7 +35,7 @@ test('retire, restore, and purge confirm first and report exactly what they bloc
   assert.equal(calls.length, 0);
   confirmAnswer = true;
   const purged = await c.purgeAction('reference', 'ref-1', 'this recording version');
-  assert.equal(purged, 'Purged 1 reference, 2 takes. Copies outside Cast still hold this audio: out/exports/copy.wav. Cast does not delete them; remove them yourself.');
+  assert.equal(purged, 'Deleted for good: 1 voice recording, 2 takes. Copies outside Cast still hold this audio: out/exports/copy.wav. Cast does not delete them; remove them yourself.');
   assert.deepEqual(calls.map((call) => call.url), ['/api/purges/preview?kind=reference&id=ref-1', '/api/purges']);
   assert.deepEqual(calls[1].body, {kind: 'reference', id: 'ref-1', confirm: true});
 });
@@ -55,10 +55,10 @@ test('take retirement controls show the correct buttons for active, retired, and
   };
   assert.deepEqual(buttonsFor({id: 't', retired: false, retirement: null}).buttons, ['Retire take']);
   const own = buttonsFor({id: 't', retired: true, retirement: {reason: 'Bad take.', inherited: false}});
-  assert.deepEqual(own.buttons, ['Restore take', 'Purge take…']);
+  assert.deepEqual(own.buttons, ['Restore take', 'Delete this take for good…']);
   assert.match(own.note, /Bad take\. New use is blocked/);
   const inherited = buttonsFor({id: 't', retired: true, retirement: {reason: 'Withdrawn.', inherited: true, source_label: 'its voice'}});
-  assert.deepEqual(inherited.buttons, ['Purge take…']);
+  assert.deepEqual(inherited.buttons, ['Delete this take for good…']);
   assert.match(inherited.note, /because its voice is retired/);
   assert.match(compact, /appendTakeRetirement\(article,take,loadCurrentTakes/);
   assert.match(compact, /appendTakeRetirement\(article,\{id:row\.take_id,retired:!!row\.retirement,retirement:row\.retirement\},refreshSceneJob/);

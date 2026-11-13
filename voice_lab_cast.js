@@ -390,10 +390,10 @@ function restoreAction(kind,id,label){
 function purgeAction(kind,id,label){
   return fetchJson('/api/purges/preview?kind='+encodeURIComponent(kind)+'&id='+encodeURIComponent(id)).then(function(preview){
     var counts=preview.would_purge,parts=[];
-    ['identity','reference','take'].forEach(function(name){if(counts[name])parts.push(counts[name]+' '+name+(counts[name]===1?'':'s'));});
+    [['identity','voice','voices'],['reference','voice recording','voice recordings'],['take','take','takes']].forEach(function(kind){var count=counts[kind[0]];if(count)parts.push(count+' '+(count===1?kind[1]:kind[2]));});
     if(!window.confirm('Permanently delete '+label+'? This removes '+parts.join(', ')+' and their audio from Cast. It cannot be undone.'))return null;
     return fetchJson('/api/purges',{kind:kind,id:id,confirm:true}).then(function(report){
-      var text='Purged '+parts.join(', ')+'.';
+      var text='Deleted for good: '+parts.join(', ')+'.';
       if(report.external_copies.length)text+=' Copies outside Cast still hold this audio: '+report.external_copies.join(', ')+(report.external_copies_truncated?' (list truncated)':'')+'. Cast does not delete them; remove them yourself.';
       return text;
     });
@@ -417,7 +417,7 @@ function appendTakeRetirement(article,take,after,show){
   if(take.retired){
     note.className+=' flagged';note.textContent=retirementLabel(take)+' New use is blocked; listening stays available for review.';
     if(!take.retirement.inherited)row.appendChild(retirementButton('Restore take',function(){return restoreAction('take',take.id,'this take');},after,show));
-    row.appendChild(retirementButton('Purge take…',function(){return purgeAction('take',take.id,'this take');},after,show));
+    row.appendChild(retirementButton('Delete this take for good…',function(){return purgeAction('take',take.id,'this take');},after,show));
   }else row.appendChild(retirementButton('Retire take',function(){return retireAction('take',take.id,'this take');},after,show));
   article.appendChild(note);article.appendChild(row);
 }

@@ -123,6 +123,9 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   and **Try the failed lines again**. The Breeze TTS 2, Qwen3-TTS and VoxCPM2 panels are headed by the model's name, and
   Scenes & batch by the menu's. Element ids, API fields, file formats and stored data are unchanged, and the guide's
   screenshots are new.
+- **Delete for good, everywhere.** Cast's **Purge voice audio…** and **Purge take…** are **Delete this voice for
+  good…** and **Delete this take for good…**, like the recording's **Delete this recording for good…**, and the report
+  after one counts voices, voice recordings and takes, where it said identities and references.
 - **Perform's line name is under Details.** **Stable line ID** sat between the voice and the dialogue, a box most people
   never need. It is **Line name** now, under **Details**, and still filled in for you; a scene's line says the same.
 - **The speed table says what it measures.** **Measured speed on this service**, with its *Device* and *Median real-time

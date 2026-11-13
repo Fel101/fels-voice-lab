@@ -115,7 +115,7 @@ package back and checks every hash, the captions, and each file's codec and leng
   report to paste into a bug report, folder sizes with a cleanup, and a one-file library backup that
   is read back and checked when it is written and restored into a new folder without touching the
   library in use.
-- **Retire and purge:** stop a voice, recording or take, and everything made from it, from being
+- **Retire, or delete for good:** stop a voice, recording or take, and everything made from it, from being
   used again without deleting its audio, or delete it for good after a confirmation.
 - **From a script:** a documented local HTTP API and a small command-line tool.
 - **Other tools:** voice conversion, consent-aware import of clips kept by

@@ -97,7 +97,7 @@
     if(!voice.retired)return [global.retirementButton('Retire voice',function(){return global.retireAction('identity',voice.identity_id,'this voice');},after,show)];
     var controls=[];
     if(!voice.retirement.inherited)controls.push(global.retirementButton('Restore voice',function(){return global.restoreAction('identity',voice.identity_id,'this voice');},after,show));
-    controls.push(global.retirementButton('Purge voice audio…',function(){return global.purgeAction('identity',voice.identity_id,'this voice');},after,show));
+    controls.push(global.retirementButton('Delete this voice for good…',function(){return global.purgeAction('identity',voice.identity_id,'this voice');},after,show));
     return controls;
   }
   function render(){

@@ -53,7 +53,7 @@ test('a retired saved voice shows its reason, restore and purge, and cannot star
   assert.equal(button('Use in Model studio').disabled,true);
   assert.equal(button('Perform lines').disabled,true);
   assert.equal(button('Edit voice').disabled,false);
-  assert.ok(button('Restore voice'));assert.ok(button('Purge voice audio…'));assert.equal(button('Retire voice'),undefined);
+  assert.ok(button('Restore voice'));assert.ok(button('Delete this voice for good…'));assert.equal(button('Retire voice'),undefined);
   assert.match(card.textContent,/Owner withdrew permission\. New use is blocked/);
   assert.ok(card.classList.items.includes('retired'));
 });

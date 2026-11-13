@@ -316,7 +316,7 @@ or automatic conversion of joint audio into separately timed game dialogue.
 The model may ignore an acting direction or speak it. All studio jobs and cloning run on CPU after a
 local Vulkan driver-loss incident. See [Drama details](DRAMA3.md).
 
-## Retire and purge
+## Retire, restore and delete for good
 
 **Retire** stops new use without deleting anything. Retire a voice in the Cast library,
 a recording version with **Retire this recording** in the Cast editor, or a take in
@@ -329,14 +329,15 @@ clears its approval, and restoring never approves it again.
 **Restore** lifts the item's own retirement. An item still blocked through the voice,
 recording or take it came from stays blocked until that source is restored. The Cast
 library hides retired voices unless you tick **Show retired voices**, where you can
-restore or purge them.
+restore them or delete them for good.
 
-**Purge** (on a recording, **Delete this recording for good…**) permanently deletes a
-retired item, everything made from it, and their audio from Cast storage. It cannot be undone, and the confirmation lists what will go.
+**Delete this voice for good…** (on a retired voice in the Cast library), **Delete this recording for good…** (on a
+retired recording in the Cast editor) and **Delete this take for good…** (on a retired take) permanently delete the
+item, everything made from it, and their audio from Cast storage. It cannot be undone, and the confirmation lists what will go.
 Cast keeps a tombstone with the time, the reason and the audio's checksums, but not the
 audio. Copies outside Cast storage, such as exported packages and comparison copies under
-`out/`, are listed after the purge and are never deleted. Remove them yourself. Back up
-the Cast folders before purging anything you might need later.
+`out/`, are listed afterwards and are never deleted. Remove them yourself. Back up
+the Cast folders before you delete anything you might need later.
 
 Limits: loose files in the `reference` and `data/voices` folders are not Cast records, so
 retire or delete them in their folders. Character-level retirement is available through

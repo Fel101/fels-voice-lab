@@ -1247,7 +1247,7 @@ function refreshSceneJob() {
       if (row.purged) {
         var gone = document.createElement('p');
         gone.className = 'meta';
-        gone.textContent = "This take's audio was purged from Cast. The row remains as a record.";
+        gone.textContent = 'This take was deleted from Cast for good. The row stays as a record.';
         article.appendChild(gone);
       }
       if (row.take_id && !row.purged) {
