@@ -38,12 +38,7 @@ def resolve_reference_path(key, path, *, extra_roots=None):
         allowed = ("voice-lab/reference/, voice-lab/data/voices/, or voice-lab/data/cast/media/references/"
                    if not own_voices else "voice-lab/reference/")
         raise ValueError(f"Reference audio must be an existing file under {allowed}.")
-    if key == "turbo":
-        import soundfile as sf
-        try:
-            duration = sf.info(reference).duration
-        except (RuntimeError, OSError) as exc:
-            raise ValueError("Turbo reference must be readable audio.") from exc
-        if duration <= 5.0:
-            raise ValueError(f"Turbo reference must be longer than 5 seconds (received {duration:.3f}s). Select or record a longer reference clip.")
+    adapter = engine_adapters.get(key)
+    if adapter is not None:
+        adapter.check_reference(reference)
     return reference

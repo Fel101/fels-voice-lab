@@ -51,27 +51,6 @@ ENGINE_LICENSE_NOTES = {
         "status": "unknown",
         "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
     },
-    "orig": {
-        "code_license": "MIT Chatterbox runtime, separately installed.",
-        "weights_license": "MIT upstream Chatterbox checkpoint.",
-        "output_use": "Review reference/subject rights; retain native Perth watermark. No unrestricted-output clearance is implied.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md and upstream ResembleAI/chatterbox license."
-    },
-    "turbo": {
-        "code_license": "MIT Chatterbox runtime, separately installed.",
-        "weights_license": "MIT upstream Chatterbox checkpoint.",
-        "output_use": "Review reference/subject rights; retain native Perth watermark. No unrestricted-output clearance is implied.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md and upstream ResembleAI/chatterbox license."
-    },
-    "chatterbox-vc": {
-        "code_license": "MIT Chatterbox runtime, separately installed.",
-        "weights_license": "MIT upstream Chatterbox checkpoint.",
-        "output_use": "Review reference/subject rights; retain native Perth watermark. No unrestricted-output clearance is implied.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md and upstream ResembleAI/chatterbox license."
-    },
     "drama-3": {
         "code_license": "MIT speech.cpp runtime, separately installed; runtime dependencies retain their own terms.",
         "weights_license": "Fish Audio Community License 1.0, including Q4 derivative.",

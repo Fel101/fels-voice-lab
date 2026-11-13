@@ -1,13 +1,10 @@
 """Settings accepted by reusable Cast performances, with their service defaults."""
 
 import math
-from chatterbox_support import normalize_chatterbox_sampling
 import engine_adapters
 
 DEFAULTS = {
     'drama-3': {'seed':42,'temperature':1.,'top_k':30,'top_p':.9,'max_seconds':47.6},
-    "turbo": normalize_chatterbox_sampling("turbo", {}),
-    "orig": normalize_chatterbox_sampling("orig", {"exaggeration": 0.6, "cfg_weight": 0.4}),
     "breeze-tts-2": {"profile": "eager", "seed": 42, "cfg_scale": 1.0,
         "max_new_tokens": 1500, "temperature": 0.9, "top_k": 50, "top_p": 1.0,
         "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0},
@@ -28,14 +25,6 @@ CONTROL_UI = {
     'drama-3': {'seed':('Seed',0,2147483647,1),'temperature':('Temperature',.05,2.,.05),
                 'top_k':('Top-k',1,4097,1),'top_p':('Top-p',.05,1.,.01),
                 'max_seconds':('Maximum seconds per chunk',.5,95.1,.1)},
-    "turbo": {"temperature": ("Temperature", 0.05, 2.0, 0.05),
-              "top_k": ("Top-k", 1, 2048, 1), "top_p": ("Top-p", 0.05, 1.0, 0.01),
-              "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05)},
-    "orig": {"exaggeration": ("Exaggeration", 0.0, 2.0, 0.05),
-             "cfg_weight": ("CFG weight", 0.0, 1.0, 0.05),
-             "temperature": ("Temperature", 0.05, 2.0, 0.05), "top_p": ("Top-p", 0.05, 1.0, 0.01),
-             "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05),
-             "min_p": ("Min-p", 0.0, 1.0, 0.01)},
     "breeze-tts-2": {"profile": ("Runtime profile", "eager", "cuda_graphs"),
                      "seed": ("Seed", 0, 2147483647, 1), "cfg_scale": ("CFG scale", 0.0, 20.0, 0.1),
                      "max_new_tokens": ("Maximum new tokens", 8, 2048, 1),
@@ -118,6 +107,5 @@ def effective_settings(engine, settings):
                 raise ValueError("Breeze profile must be eager or cuda_graphs.")
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(f"Performance {key} must be a finite number.")
-    if engine in {"orig", "turbo"}:
-        return normalize_chatterbox_sampling(engine, result)
-    return result
+    adapter = engine_adapters.get(engine)
+    return adapter.settle_settings(result) if adapter is not None else result

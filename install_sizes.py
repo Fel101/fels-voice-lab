@@ -18,17 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _chatterbox(manifest_name):
-    def size(root, nvidia, card):
-        from tools import install_chatterbox as ic
-
-        files = _files_bytes(ic.base.load_manifest(root / getattr(ic, manifest_name)))
-        download, disk = ic.packages_mb(nvidia=nvidia, card=card)
-        return download * 10**6 + files, disk * 10**6 + files
-
-    return size
-
-
 def _qwen(engine):
     def size(root, _nvidia, card):
         from tools import install_qwen as iq
@@ -66,16 +55,12 @@ def _drama3(_root, _nvidia, _card):
 
 def _sizers():
     import engine_adapters
-    from chatterbox_support import ORIGINAL_ENGINE_ID, TURBO_ENGINE_ID, VC_ENGINE_ID
     from qwen_support import QWEN_MODELS
 
     def adapted(adapter):
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        TURBO_ENGINE_ID: _chatterbox("MANIFEST"),
-        ORIGINAL_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),
-        VC_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),
         **{engine: _qwen(engine) for engine in QWEN_MODELS},
         "voxcpm2": _voxcpm,
         "breeze-tts-2": _breeze,

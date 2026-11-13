@@ -11,7 +11,6 @@ from pathlib import Path
 
 from worker_process import (WorkerCancelled, WorkerError, WorkerProcess, WorkerRequestError,
                             WorkerTimeout, WorkerUnavailable)
-from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from kokoro_support import resolve_kokoro_language
 import engine_adapters
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
@@ -30,8 +29,6 @@ QWEN_MODES = {
     "qwen3-tts-1.7b-custom-voice": "custom_voice",
 }
 VOXCPM_MODES = {"design", "clone", "continuation"}
-TURBO_NEEDS_REFERENCE = ("Chatterbox Turbo clones a reference recording: give reference_path (a clip longer than 5 seconds), or "
-                         "set clone to false for its built-in voice. The default reference, reference/af_heart.wav, is not there.")
 
 
 def process_is_running(pid):
@@ -527,7 +524,7 @@ class EnginePool:
         key = req.get("engine", engine_adapters.DEFAULT_ENGINE)
         self._require_api_engine(key)
         adapter = engine_adapters.get(key)
-        if key == "chatterbox-vc":
+        if adapter is not None and adapter.converts:
             raise ValueError("Chatterbox Voice Conversion is a source-audio task; use POST /api/convert.")
         text = req.get("text") or ""
         if not isinstance(text, str) or not text.strip():
@@ -602,16 +599,6 @@ class EnginePool:
                 raise ValueError("VoxCPM2 direction must be text of 1000 characters or fewer.")
             if req.get("save_voice_as") and mode != "design":
                 raise ValueError("Only a VoxCPM2 design take can be saved as a reusable voice reference.")
-        elif key in {"orig", "turbo"}:
-            all_sampler_fields = set().union(*CHATTERBOX_SAMPLING_FIELDS.values())
-            chatterbox_sampling = normalize_chatterbox_sampling(
-                key, {name: req[name] for name in all_sampler_fields if name in req})
-            if key == "turbo" and req.get("clone", True):
-                reference = req.get("reference_path") or LAB / "reference" / "af_heart.wav"
-                if not (req.get("reference_path") or Path(reference).is_file()):
-                    # The worker cannot make the default clip: it runs in .venv-chatterbox, which has no Kokoro.
-                    raise ValueError(TURBO_NEEDS_REFERENCE)
-                self._resolve_reference_path(key, reference)
         self._acquire_job(key, "Clip")
         output_file = None
         try:
@@ -698,22 +685,6 @@ class EnginePool:
                         "prompt_text": req.get("prompt_text", ""),
                     })
                     worker.call("prepare_reference", path=str(reference))
-            elif key == "turbo":
-                params["clone"] = req.get("clone", True)
-                params["sampling"] = chatterbox_sampling
-                if params["clone"]:
-                    reference_path = req.get("reference_path") or (LAB / "reference" / "af_heart.wav")
-                    params["ref_wav"] = str(self._resolve_reference_path(key, reference_path))
-                    worker.call("prepare_reference", path=params["ref_wav"])
-            else:
-                params["clone"] = bool(req.get("clone"))
-                params["sampling"] = chatterbox_sampling
-                params["exaggeration"] = chatterbox_sampling["exaggeration"]
-                if params["clone"]:
-                    reference_path = req.get("reference_path") or (LAB / "reference" / "af_heart.wav")
-                    params["ref_wav"] = str(self._resolve_reference_path(key, reference_path))
-                    worker.call("prepare_reference", path=params["ref_wav"],
-                                exaggeration=params["exaggeration"])
 
             runtime_pid = self.workers[key].get("runtime_pid", worker.pid)
             worker_root = OUT / "workers" / f"{key}-{runtime_pid}"
@@ -885,7 +856,7 @@ class EnginePool:
 
     def convert(self, source_path, target_reference_path):
         """Run the isolated Chatterbox VC task with distinct source and target assets."""
-        key = "chatterbox-vc"
+        key = engine_adapters.only("converts")
         self._require_api_engine(key)
         if str(source_path) == str(target_reference_path):
             raise ValueError("Source performance and target voice reference must be separate files.")

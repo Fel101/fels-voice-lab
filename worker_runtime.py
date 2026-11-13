@@ -2,24 +2,20 @@
 
 import os
 import time
-from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
 
 import engine_adapters
-from common import LAB, free_ram_gb, release_gpu, require_ram, strip_tags, to_numpy, torch_runtime
+from common import LAB, free_ram_gb, release_gpu, require_ram, to_numpy, torch_runtime
 from ram_needs import MIN_FREE_RAM_GB
-from reference_paths import resolve_reference_path
 
 QWEN_ENGINE_IDS = {
     "qwen3-tts-1.7b-voice-design", "qwen3-tts-1.7b-base",
     "qwen3-tts-0.6b-base", "qwen3-tts-1.7b-custom-voice",
 }
 VOXCPM_ENGINE_ID = "voxcpm2"
-CHATTERBOX_VC_ENGINE_ID = "chatterbox-vc"
-ENGINE_IDS = {"turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
-              CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS, *engine_adapters.ADAPTERS}
+ENGINE_IDS = {"breeze-tts-2", VOXCPM_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS, *engine_adapters.ADAPTERS}
 # The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
 # its own device.
 TORCH_ENGINE_IDS = ENGINE_IDS - {"drama-3"} - {engine for engine, adapter in engine_adapters.ADAPTERS.items()
@@ -93,7 +89,7 @@ class EngineWorkerRuntime:
         self.breeze = None
         self.qwen = None
         self.voxcpm = None
-        self.chatterbox_vc = None
+        self.backend = None  # the worker object an adapter keeps across loads (engine_adapters/)
         self.drama3 = None
         self.model_info = None
         self.profile = None
@@ -199,62 +195,7 @@ class EngineWorkerRuntime:
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
                     "memory": self.last_memory,
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if self.engine_id == CHATTERBOX_VC_ENGINE_ID:
-            require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
-            from chatterbox_vc_worker import ChatterboxVCWorker
-            if self.chatterbox_vc is None:
-                self.chatterbox_vc = ChatterboxVCWorker(self.device)
-            started = time.perf_counter()
-            result = self.chatterbox_vc.load()
-            self.engine = self.chatterbox_vc.model
-            self.sample_rate = int(result["sample_rate"])
-            self.loaded_at = time.time()
-            self.model_info = {key: result[key] for key in
-                               ("backend", "backend_version", "checkpoint", "checkpoint_revision",
-                                "mode", "runtime_identity", "device_name", "torch", "hip")
-                               if key in result}
-            self.last_memory = self._memory()
-            return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
-                    "memory": self.last_memory,
-                    "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if not DEFAULT_REFERENCE.is_file() and find_spec("kokoro") is not None:
-            # An environment you built yourself may hold Kokoro beside another engine; the guided ones never do (Kokoro has
-            # .venv-kokoro to itself), so there the Kokoro worker makes the clip and this engine warms up with its own voice.
-            from engines import ensure_reference
-            ensure_reference()
-        require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
-        from engines import build_engine
-
-        started = time.perf_counter()
-        print(f"Loading {self.engine_id} on {self.device} (worker {os.getpid()}) ...", flush=True)
-        model = build_engine(self.engine_id, self.device)
-        self.engine = model
-        self.sample_rate = int(model.sr)
-        print("Warming up the model ...", flush=True)
-        try:
-            if not DEFAULT_REFERENCE.is_file():
-                model.speak("Hello there.")
-            elif self.engine_id == "orig":
-                model.prepare_reference(str(DEFAULT_REFERENCE), exaggeration=0.5)
-                model.speak("Hello there.", ref_wav=DEFAULT_REFERENCE)
-            else:
-                model.prepare_reference(str(DEFAULT_REFERENCE))
-                model.speak("Hello there.", ref_wav=DEFAULT_REFERENCE)
-        except Exception as exc:
-            print(f"Warm-up failed: {type(exc).__name__}: {exc}", flush=True)
-        self.loaded_at = time.time()
-        self.last_memory = self._memory()
-        return {
-            "already_loaded": False,
-            "engine_id": self.engine_id,
-            "model_loaded": True,
-            "device": self.device,
-            "load_seconds": round(time.perf_counter() - started, 3),
-            "sample_rate": self.sample_rate,
-            "pid": os.getpid(),
-            "parent_pid": os.getppid(),
-            "memory": self.last_memory,
-        }
+        raise ValueError(f"{self.engine_id} has no worker.")
 
     @staticmethod
     def _make_default_reference(model):
@@ -289,18 +230,12 @@ class EngineWorkerRuntime:
             return self.qwen.prepare_reference(params)
         if self.engine_id == VOXCPM_ENGINE_ID:
             return self.voxcpm.prepare_reference(params)
-        path = resolve_reference_path(self.engine_id, path)
-        exaggeration = float(params.get("exaggeration", 0.5))
-        if self.engine_id == "orig":
-            self.engine.prepare_reference(str(path), exaggeration=exaggeration)
-        else:
-            self.engine.prepare_reference(str(path))
-        return {"prepared": True, "engine_id": self.engine_id, "path": str(path)}
+        raise ValueError(f"{self.engine_id} does not take a voice recording.")
 
     def generate(self, params):
         if self.engine is None:
             raise RuntimeError("Load the model before generation.")
-        text = params.get("text", "Voice conversion" if self.engine_id == CHATTERBOX_VC_ENGINE_ID else None)
+        text = params.get("text", getattr(self.adapter, "default_text", None))
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Text must be a non-empty string.")
         if len(text) > 1200:
@@ -310,8 +245,6 @@ class EngineWorkerRuntime:
             wav, sr, info = self.adapter.worker_generate(self, text, params)
         elif self.engine_id == 'drama-3':
             wav, sr, info = self.drama3.generate(params)
-        elif self.engine_id == CHATTERBOX_VC_ENGINE_ID:
-            wav, sr, info = self.chatterbox_vc.generate(params)
         elif self.engine_id == "breeze-tts-2":
             wav, sr, info = self.breeze.generate(params)
         elif self.engine_id in QWEN_ENGINE_IDS:
@@ -322,25 +255,6 @@ class EngineWorkerRuntime:
         elif self.engine_id == VOXCPM_ENGINE_ID:
             voxcpm_params = {key: value for key, value in params.items() if key != "output_file"}
             wav, sr, info = self.voxcpm.generate(voxcpm_params)
-        elif self.engine_id == "turbo":
-            clone = params.get("clone", True)
-            ref_wav = str(params.get("ref_wav") or DEFAULT_REFERENCE) if clone else None
-            if ref_wav:
-                self.prepare_reference({"path": ref_wav})
-            wav, sr, info = self.engine.speak(text.strip(), ref_wav=ref_wav,
-                                               **(params.get("sampling") or {}))
-        else:
-            clone = bool(params.get("clone", False))
-            ref_wav = str(params.get("ref_wav") or DEFAULT_REFERENCE) if clone else None
-            sampling = dict(params.get("sampling") or {})
-            exaggeration = float(sampling.get("exaggeration", 0.5))
-            cfg_weight = float(sampling.get("cfg_weight", 0.5))
-            if ref_wav:
-                self.prepare_reference({"path": ref_wav, "exaggeration": exaggeration})
-            wav, sr, info = self.engine.speak(strip_tags(text.strip()), ref_wav=ref_wav,
-                                               exaggeration=exaggeration, cfg_weight=cfg_weight,
-                                               **{key: value for key, value in sampling.items()
-                                                  if key not in {"exaggeration", "cfg_weight"}})
 
         audio = to_numpy(wav)
         if audio.size == 0 or not np.isfinite(audio).all():
@@ -386,15 +300,13 @@ class EngineWorkerRuntime:
         breeze_result = None
         qwen_result = None
         voxcpm_result = None
-        chatterbox_vc_result = None
         if self.engine_id == "breeze-tts-2" and self.breeze is not None:
             breeze_result = self.breeze.unload()
         if self.engine_id in QWEN_ENGINE_IDS and self.qwen is not None:
             qwen_result = self.qwen.unload()
         if self.engine_id == VOXCPM_ENGINE_ID and self.voxcpm is not None:
             voxcpm_result = self.voxcpm.unload()
-        if self.engine_id == CHATTERBOX_VC_ENGINE_ID and self.chatterbox_vc is not None:
-            chatterbox_vc_result = self.chatterbox_vc.unload()
+        adapter_result = self.adapter.worker_unload(self) if self.adapter is not None else {}
         self.engine = None
         self.sample_rate = None
         self.loaded_at = None
@@ -411,7 +323,7 @@ class EngineWorkerRuntime:
             **({"breeze": breeze_result} if breeze_result is not None else {}),
             **({"qwen": qwen_result} if qwen_result is not None else {}),
             **({"voxcpm2": voxcpm_result} if voxcpm_result is not None else {}),
-            **({"chatterbox_vc": chatterbox_vc_result} if chatterbox_vc_result is not None else {}),
+            **adapter_result,
         }
 
     def dispatch(self, method, params, *, emit_audio=None):

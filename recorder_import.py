@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+import engine_adapters
 from cast_store import (LAB, MAX_REFERENCE_SECONDS, MAX_REFERENCE_TEXT, MIN_REFERENCE_SECONDS, REFERENCE_ENGINES,
                         REFERENCE_POLICIES, CastStore, ID_RE)
 from recorder_clip import ClipRefused, RecorderClip, find_sidecars, load_clip
@@ -32,7 +33,6 @@ from recorder_identity import DEFAULT_MIN_SIMILARITY, check_identity, store_resu
 from reference_paths import resolve_reference_path
 
 DEFAULT_ENGINE = "turbo"
-TURBO_MIN_SECONDS = 5.0          # resolve_reference_path refuses a Turbo reference of 5 s or less
 MAX_ORIGIN, MAX_ALLOWED_USE = 1000, 1000     # CastStore.add_reference limits
 CLIP_FILE, IMPORT_FILE = "recorder-clip.json", "recorder-import.json"
 IMPORT_SCHEMA = "voice-lab-recorder-import-v1"
@@ -70,9 +70,11 @@ def _check_registrable(clip, engine_id):
     if not MIN_REFERENCE_SECONDS <= clip.duration_seconds <= longest:
         problems.append(f"the clip is {clip.duration_seconds:.1f} s; {engine_id} takes references of "
                         f"{MIN_REFERENCE_SECONDS:g} to {longest:g} s")
-    if engine_id == "turbo" and clip.duration_seconds <= TURBO_MIN_SECONDS:
-        problems.append(f"Turbo needs a reference longer than {TURBO_MIN_SECONDS:g} s (the clip is "
-                        f"{clip.duration_seconds:.2f} s)")
+    # A model with a shortest voice recording of its own (Turbo's, which resolve_reference_path also refuses)
+    adapter = engine_adapters.get(engine_id)
+    too_short = adapter.reference_problem(clip.duration_seconds) if adapter is not None else None
+    if too_short:
+        problems.append(too_short)
     samples = _mono(sf.read(io.BytesIO(clip.wav_bytes), dtype="float32", always_2d=True)[0])
     if float(np.max(np.abs(samples))) < 1e-6 or math.sqrt(float(np.mean(np.square(samples, dtype=np.float64)))) < 1e-3:
         problems.append("the clip is silent or quieter than -60 dBFS, which the Cast store refuses")

@@ -45,7 +45,8 @@ MAX_REFERENCE_RATE = 192_000
 FFMPEG_AUDIO = {".m4a"}
 SUPPORTED_AUDIO = {".wav", ".flac", ".ogg", ".mp3"} | FFMPEG_AUDIO
 ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
-REFERENCE_ENGINES = {"turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "voxcpm2", 'drama-3'}
+REFERENCE_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "voxcpm2", 'drama-3',
+                     *engine_adapters.engines_where("reference_voices")}
 PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice", *engine_adapters.engines_where("preset_voices")}
 FIXED_VOICE_ENGINES = engine_adapters.engines_where("fixed_voices")
 TRANSCRIPT_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", 'drama-3'}
@@ -55,10 +56,6 @@ _CAST_SCHEMA_LOCK = threading.RLock()
 REFERENCE_POLICIES = {
     'drama-3': {'max_seconds':60.,'recommended_rate':44100,'requires_transcript_for_cast':True,
                 'limit_basis':'Fel\'s Voice Lab reference ceiling; native voice files require exact transcripts'},
-    "turbo": {"max_seconds": 60.0, "limit_basis": "voice-lab safety ceiling; no stricter local native limit was established",
-              "recommended_rate": 24_000, "requires_transcript_for_cast": True},
-    "orig": {"max_seconds": 60.0, "limit_basis": "voice-lab safety ceiling; no stricter local native limit was established",
-             "recommended_rate": 24_000, "requires_transcript_for_cast": True},
     "breeze-tts-2": {"max_seconds": 60.0, "limit_basis": "native Breeze MAX_REFERENCE_SECONDS",
                      "recommended_rate": 24_000, "requires_transcript_for_cast": True},
     "qwen3-tts-1.7b-base": {"max_seconds": 60.0, "limit_basis": "voice-lab safety ceiling; the installed Qwen callable exposes no hard duration limit",
@@ -67,6 +64,8 @@ REFERENCE_POLICIES = {
                             "recommended_rate": 24_000, "requires_transcript_for_cast": True},
     "voxcpm2": {"max_seconds": 60.0, "limit_basis": "voice-lab safety ceiling for reference conditioning",
                 "recommended_rate": 48_000, "requires_transcript_for_cast": False},
+    # The engines whose adapters say (engine_adapters/).
+    **engine_adapters.table("reference_policy"),
 }
 
 

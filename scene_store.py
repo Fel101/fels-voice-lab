@@ -43,8 +43,6 @@ SCENE_ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 LINE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\Z")
 SUPPORTED_LANGUAGES = {
     'drama-3':{*DRAMA_LANGUAGES.values(),'Auto'},
-    "turbo": {"English"},
-    "orig": {"English"},
     "breeze-tts-2": {"English"},  # Only English has been verified on the local service path.
     "qwen3-tts-1.7b-voice-design": {"English", "Chinese", "Japanese", "Korean", "German", "French",
                                     "Russian", "Portuguese", "Spanish", "Italian", "Auto"},

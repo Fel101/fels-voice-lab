@@ -14,7 +14,7 @@ Adding a model is a catalog entry, a family module listed in FAMILIES (or an ada
 import importlib
 
 # The family modules, smallest first. Each has ADAPTERS: {engine id: adapter}.
-FAMILIES = ("engine_adapters.phonon", "engine_adapters.kokoro")
+FAMILIES = ("engine_adapters.phonon", "engine_adapters.kokoro", "engine_adapters.chatterbox")
 # The engine a speak or load request that names none gets.
 DEFAULT_ENGINE = "kokoro"
 

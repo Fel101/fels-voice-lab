@@ -223,8 +223,6 @@ def request_for(clip, loaded, *, root=LAB):
     adapter = engine_adapters.get(engine)
     if adapter is not None:
         return adapter.matrix_request(request, clip, loaded, root=root)
-    if engine in {"turbo", "orig"}:
-        return request
     if engine == "qwen3-tts-1.7b-custom-voice":
         speakers = (loaded or {}).get("supported_speakers") or []
         if not speakers:

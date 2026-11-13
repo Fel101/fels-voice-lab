@@ -63,7 +63,6 @@ from evaluation_suites import list_suites
 from ui_preferences import UiPreferences
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio, save_designed_reference
 from kokoro_support import discover_kokoro_voices
-from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from performance_settings import DEFAULTS, effective_settings, performance_controls
 from language_matrix import unscreened_languages
 
@@ -635,14 +634,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     backend_request["reference_text"] = reference["transcript"]
             if adapter is not None:
                 backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
-            elif engine_id == "turbo":
-                sampling = {key: settings[key] for key in CHATTERBOX_SAMPLING_FIELDS[engine_id] if key in settings}
-                backend_request.update({"clone": True, **normalize_chatterbox_sampling(engine_id, sampling)})
-            elif engine_id == "orig":
-                sampling = {key: settings[key] for key in CHATTERBOX_SAMPLING_FIELDS[engine_id] if key in settings}
-                sampling.setdefault("exaggeration", 0.6)
-                sampling.setdefault("cfg_weight", 0.4)
-                backend_request.update({"clone": True, **normalize_chatterbox_sampling(engine_id, sampling)})
             elif engine_id == "breeze-tts-2":
                 backend_request.update({"mode": "direction" if direction.strip() else "clone",
                                         "profile": settings.get("profile", "eager"),
@@ -728,8 +719,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 generation_mode = "clone"
             elif engine_id in {"voxcpm2", "drama-3"}:
                 generation_mode = backend_request["mode"]
-            elif engine_id in {"turbo", "orig"}:
-                generation_mode = "clone"
             else:
                 generation_mode = "fixed_voice"
             model = {
@@ -1256,7 +1245,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         artifact_dir.mkdir(parents=True, exist_ok=False)
         audio_path = artifact_dir / "converted.wav"
         manifest_path = artifact_dir / "manifest.json"
-        wav_bytes = synthetic_label.wav_bytes(audio, int(sample_rate), engine_id="chatterbox-vc")
+        wav_bytes = synthetic_label.wav_bytes(audio, int(sample_rate), engine_id=engine_adapters.only("converts"))
         with audio_path.open("xb") as output:
             output.write(wav_bytes)
         manifest = {

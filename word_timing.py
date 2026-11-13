@@ -13,6 +13,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import engine_adapters
+
 LAB = Path(__file__).resolve().parent
 ALIGN_PYTHON = LAB / ".venv-asr" / "Scripts" / "python.exe"
 ALIGN_WORKER = LAB / "align_worker.py"
@@ -33,10 +35,12 @@ UNSPACED_CODES = {"zh", "ja", "th", "lo", "my", "km"}
 SPEAKER_MARKER = re.compile(r"<\|speaker:\d+\|>")  # no engine says it
 SQUARE_TAG = re.compile(r"\[[^\[\]\n]*\]")
 ROUND_TAG = re.compile(r"\([^()\n]*\)")
+MARKUP = {"square": SQUARE_TAG, "round": ROUND_TAG}
 ENGINE_MARKUP = {
-    "turbo": (SQUARE_TAG,),        # [laugh] [chuckle] [cough]
     "drama-3": (SQUARE_TAG,),      # [whispers] and other delivery cues, with <|speaker:N|> markers
     "breeze-tts-2": (ROUND_TAG,),  # (laugh) (sigh) (cough)
+    # Chatterbox Turbo's [laugh] [chuckle] [cough], and the other engines whose adapters say (engine_adapters/)
+    **{engine: (MARKUP[kind],) for engine, kind in engine_adapters.table("acted_markup").items()},
 }
 SENTENCE_END = (".", "!", "?", "。", "！", "？")
 PHRASE_MAX_CHARS = 42

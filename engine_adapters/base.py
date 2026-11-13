@@ -14,6 +14,7 @@ class Adapter:
     installer = None  # the script, or the script and its arguments, the Models page's Install runs
     gpu_build = None  # the installer module whose --gpu puts in the GPU build of PyTorch for it
     required_packages = None  # Python packages its environment must hold
+    required_files = None  # files its snapshot must hold besides a weight file
     min_free_ram_gb = None  # free RAM, in GB, the Lab wants before it loads the model
     sizes_install = False  # install_size() says what its Install downloads
     uses_torch = True  # its worker runs on PyTorch, so it can be asked for the graphics card
@@ -22,6 +23,8 @@ class Adapter:
     # Voices, takes and scenes: cast_store.py, serve.py, scene_store.py, performance_settings.py, output_license.py
     direction_refusal = None  # what a line with an acting direction is told, when the model takes none
     preset_voices = False  # a voice of it is one of the model's preset voices (identity_options)
+    reference_voices = False  # a voice of it is a voice recording it clones, with its policy (reference_policy)
+    reference_policy = None  # the longest voice recording it takes, why, and the sample rate it wants
     fixed_voices = False  # a voice of it is one or more of the model's fixed voice packs (identity_options)
     takes_voice_recordings = True  # it reads voice recordings from the library, not only the bundled one
     phonemizes = False  # its worker shows the phonemes it would speak (worker_phonemize)
@@ -30,6 +33,9 @@ class Adapter:
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
     output_license = None  # what its code, weights and clips allow, for each take's licence profile
+    acted_markup = None  # the tags it acts instead of saying: "square" ([laugh]) or "round" ((laugh)), for word timing
+    converts = False  # it converts a recording into another voice (POST /api/convert) and never speaks text
+    default_text = None  # the text its worker is given when a request has none
     generation_mode = "clone"  # what a take records as its mode; mode_for() may say otherwise
 
     def check_speak(self, req, pool):
@@ -43,6 +49,17 @@ class Adapter:
     def performance_request(self, identity, settings, applied, direction, language):
         """What a take of this voice asks of speak(), besides the engine, the text and its voice recording."""
         return {}
+
+    def settle_settings(self, settings):
+        """A take's settings, with the defaults filled in, as the model takes them."""
+        return settings
+
+    def reference_problem(self, seconds):
+        """Why a voice recording this long will not do, or None."""
+        return None
+
+    def check_reference(self, path):
+        """Refuse a voice recording the model cannot clone (resolve_reference_path)."""
 
     def mode_for(self, backend_request):
         return self.generation_mode
@@ -81,3 +98,7 @@ class Adapter:
 
     def worker_generate(self, runtime, text, params):
         raise NotImplementedError
+
+    def worker_unload(self, runtime):
+        """What its own unload reports, besides the memory the worker freed."""
+        return {}
