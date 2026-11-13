@@ -28,7 +28,7 @@ import soundfile as sf
 import engine_adapters
 import engine_checks
 from evaluation_suites import get_suite
-from worker_pool import WorkerBusy
+from worker_pool import WorkerBusy, read_catalog
 
 LAB = Path(__file__).resolve().parent
 SUITE_ID = "multilingual-lines-common"
@@ -79,9 +79,9 @@ KOKORO_LETTER = {"en": "a", "en-GB": "b", "es": "e", "fr": "f", "hi": "h", "it":
 DOCUMENTED_LANGUAGES = engine_adapters.table("documented_languages")
 # The languages each engine's makers list, beyond those the Lab has checked (engine_adapters/).
 UPSTREAM_LANGUAGES = engine_adapters.table("upstream_languages")
-ENGINE_ORDER = ("kokoro", "phonon-31m-en", "turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-voice-design",
-                "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "qwen3-tts-1.7b-custom-voice",
-                "voxcpm2", "drama-3")
+# The engines the matrix screens, in the catalog's order: every one that speaks text.
+ENGINE_ORDER = tuple(entry["id"] for entry in read_catalog()["engines"]
+                     if entry["id"] not in engine_adapters.engines_where("converts"))
 CLIP_FIELDS = ("id", "engine", "column", "case_id", "repeat", "seed", "status", "reason", "device",
                "total_s", "audio_seconds", "load_seconds", "metric", "error_rate", "text", "heard")
 
@@ -659,7 +659,7 @@ def finish(records, *, meta, out_dir, suite, run_asr=_run_asr):
 def _run(args):
     from common import pick_device  # imported first: it points the model cache at this lab and selects the GPU
     from kokoro_support import discover_kokoro_voices
-    from worker_pool import EnginePool, read_catalog
+    from worker_pool import EnginePool
 
     suite = get_suite(SUITE_ID)
     if args.resume:

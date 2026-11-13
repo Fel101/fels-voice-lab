@@ -86,12 +86,14 @@ appearance before the page paints.
   `serve.make_handler` with `@router.get(path)` or `@router.post(path)` and the same path, then
   `.venv\Scripts\python.exe tools\build_api_docs.py` to write `docs/API.md` and `openapi.json`. The service will not start
   with a row and no function, or a function and no row.
-- **An engine:** an entry in `catalog/engines.json` with its own environment, and an adapter in its family's module in
-  [engine_adapters/](../engine_adapters/), listed in `FAMILIES`; [engine_adapters/phonon.py](../engine_adapters/phonon.py)
-  shows every part. Families that have not moved into an adapter yet still have their cases in `worker_runtime.py`,
-  `worker_pool.speak`, `ram_needs.py` and `engine_checks.smoke_request`. A guided installer follows
+- **An engine:** an entry in `catalog/engines.json` with its own environment, an adapter in its family's module in
+  [engine_adapters/](../engine_adapters/) (a new family is a new module, listed in `FAMILIES`), and an installer.
+  [engine_adapters/base.py](../engine_adapters/base.py) lists every answer an adapter can give, with the one most engines
+  take; [engine_adapters/phonon.py](../engine_adapters/phonon.py) is the smallest family, and
+  `tests/test_engine_adapters.py` adds a pretend engine this way. A guided installer follows
   [tools/install_phonon.py](../tools/install_phonon.py), the smallest one; the shared pieces are in `tools/install_kokoro.py`.
   Its launcher and script (the adapter's `guided_installer` and `installer`) give the engine's card its **Install** button.
+  The page's scripts still name engines, as their Node tests run page functions without the catalog.
 - **A setting for one computer:** a key in `runtime.local.json`, read with `common.runtime_setting`, and a line in
   [Setup](SETUP.md#hardware-and-state-settings).
 
