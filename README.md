@@ -38,6 +38,12 @@ British, Spanish and French. The Lab spoke every line on a mini PC's processor, 
 person's recording was used or cloned. Its [manifest](docs/demo/kokoro-demo.json) lists the lines, the voices, the model's pinned revision
 and the file's SHA-256. Like every file the Lab makes, the clip says inside it that it is AI-generated speech.
 
+[**Listen to a cloned voice**](docs/demo/designed-voice-demo.mp3) (MP3, 31 seconds, 250 KB) with no person in it. Qwen3-TTS
+VoiceDesign invented the voice from a description, "a woman in her forties with a low, warm, slightly husky voice", and
+speaks the first 13 seconds. The Lab saved that clip in Cast as the voice recording of a VoxCPM2 voice, and from 0:14 VoxCPM2
+clones it for two new lines. Its [manifest](docs/demo/designed-voice-demo.json) has the whole description, the words, both
+models' pinned revisions, the seeds, and how close the Lab's voice match finds each line to the recording.
+
 ## A look at it
 
 Everything below is the real page and the real service with Kokoro 82M speaking. Mira and Tobin are characters that

@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "file": "designed-voice-demo.mp3",
+  "sha256": "ea0a41c2eb4b86da68e379105ba0ca125a11e6885fa8d6b5068b417712d3d6ac",
+  "bytes": 251112,
+  "seconds": 31.29,
+  "made_with": "Fel's Voice Lab, the code that became 0.3.0 (it still called itself 0.2.0), on the development PC (an AMD Radeon AI PRO R9700): POST /api/speak in design mode for the voice recording, then the recording saved as the approved voice recording of a VoxCPM2 voice in Cast, and POST /api/performance for each cloned line; joined with 1 s after the recording and 0.45 s between the lines, at 48000 Hz.",
+  "models": [
+    {
+      "engine": "qwen3-tts-1.7b-voice-design",
+      "name": "Qwen3-TTS VoiceDesign 1.7B",
+      "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+      "licence": "Apache-2.0: the Qwen3-TTS weights."
+    },
+    {
+      "engine": "voxcpm2",
+      "name": "VoxCPM2",
+      "checkpoint": "openbmb/VoxCPM2",
+      "revision": "32279effe8c19989596f05d353d1447f51d9e915",
+      "licence": "Apache-2.0: the VoxCPM2 model card."
+    }
+  ],
+  "synthetic": "No person's voice is in it. The voice was invented from the description below by Qwen3-TTS VoiceDesign; that clip is the voice recording VoxCPM2 cloned. No person's recording was used or cloned.",
+  "label": "AI-generated speech: a synthetic voice designed by Qwen3-TTS VoiceDesign 1.7B and cloned by VoxCPM2 with Fel's Voice Lab 0.3.0, not a recording of a person speaking. IPTC digital source type: http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+  "checks": "Every part was read back by faster-whisper tiny: the recording and the second line word for word, the first line with one word misheard (the name VoxCPM2). The voice match is the Lab's proxy (Chatterbox Turbo's speaker encoder), calibrated on one voice; it is not a listening test.",
+  "parts": [
+    {
+      "part": "the voice recording",
+      "start_seconds": 0.0,
+      "seconds": 13.04,
+      "engine": "qwen3-tts-1.7b-voice-design",
+      "mode": "design",
+      "seed": 7,
+      "voice_description": "A woman in her forties with a low, warm, slightly husky voice, speaking English calmly and a little slowly, like someone reading a story aloud by the fire.",
+      "text": "Nobody recorded this voice. A model made it from a few words describing it: low, warm, and in no hurry. Now it is a recording the Lab can clone."
+    },
+    {
+      "part": "a cloned line",
+      "start_seconds": 14.04,
+      "seconds": 10.56,
+      "engine": "voxcpm2",
+      "mode": "clone",
+      "seed": 42,
+      "text": "This is the same voice, spoken by a different model. VoxCPM2 cloned it from that one recording, and every take it makes keeps the recording it came from.",
+      "voice_match_to_the_recording": 0.93,
+      "checkpoint_revision": "32279effe8c19989596f05d353d1447f51d9e915"
+    },
+    {
+      "part": "a cloned line",
+      "start_seconds": 25.05,
+      "seconds": 6.24,
+      "engine": "voxcpm2",
+      "mode": "clone",
+      "seed": 42,
+      "text": "Because no person is in it, there is no one to ask, and no one's voice is given away.",
+      "voice_match_to_the_recording": 0.89,
+      "checkpoint_revision": "32279effe8c19989596f05d353d1447f51d9e915"
+    }
+  ]
+}

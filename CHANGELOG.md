@@ -32,7 +32,8 @@ waits its turn for the model instead of being turned away. [Every change in deta
 - **NVIDIA cards.** An installer now checks that the card is switched on before it downloads anything, and a failed check
   says what happened. Breeze TTS 2 runs on an 8 GB card, and says to split a line that does not fit.
 - **Headroom.** A clip that reaches full scale is turned down to a -1 dBFS peak instead of being clipped.
-- **The README shows the real Lab:** an animation of the whole path on a fresh Lab, and pictures with Kokoro speaking.
+- **The README shows the real Lab:** an animation of the whole path on a fresh Lab, pictures with Kokoro speaking, and
+  a cloned voice to listen to, designed from a description so that no person is in it.
 
 ### Fixed
 
