@@ -332,455 +332,384 @@ def answer_unexpected_errors(method):
     return answer
 
 
-def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
-                 request_log=None, engine_installer=None, update_checks=None):
-    log = request_log or NullRequestLog()
-    installer = engine_installer or EngineInstaller(engines)
-    # Each card's GPU/CPU switch asks whether the GPU build of its engine can be installed here.
-    engines.gpu_install = getattr(installer, "gpu_build", None)
-    cast = cast_store or CastStore()
-    library_root = Path(getattr(cast, "root", LAB))
-    preferences = UiPreferences(library_root)
-    # Check for updates answers about this program folder, so its last answer lives in out\update beside update.bat's files.
-    checks = update_checks or updates.UpdateChecks(OUT / "update")
-    scenes = scene_store or SceneStore(cast, engines.entries)
-    batches = batch_runner or SceneBatchRunner(scenes, f"http://127.0.0.1:{port}")
-    # Scenes and Comparisons default to the Cast store's own library, so a handler built on a temporary Cast store cannot reach
-    # the real one.
-    evaluations = evaluation_store or EvaluationStore(lab_root=library_root)
-    backups_folder = library_root / library_backup.BACKUP_FOLDER
-    backup_task = library_backup.Task()
+# What the queue (GET /api/queue) calls the work a route asks of the model worker.
+QUEUE_LABELS = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
+                "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
+                "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview"}
 
-    def logged(kind, work, describe):
+
+class Lab:
+    """What the routes share, built once for each handler class: the model pool, the stores, the background task and the
+    service log. A route group (route_groups/) reads it as `lab`, and serve.py's own names, such as LAB and OUT, as
+    lab.serve.NAME, so that a test which points serve.LAB elsewhere moves the routes too."""
+
+    def __init__(self, engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
+                 request_log=None, engine_installer=None, update_checks=None):
+        self.serve = sys.modules[__name__]
+        self.engines, self.port = engines, port
+        self.log = request_log or NullRequestLog()
+        self.installer = engine_installer or EngineInstaller(engines)
+        # Each card's GPU/CPU switch asks whether the GPU build of its engine can be installed here.
+        engines.gpu_install = getattr(self.installer, "gpu_build", None)
+        self.cast = cast_store or CastStore()
+        self.library_root = Path(getattr(self.cast, "root", LAB))
+        self.preferences = UiPreferences(self.library_root)
+        # Check for updates answers about this program folder, so its last answer lives in out\update beside update.bat's
+        # files.
+        self.checks = update_checks or updates.UpdateChecks(OUT / "update")
+        self.scenes = scene_store or SceneStore(self.cast, engines.entries)
+        self.batches = batch_runner or SceneBatchRunner(self.scenes, f"http://127.0.0.1:{port}")
+        # Scenes and Comparisons default to the Cast store's own library, so a handler built on a temporary Cast store
+        # cannot reach the real one.
+        self.evaluations = evaluation_store or EvaluationStore(lab_root=self.library_root)
+        self.backups_folder = self.library_root / library_backup.BACKUP_FOLDER
+        self.backup_task = library_backup.Task()
+        self._drama, self._drama_lock = [], threading.Lock()
+
+    def logged(self, kind, work, describe):
         """Wrap a backup, check or restore so the service log says how it ended: what was made and how big, or why it failed."""
         def run(progress):
             try:
                 result = work(progress)
             except Exception as exc:
-                log.event(f"{kind} failed: {type(exc).__name__}: {exc}")
+                self.log.event(f"{kind} failed: {type(exc).__name__}: {exc}")
                 raise
-            log.event(f"{kind} finished: {describe(result)}")
+            self.log.event(f"{kind} finished: {describe(result)}")
             return result
         return run
 
-    drama_box=[]
-    drama_lock=threading.Lock()
-    def drama():
-        with drama_lock:
-            if not drama_box:
+    def drama(self):
+        """The Drama studio's jobs (drama3_lab_studio.py), started the first time a route asks for them."""
+        with self._drama_lock:
+            if not self._drama:
                 from drama3_lab_studio import create
-                drama_box.append(create(engines,cast))
-            return drama_box[0]
-    router = Router()  # the rows of api_spec.ROUTES, each answered by a function below the class
-    # What the queue (GET /api/queue) calls the work a route asks of the model worker.
-    queue_labels = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
-                    "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
-                    "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview"}
+                self._drama.append(create(self.engines, self.cast))
+            return self._drama[0]
 
-    class Handler(BaseHTTPRequestHandler):
-        _request_id = None
-        _status = 0
-        _sent_bytes = 0
-        _notes = None
+    def close_drama(self):
+        if self._drama:
+            self._drama[0].close()
 
-        @staticmethod
-        def close_drama():
-            if drama_box:drama_box[0].close()
 
-        @staticmethod
-        def close_installer():
-            installer.close()
-        def log_message(self, fmt, *args):
-            pass
+class Handler(BaseHTTPRequestHandler):
+    """The transport every route answers through: the local-only check, the body readers, _send and _json, and _dispatch,
+    which finds a request's route. make_handler gives each service a subclass with its own Lab and router."""
 
-        def handle_one_request(self):
-            """Time the request and, once it is answered, give the service log its line (see request_log.py)."""
-            self.command = None
-            self._request_id, self._status, self._sent_bytes, self._notes = None, 0, 0, {}
-            started = time.perf_counter()
-            try:
-                super().handle_one_request()
-            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
-                # The browser stopped waiting, or closed, before the answer went out. There is nothing left to deliver.
-                self.close_connection = True
-                self._note(error="the client closed the connection before the answer was sent")
-            except BaseException as exc:
-                self._note(error=f"{type(exc).__name__}: {exc}")
-                raise
-            finally:
-                seconds = time.perf_counter() - started
-                if self.command and log.wants(self.command, self._status, seconds):
-                    try:
-                        path = urlparse(self.path).path  # the query string can carry text, so it is never logged
-                    except ValueError:
-                        path = "-"
-                    notes = dict(self._notes)
-                    trace = notes.pop("traceback", None)
-                    log.request(self._rid(), self.command, path, self._status, seconds,
-                                traceback=trace, bytes=self._sent_bytes or None, **notes)
+    lab = None  # what the routes share; make_handler gives each subclass its own
+    router = None  # the rows of api_spec.ROUTES it answers, each with its function
+    _request_id = None
+    _status = 0
+    _sent_bytes = 0
+    _notes = None
 
-        def _rid(self):
-            if self._request_id is None:
-                headers = getattr(self, "headers", None)
-                self._request_id = new_request_id(headers.get("X-Request-Id") if headers is not None else None)
-            return self._request_id
+    @classmethod
+    def close_drama(cls):
+        cls.lab.close_drama()
 
-        def _note(self, **fields):
-            """Facts about this request for the service log: the engine, or why it failed."""
-            if self._notes is None:
-                self._notes = {}
-            self._notes.update({key: value for key, value in fields.items() if value not in (None, "")})
+    @classmethod
+    def close_installer(cls):
+        cls.lab.installer.close()
 
-        def send_response(self, code, message=None):
-            self._status = int(code)
-            super().send_response(code, message)
+    def log_message(self, fmt, *args):
+        pass
 
-        def end_headers(self):
-            self.send_header("X-Request-Id", self._rid())
-            # Another website may not show the Lab inside a frame of its own, where it could trick a click, and no answer is
-            # read as a type other than the one it is sent as.
-            self.send_header("X-Frame-Options", "DENY")
-            self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            super().end_headers()
-
-        def _local_only(self):
-            """Refuse DNS-rebinding (a foreign Host header) and requests made by another website's page
-            (a foreign Origin header). Callers that are not browsers, such as scripts, send no Origin.
-
-            A browser leaves Origin off a plain GET, such as an <audio> or <img> on another website, but every request it
-            sends says where it came from in Sec-Fetch-Site: "same-origin" from the Lab's own pages, "none" when the person
-            typed the address or opened a bookmark. From anywhere else ("cross-site", or "same-site" for a page on another
-            localhost port) the only request allowed is opening one of the Lab's pages in a tab."""
-            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-            if host not in LOCAL_HOSTS:
-                return False
-            site = self.headers.get("Sec-Fetch-Site")
-            if site is not None and site not in ("same-origin", "none"):
+    def handle_one_request(self):
+        """Time the request and, once it is answered, give the service log its line (see request_log.py)."""
+        self.command = None
+        self._request_id, self._status, self._sent_bytes, self._notes = None, 0, 0, {}
+        started = time.perf_counter()
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            # The browser stopped waiting, or closed, before the answer went out. There is nothing left to deliver.
+            self.close_connection = True
+            self._note(error="the client closed the connection before the answer was sent")
+        except BaseException as exc:
+            self._note(error=f"{type(exc).__name__}: {exc}")
+            raise
+        finally:
+            seconds = time.perf_counter() - started
+            if self.command and self.lab.log.wants(self.command, self._status, seconds):
                 try:
-                    page = urlparse(self.path).path in PAGE_PATHS
+                    path = urlparse(self.path).path  # the query string can carry text, so it is never logged
                 except ValueError:
-                    return False
-                return (page and self.command == "GET" and self.headers.get("Sec-Fetch-Mode") == "navigate"
-                        and self.headers.get("Sec-Fetch-Dest") == "document")
-            origin = self.headers.get("Origin")
-            if origin:
-                try:
-                    parsed = urlparse(origin)
-                    return (parsed.scheme == "http" and parsed.hostname in LOCAL_HOSTS
-                            and (parsed.port or 80) == port)
-                except ValueError:
-                    return False
-            return True
+                    path = "-"
+                notes = dict(self._notes)
+                trace = notes.pop("traceback", None)
+                self.lab.log.request(self._rid(), self.command, path, self._status, seconds,
+                                     traceback=trace, bytes=self._sent_bytes or None, **notes)
 
-        def _send(self, code, body, ctype, extra=None):
-            # Keep ASCII header values byte-compatible with existing clients. Encode metadata which
-            # cannot safely appear in an HTTP header, before buffering the response.
-            headers = {}
-            encoded = []
-            for key, value in (extra or {}).items():
-                key.encode("ascii")
-                if not re.fullmatch(r"[A-Za-z0-9-]+", key):
-                    raise ValueError("Invalid response header name.")
-                value = str(value)
-                if any(ord(char) < 32 or ord(char) >= 127 for char in value):
-                    value = quote(value, safe="")
-                    encoded.append(key)
-                headers[key] = value
-            if encoded:
-                headers["X-Metadata-Encoding"] = "percent-encoded UTF-8: " + ", ".join(encoded)
-            ctype.encode("ascii")
-            if "\r" in ctype or "\n" in ctype:
-                raise ValueError("Invalid response content type.")
-            if code == 200 and self.command == "GET" and ctype.startswith("audio/"):
-                # An <audio> player seeks by asking for part of the file. Chromium lets it seek only when the answer says
-                # parts can be asked for, so every recording says so and a request for a part gets that part.
-                headers["Accept-Ranges"] = "bytes"
-                # If-Range asks for the part only if the file is unchanged, which this service cannot tell: send it whole.
-                wanted = None if self.headers.get("If-Range") else byte_range(self.headers.get("Range"), len(body))
-                if wanted is False:
-                    error = json.dumps({"error": "The range asked for is not in the file."}).encode("utf-8")
-                    return self._send(416, error, "application/json", {"Content-Range": f"bytes */{len(body)}"})
-                if wanted:
-                    first, last = wanted
-                    headers["Content-Range"] = f"bytes {first}-{last}/{len(body)}"
-                    code, body = 206, body[first:last + 1]
-            self.send_response(code)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            for k, v in headers.items():
-                self.send_header(k, v)
-            self.end_headers()
-            self.wfile.write(body)
-            self._sent_bytes += len(body)
+    def _rid(self):
+        if self._request_id is None:
+            headers = getattr(self, "headers", None)
+            self._request_id = new_request_id(headers.get("X-Request-Id") if headers is not None else None)
+        return self._request_id
 
-        def _json(self, code, obj):
-            if code >= 400 and isinstance(obj, dict):
-                self._note(error=obj.get("error"))
-            if code >= 500 and sys.exc_info()[0] is not None:
-                self._note(traceback=traceback.format_exc())
-            self._send(code, json.dumps(obj).encode("utf-8"), "application/json")
+    def _note(self, **fields):
+        """Facts about this request for the service log: the engine, or why it failed."""
+        if self._notes is None:
+            self._notes = {}
+        self._notes.update({key: value for key, value in fields.items() if value not in (None, "")})
 
-        def _start_task(self, kind, label, work):
-            """Run a backup, check or restore in the background; one at a time, and the page polls /api/system/task."""
+    def send_response(self, code, message=None):
+        self._status = int(code)
+        super().send_response(code, message)
+
+    def end_headers(self):
+        self.send_header("X-Request-Id", self._rid())
+        # Another website may not show the Lab inside a frame of its own, where it could trick a click, and no answer is
+        # read as a type other than the one it is sent as.
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
+
+    def _local_only(self):
+        """Refuse DNS-rebinding (a foreign Host header) and requests made by another website's page
+        (a foreign Origin header). Callers that are not browsers, such as scripts, send no Origin.
+
+        A browser leaves Origin off a plain GET, such as an <audio> or <img> on another website, but every request it
+        sends says where it came from in Sec-Fetch-Site: "same-origin" from the Lab's own pages, "none" when the person
+        typed the address or opened a bookmark. From anywhere else ("cross-site", or "same-site" for a page on another
+        localhost port) the only request allowed is opening one of the Lab's pages in a tab."""
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        if host not in LOCAL_HOSTS:
+            return False
+        site = self.headers.get("Sec-Fetch-Site")
+        if site is not None and site not in ("same-origin", "none"):
             try:
-                state = backup_task.start(kind, label, work)
-            except library_backup.BackupBusy as exc:
-                return self._json(409, {"error": str(exc)})
-            return self._json(202, {"task": state})
-
-        def _declared_length(self):
-            """The body length the request declares, or 0 when it declares none or something unusable."""
-            try:
-                return max(int(self.headers.get("Content-Length") or "0"), 0)
+                page = urlparse(self.path).path in PAGE_PATHS
             except ValueError:
-                return 0
-
-        def _discard_body(self, length, limit=None):
-            """Read through a body that is being refused. Closing the connection with it unread resets the connection, and a
-            client that is still sending then gets the reset and never reads the refusal. A body too big to read through
-            (`limit`, MAX_DISCARD_BYTES unless a smaller one is given), or sent too slowly, is left unread."""
-            if length > (MAX_DISCARD_BYTES if limit is None else limit):
-                return
-            patience = self.connection.gettimeout()
-            deadline = time.monotonic() + DISCARD_SECONDS
-            try:
-                while length > 0:
-                    left = deadline - time.monotonic()
-                    if left <= 0:
-                        break
-                    self.connection.settimeout(left)
-                    chunk = self.rfile.read(min(length, 64 * 1024))
-                    if not chunk:
-                        break
-                    length -= len(chunk)
-            except OSError:  # the client stalled or went away; the refusal is sent anyway
-                pass
-            finally:
-                self.connection.settimeout(patience)
-
-        def _read_body(self, limit):
-            raw_length = self.headers.get("Content-Length") or "0"
-            try:
-                length = int(raw_length)
-            except (TypeError, ValueError) as exc:
-                raise ValueError("Invalid Content-Length.") from exc
-            if length < 0:
-                raise ValueError("Negative Content-Length.")
-            if length > limit:
-                self._discard_body(length)
-                raise OverflowError(f"Request body exceeds {limit} bytes.")
-            body = self.rfile.read(length)
-            if len(body) != length:
-                raise ValueError("Request body ended before Content-Length bytes arrived.")
-            return body
-
-        def _read_json(self, limit=MAX_REQUEST_BYTES):
-            try:
-                req = json.loads(self._read_body(limit) or b"{}")
-            except OverflowError:
-                raise
-            except Exception as exc:
-                raise ValueError("Bad JSON request body.") from exc
-            if not isinstance(req, dict):
-                raise ValueError("Request body must be a JSON object.")
-            return req
-
-        def _json_body(self, code, obj):
-            return self._json(code, obj)
-
-        def _stream_line(self, obj):
-            payload = (json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-            self.wfile.write(payload)
-            self.wfile.flush()
-            self._sent_bytes += len(payload)
-            if obj.get("type") == "error":  # a stream that fails after its headers went out still answers 200
-                self._note(error=obj.get("error"))
-
-        def _perform(self, req):
-            identity = cast.get_generation_identity(req.get("identity_id"), req.get("reference_version_id"))
-            engine_id = identity["engine_id"]
-            self._note(engine=engine_id)
-            voice_identity = generation_identity_snapshot(identity)
-            if req.get("identity_snapshot") is not None and req["identity_snapshot"] != voice_identity:
-                raise ValueError("The scene voice identity changed after this batch was saved; reload and save the scene before rendering.")
-            language = req.get("language") or (identity.get("engine_options") or {}).get("language") or "English"
-            original_text = req.get("text")
-            if not isinstance(original_text, str) or not original_text.strip() or len(original_text) > 1200:
-                raise ValueError("Performance text must contain 1–1200 characters.")
-            spoken_text = original_text
-            if req.get("use_pronunciations") is True:
-                spoken_text = cast.apply_pronunciations(original_text, identity["character_id"])
-            if len(spoken_text) > 1200:
-                raise ValueError("Pronunciation replacements expanded the spoken line past 1200 characters.")
-            direction = req.get("direction", (identity.get("engine_options") or {}).get("default_direction", ""))
-            if not isinstance(direction, str) or len(direction) > 1000:
-                raise ValueError("Acting direction must be text of 1000 characters or fewer.")
-            adapter = engine_adapters.get(engine_id)
-            if direction.strip() and engine_id not in DIRECTION_ENGINES:
-                if adapter is not None and adapter.direction_refusal:
-                    raise ValueError(adapter.direction_refusal)
-                raise ValueError(f"{engine_id} has no verified text-direction control; use its native event tags in the line text.")
-            settings = req.get("settings", {})
-            if not isinstance(settings, dict):
-                raise ValueError("Performance settings must be an object.")
-            applied_settings = effective_settings(engine_id, settings)
-            backend_request = {"engine": engine_id, "text": spoken_text}
-            if identity["kind"] == "reference":
-                reference = identity["reference"]
-                backend_request["reference_path"] = reference["audio_path"]
-                if getattr(adapter, "takes_transcript", False):
-                    backend_request["reference_text"] = reference["transcript"]
-            if adapter is not None:
-                backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
-            line_id = req.get("line_id")
-            if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
-                raise ValueError("Line ID must contain 1–100 characters.")
-
-            request_key = req.get("idempotency_key")
-            if request_key is not None:
-                if not isinstance(request_key, str) or not request_key or len(request_key) > 200:
-                    raise ValueError("Performance idempotency_key must contain 1–200 characters.")
-                existing = cast.get_take_by_request_key(request_key)
-                if existing is not None:
-                    previous_settings = dict(existing["settings"])
-                    previous_pronunciations = previous_settings.pop("use_pronunciations", False)
-                    expected_reference = identity["reference"]["id"] if identity["reference"] else None
-                    if (existing["parent_take_id"] is not None or  # a key an edit of a take used is not a performance's
-                            existing["identity_id"] != identity["id"] or existing["reference_version_id"] != expected_reference or
-                            existing["line_id"] != line_id.strip() or existing["text"] != original_text.strip() or
-                            existing["spoken_text"] != spoken_text.strip() or existing["language"] != language or
-                            existing["direction"] != direction.strip() or
-                            previous_pronunciations != (req.get("use_pronunciations") is True) or
-                            effective_settings(engine_id, previous_settings) != applied_settings or
-                            existing["model"].get("voice_identity") not in (None, voice_identity)):
-                        raise ValueError("Performance idempotency_key was already used with different inputs.")
-                    audio_body = Path(cast.get_media_path("take", existing["id"])).read_bytes()
-                    return self._send(200, audio_body, "audio/wav", {
-                        "X-Take-Id": existing["id"], "X-Cast-Character": existing["character_name"],
-                        "X-Cast-Identity": existing["identity_label"], "X-Cast-Line-Id": existing["line_id"],
-                        "X-Idempotent-Replay": "true",
-                    })
-
-            wav, sample_rate, engine_info = engines.speak(backend_request)
-            # Kokoro's phoneme times are stored in their own take column, not in the engine record saved below.
-            phoneme_timing = engine_info.pop("timing", None)
-            catalog_entry = engines.entries[engine_id]
-            voice_options = identity.get("engine_options") or {}
-            if adapter is not None:
-                generation_mode = adapter.mode_for(backend_request)
-            else:
-                generation_mode = "fixed_voice"
-            model = {
-                "engine_id": engine_id, "engine_name": catalog_entry.get("name", engine_id),
-                "backend": engine_info.get("backend", catalog_entry.get("backend", {}).get("name")),
-                "checkpoint": engine_info.get("checkpoint", catalog_entry.get("checkpoint")),
-                "checkpoint_revision": engine_info.get("checkpoint_revision", catalog_entry.get("local_revision")),
-                "runtime": catalog_entry.get("runtime"), "mode": generation_mode,
-                "backend_result": engine_info,
-                "effective_settings": applied_settings,
-                "voice_identity": voice_identity,
-            }
-            if adapter is not None:
-                model.update(adapter.take_record(voice_options))
-            take = cast.create_take(
-                identity, line_id=line_id.strip(), text=original_text.strip(), spoken_text=spoken_text.strip(),
-                language=language, direction=direction.strip(),
-                settings={**applied_settings, "use_pronunciations": req.get("use_pronunciations") is True},
-                model=model, wav=wav, sample_rate=sample_rate, generation_info=engine_info,
-                request_key=request_key, phoneme_timing=phoneme_timing,
-            )
-            audio_body = Path(cast.get_media_path("take", take["id"])).read_bytes()
-            headers = {"X-Take-Id": take["id"], "X-Cast-Character": identity["character_name"],
-                       "X-Cast-Identity": identity["label"], "X-Cast-Line-Id": take["line_id"],
-                       "X-Gen-Seconds": str(engine_info.get("total_s", "")),
-                       "X-Audio-Seconds": f"{take['duration_seconds']:.2f}",
-                       "X-Voice-Backend": str(model.get("backend") or ""),
-                       "X-Model-Checkpoint": str(model.get("checkpoint") or ""),
-                       "X-Checkpoint-Revision": str(model.get("checkpoint_revision") or ""),
-                       "X-Generation-Mode": generation_mode}
-            return self._send(200, audio_body, "audio/wav", headers)
-
-        @answer_unexpected_errors
-        def do_GET(self):
-            if not self._local_only():
-                return self._json(403, {"error": "local requests only"})
-            return self._dispatch("GET")
-
-        @answer_unexpected_errors
-        def do_POST(self):
-            if not self._local_only():
-                # Another website's page sends its body too. A small one is read through so the refusal is not lost to the reset;
-                # anything bigger than a request may be is left unread rather than waited for.
-                self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
-                return self._json(403, {"error": "local requests only"})
-            return self._dispatch("POST")
-
-        def _dispatch(self, method):
-            """Answer with the handler that routes.py finds for the request among the rows of api_spec.ROUTES, or with a 404.
-
-            A POST's JSON body is read here, except for the routes that take a recording's bytes, which read their own. What a
-            handler raises and does not answer itself is answered here the same way for every route: a body that is too big is
-            413, a thing that does not exist 404, a request the Lab cannot take 400, and a worker's error keeps its own status."""
-            parsed = urlparse(self.path)
-            path = parsed.path
-            found = router.match(method, path)
-            if found is None:
-                if method == "POST":
-                    # Read the body through, as a refusal does, so the client gets the 404 rather than a reset connection.
-                    self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
-                return self._json(404, {"error": "not found"})
-            route, handler, params = found
-            try:
-                req = None
-                if method == "POST" and route.body_kind != "audio":
-                    scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
-                    req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES)
-                with self._place_in_line(route, req):
-                    return handler(self, parsed, req, **params)
-            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
-                raise
-            except Exception as exc:
-                if self._status:
-                    raise  # the answer has begun; answer_unexpected_errors and the request log take it from here
-                status = (413 if isinstance(exc, OverflowError) else 404 if isinstance(exc, KeyError)
-                          else 400 if isinstance(exc, (ValueError, MemoryError))
-                          else exc.status_code if isinstance(exc, WorkerError) else None)
-                if status is None:
-                    raise
-                return self._json(status, {"error": str(exc)})
-
-        def _place_in_line(self, route, req):
-            """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and
-            wait_priority are taken out of it here, for every route: without wait_seconds a busy worker is refused with 409
-            at once, as before; with it the request waits in line, as this request's id, until its turn, a cancel, its
-            time, or its caller going away."""
-            wait = req.pop("wait_seconds", None) if isinstance(req, dict) else None
-            priority = req.pop("wait_priority", "normal") if isinstance(req, dict) else "normal"
-            wait = job_queue.parse_wait(wait)
-            if priority not in job_queue.PRIORITIES:
-                raise ValueError("wait_priority must be normal or low.")
-            queued = getattr(engines, "queued", None)
-            if queued is None:
-                return contextlib.nullcontext()
-            what = queue_labels.get(route.path)
-            if what and priority == "low":
-                what += " for a scene batch"
-            return queued(request_id=self._rid(), what=what, wait_seconds=wait, priority=priority,
-                          alive=self._caller_present if wait else None)
-
-        def _caller_present(self):
-            """False once the caller has closed the connection, so a request waiting in line for it leaves the line."""
-            try:
-                readable, _, _ = select.select([self.connection], [], [], 0)
-                return not readable or bool(self.connection.recv(1, socket.MSG_PEEK))
-            except (OSError, ValueError):
                 return False
+            return (page and self.command == "GET" and self.headers.get("Sec-Fetch-Mode") == "navigate"
+                    and self.headers.get("Sec-Fetch-Dest") == "document")
+        origin = self.headers.get("Origin")
+        if origin:
+            try:
+                parsed = urlparse(origin)
+                return (parsed.scheme == "http" and parsed.hostname in LOCAL_HOSTS
+                        and (parsed.port or 80) == self.lab.port)
+            except ValueError:
+                return False
+        return True
 
-        def _no_query(self, parsed):
-            """True when the request named a query string, which the model routes refuse with a 404 (docs/API.md says so)."""
-            return bool(parsed.query)
+    def _send(self, code, body, ctype, extra=None):
+        # Keep ASCII header values byte-compatible with existing clients. Encode metadata which
+        # cannot safely appear in an HTTP header, before buffering the response.
+        headers = {}
+        encoded = []
+        for key, value in (extra or {}).items():
+            key.encode("ascii")
+            if not re.fullmatch(r"[A-Za-z0-9-]+", key):
+                raise ValueError("Invalid response header name.")
+            value = str(value)
+            if any(ord(char) < 32 or ord(char) >= 127 for char in value):
+                value = quote(value, safe="")
+                encoded.append(key)
+            headers[key] = value
+        if encoded:
+            headers["X-Metadata-Encoding"] = "percent-encoded UTF-8: " + ", ".join(encoded)
+        ctype.encode("ascii")
+        if "\r" in ctype or "\n" in ctype:
+            raise ValueError("Invalid response content type.")
+        if code == 200 and self.command == "GET" and ctype.startswith("audio/"):
+            # An <audio> player seeks by asking for part of the file. Chromium lets it seek only when the answer says
+            # parts can be asked for, so every recording says so and a request for a part gets that part.
+            headers["Accept-Ranges"] = "bytes"
+            # If-Range asks for the part only if the file is unchanged, which this service cannot tell: send it whole.
+            wanted = None if self.headers.get("If-Range") else byte_range(self.headers.get("Range"), len(body))
+            if wanted is False:
+                error = json.dumps({"error": "The range asked for is not in the file."}).encode("utf-8")
+                return self._send(416, error, "application/json", {"Content-Range": f"bytes */{len(body)}"})
+            if wanted:
+                first, last = wanted
+                headers["Content-Range"] = f"bytes {first}-{last}/{len(body)}"
+                code, body = 206, body[first:last + 1]
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in headers.items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+        self._sent_bytes += len(body)
+
+    def _json(self, code, obj):
+        if code >= 400 and isinstance(obj, dict):
+            self._note(error=obj.get("error"))
+        if code >= 500 and sys.exc_info()[0] is not None:
+            self._note(traceback=traceback.format_exc())
+        self._send(code, json.dumps(obj).encode("utf-8"), "application/json")
+
+    def _declared_length(self):
+        """The body length the request declares, or 0 when it declares none or something unusable."""
+        try:
+            return max(int(self.headers.get("Content-Length") or "0"), 0)
+        except ValueError:
+            return 0
+
+    def _discard_body(self, length, limit=None):
+        """Read through a body that is being refused. Closing the connection with it unread resets the connection, and a
+        client that is still sending then gets the reset and never reads the refusal. A body too big to read through
+        (`limit`, MAX_DISCARD_BYTES unless a smaller one is given), or sent too slowly, is left unread."""
+        if length > (MAX_DISCARD_BYTES if limit is None else limit):
+            return
+        patience = self.connection.gettimeout()
+        deadline = time.monotonic() + DISCARD_SECONDS
+        try:
+            while length > 0:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self.connection.settimeout(left)
+                chunk = self.rfile.read(min(length, 64 * 1024))
+                if not chunk:
+                    break
+                length -= len(chunk)
+        except OSError:  # the client stalled or went away; the refusal is sent anyway
+            pass
+        finally:
+            self.connection.settimeout(patience)
+
+    def _read_body(self, limit):
+        raw_length = self.headers.get("Content-Length") or "0"
+        try:
+            length = int(raw_length)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid Content-Length.") from exc
+        if length < 0:
+            raise ValueError("Negative Content-Length.")
+        if length > limit:
+            self._discard_body(length)
+            raise OverflowError(f"Request body exceeds {limit} bytes.")
+        body = self.rfile.read(length)
+        if len(body) != length:
+            raise ValueError("Request body ended before Content-Length bytes arrived.")
+        return body
+
+    def _read_json(self, limit=MAX_REQUEST_BYTES):
+        try:
+            req = json.loads(self._read_body(limit) or b"{}")
+        except OverflowError:
+            raise
+        except Exception as exc:
+            raise ValueError("Bad JSON request body.") from exc
+        if not isinstance(req, dict):
+            raise ValueError("Request body must be a JSON object.")
+        return req
+
+    def _reference_metadata(self):
+        """The X-Reference-Metadata header of a recording's upload: base64url JSON with its name, words, origin and terms."""
+        encoded = self.headers.get("X-Reference-Metadata", "")
+        metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))  # a bad one is a ValueError: 400
+        if not isinstance(metadata, dict):
+            raise ValueError("Reference metadata must be an object.")
+        return metadata
+
+    def _json_body(self, code, obj):
+        return self._json(code, obj)
+
+    def _stream_line(self, obj):
+        payload = (json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+        self.wfile.write(payload)
+        self.wfile.flush()
+        self._sent_bytes += len(payload)
+        if obj.get("type") == "error":  # a stream that fails after its headers went out still answers 200
+            self._note(error=obj.get("error"))
+
+    @answer_unexpected_errors
+    def do_GET(self):
+        if not self._local_only():
+            return self._json(403, {"error": "local requests only"})
+        return self._dispatch("GET")
+
+    @answer_unexpected_errors
+    def do_POST(self):
+        if not self._local_only():
+            # Another website's page sends its body too. A small one is read through so the refusal is not lost to the reset;
+            # anything bigger than a request may be is left unread rather than waited for.
+            self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
+            return self._json(403, {"error": "local requests only"})
+        return self._dispatch("POST")
+
+    def _dispatch(self, method):
+        """Answer with the handler that routes.py finds for the request among the rows of api_spec.ROUTES, or with a 404.
+
+        A POST's JSON body is read here, except for the routes that take a recording's bytes, which read their own. What a
+        handler raises and does not answer itself is answered here the same way for every route: a body that is too big is
+        413, a thing that does not exist 404, a request the Lab cannot take 400, and a worker's error keeps its own status."""
+        parsed = urlparse(self.path)
+        path = parsed.path
+        found = self.router.match(method, path)
+        if found is None:
+            if method == "POST":
+                # Read the body through, as a refusal does, so the client gets the 404 rather than a reset connection.
+                self._discard_body(self._declared_length(), limit=MAX_REQUEST_BYTES)
+            return self._json(404, {"error": "not found"})
+        route, handler, params = found
+        try:
+            req = None
+            if method == "POST" and route.body_kind != "audio":
+                scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
+                req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES)
+            with self._place_in_line(route, req):
+                return handler(self, parsed, req, **params)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            raise
+        except Exception as exc:
+            if self._status:
+                raise  # the answer has begun; answer_unexpected_errors and the request log take it from here
+            status = (413 if isinstance(exc, OverflowError) else 404 if isinstance(exc, KeyError)
+                      else 400 if isinstance(exc, (ValueError, MemoryError))
+                      else exc.status_code if isinstance(exc, WorkerError) else None)
+            if status is None:
+                raise
+            return self._json(status, {"error": str(exc)})
+
+    def _place_in_line(self, route, req):
+        """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and
+        wait_priority are taken out of it here, for every route: without wait_seconds a busy worker is refused with 409
+        at once, as before; with it the request waits in line, as this request's id, until its turn, a cancel, its
+        time, or its caller going away."""
+        wait = req.pop("wait_seconds", None) if isinstance(req, dict) else None
+        priority = req.pop("wait_priority", "normal") if isinstance(req, dict) else "normal"
+        wait = job_queue.parse_wait(wait)
+        if priority not in job_queue.PRIORITIES:
+            raise ValueError("wait_priority must be normal or low.")
+        queued = getattr(self.lab.engines, "queued", None)
+        if queued is None:
+            return contextlib.nullcontext()
+        what = QUEUE_LABELS.get(route.path)
+        if what and priority == "low":
+            what += " for a scene batch"
+        return queued(request_id=self._rid(), what=what, wait_seconds=wait, priority=priority,
+                      alive=self._caller_present if wait else None)
+
+    def _caller_present(self):
+        """False once the caller has closed the connection, so a request waiting in line for it leaves the line."""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return not readable or bool(self.connection.recv(1, socket.MSG_PEEK))
+        except (OSError, ValueError):
+            return False
+
+    def _no_query(self, parsed):
+        """True when the request named a query string, which the model routes refuse with a 404 (docs/API.md says so)."""
+        return bool(parsed.query)
+
+
+def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
+                 request_log=None, engine_installer=None, update_checks=None):
+    """A handler class for one service: Handler, with the Lab its routes share and the router that answers the rows of
+    api_spec.ROUTES."""
+    lab = Lab(engines, port, cast_store, scene_store, batch_runner, evaluation_store, request_log, engine_installer,
+              update_checks)
+    # The parts of the Lab the routes below read by name.
+    log, cast, library_root, preferences, checks = lab.log, lab.cast, lab.library_root, lab.preferences, lab.checks
+    scenes, batches, evaluations, installer = lab.scenes, lab.batches, lab.evaluations, lab.installer
+    backups_folder, backup_task, logged, drama = lab.backups_folder, lab.backup_task, lab.logged, lab.drama
+    router = Router()  # the rows of api_spec.ROUTES, each answered by a function below
 
     # ------------------------------------------------------------------------------------------------ pages and their scripts
     # Every function below answers the rows of api_spec.ROUTES it names, and is called with the request handler, the parsed
@@ -858,7 +787,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def conversion_upload(self, parsed, req):
         body = self._read_body(MAX_UPLOAD_BYTES)
         try:
-            metadata = reference_metadata(self)
+            metadata = self._reference_metadata()
         except ValueError as exc:
             raise ValueError("Send the file's name and role as base64url JSON in the X-Reference-Metadata header.") from exc
         self._json(201, {"upload": save_conversion_upload(body, metadata)})
@@ -1159,7 +1088,108 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
     @router.post("/api/performance")
     def performance(self, parsed, req):
-        self._perform(req)
+        identity = cast.get_generation_identity(req.get("identity_id"), req.get("reference_version_id"))
+        engine_id = identity["engine_id"]
+        self._note(engine=engine_id)
+        voice_identity = generation_identity_snapshot(identity)
+        if req.get("identity_snapshot") is not None and req["identity_snapshot"] != voice_identity:
+            raise ValueError("The scene voice identity changed after this batch was saved; reload and save the scene before rendering.")
+        language = req.get("language") or (identity.get("engine_options") or {}).get("language") or "English"
+        original_text = req.get("text")
+        if not isinstance(original_text, str) or not original_text.strip() or len(original_text) > 1200:
+            raise ValueError("Performance text must contain 1–1200 characters.")
+        spoken_text = original_text
+        if req.get("use_pronunciations") is True:
+            spoken_text = cast.apply_pronunciations(original_text, identity["character_id"])
+        if len(spoken_text) > 1200:
+            raise ValueError("Pronunciation replacements expanded the spoken line past 1200 characters.")
+        direction = req.get("direction", (identity.get("engine_options") or {}).get("default_direction", ""))
+        if not isinstance(direction, str) or len(direction) > 1000:
+            raise ValueError("Acting direction must be text of 1000 characters or fewer.")
+        adapter = engine_adapters.get(engine_id)
+        if direction.strip() and engine_id not in DIRECTION_ENGINES:
+            if adapter is not None and adapter.direction_refusal:
+                raise ValueError(adapter.direction_refusal)
+            raise ValueError(f"{engine_id} has no verified text-direction control; use its native event tags in the line text.")
+        settings = req.get("settings", {})
+        if not isinstance(settings, dict):
+            raise ValueError("Performance settings must be an object.")
+        applied_settings = effective_settings(engine_id, settings)
+        backend_request = {"engine": engine_id, "text": spoken_text}
+        if identity["kind"] == "reference":
+            reference = identity["reference"]
+            backend_request["reference_path"] = reference["audio_path"]
+            if getattr(adapter, "takes_transcript", False):
+                backend_request["reference_text"] = reference["transcript"]
+        if adapter is not None:
+            backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
+        line_id = req.get("line_id")
+        if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
+            raise ValueError("Line ID must contain 1–100 characters.")
+
+        request_key = req.get("idempotency_key")
+        if request_key is not None:
+            if not isinstance(request_key, str) or not request_key or len(request_key) > 200:
+                raise ValueError("Performance idempotency_key must contain 1–200 characters.")
+            existing = cast.get_take_by_request_key(request_key)
+            if existing is not None:
+                previous_settings = dict(existing["settings"])
+                previous_pronunciations = previous_settings.pop("use_pronunciations", False)
+                expected_reference = identity["reference"]["id"] if identity["reference"] else None
+                if (existing["parent_take_id"] is not None or  # a key an edit of a take used is not a performance's
+                        existing["identity_id"] != identity["id"] or existing["reference_version_id"] != expected_reference or
+                        existing["line_id"] != line_id.strip() or existing["text"] != original_text.strip() or
+                        existing["spoken_text"] != spoken_text.strip() or existing["language"] != language or
+                        existing["direction"] != direction.strip() or
+                        previous_pronunciations != (req.get("use_pronunciations") is True) or
+                        effective_settings(engine_id, previous_settings) != applied_settings or
+                        existing["model"].get("voice_identity") not in (None, voice_identity)):
+                    raise ValueError("Performance idempotency_key was already used with different inputs.")
+                audio_body = Path(cast.get_media_path("take", existing["id"])).read_bytes()
+                return self._send(200, audio_body, "audio/wav", {
+                    "X-Take-Id": existing["id"], "X-Cast-Character": existing["character_name"],
+                    "X-Cast-Identity": existing["identity_label"], "X-Cast-Line-Id": existing["line_id"],
+                    "X-Idempotent-Replay": "true",
+                })
+
+        wav, sample_rate, engine_info = engines.speak(backend_request)
+        # Kokoro's phoneme times are stored in their own take column, not in the engine record saved below.
+        phoneme_timing = engine_info.pop("timing", None)
+        catalog_entry = engines.entries[engine_id]
+        voice_options = identity.get("engine_options") or {}
+        if adapter is not None:
+            generation_mode = adapter.mode_for(backend_request)
+        else:
+            generation_mode = "fixed_voice"
+        model = {
+            "engine_id": engine_id, "engine_name": catalog_entry.get("name", engine_id),
+            "backend": engine_info.get("backend", catalog_entry.get("backend", {}).get("name")),
+            "checkpoint": engine_info.get("checkpoint", catalog_entry.get("checkpoint")),
+            "checkpoint_revision": engine_info.get("checkpoint_revision", catalog_entry.get("local_revision")),
+            "runtime": catalog_entry.get("runtime"), "mode": generation_mode,
+            "backend_result": engine_info,
+            "effective_settings": applied_settings,
+            "voice_identity": voice_identity,
+        }
+        if adapter is not None:
+            model.update(adapter.take_record(voice_options))
+        take = cast.create_take(
+            identity, line_id=line_id.strip(), text=original_text.strip(), spoken_text=spoken_text.strip(),
+            language=language, direction=direction.strip(),
+            settings={**applied_settings, "use_pronunciations": req.get("use_pronunciations") is True},
+            model=model, wav=wav, sample_rate=sample_rate, generation_info=engine_info,
+            request_key=request_key, phoneme_timing=phoneme_timing,
+        )
+        audio_body = Path(cast.get_media_path("take", take["id"])).read_bytes()
+        headers = {"X-Take-Id": take["id"], "X-Cast-Character": identity["character_name"],
+                   "X-Cast-Identity": identity["label"], "X-Cast-Line-Id": take["line_id"],
+                   "X-Gen-Seconds": str(engine_info.get("total_s", "")),
+                   "X-Audio-Seconds": f"{take['duration_seconds']:.2f}",
+                   "X-Voice-Backend": str(model.get("backend") or ""),
+                   "X-Model-Checkpoint": str(model.get("checkpoint") or ""),
+                   "X-Checkpoint-Revision": str(model.get("checkpoint_revision") or ""),
+                   "X-Generation-Mode": generation_mode}
+        return self._send(200, audio_body, "audio/wav", headers)
 
     @router.post("/api/kokoro/phonemize")
     def kokoro_phonemize(self, parsed, req):
@@ -1272,19 +1302,11 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def update_identity(self, parsed, req, identity_id):
         self._json(200, {"identity": cast.update_identity(identity_id, req, fixed_voices=discover_kokoro_voices())})
 
-    def reference_metadata(self):
-        """The X-Reference-Metadata header of a recording's upload: base64url JSON with its name, words, origin and terms."""
-        encoded = self.headers.get("X-Reference-Metadata", "")
-        metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))  # a bad one is a ValueError: 400
-        if not isinstance(metadata, dict):
-            raise ValueError("Reference metadata must be an object.")
-        return metadata
-
     @router.post("/api/identities/{identity_id}/references/preview")
     def preview_reference(self, parsed, req, identity_id):
         try:
             body = self._read_body(MAX_UPLOAD_BYTES)
-            metadata = reference_metadata(self)
+            metadata = self._reference_metadata()
             audio, metrics = cast.preview_reference(identity_id, metadata.get("filename"), body, edits=metadata.get("edits"))
         except RuntimeError as exc:
             return self._json(400, {"error": str(exc)})
@@ -1298,7 +1320,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def upload_reference(self, parsed, req, identity_id):
         try:
             body = self._read_body(MAX_UPLOAD_BYTES)
-            metadata = reference_metadata(self)
+            metadata = self._reference_metadata()
             saved = cast.add_reference(identity_id, metadata.get("filename"), body,
                                        transcript=metadata.get("transcript", ""), origin=metadata.get("origin", ""),
                                        allowed_use=metadata.get("allowed_use", ""), edits=metadata.get("edits"))
@@ -1738,13 +1760,21 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def task(self, parsed, req):
         self._json(200, {"task": backup_task.status()})
 
+    def start_task(self, kind, label, work):
+        """Run a backup, check or restore in the background; one at a time, and the page polls /api/system/task."""
+        try:
+            state = backup_task.start(kind, label, work)
+        except library_backup.BackupBusy as exc:
+            return self._json(409, {"error": str(exc)})
+        return self._json(202, {"task": state})
+
     @router.post("/api/system/backups")
     def back_up(self, parsed, req):
         include = req.get("include", list(library_backup.OPTIONAL))
         if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
             raise ValueError("include must be a list of section names.")
         library_backup.chosen_sections(include)  # an unknown name is refused now, not after the thread starts
-        self._start_task("backup", "Backing up the library", logged(
+        start_task(self, "backup", "Backing up the library", logged(
             "backup", lambda progress: library_backup.create(
                 library_root, backups_folder, include=include, app=APP_NAME, version=VERSION, progress=progress),
             lambda result: f"{result['name']}, {result['files']} files, {result['bytes']} bytes"))
@@ -1752,7 +1782,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     @router.post("/api/system/backups/verify")
     def check_backup(self, parsed, req):
         source = library_backup.backup_path(backups_folder, req.get("name"))
-        self._start_task("check", f"Checking {source.name}", logged(
+        start_task(self, "check", f"Checking {source.name}", logged(
             "check", lambda progress: library_backup.verify(source, progress=progress),
             lambda result: f"{result['name']} {'passed' if result['ok'] else 'did not pass'}"))
 
@@ -1760,7 +1790,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def restore_backup(self, parsed, req):
         source = library_backup.backup_path(backups_folder, req.get("name"))
         target = library_backup.restore_target(library_root, req.get("folder"))
-        self._start_task("restore", f"Restoring {source.name}", logged(
+        start_task(self, "restore", f"Restoring {source.name}", logged(
             "restore", lambda progress: {**library_backup.restore(source, target, progress=progress), "folder": target.name},
             lambda result: f"{result['folder']}, {result['files']} files"))
 
@@ -1807,8 +1837,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         self._json(200, {"job": drama().cancel(job_id)})
 
     router.check()
-    Handler.router = router  # the table it answers, read by the tests
-    return Handler
+    return type("Handler", (Handler,), {"lab": lab, "router": router})
 
 
 class LocalThreadingHTTPServer(ThreadingHTTPServer):
