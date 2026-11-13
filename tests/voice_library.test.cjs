@@ -58,6 +58,23 @@ test('a retired saved voice shows its reason, restore and purge, and cannot star
   assert.ok(card.classList.items.includes('retired'));
 });
 
+test('the report of a delete, retire or restore on a voice card stays above the count after the cards are redrawn',async()=>{
+  const h=harness();h.data.voices[0]={...h.data.voices[0],retired:true,retirement:{reason:'Owner withdrew permission.',inherited:false,source_label:'its voice'}};
+  h.el('showRetiredVoices').checked=true;await h.ctx.VoiceLabLibrary.refresh();
+  const report='Deleted for good: 1 voice, 1 voice recording, 2 takes. Copies outside Cast still hold this audio: out/exports/a.wav. Cast does not delete them; remove them yourself.';
+  h.ctx.purgeAction=async()=>{h.data.voices=h.data.voices.slice(1);return report;};
+  const card=h.el('voiceGallery').children[0];
+  await card.querySelectorAll('button').find(item=>item.textContent==='Delete this voice for good…').handlers.click();
+  for(let i=0;i<20&&!h.el('voiceLibraryStatus').textContent.startsWith(report+'\n');i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.el('voiceGallery').children.length,9);
+  assert.equal(h.el('voiceLibraryStatus').textContent,report+'\n9 voices\nListen below, then choose where to use a voice.');
+  h.ctx.restoreAction=async()=>{throw new Error('Restore failed.');};
+  h.data.voices[0]={...h.data.voices[0],retired:true,retirement:{reason:'Paused.',inherited:false,source_label:'its voice'}};await h.ctx.VoiceLabLibrary.refresh();
+  await h.el('voiceGallery').children[0].querySelectorAll('button').find(item=>item.textContent==='Restore voice').handlers.click();
+  for(let i=0;i<20&&h.el('voiceLibraryStatus').textContent!=='Restore failed.';i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.el('voiceLibraryStatus').textContent,'Restore failed.');
+});
+
 test('the library shows all ten named cards and previews, including the fixed blend',async()=>{
   const h=harness();await h.ctx.VoiceLabLibrary.refresh();
   assert.equal(h.el('voiceGallery').children.length,10);

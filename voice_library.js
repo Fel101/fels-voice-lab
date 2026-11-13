@@ -93,7 +93,9 @@
   }
   function setNavigationBusy(value){busyNavigation=value;el('voiceGallery').querySelectorAll('button').forEach(function(button){button.disabled=value||!!button._referenceMissing||!!button._retired;});}
   function retirementControls(voice){
-    var show=function(message){status(message);},after=function(){return refresh();};
+    var report='',show=function(message){report=message;status(message);};
+    // The refresh redraws the cards and writes the voice count into the same line, so the report goes back above it.
+    var after=function(){return refresh().then(function(){if(report)status(report+'\n'+el('voiceLibraryStatus').textContent);});};
     if(!voice.retired)return [global.retirementButton('Retire voice',function(){return global.retireAction('identity',voice.identity_id,'this voice');},after,show)];
     var controls=[];
     if(!voice.retirement.inherited)controls.push(global.retirementButton('Restore voice',function(){return global.restoreAction('identity',voice.identity_id,'this voice');},after,show));

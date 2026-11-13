@@ -49,6 +49,9 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   did in the new smoke test. Written as 16-bit, those samples were cut off, and the take checks flagged the take as clipped.
   Every clip a model makes, and every voice conversion, is now scaled to a -1 dBFS peak when its peak reaches full scale;
   quieter clips are left exactly as they are.
+- **A voice card's report stays.** After **Retire voice**, **Restore voice** or deleting a voice for good on its card, the
+  Cast library redrew its cards and wrote the voice count over the report at once, so the list of copies outside Cast that
+  a delete leaves for you to remove never stayed on screen. The report now stays, above the count.
 - The Clone page's note on Common Voice no longer says Cast cannot take MP3.
 
 ### Setup
