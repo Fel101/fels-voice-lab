@@ -46,17 +46,27 @@ models' pinned revisions, the seeds, and how close the Lab's voice match finds e
 
 ## A look at it
 
-Everything below is the real page and the real service with Kokoro 82M speaking. Mira and Tobin are characters that
-exist only in a library made for it, and their voices are Kokoro's preset voices, so no person's recording was used or
-cloned. The waveforms, lengths and loudness readings are the model's.
+Everything below is the real page and the real service. Mira and Tobin are characters that exist only in a library made
+for it. In the animation and the pictures their voices are Kokoro 82M's preset voices, and in the video with sound they
+were designed from descriptions, so no person's recording was used or cloned. The waveforms, lengths and loudness
+readings are the models'.
 
 ### The whole path
 
 ![A Lab fresh from setup installs Kokoro 82M from Model studio and says its first words, gives two characters Kokoro voices (one a blend of two), performs a line, then imports a four-line script as a scene, renders it and plays it](docs/images/lab-tour.gif)
 
 A Lab fresh from setup, in a minute and a half: install a model, make a voice, perform a line, render a scene. The page
-was driven by a script, and the waits for the install and the model's first load are sped up. The pictures that follow
-are made by [`tools/readme_shots.py`](tools/readme_shots.py), with `af_heart` for Mira and `bm_george` for Tobin.
+was driven by a script, and the waits for the install and the model's first load are sped up.
+
+The same path with sound and a narrator, in 3 minutes 39 seconds, with bigger models after the install: Qwen3-TTS
+VoiceDesign designs Mira's and Tobin's voices from written descriptions, VoxCPM2 clones Mira's and Chatterbox Turbo
+Tobin's, and the scene plays in their voices. The narrator is the designed voice of the cloning demo above, cloned by
+VoxCPM2.
+
+https://github.com/user-attachments/assets/e1bbee2f-c3ce-4242-96af-819682310bfe
+
+The pictures that follow are made by [`tools/readme_shots.py`](tools/readme_shots.py), with `af_heart` for Mira and
+`bm_george` for Tobin.
 
 ### Cast library
 
