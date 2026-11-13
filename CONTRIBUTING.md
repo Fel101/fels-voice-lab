@@ -51,8 +51,8 @@ does not wait for it, and it keeps the clip as an artifact.
 
 The HTTP API is one table, `api_spec.py`: the service's dispatch is built from it (`routes.py`), and `docs/API.md` and
 `openapi.json` are written from it. To add a route, give it a row there, documented or marked `internal=True` (the Lab's own
-pages and helpers), and a function in `serve.make_handler` registered with `@router.get(path)` or `@router.post(path)` under
-the same path. The service refuses to start with a row that has no function or a function that has no row, and
+pages and helpers), and a function in its group's module in `route_groups/`, registered in that module's
+`register(router, lab)` with `@router.get(path)` or `@router.post(path)` under the same path. The service refuses to start with a row that has no function or a function that has no row, and
 `tests/test_api_docs.py` checks the same. After editing the table run `.venv\Scripts\python.exe tools/build_api_docs.py`
 (`--check` only reports). `/api/speak` stays one blocking call that answers a whole WAV file, and
 `tests/test_api_contract.py` holds it to that.

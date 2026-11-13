@@ -28,7 +28,7 @@ a model worker           engine_worker.py in that model's own environment: .venv
   service's `.venv` with no model package (`tests/test_engine_adapters.py` checks both).
 - **[job_queue.py](../job_queue.py) is the line for the worker.** One request uses it at a time. The others wait in order,
   a person's ahead of a scene batch's lines, when they sent `wait_seconds`, and are refused with 409 otherwise; any can be
-  cancelled, and a running one is stopped by ending its worker's process. `serve._place_in_line` puts every request that
+  cancelled, and a running one is stopped by ending its worker's process. `serve.Handler._place_in_line` puts every request that
   needs the worker in line under its `X-Request-Id`, and the page's `voice_lab_queue.js` makes all of the page's ask to wait.
 - **The device.** The service asks for `cpu` or `cuda` (`common.pick_device`: `runtime.local.json`, then an NVIDIA driver,
   then an AMD card that AMD's ROCm build of PyTorch has code for, then the CPU). A worker whose own PyTorch cannot use the card
@@ -40,10 +40,14 @@ a model worker           engine_worker.py in that model's own environment: .venv
 
 1. `serve.py` refuses anything that is not local (`_local_only`: the Host, Origin and Sec-Fetch-Site headers).
 2. [routes.py](../routes.py) matches the path against the rows of [api_spec.py](../api_spec.py), the one table of every route,
-   and finds the function `serve.make_handler` registered for that row with `@router.get(...)` or `@router.post(...)`.
-3. The function works with the stores built in `make_handler`, which it closes over: `cast` (characters, voices, references
-   and takes; [cast_store.py](../cast_store.py)), `scenes` ([scene_store.py](../scene_store.py)), `evaluations`, `engines` (the
-   pool), `installer` (the Models page's Install button) and the rest.
+   and finds the function registered for that row with `@router.get(...)` or `@router.post(...)` by one of the route groups
+   in [route_groups/](../route_groups/): the pages, engines and speech, conversion, the Cast, takes, scenes and export,
+   comparisons, the system and backups, and the Drama studio, each a module with a `register(router, lab)`.
+3. The function works with what the routes share, the `serve.Lab` that `make_handler` builds: `cast` (characters, voices,
+   references and takes; [cast_store.py](../cast_store.py)), `scenes` ([scene_store.py](../scene_store.py)), `evaluations`,
+   `engines` (the pool), `installer` (the Models page's Install button) and the rest. It answers through the request handler,
+   `serve.Handler` (`_send`, `_json`, the body readers), and reads `serve.py`'s own names, such as `LAB` and `OUT`, as
+   `serve.LAB`, so that a test which points them elsewhere moves the routes too.
 4. What a handler raises and does not answer itself, `_dispatch` answers the same way for every route: 413 for a body too
    big, 404 for something that does not exist, 400 for a request the Lab cannot take, a worker's own status for its errors.
 
@@ -82,8 +86,9 @@ appearance before the page paints.
 
 ## Adding
 
-- **A route:** a row in `api_spec.ROUTES` (documented, or `internal=True` for the Lab's own pages), a function in
-  `serve.make_handler` with `@router.get(path)` or `@router.post(path)` and the same path, then
+- **A route:** a row in `api_spec.ROUTES` (documented, or `internal=True` for the Lab's own pages), a function in its
+  group's `register(router, lab)` in [route_groups/](../route_groups/) with `@router.get(path)` or `@router.post(path)` and the
+  same path (a new group is a new module, listed in `GROUPS`), then
   `.venv\Scripts\python.exe tools\build_api_docs.py` to write `docs/API.md` and `openapi.json`. The service will not start
   with a row and no function, or a function and no row.
 - **An engine:** an entry in `catalog/engines.json` with its own environment, an adapter in its family's module in

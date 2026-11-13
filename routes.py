@@ -1,7 +1,7 @@
-"""Which function answers a request: the rows of api_spec.ROUTES, each matched to the handler serve.py registered for it.
+"""Which function answers a request: the rows of api_spec.ROUTES, each matched to the handler registered for it.
 
-serve.py registers one function per route with @router.get(path) or @router.post(path), naming the path exactly as api_spec.py
-writes it, {take_id} and all; one function may answer several rows. A request path is matched against the patterns
+The route groups (route_groups/) register one function per route with @router.get(path) or @router.post(path), naming the path
+exactly as api_spec.py writes it, {take_id} and all; one function may answer several rows. A request path is matched against the patterns
 api_spec.PATH_PARAMS gives each parameter: a path with no parameter first, then the patterns in the table's order, then the
 prefixes (a path that ends in /*). The handler receives the parameters by name.
 
