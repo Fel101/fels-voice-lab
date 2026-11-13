@@ -802,6 +802,43 @@ class InstallWindowTests(unittest.TestCase):
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class CastEditorTests(unittest.TestCase):
+    def test_a_kokoro_voice_keeps_the_preset_voices_chosen_for_it(self):
+        """The Cast editor sent the chosen voices where the service did not look, so every Kokoro voice made in the page was
+        saved as af_heart, and no blend could be made there."""
+        import kokoro_support
+
+        installed = ["af_heart", "bf_emma", "bm_george"]
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp, \
+                mock.patch.object(serve, "discover_kokoro_voices", lambda: list(installed)), \
+                mock.patch.object(kokoro_support, "discover_kokoro_voices", lambda: list(installed)):
+            server = FlowServer(Path(temp))
+            page = None
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#cast")
+                page.evaluate("document.getElementById('castEditor').open = true")
+                page.set_value("#characterName", "Tobin")
+                page.click("#createCharacter")
+                page.wait_until("[...document.querySelectorAll('#characterSelect option')].some((o) => o.textContent === 'Tobin')")
+                page.set_value("#identityEngine", "kokoro")
+                page.wait_until("document.getElementById('fixedVoice').options.length === 3")
+                page.set_value("#identityLabel", "Tobin, a blend")
+                page.evaluate("""[...document.getElementById('fixedVoice').options]
+                                 .forEach((o) => { o.selected = ['bf_emma', 'bm_george'].includes(o.value); })""")
+                page.click("#createIdentity")
+                page.wait_until("document.getElementById('identityState').textContent.startsWith('kokoro')")
+                voices = [identity["engine_options"]["voice"] for character in server.cast.list_cast()
+                          for identity in character["identities"]]
+                self.assertEqual(voices, ["bf_emma,bm_george"])
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class ScriptImportPageTests(unittest.TestCase):
     """A Fountain file and a pasted plain-text script each become a scene, with the speakers matched to Cast by name."""
 

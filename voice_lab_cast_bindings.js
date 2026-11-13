@@ -22,8 +22,8 @@ $('identityEngine').addEventListener('change',updateIdentityEngineKind);
 $('loadCustomVoiceIdentity').addEventListener('click',loadCustomVoiceIdentityOptions);
 ['phononVoice','phononIdentityVoice'].forEach(function(id){$(id).addEventListener('change',showPhononVoiceInfo);});
 $('createIdentity').addEventListener('click',function(){var c=activeCharacter();if(!c){apiFailure(new Error('Create or open a character first.'));return;}
-  var engine=$('identityEngine').value,options={},body={engine_id:engine,label:$('identityLabel').value,engine_options:options,notes:$('identityNotes').value};
-  if(engine==='kokoro'){options.voice=selectedValues($('fixedVoice')).join(',');}
+  var engine=$('identityEngine').value,body={engine_id:engine,label:$('identityLabel').value,notes:$('identityNotes').value};
+  if(engine==='kokoro'){body.voice=selectedValues($('fixedVoice')).join(',');}
   if(engine==='qwen3-tts-1.7b-custom-voice'){
     if(!$('presetSpeaker').value||!$('presetLanguage').value){apiFailure(new Error('Load CustomVoice, then choose its speaker and language.'));return;}
     body.speaker=$('presetSpeaker').value;body.language=$('presetLanguage').value;body.default_direction=$('presetDirection').value;
