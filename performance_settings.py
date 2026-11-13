@@ -10,13 +10,6 @@ DEFAULTS = {
         "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0},
     "voxcpm2": {"seed": 42, "cfg_value": 2.0, "inference_timesteps": 10},
 }
-for _engine in ("qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"):
-    DEFAULTS[_engine] = {"seed": 42, "max_new_tokens": 512, "temperature": 0.9,
-                        "top_k": 50, "top_p": 1.0, "repetition_penalty": 1.05}
-DEFAULTS["qwen3-tts-1.7b-custom-voice"] = {
-    "seed": 42, "max_new_tokens": 512, "temperature": 0.9,
-    "top_k": 50, "top_p": 1.0, "repetition_penalty": 1.05,
-}
 
 # Presentation metadata for the values already accepted by effective_settings(). The
 # catalog remains authoritative for capability status; this table supplies readable
@@ -36,13 +29,6 @@ CONTROL_UI = {
     "voxcpm2": {"seed": ("Seed", 0, 2147483647, 1), "cfg_value": ("CFG value", 0.1, 10.0, 0.1),
                 "inference_timesteps": ("Inference steps", 1, 100, 1)},
 }
-for _engine in ("qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "qwen3-tts-1.7b-custom-voice"):
-    CONTROL_UI[_engine] = {
-        "seed": ("Seed", 0, 2147483647, 1), "max_new_tokens": ("Maximum new tokens", 8, 2048, 1),
-        "temperature": ("Temperature", 0.05, 2.0, 0.05), "top_k": ("Top-k", 0, 200, 1),
-        "top_p": ("Top-p", 0.05, 1.0, 0.01),
-        "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05),
-    }
 # The engines whose adapters say (engine_adapters/).
 for _engine, _adapter in engine_adapters.ADAPTERS.items():
     if _adapter.performance_defaults is not None:

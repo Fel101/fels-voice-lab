@@ -16,34 +16,6 @@ ENGINE_LICENSE_NOTES = {
         "status": "restricted",
         "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
     },
-    "qwen3-tts-1.7b-voice-design": {
-        "code_license": "MIT faster-qwen3-tts runtime; Apache-2.0 Qwen/Transformers compatibility components.",
-        "weights_license": "Apache-2.0, Qwen3-TTS checkpoint; recording rights are separate.",
-        "output_use": "Unknown; review checkpoint terms and reference rights before redistribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
-    "qwen3-tts-1.7b-base": {
-        "code_license": "MIT faster-qwen3-tts runtime; Apache-2.0 Qwen/Transformers compatibility components.",
-        "weights_license": "Apache-2.0, Qwen3-TTS checkpoint; recording rights are separate.",
-        "output_use": "Unknown; review checkpoint terms and reference rights before redistribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
-    "qwen3-tts-0.6b-base": {
-        "code_license": "MIT faster-qwen3-tts runtime; Apache-2.0 Qwen/Transformers compatibility components.",
-        "weights_license": "Apache-2.0, Qwen3-TTS checkpoint; recording rights are separate.",
-        "output_use": "Unknown; review checkpoint terms and reference rights before redistribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
-    "qwen3-tts-1.7b-custom-voice": {
-        "code_license": "MIT faster-qwen3-tts runtime; Apache-2.0 Qwen/Transformers compatibility components.",
-        "weights_license": "Apache-2.0, Qwen3-TTS checkpoint; recording rights are separate.",
-        "output_use": "Unknown; review checkpoint terms and reference rights before redistribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
     "voxcpm2": {
         "code_license": "Apache-2.0 per the pinned upstream repository.",
         "weights_license": "Apache-2.0 per the pinned model card.",

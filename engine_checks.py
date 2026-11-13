@@ -17,7 +17,6 @@ import numpy as np
 from kokoro_support import discover_kokoro_voices
 import engine_adapters
 from phonon_support import VOICE_CATALOG
-from qwen_support import QWEN_FILES, QWEN_LAUNCHER, QWEN_MODELS
 
 LAB = Path(__file__).resolve().parent
 CHECK_TEXT = "This is a short check of the voice engine."
@@ -37,27 +36,25 @@ BORROWED_PACKAGES = {"voxcpm2": ".venv-fqwen/Scripts/python.exe"}
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
-GUIDED_INSTALLERS = {**{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()},
-                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
+GUIDED_INSTALLERS = {"voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
                      **engine_adapters.table("guided_installer")}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
 # into it.
-REQUIRED_PACKAGES = {**{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS},
-                     "voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate"),
+REQUIRED_PACKAGES = {"voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate"),
                      **engine_adapters.table("required_packages")}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
-REQUIRED_FILES = {**{engine: QWEN_FILES for engine in QWEN_MODELS},
-                  "voxcpm2": ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json"),
+REQUIRED_FILES = {"voxcpm2": ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json"),
                   **engine_adapters.table("required_files")}
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 # Where Breeze's loader looks for its files (breeze/loader.py: the models folder beside it, then the repository's name), and the
 # ones it cannot load without.
 BREEZE_FOLDER = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
 BREEZE_FILES = (BREEZE_WEIGHTS, "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors")
-DESIGN_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-voice-design", "voxcpm2", "drama-3"}
-CLONE_ENGINES = {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}
+DESIGN_ENGINES = {"breeze-tts-2", "voxcpm2", "drama-3"}
+# The engines whose Test clones the bundled clip; the evaluation compares their voices with it.
+CLONE_ENGINES = engine_adapters.engines_where("clone_check")
 
 
 def utc_now():
@@ -204,14 +201,6 @@ def smoke_request(engine, loaded=None, *, root=LAB):
         return adapter.smoke_request(base, loaded, root=root)
     if engine in DESIGN_ENGINES:
         return {**base, "mode": "design", "voice_description": CHECK_VOICE}
-    if engine in CLONE_ENGINES:
-        # x-vector conditioning needs no transcript, and the bundled reference has none.
-        return {**base, "reference_path": str(Path(root) / "reference" / "af_heart.wav"), "xvec_only": True}
-    if engine == "qwen3-tts-1.7b-custom-voice":
-        speakers = (loaded or {}).get("supported_speakers") or []
-        if not speakers:
-            raise ValueError("The CustomVoice checkpoint reported no speakers to check.")
-        return {**base, "speaker": speakers[0]}
     raise ValueError(f"No speech check is defined for {engine!r}.")
 
 

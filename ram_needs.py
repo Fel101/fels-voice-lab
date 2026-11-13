@@ -13,7 +13,6 @@ from common import runtime_setting
 
 DEFAULT_MIN_FREE_RAM_GB = {
     "breeze-tts-2": 12, "voxcpm2": 10, "drama-3": 26,
-    "qwen3-tts-1.7b-voice-design": 10, "qwen3-tts-1.7b-base": 10, "qwen3-tts-0.6b-base": 10, "qwen3-tts-1.7b-custom-voice": 10,
     # The engines whose adapters say (engine_adapters/).
     **engine_adapters.table("min_free_ram_gb"),
 }

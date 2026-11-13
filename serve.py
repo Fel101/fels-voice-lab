@@ -630,7 +630,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             if identity["kind"] == "reference":
                 reference = identity["reference"]
                 backend_request["reference_path"] = reference["audio_path"]
-                if engine_id in {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}:
+                if engine_id == "breeze-tts-2" or getattr(adapter, "takes_transcript", False):
                     backend_request["reference_text"] = reference["transcript"]
             if adapter is not None:
                 backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
@@ -646,25 +646,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                                         "depth_temperature": settings.get("depth_temperature", 0.9),
                                         "depth_top_k": settings.get("depth_top_k", 50),
                                         "depth_top_p": settings.get("depth_top_p", 1.0)})
-            elif engine_id in {"qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}:
-                if not isinstance(language, str) or not language.strip():
-                    raise ValueError("Choose a language for Qwen Base performance.")
-                backend_request.update({"mode": "clone", "language": language,
-                                        "direction": direction, "seed": settings.get("seed", 42),
-                                        "max_new_tokens": settings.get("max_new_tokens", 512),
-                                        "temperature": settings.get("temperature", 0.9),
-                                        "top_k": settings.get("top_k", 50), "top_p": settings.get("top_p", 1.0),
-                                        "repetition_penalty": settings.get("repetition_penalty", 1.05),
-                                        "xvec_only": False})
-            elif engine_id == "qwen3-tts-1.7b-custom-voice":
-                options = identity["engine_options"]
-                backend_request.update({"mode": "custom_voice", "speaker": options["speaker"],
-                                        "language": language, "direction": direction,
-                                        "seed": settings.get("seed", 42),
-                                        "max_new_tokens": settings.get("max_new_tokens", 512),
-                                        "temperature": settings.get("temperature", 0.9),
-                                        "top_k": settings.get("top_k", 50), "top_p": settings.get("top_p", 1.0),
-                                        "repetition_penalty": settings.get("repetition_penalty", 1.05)})
             elif engine_id == 'drama-3':
                 backend_request.update(mode='clone', reference_text=identity['reference']['transcript'],
                                        direction=direction, language=language, **applied_settings)
@@ -713,10 +694,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 generation_mode = adapter.mode_for(backend_request)
             elif engine_id == "breeze-tts-2":
                 generation_mode = backend_request["mode"]
-            elif engine_id in PRESET_VOICE_ENGINES:
-                generation_mode = "custom_voice"
-            elif engine_id.startswith("qwen3-tts"):
-                generation_mode = "clone"
             elif engine_id in {"voxcpm2", "drama-3"}:
                 generation_mode = backend_request["mode"]
             else:
@@ -1036,8 +1013,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         save_path = None
         if save_name not in (None, ""):
             save_engine = req.get("engine", engine_adapters.DEFAULT_ENGINE)
-            can_save_design = (save_engine == "breeze-tts-2" and req.get("mode", "design") == "design") or (
-                save_engine in {"qwen3-tts-1.7b-voice-design", "voxcpm2"} and req.get("mode", "design") == "design")
+            designs = {"breeze-tts-2", "voxcpm2", *engine_adapters.engines_where("saves_designs")}
+            can_save_design = save_engine in designs and req.get("mode", "design") == "design"
             if not can_save_design:
                 return self._json(400, {"error": "Reusable voice assets can be saved from Breeze, Qwen VoiceDesign, or VoxCPM2 "
                                                  "design takes."})
@@ -1103,7 +1080,8 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         save_path = None
         save_name = req.get("save_voice_as")
         if save_name not in (None, ""):
-            if req.get("engine") != "qwen3-tts-1.7b-voice-design" or req.get("mode", "design") != "design":
+            streamed_designs = engine_adapters.engines_where("streams") & engine_adapters.engines_where("saves_designs")
+            if req.get("engine") not in streamed_designs or req.get("mode", "design") != "design":
                 return self._json(400, {"error": "Only a Qwen VoiceDesign stream can be saved as a reusable voice reference."})
             try:
                 save_path = voice_asset_path(save_name)
@@ -1311,40 +1289,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
         if adapter is not None and (adapter.fixed_voices or adapter.preset_voices):
             options = adapter.identity_options(capabilities, req, performance_controls(engine_id, capabilities), engines)
-        elif preset_voice:
-            loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
-            if not loaded_info:
-                raise ValueError("Load the CustomVoice checkpoint first so its local speakers and languages can be verified.")
-            supported_speakers = loaded_info.get("supported_speakers") or []
-            supported_languages = loaded_info.get("supported_languages") or []
-            speaker = req.get("speaker")
-            language = req.get("language")
-            if not isinstance(speaker, str) or speaker not in supported_speakers:
-                raise ValueError("Choose a speaker reported by the loaded CustomVoice checkpoint.")
-            language_match = next((item for item in supported_languages
-                                   if isinstance(language, str) and item.casefold() == language.casefold()), None)
-            if language_match is None:
-                raise ValueError("Choose a language reported by the loaded CustomVoice checkpoint.")
-            default_direction = req.get("default_direction", "")
-            if not isinstance(default_direction, str) or len(default_direction) > 1000:
-                raise ValueError("Preset delivery instruction must be text of 1000 characters or fewer.")
-            controls = performance_controls(engine_id, capabilities)
-            checkpoint = loaded_info.get("checkpoint") or entry["checkpoint"]
-            checkpoint_revision = loaded_info.get("checkpoint_revision") or entry["local_revision"]
-            if checkpoint != entry["checkpoint"] or checkpoint_revision != entry["local_revision"]:
-                raise ValueError("The loaded CustomVoice model does not match the catalog's pinned checkpoint revision.")
-            options = {
-                "checkpoint": checkpoint,
-                "checkpoint_revision": checkpoint_revision,
-                "speaker": speaker, "language": language_match,
-                "supported_speakers": list(supported_speakers),
-                "supported_languages": list(supported_languages),
-                "default_direction": default_direction.strip(),
-                "settings_schema": controls["controls"],
-                "capability_snapshot": {"voice_direction": controls["direction"],
-                                        "sampling_controls": capabilities.get("sampling_controls", {}),
-                                        "acting_controls": capabilities.get("acting_controls", [])},
-            }
         else:
             options = {}
         self._json(201, {"identity": cast.create_identity(character_id, engine_id, req.get("label"), options,

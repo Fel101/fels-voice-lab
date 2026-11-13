@@ -22,12 +22,6 @@ import engine_devices
 LAB = Path(__file__).resolve().parent
 OUT = LAB / "out"
 CATALOG_PATH = LAB / "catalog" / "engines.json"
-QWEN_MODES = {
-    "qwen3-tts-1.7b-voice-design": "design",
-    "qwen3-tts-1.7b-base": "clone",
-    "qwen3-tts-0.6b-base": "clone",
-    "qwen3-tts-1.7b-custom-voice": "custom_voice",
-}
 VOXCPM_MODES = {"design", "clone", "continuation"}
 
 
@@ -500,13 +494,14 @@ class EnginePool:
                 raise ValueError('Drama 3 reference preparation requires the exact transcript.')
             load_params = {"profile": profile or "eager"} if key == "breeze-tts-2" else None
             worker = self._ensure_loaded_locked(key, load_params)
+            adapter = engine_adapters.get(key)
+            if adapter is not None:
+                return worker.call("prepare_reference",
+                                   **adapter.reference_call(reference, reference_text, xvec_only, exaggeration))
             if key == "breeze-tts-2":
                 return worker.call("prepare_reference", path=str(reference))
             if key == 'drama-3':
                 return worker.call('prepare_reference', path=str(reference), reference_text=reference_text)
-            if key in QWEN_MODES:
-                return worker.call("prepare_reference", path=str(reference),
-                                   reference_text=reference_text, xvec_only=xvec_only)
             if key == "voxcpm2":
                 return worker.call("prepare_reference", path=str(reference))
             return worker.call("prepare_reference", path=str(reference), exaggeration=exaggeration)
@@ -546,34 +541,7 @@ class EnginePool:
                 if not isinstance(req.get('reference_text'),str) or not req['reference_text'].strip():
                     raise ValueError('Drama 3 cloning requires the exact reference transcript.')
             controls({name:req[name] for name in controls() if name in req})
-        if key in QWEN_MODES:
-            mode = QWEN_MODES[key]
-            if req.get("mode", mode) != mode:
-                raise ValueError(f"Checkpoint {key!r} supports mode {mode!r}; it does not support {req.get('mode')!r}.")
-            common_fields = {"engine", "text", "mode", "language", "seed", "max_new_tokens", "save_voice_as",
-                             "temperature", "top_k", "top_p", "repetition_penalty"}
-            mode_fields = {
-                "design": {"voice_description"},
-                "clone": {"reference_path", "reference_text", "xvec_only", "direction"},
-                "custom_voice": {"speaker", "direction"},
-            }[mode]
-            unsupported = set(req) - common_fields - mode_fields
-            if unsupported:
-                raise ValueError(f"Unsupported Qwen {mode} parameter(s): {', '.join(sorted(unsupported))}.")
-            if mode == "design" and not str(req.get("voice_description", "")).strip():
-                raise ValueError("Qwen VoiceDesign requires a non-empty voice_description.")
-            if mode == "clone":
-                if not req.get("reference_path"):
-                    raise ValueError("Qwen reference cloning requires reference_path.")
-                if not isinstance(req.get("xvec_only", False), bool):
-                    raise ValueError("xvec_only must be true or false.")
-                if not req.get("xvec_only", False) and not str(req.get("reference_text", "")).strip():
-                    raise ValueError("Qwen reference cloning requires reference_text unless xvec_only is enabled.")
-            if mode == "custom_voice" and not str(req.get("speaker", "")).strip():
-                raise ValueError("Qwen CustomVoice requires a speaker returned by the loaded checkpoint.")
-            if req.get("save_voice_as") and mode != "design":
-                raise ValueError("Only a Qwen VoiceDesign take can be saved as a new reusable voice reference.")
-        elif key == "voxcpm2":
+        if key == "voxcpm2":
             mode = req.get("mode", "design")
             if mode not in VOXCPM_MODES:
                 raise ValueError("VoxCPM2 mode must be design, clone, or continuation.")
@@ -637,31 +605,6 @@ class EnginePool:
                     params["reference_path"] = str(reference)
                     params["reference_text"] = req.get("reference_text", "")
                     worker.call("prepare_reference", path=str(reference))
-            elif key in QWEN_MODES:
-                mode = QWEN_MODES[key]
-                params.update({
-                    "mode": mode,
-                    "language": req.get("language", "English"),
-                    "seed": req.get("seed", 42),
-                    "max_new_tokens": req.get("max_new_tokens", 512),
-                    "temperature": req.get("temperature", 0.9),
-                    "top_k": req.get("top_k", 50),
-                    "top_p": req.get("top_p", 1.0),
-                    "repetition_penalty": req.get("repetition_penalty", 1.05),
-                })
-                if mode == "design":
-                    params["voice_description"] = req.get("voice_description", "")
-                elif mode == "clone":
-                    reference = self._resolve_reference_path(key, req["reference_path"])
-                    params.update({
-                        "reference_path": str(reference),
-                        "reference_text": req.get("reference_text", ""),
-                        "xvec_only": req.get("xvec_only", False),
-                        "direction": req.get("direction", ""),
-                    })
-                else:
-                    params["speaker"] = req.get("speaker", "")
-                    params["direction"] = req.get("direction", "")
             elif key == "voxcpm2":
                 mode = req.get("mode", "design")
                 params.update({
@@ -762,67 +705,21 @@ class EnginePool:
             raise ValueError("Request body must be a JSON object.")
         key = req.get("engine", "")
         self._require_api_engine(key)
-        if key not in QWEN_MODES:
+        adapter = engine_adapters.get(key)
+        if adapter is None or not adapter.streams:
             raise ValueError("Native streaming is currently available only for faster-Qwen checkpoints.")
-        mode = QWEN_MODES[key]
-        if req.get("mode", mode) != mode:
-            raise ValueError(f"Checkpoint {key!r} supports mode {mode!r}; it does not support {req.get('mode')!r}.")
+        adapter.check_mode(req)
+        mode = adapter.mode
         text = req.get("text") or ""
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Type something to say.")
         if len(text) > 1200:
             raise ValueError("Keep it under 1200 characters (split long replies into sentences).")
-        common_fields = {"engine", "text", "mode", "language", "seed", "max_new_tokens", "save_voice_as",
-                         "temperature", "top_k", "top_p", "repetition_penalty"}
-        mode_fields = {
-            "design": {"voice_description"},
-            "clone": {"reference_path", "reference_text", "xvec_only", "direction"},
-            "custom_voice": {"speaker", "direction"},
-        }[mode]
-        unsupported = set(req) - common_fields - mode_fields
-        if unsupported:
-            raise ValueError(f"Unsupported Qwen {mode} parameter(s): {', '.join(sorted(unsupported))}.")
-        if mode == "design" and not str(req.get("voice_description", "")).strip():
-            raise ValueError("Qwen VoiceDesign requires a non-empty voice_description.")
-        if mode == "clone":
-            if not req.get("reference_path"):
-                raise ValueError("Qwen reference cloning requires reference_path.")
-            if not isinstance(req.get("xvec_only", False), bool):
-                raise ValueError("xvec_only must be true or false.")
-            if not req.get("xvec_only", False) and not str(req.get("reference_text", "")).strip():
-                raise ValueError("Qwen reference cloning requires reference_text unless xvec_only is enabled.")
-        if mode == "custom_voice" and not str(req.get("speaker", "")).strip():
-            raise ValueError("Qwen CustomVoice requires a speaker returned by the loaded checkpoint.")
-        if req.get("save_voice_as") and mode != "design":
-            raise ValueError("Only a Qwen VoiceDesign take can be saved as a new reusable voice reference.")
+        adapter.check_speak(req, self)
         if not callable(on_start) or not callable(on_chunk):
             raise TypeError("Streaming start and chunk callbacks must be callable.")
-
-        params = {
-            "text": text.strip(),
-            "mode": mode,
-            "language": req.get("language", "English"),
-            "seed": req.get("seed", 42),
-            "max_new_tokens": req.get("max_new_tokens", 512),
-            "temperature": req.get("temperature", 0.9),
-            "top_k": req.get("top_k", 50),
-            "top_p": req.get("top_p", 1.0),
-            "repetition_penalty": req.get("repetition_penalty", 1.05),
-        }
-        reference = None
-        if mode == "design":
-            params["voice_description"] = req.get("voice_description", "")
-        elif mode == "clone":
-            reference = self._resolve_reference_path(key, req["reference_path"])
-            params.update({
-                "reference_path": str(reference),
-                "reference_text": req.get("reference_text", ""),
-                "xvec_only": req.get("xvec_only", False),
-                "direction": req.get("direction", ""),
-            })
-        else:
-            params["speaker"] = req.get("speaker", "")
-            params["direction"] = req.get("direction", "")
+        params = {"text": text.strip(), **adapter.request_params(req, self)}
+        reference = params.get("reference_path")
 
         self._acquire_job(key, "Live clip")
         try:

@@ -18,17 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _qwen(engine):
-    def size(root, _nvidia, card):
-        from tools import install_qwen as iq
-
-        files = _files_bytes(iq.base.load_manifest(root / iq.MODELS[engine]["manifest"]))
-        download, disk = iq.packages_mb(card)
-        return download * 10**6 + files, disk * 10**6 + files
-
-    return size
-
-
 def _voxcpm(root, _nvidia, card):
     from tools import install_voxcpm as iv
 
@@ -55,13 +44,11 @@ def _drama3(_root, _nvidia, _card):
 
 def _sizers():
     import engine_adapters
-    from qwen_support import QWEN_MODELS
 
     def adapted(adapter):
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        **{engine: _qwen(engine) for engine in QWEN_MODELS},
         "voxcpm2": _voxcpm,
         "breeze-tts-2": _breeze,
         "drama-3": _drama3,

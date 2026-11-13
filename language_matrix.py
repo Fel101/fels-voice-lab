@@ -223,16 +223,8 @@ def request_for(clip, loaded, *, root=LAB):
     adapter = engine_adapters.get(engine)
     if adapter is not None:
         return adapter.matrix_request(request, clip, loaded, root=root)
-    if engine == "qwen3-tts-1.7b-custom-voice":
-        speakers = (loaded or {}).get("supported_speakers") or []
-        if not speakers:
-            raise ValueError("The CustomVoice checkpoint reported no speakers.")
-        return {**request, "speaker": speakers[0], "language": clip["label"], "seed": clip["seed"]}
-    if engine in engine_checks.CLONE_ENGINES:
-        reference = str(Path(root) / "reference" / "af_heart.wav")
-        return {**request, "reference_path": reference, "xvec_only": True, "language": clip["label"], "seed": clip["seed"]}
     design = {**request, "mode": "design", "voice_description": engine_checks.CHECK_VOICE, "seed": clip["seed"]}
-    if engine in {"qwen3-tts-1.7b-voice-design", "drama-3"}:
+    if engine == "drama-3":
         return {**design, "language": clip["label"]}
     return design  # Breeze and VoxCPM2 take the language from the text itself.
 

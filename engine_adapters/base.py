@@ -19,12 +19,18 @@ class Adapter:
     sizes_install = False  # install_size() says what its Install downloads
     uses_torch = True  # its worker runs on PyTorch, so it can be asked for the graphics card
     cpu_only = None  # why the model never uses the graphics card in the Lab, for its card on the Models page
+    gpu_only = None  # why the model never runs on the CPU in the Lab, for its card on the Models page
 
     # Voices, takes and scenes: cast_store.py, serve.py, scene_store.py, performance_settings.py, output_license.py
     direction_refusal = None  # what a line with an acting direction is told, when the model takes none
     preset_voices = False  # a voice of it is one of the model's preset voices (identity_options)
     reference_voices = False  # a voice of it is a voice recording it clones, with its policy (reference_policy)
     reference_policy = None  # the longest voice recording it takes, why, and the sample rate it wants
+    takes_transcript = False  # a voice of it keeps its recording's transcript, which each take sends
+    takes_direction = False  # a take of it may carry an acting direction
+    clone_check = False  # its Test clones the bundled clip, so the evaluation compares the voices
+    saves_designs = False  # a take that designs a voice may be kept as a voice recording (save_voice_as)
+    streams = False  # it streams its audio as it speaks (POST /api/stream)
     fixed_voices = False  # a voice of it is one or more of the model's fixed voice packs (identity_options)
     takes_voice_recordings = True  # it reads voice recordings from the library, not only the bundled one
     phonemizes = False  # its worker shows the phonemes it would speak (worker_phonemize)
@@ -60,6 +66,10 @@ class Adapter:
 
     def check_reference(self, path):
         """Refuse a voice recording the model cannot clone (resolve_reference_path)."""
+
+    def reference_call(self, reference, reference_text, xvec_only, exaggeration):
+        """What the worker's prepare_reference gets when the pool prepares a voice recording ahead of a take."""
+        return {"path": str(reference), "exaggeration": exaggeration}
 
     def mode_for(self, backend_request):
         return self.generation_mode
