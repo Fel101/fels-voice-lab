@@ -22,6 +22,10 @@ a model worker           engine_worker.py in that model's own environment: .venv
 - **`worker_pool.EnginePool`** keeps at most one model loaded, checks free RAM first ([ram_needs.py](../ram_needs.py)), and
   talks to the worker in JSON lines over stdin and stdout ([worker_protocol.py](../worker_protocol.py)). Audio comes back as a
   temporary `.npy` file under `out/workers/<engine>-<pid>`. `worker_runtime.py` is the worker's side: load, generate, unload.
+- **[engine_adapters/](../engine_adapters/) says what each model is.** One module per family holds an adapter for each of
+  its engines: its installers, RAM need, Test request, settings, how a take asks for it, and, in the worker's half, how it
+  loads and speaks. The shared code asks the adapter instead of testing the engine's name, and the adapters import in the
+  service's `.venv` with no model package (`tests/test_engine_adapters.py` checks both).
 - **[job_queue.py](../job_queue.py) is the line for the worker.** One request uses it at a time. The others wait in order,
   a person's ahead of a scene batch's lines, when they sent `wait_seconds`, and are refused with 409 otherwise; any can be
   cancelled, and a running one is stopped by ending its worker's process. `serve._place_in_line` puts every request that
@@ -82,11 +86,12 @@ appearance before the page paints.
   `serve.make_handler` with `@router.get(path)` or `@router.post(path)` and the same path, then
   `.venv\Scripts\python.exe tools\build_api_docs.py` to write `docs/API.md` and `openapi.json`. The service will not start
   with a row and no function, or a function and no row.
-- **An engine:** an entry in `catalog/engines.json` with its own environment, its case in `worker_runtime.py`, a RAM need in
-  `ram_needs.py`, and a speech check in `engine_checks.smoke_request`. A guided installer follows
+- **An engine:** an entry in `catalog/engines.json` with its own environment, and an adapter in its family's module in
+  [engine_adapters/](../engine_adapters/), listed in `FAMILIES`; [engine_adapters/phonon.py](../engine_adapters/phonon.py)
+  shows every part. Families that have not moved into an adapter yet still have their cases in `worker_runtime.py`,
+  `worker_pool.speak`, `ram_needs.py` and `engine_checks.smoke_request`. A guided installer follows
   [tools/install_phonon.py](../tools/install_phonon.py), the smallest one; the shared pieces are in `tools/install_kokoro.py`.
-  Its launcher goes in `engine_checks.GUIDED_INSTALLERS` and its script in `engine_install.INSTALLERS`, which give the engine's
-  card its **Install** button.
+  Its launcher and script (the adapter's `guided_installer` and `installer`) give the engine's card its **Install** button.
 - **A setting for one computer:** a key in `runtime.local.json`, read with `common.runtime_setting`, and a line in
   [Setup](SETUP.md#hardware-and-state-settings).
 

@@ -33,6 +33,7 @@ from ram_needs import MIN_FREE_RAM_GB
 import soundfile as sf
 
 import api_spec
+import engine_adapters
 import job_queue
 from routes import Router
 import housekeeping
@@ -62,7 +63,6 @@ from evaluation_suites import list_suites
 from ui_preferences import UiPreferences
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio, save_designed_reference
 from kokoro_support import discover_kokoro_voices, kokoro_languages, normalize_kokoro_voices
-from phonon_support import PHONON_ENGINE_ID, discover_phonon_voices, identity_options as phonon_identity_options
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from performance_settings import DEFAULTS, effective_settings, performance_controls
 from language_matrix import unscreened_languages
@@ -618,9 +618,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             direction = req.get("direction", (identity.get("engine_options") or {}).get("default_direction", ""))
             if not isinstance(direction, str) or len(direction) > 1000:
                 raise ValueError("Acting direction must be text of 1000 characters or fewer.")
+            adapter = engine_adapters.get(engine_id)
             if direction.strip() and engine_id not in DIRECTION_ENGINES:
-                if engine_id == PHONON_ENGINE_ID:
-                    raise ValueError("Phonon has no text-direction control; its pace, seed and temperature are the settings.")
+                if adapter is not None and adapter.direction_refusal:
+                    raise ValueError(adapter.direction_refusal)
                 raise ValueError(f"{engine_id} has no verified text-direction control; use its native event tags in the line text.")
             settings = req.get("settings", {})
             if not isinstance(settings, dict):
@@ -632,7 +633,9 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 backend_request["reference_path"] = reference["audio_path"]
                 if engine_id in {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base"}:
                     backend_request["reference_text"] = reference["transcript"]
-            if engine_id == "kokoro":
+            if adapter is not None:
+                backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
+            elif engine_id == "kokoro":
                 backend_request.update(identity["engine_options"])
                 backend_request["speed"] = settings.get("speed", 1.0)
                 backend_request["language"] = language
@@ -685,8 +688,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     "cfg_value": settings.get("cfg_value", 2.0),
                     "inference_timesteps": settings.get("inference_timesteps", 10),
                 })
-            elif engine_id == PHONON_ENGINE_ID:
-                backend_request.update({"voice": identity["engine_options"]["speaker"], "language": language, **applied_settings})
             line_id = req.get("line_id")
             if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
                 raise ValueError("Line ID must contain 1–100 characters.")
@@ -721,10 +722,10 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             phoneme_timing = engine_info.pop("timing", None)
             catalog_entry = engines.entries[engine_id]
             voice_options = identity.get("engine_options") or {}
-            if engine_id == "breeze-tts-2":
+            if adapter is not None:
+                generation_mode = adapter.mode_for(backend_request)
+            elif engine_id == "breeze-tts-2":
                 generation_mode = backend_request["mode"]
-            elif engine_id == PHONON_ENGINE_ID:
-                generation_mode = "fixed_voice"
             elif engine_id in PRESET_VOICE_ENGINES:
                 generation_mode = "custom_voice"
             elif engine_id.startswith("qwen3-tts"):
@@ -962,7 +963,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
     def info(self, parsed, req):
         self._json(200, {"device": engines.device, "loaded": engines.loaded,
                          "voices": discover_kokoro_voices(), "kokoro_languages": kokoro_languages(),
-                         "phonon_voices": discover_phonon_voices(), "free_ram_gb": round(free_ram_gb(), 1)})
+                         **engine_adapters.info(), "free_ram_gb": round(free_ram_gb(), 1)})
 
     @router.get("/api/catalog")
     def catalog(self, parsed, req):
@@ -1324,10 +1325,9 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
         if engine_id == "kokoro":
             options = {"voice": ",".join(normalize_kokoro_voices(req.get("voice", "af_heart"), discover_kokoro_voices()))}
-        elif engine_id == PHONON_ENGINE_ID:
-            # Its voices are read from the installed catalog, so nothing has to be loaded first.
-            options = phonon_identity_options(capabilities, req.get("speaker"), req.get("language"),
-                                              performance_controls(engine_id, capabilities))
+        elif getattr(engine_adapters.get(engine_id), "preset_voices", False):
+            options = engine_adapters.get(engine_id).identity_options(capabilities, req,
+                                                                       performance_controls(engine_id, capabilities), engines)
         elif preset_voice:
             loaded_info = getattr(engines, "loaded_model_info", lambda _key: None)(engine_id)
             if not loaded_info:

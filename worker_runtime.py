@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
+import engine_adapters
 from common import LAB, free_ram_gb, release_gpu, require_ram, strip_tags, to_numpy, torch_runtime
-from phonon_support import PHONON_ENGINE_ID
 from ram_needs import MIN_FREE_RAM_GB
 from reference_paths import resolve_reference_path
 
@@ -18,10 +18,12 @@ QWEN_ENGINE_IDS = {
 }
 VOXCPM_ENGINE_ID = "voxcpm2"
 CHATTERBOX_VC_ENGINE_ID = "chatterbox-vc"
-ENGINE_IDS = {"kokoro", PHONON_ENGINE_ID, "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
-              CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS}
-# The engines that run on PyTorch. Phonon (ptts) runs on the CPU and Drama (speech.cpp) chooses its own device.
-TORCH_ENGINE_IDS = ENGINE_IDS - {PHONON_ENGINE_ID, "drama-3"}
+ENGINE_IDS = {"kokoro", "turbo", "orig", "breeze-tts-2", VOXCPM_ENGINE_ID,
+              CHATTERBOX_VC_ENGINE_ID, 'drama-3', *QWEN_ENGINE_IDS, *engine_adapters.ADAPTERS}
+# The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
+# its own device.
+TORCH_ENGINE_IDS = ENGINE_IDS - {"drama-3"} - {engine for engine, adapter in engine_adapters.ADAPTERS.items()
+                                               if not adapter.uses_torch}
 REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
 
@@ -81,6 +83,8 @@ class EngineWorkerRuntime:
         if engine_id not in ENGINE_IDS:
             raise ValueError(f"Engine {engine_id!r} is not enabled for the worker service.")
         self.engine_id = engine_id
+        # The engine's adapter (engine_adapters/) does its load, clips and references; None for an engine still handled here.
+        self.adapter = engine_adapters.get(engine_id)
         self.device, self.device_note = usable_device(engine_id, device)
         if self.device_note:
             print(f"The service asked for the graphics card, but {self.device_note}, so {engine_id} runs on the CPU.",
@@ -134,6 +138,9 @@ class EngineWorkerRuntime:
             if self.engine_id == "breeze-tts-2" and params.get("profile", self.profile) != self.profile:
                 raise ValueError(f"Breeze worker is loaded with profile {self.profile!r}; unload it before changing profiles.")
             return {"already_loaded": True, **self.health()}
+        if self.adapter is not None:
+            require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
+            return self.adapter.worker_load(self, params)
         if self.engine_id == 'drama-3':
             from drama3_worker import Drama3Worker
             require_ram(MIN_FREE_RAM_GB['drama-3'], 'drama-3')
@@ -210,7 +217,7 @@ class EngineWorkerRuntime:
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
                     "memory": self.last_memory,
                     "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
-        if (self.engine_id not in {"kokoro", PHONON_ENGINE_ID} and not DEFAULT_REFERENCE.is_file()
+        if (self.engine_id != "kokoro" and not DEFAULT_REFERENCE.is_file()
                 and find_spec("kokoro") is not None):
             # An environment you built yourself may hold Kokoro beside another engine; the guided ones never do (Kokoro has
             # .venv-kokoro to itself), so there the Kokoro worker makes the clip and this engine warms up with its own voice.
@@ -228,7 +235,7 @@ class EngineWorkerRuntime:
             self._make_default_reference(model)
         print("Warming up the model ...", flush=True)
         try:
-            if self.engine_id in {"kokoro", PHONON_ENGINE_ID} or not DEFAULT_REFERENCE.is_file():
+            if self.engine_id == "kokoro" or not DEFAULT_REFERENCE.is_file():
                 model.speak("Hello there.")
             elif self.engine_id == "orig":
                 model.prepare_reference(str(DEFAULT_REFERENCE), exaggeration=0.5)
@@ -240,22 +247,16 @@ class EngineWorkerRuntime:
             print(f"Warm-up failed: {type(exc).__name__}: {exc}", flush=True)
         self.loaded_at = time.time()
         self.last_memory = self._memory()
-        if self.engine_id == PHONON_ENGINE_ID:
-            checkpoint, revision = model.pins["model"]
-            self.model_info = {"backend": "ptts", "backend_version": model.version, "checkpoint": checkpoint,
-                               "checkpoint_revision": revision, "supported_speakers": list(model.voices),
-                               "supported_languages": ["English"]}
         return {
             "already_loaded": False,
             "engine_id": self.engine_id,
             "model_loaded": True,
-            "device": model.device if self.engine_id == PHONON_ENGINE_ID else self.device,
+            "device": self.device,
             "load_seconds": round(time.perf_counter() - started, 3),
             "sample_rate": self.sample_rate,
             "pid": os.getpid(),
             "parent_pid": os.getppid(),
             "memory": self.last_memory,
-            **(self.model_info if self.engine_id == PHONON_ENGINE_ID else {}),
         }
 
     @staticmethod
@@ -281,12 +282,12 @@ class EngineWorkerRuntime:
     def prepare_reference(self, params):
         if self.engine is None:
             raise RuntimeError("Load the model before preparing a reference.")
+        if self.adapter is not None:
+            return self.adapter.worker_prepare_reference(self, params)
         if self.engine_id == 'drama-3':
             return self.drama3.prepare_reference(params)
         if self.engine_id == "kokoro":
             raise ValueError("Kokoro uses fixed voice IDs and does not accept reference audio.")
-        if self.engine_id == PHONON_ENGINE_ID:
-            raise ValueError("Phonon uses its preset voices and does not accept reference audio.")
         path = Path(params.get("path", "")).expanduser().resolve()
         if self.engine_id == "breeze-tts-2":
             return self.breeze.prepare_reference(str(path))
@@ -311,7 +312,9 @@ class EngineWorkerRuntime:
         if len(text) > 1200:
             raise ValueError("Keep it under 1200 characters (split long replies into sentences).")
 
-        if self.engine_id == 'drama-3':
+        if self.adapter is not None:
+            wav, sr, info = self.adapter.worker_generate(self, text, params)
+        elif self.engine_id == 'drama-3':
             wav, sr, info = self.drama3.generate(params)
         elif self.engine_id == CHATTERBOX_VC_ENGINE_ID:
             wav, sr, info = self.chatterbox_vc.generate(params)
@@ -325,10 +328,6 @@ class EngineWorkerRuntime:
         elif self.engine_id == VOXCPM_ENGINE_ID:
             voxcpm_params = {key: value for key, value in params.items() if key != "output_file"}
             wav, sr, info = self.voxcpm.generate(voxcpm_params)
-        elif self.engine_id == PHONON_ENGINE_ID:
-            wav, sr, info = self.engine.speak(strip_tags(text.strip()), voice=params.get("voice"),
-                                              seed=params.get("seed", 42), temperature=params.get("temperature", 0.3),
-                                              duration_delta=params.get("duration_delta", 0.0))
         elif self.engine_id == "kokoro":
             voice = str(params.get("voice", "af_heart"))
             speed = min(2.0, max(0.5, float(params.get("speed", 1.0))))

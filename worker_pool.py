@@ -13,7 +13,7 @@ from worker_process import (WorkerCancelled, WorkerError, WorkerProcess, WorkerR
                             WorkerTimeout, WorkerUnavailable)
 from chatterbox_support import CHATTERBOX_SAMPLING_FIELDS, normalize_chatterbox_sampling
 from kokoro_support import resolve_kokoro_language
-from phonon_support import PHONON_ENGINE_ID, check_request as check_phonon_request
+import engine_adapters
 from reference_paths import resolve_reference_path, REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV
 from local_ownership import LocalOwnership
 from job_queue import JobQueue, Ticket, WorkerBusy  # noqa: F401 (WorkerBusy is imported from here)
@@ -525,6 +525,7 @@ class EnginePool:
             raise ValueError("Request body must be a JSON object.")
         key = req.get("engine", "kokoro")
         self._require_api_engine(key)
+        adapter = engine_adapters.get(key)
         if key == "chatterbox-vc":
             raise ValueError("Chatterbox Voice Conversion is a source-audio task; use POST /api/convert.")
         text = req.get("text") or ""
@@ -532,6 +533,8 @@ class EnginePool:
             raise ValueError("Type something to say.")
         if len(text) > 1200:
             raise ValueError("Keep it under 1200 characters (split long replies into sentences).")
+        # What the engine's adapter checks before the worker is taken, and hands to speak_params() after.
+        checked = adapter.check_speak(req, self) if adapter is not None else None
         if key == 'drama-3':
             from drama3_runtime import controls
             allowed = {'engine','text','mode','voice_description','direction','reference_path','reference_text','language',*controls()}
@@ -608,8 +611,6 @@ class EnginePool:
                     # The worker cannot make the default clip: it runs in .venv-chatterbox, which has no Kokoro.
                     raise ValueError(TURBO_NEEDS_REFERENCE)
                 self._resolve_reference_path(key, reference)
-        elif key == PHONON_ENGINE_ID:
-            phonon_params = check_phonon_request(req)
         self._acquire_job(key, "Clip")
         output_file = None
         try:
@@ -618,12 +619,12 @@ class EnginePool:
             load_params = {"profile": profile} if profile is not None else None
             worker = self._ensure_loaded_locked(key, load_params)
             params = {"text": text.strip()}
-            if key == "kokoro":
+            if adapter is not None:
+                params.update(adapter.speak_params(req, self, worker, checked))
+            elif key == "kokoro":
                 params["voice"] = str(req.get("voice", "af_heart"))
                 params["speed"] = req.get("speed", 1.0)
                 params["language"] = req.get("language", "English")
-            elif key == PHONON_ENGINE_ID:
-                params.update(phonon_params)
             elif key == 'drama-3':
                 params.update({name:value for name,value in req.items() if name not in ('engine','text','language')})
                 if params.get('mode')=='clone':

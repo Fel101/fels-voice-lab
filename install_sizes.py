@@ -27,14 +27,6 @@ def _kokoro(root, nvidia, card):
     return download * 10**6 + files, disk * 10**6 + files
 
 
-def _phonon(root, _nvidia, _card):
-    from tools import install_phonon as ip
-
-    manifest = ip.load_manifest(root / ip.MANIFEST)
-    files = sum(_files_bytes(repo) for repo in manifest["repos"])
-    return ip.PACKAGES_DOWNLOAD_MB * 10**6 + files, ip.PACKAGES_DISK_MB * 10**6 + files
-
-
 def _chatterbox(manifest_name):
     def size(root, nvidia, card):
         from tools import install_chatterbox as ic
@@ -82,13 +74,15 @@ def _drama3(_root, _nvidia, _card):
 
 
 def _sizers():
+    import engine_adapters
     from chatterbox_support import ORIGINAL_ENGINE_ID, TURBO_ENGINE_ID, VC_ENGINE_ID
-    from phonon_support import PHONON_ENGINE_ID
     from qwen_support import QWEN_MODELS
+
+    def adapted(adapter):
+        return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
         "kokoro": _kokoro,
-        PHONON_ENGINE_ID: _phonon,
         TURBO_ENGINE_ID: _chatterbox("MANIFEST"),
         ORIGINAL_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),
         VC_ENGINE_ID: _chatterbox("ORIGINAL_MANIFEST"),
@@ -96,6 +90,7 @@ def _sizers():
         "voxcpm2": _voxcpm,
         "breeze-tts-2": _breeze,
         "drama-3": _drama3,
+        **{engine: adapted(adapter) for engine, adapter in engine_adapters.ADAPTERS.items() if adapter.sizes_install},
     }
 
 

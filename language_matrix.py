@@ -25,6 +25,7 @@ from pathlib import Path
 
 import soundfile as sf
 
+import engine_adapters
 import engine_checks
 from evaluation_suites import get_suite
 from worker_pool import WorkerBusy
@@ -218,12 +219,11 @@ def request_for(clip, loaded, *, root=LAB):
     """The request a Perform line would send for this clip, with its sentence and language swapped in."""
     engine = clip["engine"]
     request = {"engine": engine, "text": clip["text"]}
+    adapter = engine_adapters.get(engine)
+    if adapter is not None:
+        return adapter.matrix_request(request, clip, loaded, root=root)
     if engine == "kokoro":
         return {**request, "voice": clip["voice"], "language": clip["label"]}
-    if engine == "phonon-31m-en":
-        from phonon_support import default_voice, voice_names
-
-        return {**request, "voice": default_voice(voice_names(root)), "seed": clip["seed"]}
     if engine in {"turbo", "orig"}:
         return request
     if engine == "qwen3-tts-1.7b-custom-voice":

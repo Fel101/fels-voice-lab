@@ -16,7 +16,8 @@ import numpy as np
 
 from chatterbox_support import ORIGINAL_ENGINE_ID, ORIGINAL_FILES, TURBO_ENGINE_ID, TURBO_FILES, VC_ENGINE_ID, VC_FILES
 from kokoro_support import discover_kokoro_voices
-from phonon_support import PHONON_ENGINE_ID, VOICE_CATALOG, default_voice, voice_names
+import engine_adapters
+from phonon_support import VOICE_CATALOG
 from qwen_support import QWEN_FILES, QWEN_LAUNCHER, QWEN_MODELS
 
 LAB = Path(__file__).resolve().parent
@@ -37,18 +38,20 @@ BORROWED_PACKAGES = {"voxcpm2": ".venv-fqwen/Scripts/python.exe"}
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
-GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", PHONON_ENGINE_ID: "setup-phonon.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
+GUIDED_INSTALLERS = {"kokoro": "setup-kokoro.bat", TURBO_ENGINE_ID: "setup-chatterbox.bat",
                      ORIGINAL_ENGINE_ID: "setup-chatterbox.bat --original", VC_ENGINE_ID: "setup-chatterbox.bat --original",
                      **{engine: f"{QWEN_LAUNCHER} --model {model}" for engine, model in QWEN_MODELS.items()},
-                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat"}
+                     "voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
+                     **engine_adapters.table("guided_installer")}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
 # into it.
-REQUIRED_PACKAGES = {"kokoro": ("kokoro",), PHONON_ENGINE_ID: ("ptts",),
+REQUIRED_PACKAGES = {"kokoro": ("kokoro",),
                      **{engine: ("chatterbox-tts",) for engine in (TURBO_ENGINE_ID, ORIGINAL_ENGINE_ID, VC_ENGINE_ID)},
                      **{engine: ("faster-qwen3-tts",) for engine in QWEN_MODELS},
-                     "voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate")}
+                     "voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate"),
+                     **engine_adapters.table("required_packages")}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
 REQUIRED_FILES = {TURBO_ENGINE_ID: TURBO_FILES, ORIGINAL_ENGINE_ID: ORIGINAL_FILES, VC_ENGINE_ID: VC_FILES,
                   **{engine: QWEN_FILES for engine in QWEN_MODELS},
@@ -196,11 +199,12 @@ def engine_fingerprint(entry, root=LAB):
 def smoke_request(engine, loaded=None, *, root=LAB):
     """The shortest request that uses an engine's normal path, so a passing check predicts Perform."""
     base = {"engine": engine, "text": CHECK_TEXT}
+    adapter = engine_adapters.get(engine)
+    if adapter is not None:
+        return adapter.smoke_request(base, loaded, root=root)
     if engine == "kokoro":
         voices = discover_kokoro_voices()
         return {**base, "voice": "af_heart" if not voices or "af_heart" in voices else voices[0]}
-    if engine == PHONON_ENGINE_ID:
-        return {**base, "voice": default_voice(voice_names(root))}
     if engine == TURBO_ENGINE_ID and not (Path(root) / "reference" / "af_heart.wav").is_file():
         # Turbo clones the default reference when there is one (Kokoro makes it). Its own environment cannot make it, so
         # without it the check speaks in the built-in voice: the installer's speech check is the one that clones.

@@ -24,7 +24,7 @@ import ffmpeg_tools
 import loudness
 from db_snapshots import snapshot_before_migration
 from evaluation_diagnostics import TAKE_CHECKER, take_checks
-from phonon_support import PHONON_ENGINE_ID
+import engine_adapters
 import reference_quality
 import speaker_similarity
 import synthetic_label
@@ -46,7 +46,7 @@ FFMPEG_AUDIO = {".m4a"}
 SUPPORTED_AUDIO = {".wav", ".flac", ".ogg", ".mp3"} | FFMPEG_AUDIO
 ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 REFERENCE_ENGINES = {"turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "voxcpm2", 'drama-3'}
-PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice", PHONON_ENGINE_ID}
+PRESET_VOICE_ENGINES = {"qwen3-tts-1.7b-custom-voice", *engine_adapters.engines_where("preset_voices")}
 TRANSCRIPT_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", 'drama-3'}
 DIRECTION_ENGINES = {"breeze-tts-2", "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base",
                      "qwen3-tts-1.7b-custom-voice", "voxcpm2", 'drama-3'}

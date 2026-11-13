@@ -24,6 +24,7 @@ from scipy.signal import resample_poly
 
 import synthetic_label
 from cast_store import ID_RE, CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
+import engine_adapters
 from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
 from drama3_production import LANGUAGES as DRAMA_LANGUAGES
@@ -44,7 +45,6 @@ SUPPORTED_LANGUAGES = {
     'drama-3':{*DRAMA_LANGUAGES.values(),'Auto'},
     "kokoro": {"English", "American English", "British English", "Spanish", "French", "Hindi",
                 "Italian", "Brazilian Portuguese"},
-    "phonon-31m-en": {"English"},
     "turbo": {"English"},
     "orig": {"English"},
     "breeze-tts-2": {"English"},  # Only English has been verified on the local service path.
@@ -56,6 +56,8 @@ SUPPORTED_LANGUAGES = {
                              "Russian", "Portuguese", "Spanish", "Italian", "Auto"},
     "qwen3-tts-1.7b-custom-voice": {"English", "Chinese", "Japanese", "Korean", "German", "French",
                                     "Russian", "Portuguese", "Spanish", "Italian", "Auto"},
+    # The engines whose adapters say (engine_adapters/).
+    **{engine: set(languages) for engine, languages in engine_adapters.table("languages").items()},
 }
 CSV_FIELDS = [
     "schema_version", "scene_name", "line_id", "line_type", "character_id", "identity_id",
