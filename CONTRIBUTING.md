@@ -86,7 +86,10 @@ Check for updates and `update.bat` compare `VERSION` in `app_version.py` with th
 version number, a tag and a GitHub release that agree:
 
 1. Set `VERSION` in `app_version.py`, and give the version its heading and date in `CHANGELOG.md` (`## 0.3.0 — 2026-11-20`,
-   in place of "Unreleased"). `.venv\Scripts\python.exe tools/release_notes.py` shows the notes the release will get.
+   in place of "Unreleased"). `.venv\Scripts\python.exe tools/release_notes.py` shows the notes the release will get. Keep
+   that section short, as it is the release's notes: a line or two for each change under New, Changed, Fixed, After
+   updating, and For scripts and contributors. Every change in detail goes in `docs/releases/<version>.md`, which the
+   section links to.
 2. Run every check. On the development PC, also run `.venv\Scripts\python.exe tools/real_model_smoke.py --all-installed`
    and listen to its clips. Commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push the commit and the
    tag.
