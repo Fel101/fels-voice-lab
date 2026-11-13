@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-13
 
 Every NVIDIA build has now run on an NVIDIA card. The Lab is simpler to set up: a Setup.exe, no Python to install, FFmpeg
 from a button and a first model from the studio itself. A script becomes a scene, a scene opens as a table, and a request
