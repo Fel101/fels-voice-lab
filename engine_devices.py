@@ -23,12 +23,9 @@ import engine_adapters
 CHOICES = ("gpu", "cpu")
 STORE_SCHEMA = 1
 # Models that never use the graphics card in the Lab, and what their card says about it. Their workers are asked for the
-# service's device as before: an adapter says why its engine does not (Phonon's ptts has no GPU code), and Drama 3
-# (speech.cpp) chooses its own device.
-CPU_ONLY = {
-    **engine_adapters.table("cpu_only"),
-    "drama-3": "Drama 3 runs on the CPU in the Lab; docs/SETUP.md describes its experimental GPU setting for short designs.",
-}
+# service's device as before: an adapter says why its engine does not (Phonon's ptts has no GPU code; Drama 3's speech.cpp
+# chooses its own device).
+CPU_ONLY = engine_adapters.table("cpu_only")
 # Models that run only on a graphics card in the Lab, and what their card says about the CPU. Their workers refuse the CPU.
 GPU_ONLY = {
     **engine_adapters.table("gpu_only"),

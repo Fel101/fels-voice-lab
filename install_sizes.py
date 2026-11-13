@@ -18,14 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _drama3(_root, _nvidia, _card):
-    from tools import install_drama3 as idr
-
-    assets = sum(item["size"] for item in idr.ASSETS)
-    # The runtime's archive is kept beside what it unpacks to, which the installer allows four times its size for.
-    return idr.RUNTIME_SIZE + idr.MODEL_SIZE + assets, idr.RUNTIME_SIZE * 4 + idr.MODEL_SIZE + assets
-
-
 def _sizers():
     import engine_adapters
 
@@ -33,7 +25,6 @@ def _sizers():
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        "drama-3": _drama3,
         **{engine: adapted(adapter) for engine, adapter in engine_adapters.ADAPTERS.items() if adapter.sizes_install},
     }
 

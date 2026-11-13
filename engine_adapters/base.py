@@ -23,6 +23,7 @@ class Adapter:
     profiles = False  # it loads in one of several runtime profiles, which a load names; another one restarts its worker
     uses_torch = True  # its worker runs on PyTorch, so it can be asked for the graphics card
     cpu_only = None  # why the model never uses the graphics card in the Lab, for its card on the Models page
+    studio = False  # it has a studio page of its own, whose takes stream through EnginePool.stream_drama3
     gpu_only = None  # why the model never runs on the CPU in the Lab, for its card on the Models page
 
     # Voices, takes and scenes: cast_store.py, serve.py, scene_store.py, performance_settings.py, output_license.py
@@ -42,6 +43,7 @@ class Adapter:
     languages = None  # the languages a scene line may ask of it
     upstream_languages = None  # the languages its makers list, beyond those the Lab has checked (the language matrix)
     documented_languages = None  # the languages its documentation says were checked, beyond the scene picker's
+    language_is_metadata = None  # why the language a line names never reaches its speech runtime (the language matrix)
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
     output_license = None  # what its code, weights and clips allow, for each take's licence profile
@@ -62,6 +64,10 @@ class Adapter:
         """What a take of this voice asks of speak(), besides the engine, the text and its voice recording."""
         return {}
 
+    def own_settings(self, settings):
+        """A take's settings when the model checks them itself; None leaves them to performance_settings."""
+        return None
+
     def settle_settings(self, settings):
         """A take's settings, with the defaults filled in, as the model takes them."""
         return settings
@@ -72,6 +78,9 @@ class Adapter:
 
     def check_reference(self, path):
         """Refuse a voice recording the model cannot clone (resolve_reference_path)."""
+
+    def check_prepare(self, reference_text):
+        """Refuse to prepare a voice recording ahead of a take without what the model needs with it."""
 
     def reference_call(self, reference, reference_text, xvec_only, exaggeration):
         """What the worker's prepare_reference gets when the pool prepares a voice recording ahead of a take."""
@@ -118,6 +127,9 @@ class Adapter:
 
     def worker_generate(self, runtime, text, params):
         raise NotImplementedError
+
+    def worker_generate_stream(self, runtime, params, emit_audio):
+        raise ValueError("Native worker streaming is currently available only for faster-Qwen checkpoints.")
 
     def worker_unload(self, runtime):
         """What its own unload reports, besides the memory the worker freed."""

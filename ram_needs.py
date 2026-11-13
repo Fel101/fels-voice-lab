@@ -12,7 +12,6 @@ import engine_adapters
 from common import runtime_setting
 
 DEFAULT_MIN_FREE_RAM_GB = {
-    "drama-3": 26,
     # The engines whose adapters say (engine_adapters/).
     **engine_adapters.table("min_free_ram_gb"),
 }

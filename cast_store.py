@@ -45,16 +45,13 @@ MAX_REFERENCE_RATE = 192_000
 FFMPEG_AUDIO = {".m4a"}
 SUPPORTED_AUDIO = {".wav", ".flac", ".ogg", ".mp3"} | FFMPEG_AUDIO
 ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
-REFERENCE_ENGINES = {'drama-3',
-                     *engine_adapters.engines_where("reference_voices")}
+REFERENCE_ENGINES = engine_adapters.engines_where("reference_voices")
 PRESET_VOICE_ENGINES = engine_adapters.engines_where("preset_voices")
 FIXED_VOICE_ENGINES = engine_adapters.engines_where("fixed_voices")
-TRANSCRIPT_ENGINES = {'drama-3', *engine_adapters.engines_where("takes_transcript")}
-DIRECTION_ENGINES = {'drama-3', *engine_adapters.engines_where("takes_direction")}
+TRANSCRIPT_ENGINES = engine_adapters.engines_where("takes_transcript")
+DIRECTION_ENGINES = engine_adapters.engines_where("takes_direction")
 _CAST_SCHEMA_LOCK = threading.RLock()
 REFERENCE_POLICIES = {
-    'drama-3': {'max_seconds':60.,'recommended_rate':44100,'requires_transcript_for_cast':True,
-                'limit_basis':'Fel\'s Voice Lab reference ceiling; native voice files require exact transcripts'},
     # The engines whose adapters say (engine_adapters/).
     **engine_adapters.table("reference_policy"),
 }

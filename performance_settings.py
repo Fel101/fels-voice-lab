@@ -3,18 +3,12 @@
 import math
 import engine_adapters
 
-DEFAULTS = {
-    'drama-3': {'seed':42,'temperature':1.,'top_k':30,'top_p':.9,'max_seconds':47.6},
-}
+DEFAULTS = {}
 
 # Presentation metadata for the values already accepted by effective_settings(). The
 # catalog remains authoritative for capability status; this table supplies readable
 # labels and input bounds to the Perform and scene forms.
-CONTROL_UI = {
-    'drama-3': {'seed':('Seed',0,2147483647,1),'temperature':('Temperature',.05,2.,.05),
-                'top_k':('Top-k',1,4097,1),'top_p':('Top-p',.05,1.,.01),
-                'max_seconds':('Maximum seconds per chunk',.5,95.1,.1)},
-}
+CONTROL_UI = {}
 # The engines whose adapters say (engine_adapters/).
 for _engine, _adapter in engine_adapters.ADAPTERS.items():
     if _adapter.performance_defaults is not None:
@@ -61,9 +55,10 @@ def performance_controls(engine, capabilities=None):
 
 
 def effective_settings(engine, settings):
-    if engine == 'drama-3':
-        from drama3_runtime import controls
-        return controls(settings)
+    adapter = engine_adapters.get(engine)
+    own = adapter.own_settings(settings) if adapter is not None else None
+    if own is not None:  # a model that checks its settings itself (Drama 3)
+        return own
     if not isinstance(settings, dict):
         raise ValueError("Performance settings must be an object.")
     defaults = DEFAULTS.get(engine)
@@ -79,5 +74,4 @@ def effective_settings(engine, settings):
                 raise ValueError("Breeze profile must be eager or cuda_graphs.")
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(f"Performance {key} must be a finite number.")
-    adapter = engine_adapters.get(engine)
     return adapter.settle_settings(result) if adapter is not None else result

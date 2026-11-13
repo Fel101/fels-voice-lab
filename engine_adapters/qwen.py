@@ -172,7 +172,9 @@ class Qwen(Adapter):
         return runtime.backend.generate({key: value for key, value in params.items() if key != "output_file"})
 
     def worker_generate_stream(self, runtime, params, emit_audio):
-        return runtime.backend.generate_stream(params, emit_audio)
+        result = runtime.backend.generate_stream(params, emit_audio)
+        runtime.last_memory = runtime._memory()
+        return {**result, "memory": runtime.last_memory, "pid": os.getpid(), "parent_pid": os.getppid()}
 
     def worker_unload(self, runtime):
         return {"qwen": runtime.backend.unload()} if runtime.backend is not None else {}

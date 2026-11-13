@@ -489,16 +489,14 @@ class EnginePool:
             if self.api_entries[key].get("capabilities", {}).get("voice_cloning", {}).get("status") == "unsupported":
                 raise ValueError(f"Engine {key!r} does not support reference audio.")
             reference = self._resolve_reference_path(key, path)
-            if key=='drama-3' and (not isinstance(reference_text,str) or not reference_text.strip()):
-                raise ValueError('Drama 3 reference preparation requires the exact transcript.')
+            if engine_adapters.get(key) is not None:
+                engine_adapters.get(key).check_prepare(reference_text)
             load_params = {"profile": profile or "eager"} if getattr(engine_adapters.get(key), "profiles", False) else None
             worker = self._ensure_loaded_locked(key, load_params)
             adapter = engine_adapters.get(key)
             if adapter is not None:
                 return worker.call("prepare_reference",
                                    **adapter.reference_call(reference, reference_text, xvec_only, exaggeration))
-            if key == 'drama-3':
-                return worker.call('prepare_reference', path=str(reference), reference_text=reference_text)
             return worker.call("prepare_reference", path=str(reference), exaggeration=exaggeration)
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
@@ -523,19 +521,6 @@ class EnginePool:
             raise ValueError("Keep it under 1200 characters (split long replies into sentences).")
         # What the engine's adapter checks before the worker is taken, and hands to speak_params() after.
         checked = adapter.check_speak(req, self) if adapter is not None else None
-        if key == 'drama-3':
-            from drama3_runtime import controls
-            allowed = {'engine','text','mode','voice_description','direction','reference_path','reference_text','language',*controls()}
-            if set(req)-allowed:
-                raise ValueError('Unsupported Drama 3 parameter(s): ' + ', '.join(sorted(set(req)-allowed)))
-            mode = req.get('mode','design')
-            if mode not in ('design','clone'):
-                raise ValueError('Drama 3 mode must be design or clone.')
-            if mode=='clone':
-                self._resolve_reference_path(key,req.get('reference_path'))
-                if not isinstance(req.get('reference_text'),str) or not req['reference_text'].strip():
-                    raise ValueError('Drama 3 cloning requires the exact reference transcript.')
-            controls({name:req[name] for name in controls() if name in req})
         self._acquire_job(key, "Clip")
         output_file = None
         try:
@@ -546,10 +531,6 @@ class EnginePool:
             params = {"text": text.strip()}
             if adapter is not None:
                 params.update(adapter.speak_params(req, self, worker, checked))
-            elif key == 'drama-3':
-                params.update({name:value for name,value in req.items() if name not in ('engine','text','language')})
-                if params.get('mode')=='clone':
-                    params['reference_path']=str(self._resolve_reference_path(key,params.get('reference_path')))
 
             runtime_pid = self.workers[key].get("runtime_pid", worker.pid)
             worker_root = OUT / "workers" / f"{key}-{runtime_pid}"
@@ -588,25 +569,26 @@ class EnginePool:
         """CPU production path, with owned-worker cancellation during load or prefill."""
         from drama3_production import script
         from drama3_runtime import controls
+        key = engine_adapters.only("studio")  # the engine the Drama studio speaks with
         script(req['text'])
         controls(req.get('settings'))
-        refs=[{'path':str(self._resolve_reference_path('drama-3',ref['path'])),
+        refs=[{'path':str(self._resolve_reference_path(key,ref['path'])),
                'text':ref['text'],'speaker':ref['speaker']} for ref in references]
-        self._acquire_job('drama-3', 'Drama studio take')
+        self._acquire_job(key, 'Drama studio take')
         watching=threading.Event()
         def watch():
             while not watching.wait(.1):
                 if cancel.is_set():
                     with self._state_lock:
                         owned=list(self._starting_workers)
-                        record=self.workers.get('drama-3')
+                        record=self.workers.get(key)
                         if record:owned.append(record['worker'])
                     for worker in owned:worker.close(force=True)
                     return
         monitor=threading.Thread(target=watch,daemon=True);monitor.start()
         try:
             if cancel.is_set():raise WorkerCancelled('Take stopped.')
-            worker=self._ensure_loaded_locked('drama-3',{'cpu_only':True})
+            worker=self._ensure_loaded_locked(key,{'cpu_only':True})
             worker.timeouts['generate_stream']=3600
             def chunk(packet):
                 if cancel.is_set():return False

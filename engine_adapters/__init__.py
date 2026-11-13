@@ -21,6 +21,7 @@ FAMILIES = (
     "engine_adapters.qwen",
     "engine_adapters.voxcpm",
     "engine_adapters.breeze",
+    "engine_adapters.drama",
 )
 # The engine a speak or load request that names none gets.
 DEFAULT_ENGINE = "kokoro"

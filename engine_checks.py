@@ -36,8 +36,7 @@ BORROWED_PACKAGES = engine_adapters.table("borrowed_packages")
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
-GUIDED_INSTALLERS = {"drama-3": "setup-drama3.bat",
-                     **engine_adapters.table("guided_installer")}
+GUIDED_INSTALLERS = engine_adapters.table("guided_installer")
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
@@ -50,7 +49,6 @@ BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 # ones it cannot load without.
 BREEZE_FOLDER = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
 BREEZE_FILES = (BREEZE_WEIGHTS, "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors")
-DESIGN_ENGINES = {"drama-3"}
 # The engines whose Test clones the bundled clip; the evaluation compares their voices with it.
 CLONE_ENGINES = engine_adapters.engines_where("clone_check")
 
@@ -108,10 +106,7 @@ def installation(entry, root=LAB):
                                 and _has_package(root, borrowed, package)))
     adapter = engine_adapters.get(engine)
     own = adapter.checkpoint_missing(root) if adapter is not None else None
-    if engine == "drama-3":
-        checkpoint = "out/drama3"
-        missing.extend(_drama_missing(root))
-    elif own is not None:  # files of its own, such as Breeze's in breeze/models
+    if own is not None:  # files of its own, such as Breeze's in breeze/models or Drama's in out/drama3
         checkpoint, files = own
         missing.extend(files)
     else:
@@ -199,8 +194,6 @@ def smoke_request(engine, loaded=None, *, root=LAB):
     adapter = engine_adapters.get(engine)
     if adapter is not None:
         return adapter.smoke_request(base, loaded, root=root)
-    if engine in DESIGN_ENGINES:
-        return {**base, "mode": "design", "voice_description": CHECK_VOICE}
     raise ValueError(f"No speech check is defined for {engine!r}.")
 
 

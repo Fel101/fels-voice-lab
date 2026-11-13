@@ -37,8 +37,7 @@ SQUARE_TAG = re.compile(r"\[[^\[\]\n]*\]")
 ROUND_TAG = re.compile(r"\([^()\n]*\)")
 MARKUP = {"square": SQUARE_TAG, "round": ROUND_TAG}
 ENGINE_MARKUP = {
-    "drama-3": (SQUARE_TAG,),      # [whispers] and other delivery cues, with <|speaker:N|> markers
-    # Chatterbox Turbo's [laugh] [chuckle] [cough], and the other engines whose adapters say (engine_adapters/)
+    # Chatterbox Turbo's [laugh] [chuckle] [cough], Breeze's (laugh) (sigh) (cough), and Drama 3's [whispers] and other cues
     **{engine: (MARKUP[kind],) for engine, kind in engine_adapters.table("acted_markup").items()},
 }
 SENTENCE_END = (".", "!", "?", "。", "！", "？")

@@ -43,7 +43,7 @@ import worker_pool
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
 # that choose the engine's checkpoint. tests/test_engine_install.py keeps this in step with engine_checks.GUIDED_INSTALLERS and
 # with the launchers themselves.
-INSTALLERS = {"drama-3": "tools/install_drama3.py", **engine_adapters.table("installer")}
+INSTALLERS = engine_adapters.table("installer")
 # Engine id -> the installer module whose --gpu puts in the GPU build of PyTorch for this computer's card: NVIDIA's, whose
 # card_problems(cards) says why it would not run on this computer's NVIDIA cards, or on a computer whose card is an AMD Radeon,
 # AMD's ROCm build, which its amd_card_problems(cards) judges. Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so

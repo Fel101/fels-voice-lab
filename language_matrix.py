@@ -219,10 +219,7 @@ def request_for(clip, loaded, *, root=LAB):
     adapter = engine_adapters.get(engine)
     if adapter is not None:
         return adapter.matrix_request(request, clip, loaded, root=root)
-    design = {**request, "mode": "design", "voice_description": engine_checks.CHECK_VOICE, "seed": clip["seed"]}
-    if engine == "drama-3":
-        return {**design, "language": clip["label"]}
-    return design
+    return {**request, "mode": "design", "voice_description": engine_checks.CHECK_VOICE, "seed": clip["seed"]}
 
 
 def _record(clip, status, reason=None, **measured):
@@ -376,7 +373,7 @@ def evidence(records, *, engines, repeats, suite, started, finished, device, nam
 
 
 # Engines whose language label never reaches the speech runtime. Their labels are metadata, so the screen measures the text.
-METADATA_LANGUAGE_ENGINES = {"drama-3": "the speech runtime does not receive the label"}
+METADATA_LANGUAGE_ENGINES = engine_adapters.table("language_is_metadata")
 # Reasons that explain a missing screen without a claim failing: the voice pack or the engine is not on this machine.
 EXPLAINED_GAPS = ("voice pack", "not installed")
 

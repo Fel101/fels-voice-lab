@@ -1,7 +1,6 @@
 """Model lifecycle and generation methods executed only inside a model worker process."""
 
 import os
-import time
 from pathlib import Path
 
 import numpy as np
@@ -10,11 +9,10 @@ import engine_adapters
 from common import LAB, free_ram_gb, release_gpu, require_ram, to_numpy, torch_runtime
 from ram_needs import MIN_FREE_RAM_GB
 
-ENGINE_IDS = {'drama-3', *engine_adapters.ADAPTERS}
-# The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
-# its own device.
-TORCH_ENGINE_IDS = ENGINE_IDS - {"drama-3"} - {engine for engine, adapter in engine_adapters.ADAPTERS.items()
-                                               if not adapter.uses_torch}
+ENGINE_IDS = set(engine_adapters.ADAPTERS)
+# The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts, and Drama's speech.cpp, which
+# chooses its own device).
+TORCH_ENGINE_IDS = {engine for engine, adapter in engine_adapters.ADAPTERS.items() if adapter.uses_torch}
 REFERENCE_DIR = (LAB / "reference").resolve()
 DEFAULT_REFERENCE = REFERENCE_DIR / "af_heart.wav"
 
@@ -82,7 +80,6 @@ class EngineWorkerRuntime:
                   flush=True)
         self.engine = None
         self.backend = None  # the worker object an adapter keeps across loads (engine_adapters/)
-        self.drama3 = None
         self.model_info = None
         self.profile = None
         self.sample_rate = None
@@ -129,16 +126,6 @@ class EngineWorkerRuntime:
         if self.adapter is not None:
             require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
             return self.adapter.worker_load(self, params)
-        if self.engine_id == 'drama-3':
-            from drama3_worker import Drama3Worker
-            require_ram(MIN_FREE_RAM_GB['drama-3'], 'drama-3')
-            self.drama3 = Drama3Worker('cpu' if params.get('cpu_only') else self.device)
-            result = self.drama3.load()
-            self.engine = self.drama3
-            self.sample_rate = 44100
-            self.loaded_at = time.time()
-            self.model_info = result
-            return {**result, 'pid':os.getpid(), 'parent_pid':os.getppid()}
         raise ValueError(f"{self.engine_id} has no worker.")
 
     @staticmethod
@@ -165,8 +152,6 @@ class EngineWorkerRuntime:
             raise RuntimeError("Load the model before preparing a reference.")
         if self.adapter is not None:
             return self.adapter.worker_prepare_reference(self, params)
-        if self.engine_id == 'drama-3':
-            return self.drama3.prepare_reference(params)
         raise ValueError(f"{self.engine_id} does not take a voice recording.")
 
     def generate(self, params):
@@ -180,8 +165,6 @@ class EngineWorkerRuntime:
 
         if self.adapter is not None:
             wav, sr, info = self.adapter.worker_generate(self, text, params)
-        elif self.engine_id == 'drama-3':
-            wav, sr, info = self.drama3.generate(params)
 
         audio = to_numpy(wav)
         if audio.size == 0 or not np.isfinite(audio).all():
@@ -208,22 +191,12 @@ class EngineWorkerRuntime:
     def generate_stream(self, params, emit_audio):
         if self.engine is None:
             raise RuntimeError("Load the model before generation.")
-        if self.engine_id == 'drama-3':
-            def emit(pcm,rate):
-                emit_audio(np.frombuffer(pcm,dtype='<i2').astype(np.float32)/32767.,rate)
-            audio,rate,info=self.drama3.generate(params,on_audio=emit)
-            return {**info,'sample_count':len(audio),'sample_rate':rate,'pid':os.getpid()}
-        if not getattr(self.adapter, "streams", False):
+        if self.adapter is None:
             raise ValueError("Native worker streaming is currently available only for faster-Qwen checkpoints.")
-        result = self.adapter.worker_generate_stream(self, params, emit_audio)
-        self.last_memory = self._memory()
-        return {**result, "memory": self.last_memory, "pid": os.getpid(), "parent_pid": os.getppid()}
+        return self.adapter.worker_generate_stream(self, params, emit_audio)
 
     def unload(self):
         before = self._memory()
-        if self.drama3 is not None:
-            self.drama3.unload()
-            self.drama3 = None
         adapter_result = self.adapter.worker_unload(self) if self.adapter is not None else {}
         self.engine = None
         self.sample_rate = None

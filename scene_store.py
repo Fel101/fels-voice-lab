@@ -27,7 +27,6 @@ from cast_store import ID_RE, CastStore, DIRECTION_ENGINES, _validate_id, genera
 import engine_adapters
 from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
-from drama3_production import LANGUAGES as DRAMA_LANGUAGES
 from performance_settings import effective_settings
 from scene_selection import take_problem, validate_selected_take
 from script_import import parse_script
@@ -42,7 +41,6 @@ MAX_TARGET_MS = 120_000
 SCENE_ID_RE = re.compile(r"\A[a-f0-9]{32}\Z")
 LINE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\Z")
 SUPPORTED_LANGUAGES = {
-    'drama-3':{*DRAMA_LANGUAGES.values(),'Auto'},
     # The engines whose adapters say (engine_adapters/).
     **{engine: set(languages) for engine, languages in engine_adapters.table("languages").items()},
 }

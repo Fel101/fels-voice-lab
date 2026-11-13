@@ -8,15 +8,7 @@ import re
 
 import engine_adapters
 
-ENGINE_LICENSE_NOTES = {
-    "drama-3": {
-        "code_license": "MIT speech.cpp runtime, separately installed; runtime dependencies retain their own terms.",
-        "weights_license": "Fish Audio Community License 1.0, including Q4 derivative.",
-        "output_use": "Conditional commercial use, aggregate affiliate revenue below USD 500,000; hosted TTS/voice-cloning services need separate agreement. Built with Fish Audio. Review full model and reference terms.",
-        "status": "restricted",
-        "evidence": "https://huggingface.co/fishaudio/drama-3/blob/e0a9218aa48888270f06ef1ed9ea67622c0e17d2/LICENSE; derivative NOTICE."
-    }
-}
+ENGINE_LICENSE_NOTES = {}
 # The engines whose adapters say (engine_adapters/).
 ENGINE_LICENSE_NOTES.update(engine_adapters.table("output_license"))
 

@@ -634,9 +634,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                     backend_request["reference_text"] = reference["transcript"]
             if adapter is not None:
                 backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
-            elif engine_id == 'drama-3':
-                backend_request.update(mode='clone', reference_text=identity['reference']['transcript'],
-                                       direction=direction, language=language, **applied_settings)
             line_id = req.get("line_id")
             if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
                 raise ValueError("Line ID must contain 1–100 characters.")
@@ -673,8 +670,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             voice_options = identity.get("engine_options") or {}
             if adapter is not None:
                 generation_mode = adapter.mode_for(backend_request)
-            elif engine_id == "drama-3":
-                generation_mode = backend_request["mode"]
             else:
                 generation_mode = "fixed_voice"
             model = {
