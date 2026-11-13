@@ -76,13 +76,10 @@ KOKORO_LABEL = {"en": "American English", "en-GB": "British English", "es": "Spa
                 "hi": "Hindi", "it": "Italian", "pt": "Brazilian Portuguese"}
 KOKORO_LETTER = {"en": "a", "en-GB": "b", "es": "e", "fr": "f", "hi": "h", "it": "i", "pt": "p"}
 # Claims beyond the scene picker's allowlist. Breeze's documentation says Chinese was checked
-# locally. VoxCPM2's model card lists 30 languages; the picker allows only English.
+# locally.
 DOCUMENTED_LANGUAGES = {"breeze-tts-2": ("Chinese",)}
-UPSTREAM_LANGUAGES = {"voxcpm2": (
-    "Arabic", "Burmese", "Chinese", "Danish", "Dutch", "English", "Finnish", "French", "German", "Greek",
-    "Hebrew", "Hindi", "Indonesian", "Italian", "Japanese", "Khmer", "Korean", "Lao", "Malay", "Norwegian",
-    "Polish", "Portuguese", "Russian", "Spanish", "Swahili", "Swedish", "Tagalog", "Thai", "Turkish", "Vietnamese",
-)}
+# The languages each engine's makers list, beyond those the Lab has checked (engine_adapters/).
+UPSTREAM_LANGUAGES = engine_adapters.table("upstream_languages")
 ENGINE_ORDER = ("kokoro", "phonon-31m-en", "turbo", "orig", "breeze-tts-2", "qwen3-tts-1.7b-voice-design",
                 "qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "qwen3-tts-1.7b-custom-voice",
                 "voxcpm2", "drama-3")
@@ -226,7 +223,7 @@ def request_for(clip, loaded, *, root=LAB):
     design = {**request, "mode": "design", "voice_description": engine_checks.CHECK_VOICE, "seed": clip["seed"]}
     if engine == "drama-3":
         return {**design, "language": clip["label"]}
-    return design  # Breeze and VoxCPM2 take the language from the text itself.
+    return design  # Breeze takes the language from the text itself.
 
 
 def _record(clip, status, reason=None, **measured):

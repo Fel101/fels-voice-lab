@@ -10,8 +10,7 @@ import engine_adapters
 from common import LAB, free_ram_gb, release_gpu, require_ram, to_numpy, torch_runtime
 from ram_needs import MIN_FREE_RAM_GB
 
-VOXCPM_ENGINE_ID = "voxcpm2"
-ENGINE_IDS = {"breeze-tts-2", VOXCPM_ENGINE_ID, 'drama-3', *engine_adapters.ADAPTERS}
+ENGINE_IDS = {"breeze-tts-2", 'drama-3', *engine_adapters.ADAPTERS}
 # The engines that run on PyTorch: an adapter says when its engine does not (Phonon's ptts), and Drama (speech.cpp) chooses
 # its own device.
 TORCH_ENGINE_IDS = ENGINE_IDS - {"drama-3"} - {engine for engine, adapter in engine_adapters.ADAPTERS.items()
@@ -83,7 +82,6 @@ class EngineWorkerRuntime:
                   flush=True)
         self.engine = None
         self.breeze = None
-        self.voxcpm = None
         self.backend = None  # the worker object an adapter keeps across loads (engine_adapters/)
         self.drama3 = None
         self.model_info = None
@@ -154,24 +152,6 @@ class EngineWorkerRuntime:
             self.loaded_at = time.time()
             self.last_memory = self._memory()
             return {**result, "pid": os.getpid(), "parent_pid": os.getppid(), "memory": self.last_memory}
-        if self.engine_id == VOXCPM_ENGINE_ID:
-            require_ram(MIN_FREE_RAM_GB[self.engine_id], self.engine_id)
-            from voxcpm_worker import VoxCPMWorker
-            if self.voxcpm is None:
-                self.voxcpm = VoxCPMWorker(self.device)
-            started = time.perf_counter()
-            result = self.voxcpm.load()
-            self.engine = self.voxcpm.model
-            self.sample_rate = int(result["sample_rate"])
-            self.loaded_at = time.time()
-            self.model_info = {key: result[key] for key in
-                               ("backend", "backend_version", "checkpoint", "checkpoint_revision",
-                                "mode", "runtime_identity", "dtype", "device_name", "torch", "hip")
-                               if key in result}
-            self.last_memory = self._memory()
-            return {**result, "pid": os.getpid(), "parent_pid": os.getppid(),
-                    "memory": self.last_memory,
-                    "load_seconds": result.get("load_seconds", round(time.perf_counter() - started, 3))}
         raise ValueError(f"{self.engine_id} has no worker.")
 
     @staticmethod
@@ -203,8 +183,6 @@ class EngineWorkerRuntime:
         path = Path(params.get("path", "")).expanduser().resolve()
         if self.engine_id == "breeze-tts-2":
             return self.breeze.prepare_reference(str(path))
-        if self.engine_id == VOXCPM_ENGINE_ID:
-            return self.voxcpm.prepare_reference(params)
         raise ValueError(f"{self.engine_id} does not take a voice recording.")
 
     def generate(self, params):
@@ -222,9 +200,6 @@ class EngineWorkerRuntime:
             wav, sr, info = self.drama3.generate(params)
         elif self.engine_id == "breeze-tts-2":
             wav, sr, info = self.breeze.generate(params)
-        elif self.engine_id == VOXCPM_ENGINE_ID:
-            voxcpm_params = {key: value for key, value in params.items() if key != "output_file"}
-            wav, sr, info = self.voxcpm.generate(voxcpm_params)
 
         audio = to_numpy(wav)
         if audio.size == 0 or not np.isfinite(audio).all():
@@ -268,11 +243,8 @@ class EngineWorkerRuntime:
             self.drama3.unload()
             self.drama3 = None
         breeze_result = None
-        voxcpm_result = None
         if self.engine_id == "breeze-tts-2" and self.breeze is not None:
             breeze_result = self.breeze.unload()
-        if self.engine_id == VOXCPM_ENGINE_ID and self.voxcpm is not None:
-            voxcpm_result = self.voxcpm.unload()
         adapter_result = self.adapter.worker_unload(self) if self.adapter is not None else {}
         self.engine = None
         self.sample_rate = None
@@ -288,7 +260,6 @@ class EngineWorkerRuntime:
             "memory_after": after,
             "allocated_bytes_released": max(0, before.get("allocated_bytes", 0) - after.get("allocated_bytes", 0)),
             **({"breeze": breeze_result} if breeze_result is not None else {}),
-            **({"voxcpm2": voxcpm_result} if voxcpm_result is not None else {}),
             **adapter_result,
         }
 

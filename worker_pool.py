@@ -22,7 +22,6 @@ import engine_devices
 LAB = Path(__file__).resolve().parent
 OUT = LAB / "out"
 CATALOG_PATH = LAB / "catalog" / "engines.json"
-VOXCPM_MODES = {"design", "clone", "continuation"}
 
 
 def process_is_running(pid):
@@ -502,8 +501,6 @@ class EnginePool:
                 return worker.call("prepare_reference", path=str(reference))
             if key == 'drama-3':
                 return worker.call('prepare_reference', path=str(reference), reference_text=reference_text)
-            if key == "voxcpm2":
-                return worker.call("prepare_reference", path=str(reference))
             return worker.call("prepare_reference", path=str(reference), exaggeration=exaggeration)
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
@@ -541,32 +538,6 @@ class EnginePool:
                 if not isinstance(req.get('reference_text'),str) or not req['reference_text'].strip():
                     raise ValueError('Drama 3 cloning requires the exact reference transcript.')
             controls({name:req[name] for name in controls() if name in req})
-        if key == "voxcpm2":
-            mode = req.get("mode", "design")
-            if mode not in VOXCPM_MODES:
-                raise ValueError("VoxCPM2 mode must be design, clone, or continuation.")
-            common_fields = {"engine", "text", "mode", "seed", "cfg_value", "inference_timesteps",
-                             "save_voice_as"}
-            mode_fields = {
-                "design": {"voice_description"},
-                "clone": {"reference_path", "direction"},
-                "continuation": {"reference_path", "prompt_path", "prompt_text"},
-            }[mode]
-            unsupported = set(req) - common_fields - mode_fields
-            if unsupported:
-                raise ValueError(f"Unsupported VoxCPM2 {mode} parameter(s): {', '.join(sorted(unsupported))}.")
-            if mode == "design" and not str(req.get("voice_description", "")).strip():
-                raise ValueError("VoxCPM2 design requires a non-empty voice_description.")
-            if mode in {"clone", "continuation"} and not req.get("reference_path"):
-                raise ValueError(f"VoxCPM2 {mode} requires reference_path.")
-            if mode == "continuation":
-                if not req.get("prompt_path") or not str(req.get("prompt_text", "")).strip():
-                    raise ValueError("VoxCPM2 continuation requires prompt_path and prompt_text.")
-            direction = req.get("direction", "")
-            if mode == "clone" and (not isinstance(direction, str) or len(direction) > 1000):
-                raise ValueError("VoxCPM2 direction must be text of 1000 characters or fewer.")
-            if req.get("save_voice_as") and mode != "design":
-                raise ValueError("Only a VoxCPM2 design take can be saved as a reusable voice reference.")
         self._acquire_job(key, "Clip")
         output_file = None
         try:
@@ -604,29 +575,6 @@ class EnginePool:
                     reference = self._resolve_reference_path(key, reference_path)
                     params["reference_path"] = str(reference)
                     params["reference_text"] = req.get("reference_text", "")
-                    worker.call("prepare_reference", path=str(reference))
-            elif key == "voxcpm2":
-                mode = req.get("mode", "design")
-                params.update({
-                    "mode": mode,
-                    "seed": req.get("seed", 42),
-                    "cfg_value": req.get("cfg_value", 2.0),
-                    "inference_timesteps": req.get("inference_timesteps", 10),
-                })
-                if mode == "design":
-                    params["voice_description"] = req.get("voice_description", "")
-                elif mode == "clone":
-                    reference = self._resolve_reference_path(key, req["reference_path"])
-                    params["reference_path"] = str(reference)
-                    params["direction"] = req.get("direction", "")
-                    worker.call("prepare_reference", path=str(reference))
-                else:
-                    reference = self._resolve_reference_path(key, req["reference_path"])
-                    prompt = self._resolve_reference_path(key, req["prompt_path"])
-                    params.update({
-                        "reference_path": str(reference), "prompt_path": str(prompt),
-                        "prompt_text": req.get("prompt_text", ""),
-                    })
                     worker.call("prepare_reference", path=str(reference))
 
             runtime_pid = self.workers[key].get("runtime_pid", worker.pid)

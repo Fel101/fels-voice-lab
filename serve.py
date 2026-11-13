@@ -649,13 +649,6 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
             elif engine_id == 'drama-3':
                 backend_request.update(mode='clone', reference_text=identity['reference']['transcript'],
                                        direction=direction, language=language, **applied_settings)
-            elif engine_id == "voxcpm2":
-                backend_request.update({
-                    "mode": "clone", "direction": direction,
-                    "seed": settings.get("seed", 42),
-                    "cfg_value": settings.get("cfg_value", 2.0),
-                    "inference_timesteps": settings.get("inference_timesteps", 10),
-                })
             line_id = req.get("line_id")
             if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
                 raise ValueError("Line ID must contain 1–100 characters.")
@@ -694,7 +687,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
                 generation_mode = adapter.mode_for(backend_request)
             elif engine_id == "breeze-tts-2":
                 generation_mode = backend_request["mode"]
-            elif engine_id in {"voxcpm2", "drama-3"}:
+            elif engine_id == "drama-3":
                 generation_mode = backend_request["mode"]
             else:
                 generation_mode = "fixed_voice"
@@ -1013,7 +1006,7 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
         save_path = None
         if save_name not in (None, ""):
             save_engine = req.get("engine", engine_adapters.DEFAULT_ENGINE)
-            designs = {"breeze-tts-2", "voxcpm2", *engine_adapters.engines_where("saves_designs")}
+            designs = {"breeze-tts-2", *engine_adapters.engines_where("saves_designs")}
             can_save_design = save_engine in designs and req.get("mode", "design") == "design"
             if not can_save_design:
                 return self._json(400, {"error": "Reusable voice assets can be saved from Breeze, Qwen VoiceDesign, or VoxCPM2 "

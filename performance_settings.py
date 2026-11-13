@@ -8,7 +8,6 @@ DEFAULTS = {
     "breeze-tts-2": {"profile": "eager", "seed": 42, "cfg_scale": 1.0,
         "max_new_tokens": 1500, "temperature": 0.9, "top_k": 50, "top_p": 1.0,
         "repetition_penalty": 1.1, "depth_temperature": 0.9, "depth_top_k": 50, "depth_top_p": 1.0},
-    "voxcpm2": {"seed": 42, "cfg_value": 2.0, "inference_timesteps": 10},
 }
 
 # Presentation metadata for the values already accepted by effective_settings(). The
@@ -26,8 +25,6 @@ CONTROL_UI = {
                      "repetition_penalty": ("Repetition penalty", 0.5, 2.0, 0.05),
                      "depth_temperature": ("Depth temperature", 0.05, 2.0, 0.05),
                      "depth_top_k": ("Depth top-k", 0, 200, 1), "depth_top_p": ("Depth top-p", 0.05, 1.0, 0.01)},
-    "voxcpm2": {"seed": ("Seed", 0, 2147483647, 1), "cfg_value": ("CFG value", 0.1, 10.0, 0.1),
-                "inference_timesteps": ("Inference steps", 1, 100, 1)},
 }
 # The engines whose adapters say (engine_adapters/).
 for _engine, _adapter in engine_adapters.ADAPTERS.items():

@@ -18,14 +18,6 @@ def _files_bytes(manifest, files=None):
     return sum(item["size"] for item in (manifest["files"] if files is None else files))
 
 
-def _voxcpm(root, _nvidia, card):
-    from tools import install_voxcpm as iv
-
-    files = _files_bytes(iv.base.load_manifest(root / iv.MANIFEST)) + _files_bytes(iv.load_source(root / iv.SOURCE_MANIFEST))
-    download, disk = iv.packages_mb(card)
-    return download * 10**6 + files, disk * 10**6 + files
-
-
 def _breeze(root, _nvidia, card):
     from tools import install_breeze as ib
 
@@ -49,7 +41,6 @@ def _sizers():
         return lambda root, nvidia, card: adapter.install_size(root, nvidia, card, _files_bytes)
 
     return {
-        "voxcpm2": _voxcpm,
         "breeze-tts-2": _breeze,
         "drama-3": _drama3,
         **{engine: adapted(adapter) for engine, adapter in engine_adapters.ADAPTERS.items() if adapter.sizes_install},

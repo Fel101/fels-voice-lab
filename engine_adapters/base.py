@@ -15,6 +15,9 @@ class Adapter:
     gpu_build = None  # the installer module whose --gpu puts in the GPU build of PyTorch for it
     required_packages = None  # Python packages its environment must hold
     required_files = None  # files its snapshot must hold besides a weight file
+    top_level_cache = False  # it reads its snapshot from the top of hf-cache, not hf-cache/hub
+    extra_directories = None  # folders its worker adds to its import path, which its installer fetches
+    borrowed_packages = None  # the Python of another environment whose packages it may borrow when its own lacks them
     min_free_ram_gb = None  # free RAM, in GB, the Lab wants before it loads the model
     sizes_install = False  # install_size() says what its Install downloads
     uses_torch = True  # its worker runs on PyTorch, so it can be asked for the graphics card
@@ -36,6 +39,7 @@ class Adapter:
     phonemizes = False  # its worker shows the phonemes it would speak (worker_phonemize)
     voice_per_language = False  # each of its voices speaks one language (the language matrix picks one per column)
     languages = None  # the languages a scene line may ask of it
+    upstream_languages = None  # the languages its makers list, beyond those the Lab has checked (the language matrix)
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
     output_license = None  # what its code, weights and clips allow, for each take's licence profile

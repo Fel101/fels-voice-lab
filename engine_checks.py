@@ -26,33 +26,32 @@ CHECK_MIN_PEAK = 0.001
 SPEED_SAMPLES = 20
 STORE_SCHEMA = 1
 WEIGHT_SUFFIXES = (".safetensors", ".pth", ".pt", ".bin", ".gguf")
-# VoxCPM2 reads its pinned snapshot from the top of hf-cache; the other Hugging Face engines use hf-cache/hub.
-TOP_LEVEL_CACHE = {"voxcpm2"}
-# Source directories that a worker adds to its import path: VoxCPM2's pinned source files, which tools/install_voxcpm.py fetches.
-EXTRA_DIRECTORIES = {"voxcpm2": ("out/voxcpm2/source/src",)}
-# Environments whose packages an engine may borrow when its own lacks them: a .venv-voxcpm made by hand without PyTorch reads
-# .venv-fqwen's, read-only (engine_worker.py adds them to its import path), as the Lab first ran VoxCPM2 on an AMD card.
-BORROWED_PACKAGES = {"voxcpm2": ".venv-fqwen/Scripts/python.exe"}
+# The engines that read their pinned snapshot from the top of hf-cache (VoxCPM2's); the other Hugging Face engines use
+# hf-cache/hub.
+TOP_LEVEL_CACHE = engine_adapters.engines_where("top_level_cache")
+# Source directories that a worker adds to its import path, such as VoxCPM2's pinned source files.
+EXTRA_DIRECTORIES = engine_adapters.table("extra_directories")
+# Environments whose packages an engine may borrow when its own lacks them (engine_worker.py adds them to its import path).
+BORROWED_PACKAGES = engine_adapters.table("borrowed_packages")
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A launcher in the lab folder that puts an engine's files in place, with the arguments that choose its checkpoint.
 # installation() names it while files are missing.
-GUIDED_INSTALLERS = {"voxcpm2": "setup-voxcpm.bat", "breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
+GUIDED_INSTALLERS = {"breeze-tts-2": "setup-breeze.bat", "drama-3": "setup-drama3.bat",
                      **engine_adapters.table("guided_installer")}
 # Python packages an engine's environment must hold besides the interpreter; installation() looks for their dist-info folders.
 # Kokoro and Phonon each have an environment of their own (.venv-kokoro, .venv-phonon), the three Chatterbox engines share
 # .venv-chatterbox, and the four Qwen3-TTS engines .venv-fqwen; each installer makes its environment before it installs anything
 # into it.
-REQUIRED_PACKAGES = {"voxcpm2": ("torch", "transformers", "librosa"), "breeze-tts-2": ("transformers", "accelerate"),
+REQUIRED_PACKAGES = {"breeze-tts-2": ("transformers", "accelerate"),
                      **engine_adapters.table("required_packages")}
 # Files an engine's snapshot must hold, beyond having a weight file: the engine cannot load with any of these missing.
-REQUIRED_FILES = {"voxcpm2": ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json"),
-                  **engine_adapters.table("required_files")}
+REQUIRED_FILES = engine_adapters.table("required_files")
 BREEZE_WEIGHTS = "Breeze-TTS-2-bf16.safetensors"
 # Where Breeze's loader looks for its files (breeze/loader.py: the models folder beside it, then the repository's name), and the
 # ones it cannot load without.
 BREEZE_FOLDER = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
 BREEZE_FILES = (BREEZE_WEIGHTS, "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors")
-DESIGN_ENGINES = {"breeze-tts-2", "voxcpm2", "drama-3"}
+DESIGN_ENGINES = {"breeze-tts-2", "drama-3"}
 # The engines whose Test clones the bundled clip; the evaluation compares their voices with it.
 CLONE_ENGINES = engine_adapters.engines_where("clone_check")
 

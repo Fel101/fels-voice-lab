@@ -16,13 +16,6 @@ ENGINE_LICENSE_NOTES = {
         "status": "restricted",
         "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
     },
-    "voxcpm2": {
-        "code_license": "Apache-2.0 per the pinned upstream repository.",
-        "weights_license": "Apache-2.0 per the pinned model card.",
-        "output_use": "Unknown; review reference rights and intended distribution.",
-        "status": "unknown",
-        "evidence": "THIRD_PARTY_NOTICES.md; pinned catalog/engines.json; complete upstream license."
-    },
     "drama-3": {
         "code_license": "MIT speech.cpp runtime, separately installed; runtime dependencies retain their own terms.",
         "weights_license": "Fish Audio Community License 1.0, including Q4 derivative.",

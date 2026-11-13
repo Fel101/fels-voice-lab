@@ -43,13 +43,13 @@ import worker_pool
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
 # that choose the engine's checkpoint. tests/test_engine_install.py keeps this in step with engine_checks.GUIDED_INSTALLERS and
 # with the launchers themselves.
-INSTALLERS = {"voxcpm2": "tools/install_voxcpm.py", "breeze-tts-2": "tools/install_breeze.py",
+INSTALLERS = {"breeze-tts-2": "tools/install_breeze.py",
               "drama-3": "tools/install_drama3.py", **engine_adapters.table("installer")}
 # Engine id -> the installer module whose --gpu puts in the GPU build of PyTorch for this computer's card: NVIDIA's, whose
 # card_problems(cards) says why it would not run on this computer's NVIDIA cards, or on a computer whose card is an AMD Radeon,
 # AMD's ROCm build, which its amd_card_problems(cards) judges. Qwen3-TTS, VoxCPM2 and Breeze run only on a graphics card, so
 # their installers always put in the GPU build.
-GPU_BUILDS = {"voxcpm2": "tools.install_voxcpm", "breeze-tts-2": "tools.install_breeze",
+GPU_BUILDS = {"breeze-tts-2": "tools.install_breeze",
               **engine_adapters.table("gpu_build")}
 NO_GPU = ("The app installs the GPU build of {name} for an NVIDIA graphics card or an AMD Radeon, and this computer has neither "
           "an NVIDIA driver nor an AMD card that Windows lists.")
