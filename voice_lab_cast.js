@@ -36,7 +36,7 @@ function performanceIdentity() {
 }
 function apiAudioContext() {
   if (!audioContext || audioContext.state==='closed') { var AudioCtor = window.AudioContext || window.webkitAudioContext; if (AudioCtor) { audioContext = new AudioCtor(); } }
-  if (!audioContext) { throw new Error('This browser cannot decode audio for local reference preview.'); }
+  if (!audioContext) { throw new Error('This browser cannot decode the audio to preview the recording.'); }
   if (audioContext.state === 'suspended') { audioContext.resume(); }
   return audioContext;
 }
@@ -91,18 +91,18 @@ function wavBlob(buffer, startSeconds, endSeconds, targetRate, channelMode) {
   return new Blob([bytes],{type:'audio/wav'});
 }
 function activeTrim() {
-  if (!referenceBuffer) { throw new Error('Choose or record a local reference first.'); }
+  if (!referenceBuffer) { throw new Error('Choose or record a voice recording first.'); }
   var start=Number($('trimStart').value), end=Number($('trimEnd').value);
   if (!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>referenceBuffer.duration+0.02) { throw new Error('Choose a valid trim range within the source waveform.'); }
-  if (end-start>60) { throw new Error('This reference exceeds the 60-second native Breeze / studio safety limit. Trim it before saving.'); }
+  if (end-start>60) { throw new Error('This recording is longer than 60 seconds, the most the Lab takes. Trim it before saving.'); }
   return {start:start,end:end};
 }
 function previewReferenceClip() {
   var revision=referenceLoadRevision,previewRevision=++referencePreviewRevision;
   try {
     var range=activeTrim(),identity=activeIdentity();
-    if(!identity||identity.kind!=='reference'){throw new Error('Choose a reference-cloning identity in Cast first.');}
-    if(!referenceSourceBlob){throw new Error('Choose or record a local reference first.');}
+    if(!identity||identity.kind!=='reference'){throw new Error('Choose a voice that clones a recording in Cast first.');}
+    if(!referenceSourceBlob){throw new Error('Choose or record a voice recording first.');}
     var selected=selectedReference(identity,$('referenceVersion'));
     var metadata={filename:referenceSourceFile?referenceSourceFile.name:(selected&&selected.source_name)||'source.wav',edits:fillReferenceMetadata()};
     var encoded=encodeReferenceMetadata(metadata);
@@ -113,18 +113,18 @@ function previewReferenceClip() {
         drawReferenceWave(referenceBuffer,range.start,range.end);
         var details='Preview: '+result.headers.get('X-Reference-Duration')+' s, mono, '+result.headers.get('X-Reference-Sample-Rate')+' Hz, RMS '+result.headers.get('X-Reference-RMS')+' dBFS.';details+=referenceQualityText(decodeReferenceQuality(result.headers.get('X-Reference-Quality')));
         if($('noiseReductionEnabled').checked){details+=' Steady-noise reduction is active; the original remains unchanged.';}
-        $('referenceAnalysis').textContent=details;$('referenceStatus').textContent='Preview ready. Listen before saving this reference version.';})
+        $('referenceAnalysis').textContent=details;$('referenceStatus').textContent='Preview ready. Listen before saving this version.';})
       .catch(function(error){if(revision===referenceLoadRevision&&previewRevision===referencePreviewRevision)$('referenceStatus').textContent='Could not create processed preview: '+error.message;});
   } catch(error) { $('referenceStatus').textContent=error.message; }
 }
 function loadReferenceSource(blob, file, revision) {
   var token=revision===undefined?++referenceLoadRevision:revision;
-  if(token!==referenceLoadRevision)return Promise.reject(new Error('The reference selection changed.'));
+  if(token!==referenceLoadRevision)return Promise.reject(new Error('The chosen recording changed.'));
   referenceSourceFile=null;referenceSourceBlob=null;referenceBuffer=null;
   referenceDecodePending=true;referencePreviewRevision++;$('saveReference').disabled=true;$('saveReferenceVersion').disabled=true;$('previewReference').disabled=true;
   if(file)setReferencePlayer(null);
   return decodeBlob(blob).then(function(buffer) {
-    if(token!==referenceLoadRevision){throw new Error('The reference selection changed; choose the current recording.');}
+    if(token!==referenceLoadRevision){throw new Error('The chosen recording changed; choose the current one.');}
     referenceSourceFile=file||null;referenceSourceBlob=blob;
     referenceBuffer=buffer; $('trimStart').value='0'; $('trimEnd').value=buffer.duration.toFixed(2);
     if(file) {
@@ -189,12 +189,12 @@ function selectedReference(identity, selector) {
 function renderActiveIdentity() {
   clearReferenceEditor();
   var identity=activeIdentity(); $('referenceEditor').hidden=!identity||identity.kind!=='reference';
-  $('identityState').textContent=identity?identity.engine_id+' / '+identity.status+(identity.approved_reference_id?' / approved reference v'+(identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version:''):'';
+  $('identityState').textContent=identity?identity.engine_id+' / '+identity.status+(identity.approved_reference_id?' / approved recording v'+(identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version:''):'';
   $('approveFixedIdentity').hidden=!identity||['fixed_voice','preset_voice'].indexOf(identity.kind)<0;
   if(identity&&identity.kind==='preset_voice'){
-    $('approveFixedIdentity').textContent='Approve preset identity';
+    $('approveFixedIdentity').textContent='Approve this preset voice';
     $('identityState').textContent=identity.engine_options.checkpoint+' / revision '+identity.engine_options.checkpoint_revision+' / '+identity.engine_options.speaker+' / '+identity.engine_options.language+' / '+identity.status;
-  }else{$('approveFixedIdentity').textContent='Approve fixed voice';}
+  }else{$('approveFixedIdentity').textContent='Approve this preset voice';}
   if(identity&&identity.kind==='fixed_voice') {
     var savedVoices=(identity.engine_options.voice||'').split(',');
     Array.from($('fixedVoice').options).forEach(function(item){item.selected=savedVoices.indexOf(item.value)>=0;});
@@ -222,7 +222,7 @@ function loadSavedReference(reference) {
   fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not load audio: '+error.message;});
   fetch('/api/references/'+reference.id+'/source').then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){return loadReferenceSource(blob,null,revision);})
     .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent='v'+reference.version+' / '+reference.duration_seconds.toFixed(2)+' s / '+reference.sample_rate+' Hz / '+reference.channels+' mono channel(s) / '+reference.audio_sha256.slice(0,16)+(reference.warnings.length?' / '+reference.warnings.join(' '):'');})
-    .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not preview saved reference: '+error.message;});
+    .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not preview the saved recording: '+error.message;});
 }
 function renderPerformanceCharacter() {
   var character=performanceCharacter(), select=$('performIdentity'), before=select.value; select.textContent='';
@@ -234,7 +234,7 @@ function renderPerformanceCharacter() {
 }
 function renderPerformanceIdentity() {
   var character=performanceCharacter(), identity=performanceIdentity();$('performReference').textContent='';
-  if(!identity){option($('performReference'),'','No voice identity',true);$('performSupport').textContent='Create a voice candidate in Cast first.';$('performDirectionWrap').hidden=true;$('nativeTags').hidden=true;$('performSettingsPanel').hidden=true;return;}
+  if(!identity){option($('performReference'),'','No voice',true);$('performSupport').textContent='Add a voice in Cast first.';$('performDirectionWrap').hidden=true;$('nativeTags').hidden=true;$('performSettingsPanel').hidden=true;return;}
   var options=identity.engine_options||{}, isPreset=identity.kind==='preset_voice';
   $('performReference').parentElement.hidden=identity.kind!=='reference';
   if(identity.kind==='reference'){
@@ -253,12 +253,12 @@ function renderPerformanceIdentity() {
   var seeded=(schema.controls||[]).some(function(control){return control.id==='seed';});
   $('performSeed').parentElement.hidden=!seeded;$('variantCount').parentElement.hidden=!seeded;
   $('performDirectionWrap').hidden=!directionSupported;$('actingPreset').parentElement.hidden=!directionSupported;
-  $('performSupport').textContent=directionStatus==='experimental'?'Delivery instruction is experimental for this checkpoint.':
-    isPreset?'Checkpoint preset: '+options.speaker+' / '+$('performLanguage').value+'. No reference recording is used.':
-    identity.engine_id==='turbo'?'Reference clips must exceed 5 seconds. Use [laugh], [chuckle], or [cough] tags in text.':
-    directionSupported?'Delivery instruction is supported by this checkpoint.':
+  $('performSupport').textContent=directionStatus==='experimental'?'Acting direction is experimental with this model.':
+    isPreset?'Checkpoint preset: '+options.speaker+' / '+$('performLanguage').value+'. No voice recording is used.':
+    identity.engine_id==='turbo'?'Voice recordings must be longer than 5 seconds. Use [laugh], [chuckle], or [cough] tags in text.':
+    directionSupported?'This model takes an acting direction.':
     identity.engine_id==='orig'?'Text direction is unsupported for this checkpoint.':
-    identity.kind==='fixed_voice'?'Fixed speaker identity; no reference clone controls.':'Reference-cloned character identity.';
+    identity.kind==='fixed_voice'?'A preset voice: it clones no recording.':'A voice cloned from a recording.';
   renderPerformanceSettings(identity,schema);
   var native=identity.engine_id==='turbo'||identity.engine_id==='breeze-tts-2'||identity.engine_id==='drama-3'; $('nativeTags').hidden=!native;
   $('nativeTags').textContent='Insert model-native event: ';
@@ -283,7 +283,7 @@ function renderPerformanceSettings(identity,schema){
 }
 function insertTag(tag){var field=$('performText'),a=field.selectionStart,b=field.selectionEnd;field.value=field.value.slice(0,a)+tag+field.value.slice(b);field.focus();field.selectionStart=field.selectionEnd=a+tag.length;}
 function saveIdentityUpdate(changes) {
-  var identity=activeIdentity();if(!identity){return Promise.reject(new Error('Choose a voice identity first.'));}
+  var identity=activeIdentity();if(!identity){return Promise.reject(new Error('Choose a voice first.'));}
   return fetchJson('/api/identities/'+identity.id+'/update',changes);
 }
 function syncNoiseReductionFields(){$('noiseProfileFields').hidden=!$('noiseReductionEnabled').checked;$('noiseReductionStrengthValue').textContent=Number($('noiseReductionStrength').value).toFixed(2);}
@@ -303,7 +303,7 @@ function saveUploadedReference(){
   var analysis=bufferAnalysis(referenceBuffer);if(analysis.rms<0.001){$('referenceStatus').textContent='Source is silent/too quiet; record a clear passage.';return;}
   var metadata={filename:referenceSourceFile.name||'microphone-capture.wav',transcript:$('referenceTranscript').value,
     origin:$('referenceOrigin').value,allowed_use:$('referenceAllowedUse').value,edits:fillReferenceMetadata()};
-  $('saveReference').disabled=true;$('referenceStatus').textContent='Saving the original audio and immutable processed reference version...';
+  $('saveReference').disabled=true;$('referenceStatus').textContent='Saving the original audio and this version of the recording...';
   var encoded=encodeReferenceMetadata(metadata);
   fetch('/api/identities/'+identity.id+'/references',{method:'POST',headers:{'Content-Type':referenceSourceFile.type||'application/octet-stream','X-Reference-Metadata':encoded},body:referenceSourceFile})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||r.status);return j.reference;});})
@@ -351,7 +351,7 @@ function appendTakeChecks(parent,checks){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!checks||checks.status==='not_recorded'){note.textContent='Waveform checks were not recorded for this take.';}
   else if(checks.status==='unavailable'){note.className+=' flagged';note.textContent='Waveform checks could not run: '+(checks.error||'unknown error')+'.';}
-  else if(!checks.flags.length){note.textContent='Automatic waveform checks found no flags. They do not judge the words, identity or acting.';}
+  else if(!checks.flags.length){note.textContent='Automatic waveform checks found no flags. They do not judge the words, the voice or the acting.';}
   else{note.className+=' flagged';note.textContent='Automatic waveform checks flagged: '+checks.flags.map(function(flag){
     return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')+'. Listen before selecting.';}
   parent.appendChild(note);
@@ -443,7 +443,7 @@ function renderTakes(takes){
       reference_version_id:take.reference_version_id||null,provenance:take.provenance||{}},null,2);
     provenance.appendChild(provenanceTitle);provenance.appendChild(provenanceBody);article.appendChild(provenance);
     var actions=document.createElement('div');actions.className='cast-actions';[['selected','Select'],['candidate','Keep as candidate'],['rejected','Reject']].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
-    var newReference=document.createElement('button');newReference.type='button';newReference.textContent='Create new reference version from this take';newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent='Choose this take’s reference voice in Perform first.';return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent='Created reference v'+result.reference.version+' with inherited use restrictions.';return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent='Check voice match';var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent='Measuring the voice match…';fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?('Voice match (proxy) '+m.score.toFixed(2)+': '+({likely_same:'likely the reference voice',uncertain:'uncertain',likely_different:'likely a different voice'}[m.band])+'. Calibrated on one voice; this is not a listening test.'):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!=='Check voice match')b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
+    var newReference=document.createElement('button');newReference.type='button';newReference.textContent='Make a voice recording from this take';newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent='Choose this take’s voice in Perform first.';return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent='Created recording v'+result.reference.version+' with inherited use restrictions.';return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent='Check voice match';var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent='Measuring the voice match…';fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?('Voice match (proxy) '+m.score.toFixed(2)+': '+({likely_same:'likely the voice of its recording',uncertain:'uncertain',likely_different:'likely a different voice'}[m.band])+'. Calibrated on one voice; this is not a listening test.'):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!=='Check voice match')b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
 }
 var takeLoadRevision=0;
 function loadCurrentTakes(){
@@ -467,7 +467,7 @@ function performanceSettings(identity, seed){
   return settings;
 }
 function generatePerformanceSet(){
-  var identity=performanceIdentity();if(!identity){$('performError').textContent='Choose an identity.';return;}
+  var identity=performanceIdentity();if(!identity){$('performError').textContent='Choose a voice.';return;}
   var count=Math.max(1,Math.min(8,Math.floor(Number($('variantCount').value))||1)),seed=Number.isFinite(Number($('performSeed').value))?Number($('performSeed').value):42;
   var settings=performanceSettings(identity,seed);
   if(!Object.prototype.hasOwnProperty.call(settings,'seed'))count=1;
@@ -488,13 +488,13 @@ function generatePerformanceSet(){
       .then(function(response){if(!response.ok)return response.json().then(function(j){throw new Error(j.error||response.status);});return response.blob();})
       .then(function(){run.done++;return loadCurrentTakes();}).then(function(){return next(i+1);});
   }
-  next(0).then(function(){$('performStatus').textContent=run.done<count?'Stopped after '+run.done+' of '+count+' takes. The takes already made are saved.':'Candidate set complete; each take has its own WAV and model/reference provenance.';})
+  next(0).then(function(){$('performStatus').textContent=run.done<count?'Stopped after '+run.done+' of '+count+' takes. The takes already made are saved.':'Takes made. Each has its own WAV and records its model and voice recording.';})
     .catch(function(error){$('performError').textContent=error.message+' Previously completed takes remain saved.';$('performStatus').textContent='Generation stopped before the set completed.';})
     .then(function(){clearInterval(ticker);if(performRun===run)performRun=null;$('performStop').hidden=true;$('performGenerate').disabled=false;});
 }
 var performRun=null;
 function performStatusText(run){
-  return 'Generating candidate '+run.index+' of '+run.count+(run.count>1?' in sequence':'')+'... '+Math.round((performance.now()-run.started)/1000)+' s'
+  return 'Making take '+run.index+' of '+run.count+(run.count>1?' in sequence':'')+'... '+Math.round((performance.now()-run.started)/1000)+' s'
     +(run.stopRequested?' (stopping after this take)':'');
 }
 function stopPerformanceSet(){

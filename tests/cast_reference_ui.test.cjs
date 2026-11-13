@@ -17,7 +17,7 @@ test('decoding a new file immediately invalidates the old upload and ignores a l
   const old=c.loadReferenceSource(a,a);old.catch(()=>{});
   assert.equal(c.referenceSourceFile,null);assert.equal(c.referenceBuffer,null);assert.equal($('saveReference').disabled,true);
   const current=c.loadReferenceSource(b,b);second.resolve({duration:8,sampleRate:24000,numberOfChannels:1});await current;
-  first.resolve({duration:3,sampleRate:24000,numberOfChannels:1});await assert.rejects(old,/selection changed/);
+  first.resolve({duration:3,sampleRate:24000,numberOfChannels:1});await assert.rejects(old,/chosen recording changed/);
   assert.equal(c.referenceSourceFile,b);assert.equal(c.referenceBuffer.duration,8);assert.equal($('saveReference').disabled,false);
 });
 test('a pending processed preview cannot repaint a different reference',async()=>{

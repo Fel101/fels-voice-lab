@@ -262,7 +262,7 @@ test('speed table shows an empty message, then one row per device with its real-
   const rows = fields.speedRows.children;
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[0].children.map(cell => cell.textContent),
-    ['Kokoro 82M', 'CPU', '3', '0.25', '0.50 s for 2.00 s of audio']);
+    ['Kokoro 82M', 'CPU', '3', '0.25 s', '0.50 s for 2.00 s of audio']);
   assert.deepEqual(rows[1].children.map(cell => cell.textContent),
     ['turbo', 'GPU', '1', '—', '1.23 s for 4.00 s of audio']);
 });

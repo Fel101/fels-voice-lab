@@ -515,7 +515,7 @@ class VerifyTests(LibraryBase):
         row = library_backup.list_backups(self.dest)[0]
         self.assertEqual(list(row["sections"]), ["cast", "scenes", "evaluations", "settings", "voices", "exports", "drama"])
         self.assertEqual(row["included"], list(row["sections"]))
-        self.assertEqual(row["sections"]["cast"]["label"], "Cast voices, references and takes")
+        self.assertEqual(row["sections"]["cast"]["label"], "Cast voices, voice recordings and takes")
         self.assertEqual(sum(part["files"] for part in row["sections"].values()), row["files"])
 
     def test_a_listing_never_fails_on_a_manifest_with_odd_values(self):

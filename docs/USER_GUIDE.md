@@ -20,137 +20,138 @@ follows the operating system (Light, or Dark when Windows is in dark mode); an e
 saved in the selected app state folder and survives closing/reopening the desktop
 window, whose local port can change. Compare uses the same preference when opened.
 
-Choose **Voice cloning** to upload or record a voice, save a named candidate and
-generate a test directly. **Cast library** provides reference editing and approval;
-**Perform lines** provides repeatable dialogue and acting. On narrow screens the
+Choose **Voice cloning** to upload or record a voice, save it under a name and
+hear a test straight away. **Cast library** is where you edit a voice's recordings and approve
+them; **Perform lines** makes repeatable dialogue and acting. On narrow screens the
 navigation wraps above the workspace and sample cards stack.
 
 ## Clone your own voice
 
-1. Open **Voice cloning**, name the voice/character and choose a cloning model.
+1. Open **Voice cloning**, type a **Name for this voice** and choose a **Model** that clones.
    Press **Install** on a model's card in **Models & features** to add one.
    Chatterbox Turbo clones on an ordinary CPU (or run `setup-chatterbox.bat`,
    [setup](SETUP.md#chatterbox-turbo-on-the-cpu)); Chatterbox 500M and Drama 3,
    which needs 26 GB of free RAM, clone on the CPU too, and the Qwen3-TTS Base
    models, VoxCPM2 and Breeze TTS 2 on a graphics card, NVIDIA's or AMD's.
-2. Choose **Upload your voice — browse files**, **Record microphone**, or a saved
-   reference. Uploaded WAV, FLAC, OGG, MP3 and M4A files stay on this PC. The
-   file you upload is kept untouched as the source, and the reference is made from
+2. Choose **Upload your voice — browse files**, **Record from the microphone**, or a saved
+   voice recording. Uploaded WAV, FLAC, OGG, MP3 and M4A files stay on this PC. The
+   file you upload is kept untouched as the source, and the voice recording is made from
    it as a WAV, so an MP3 or M4A is never re-encoded. M4A files are read with FFmpeg
    (see [setup](SETUP.md)); without it the page says so and suggests converting the file.
    Use one clear
    speaker without music; a clean 6–30 second passage is a useful starting point.
    The direct workflow accepts 0.5–60 seconds and up to 32 MB; Turbo requires
    more than 5 seconds. Use Cast to trim a longer recording before cloning.
-3. Play the source preview. Enter the **Exact words in the reference** as heard,
-   the recording's origin and its permitted uses/restrictions. The direct workflow
-   requires a transcript except for VoxCPM2 identity cloning. Confirm that you own
+3. Play the source preview. Enter the **Exact words in the recording** as heard,
+   **Where it comes from** and **Who may use it, and how**. Voice cloning needs the
+   words for every model except VoxCPM2, which can clone without them. Confirm that you own
    the recording or have permission to clone it. The checkbox records your decision;
    it does not establish rights by itself.
-4. Enter **New words to speak**. These are the new performance, not the reference's
-   transcript. Add a delivery instruction when the selected model offers one.
-   Choose **Save voice and generate test**, or **Save reference only**.
-5. Listen to the result against the source. The named voice and immutable reference
-   are saved as a Cast candidate, and a generated test is saved in Perform lines.
-   Open **Review and edit in Cast** to edit, version or approve the reference.
-   Nothing is approved automatically.
+4. Enter **New words to speak**. These are the new performance, not the words of the
+   recording. Add an **Acting direction** when the model takes one.
+   Choose **Save the voice and hear it**, or **Save the recording only**.
+5. Listen to the result against the source. The voice and its recording are saved in
+   Cast, not yet approved, and the test is saved in Perform lines as a take. A saved
+   recording never changes: an edit makes a new version of it. Open **Review and edit
+   in Cast** to edit the recording or approve it. Nothing is approved automatically.
 
 The preview also shows a **quality score** (0–100: good, review or poor) and plain warnings for clipping, a high
 noise floor, reverberant decay, steady tones such as hum or music in the quiet parts, and a second voice. A warning
-means listen before saving; it does not block the save, and the score is not stored with the reference. See
+means listen before saving; it does not block the save, and the score is not stored with the recording. See
 [REFERENCE_SCREEN.md](REFERENCE_SCREEN.md) for what each check measures and where it is weak.
 
 Microphone recording needs the browser's permission and an available input device.
 Choose **Stop recording** when finished; recording stops automatically at about
 59 seconds. If microphone capture is unavailable, upload a recording instead.
-If generation fails after saving, the saved reference remains available for retry.
+If the test fails after saving, the saved recording stays, so you can try again.
 Fish cloning runs on CPU and its first test can take several minutes. Chatterbox Turbo on a
 CPU takes 10 to 30 seconds to load and then two to three times as long as the line it speaks.
 
-A reference conditions the speaker's identity and can also carry accent, delivery
-and recording characteristics into the result. It is not a trained replacement
-model. The exact transcript helps engines that use audio/text conditioning; wrong
-words can reduce quality. Choosing another reference can change the resulting
-voice even when the new dialogue stays the same.
+A voice recording gives the model the voice, and can also carry its accent, its way of
+speaking and the sound of the room into the result. It is not a trained replacement
+model. The exact words help the models that read a recording together with its text;
+wrong words can lower the quality. Choosing another recording can change the voice you
+get even when the new dialogue stays the same.
 
 Use your own recording or one whose speaker and rights holder allow the intended
 cloning and distribution. A downloadable dataset, public video or existing picker
 entry is not blanket permission. Model terms still apply: Breeze self-hosted
 outputs are non-commercial; Fish has commercial and hosted-service conditions.
-Read [voice asset rights](VOICE_ASSET_RIGHTS.md) before publishing reference audio
+Read [voice asset rights](VOICE_ASSET_RIGHTS.md) before publishing voice recordings
 or a starter voice pack.
 
 ## Design, cast and perform
 
-**Model studio** auditions text with a model's supported settings. Kokoro uses
-fixed cached voices and equal blends. Its fixed-voice list contains licensed
-Kokoro speaker tensors, not uploaded WAVs; selecting multiple voices averages
-them equally. Kokoro cannot add a newly recorded voice by browsing to a WAV or
-perform reference cloning. Upload that recording in **Voice cloning** and choose
-a cloning-capable model instead. Qwen CustomVoice uses native preset identities.
+**Model studio** auditions text with a model's own settings. Kokoro speaks in its
+preset voices, one or several blended equally (**Kokoro voices**). Its list holds
+licensed Kokoro voice files, not uploaded WAVs; choosing several averages them
+equally. Kokoro cannot take a new voice from a WAV or clone a voice recording.
+Upload that recording in **Voice cloning** and choose a model that clones instead.
+Qwen CustomVoice speaks in the model's own preset voices (**Preset voice**).
 Phonon speaks English in 37 fixed preset voices, grouped as American English, British
-English and Characters, with a seed, a temperature and a pace shift; it takes no direction
-and no reference, and its voices can be added to a character in **Cast library** as
-preset identities. The same seed gives nearly the same clip, not the same file.
+English and Characters, with a seed, a temperature and a pace shift; it takes no acting direction
+and no voice recording, and its voices can be added to a character in **Cast library** as
+preset voices. The same seed gives nearly the same clip, not the same file.
 Gradium states no licence for those 37 voices, so ask them before you publish audio
-made with one. Design-capable engines accept descriptions; cloning models need a permitted
-reference and, where required, its exact transcript. Unsupported controls
+made with one. Models that design voices take a description; models that clone need a voice
+recording you may use and, where they ask for them, its exact words. Unsupported controls
 are withheld or rejected, not silently advertised as effective.
 
 While **Generate** works, the status line counts the seconds, and the first request
 of a session also loads and warms the model. **Stop waiting** gives the page back at once.
-It cannot interrupt the engine: that line may still be finishing, and a new request is
+It cannot interrupt the model: that line may still be finishing, and a new request is
 turned away as busy until it does. A stopped request adds nothing to Recent clips, but a
 voice you asked to save as a reusable asset is still saved when the model finishes.
 
-Reference pickers show a playable preview plus the source category, duration,
-origin and allowed-use notes. Cast references also identify their character,
-identity and version. **Rights unknown** means provenance has not been documented;
-**use notes saved** means notes exist, not that the app verified their legal
-accuracy. Older generated fixtures may have sparse metadata or duplicate audio.
-Use **Upload / record a new voice** to add a reference, and refresh the saved
-references after external changes.
+A list of voice recordings shows a playable preview, and under **Source, use notes and
+recording details** the kind of source, the length, where it comes from and who may use
+it. A recording from Cast also names its character, its voice and its version. **Allowed
+use: Unknown** means nobody has written down who may use it; notes that are there were
+written by a person, and the app does not check that they are right. Older generated
+fixtures may have sparse notes or duplicate audio. Use **Upload / record a new voice** to
+add a recording, and **Refresh saved recordings** after changing them outside the Lab.
 
-Saved references are grouped as saved character voices or local recordings and
-designs. The normal list uses each identity's preferred version: its approved
-version, or its newest candidate when none is approved. **All reference versions**
-exposes the other immutable versions. This filter does not silently replace an
-already selected recording.
+Saved voice recordings are grouped as **Saved character voices** or **Local recordings and
+designs**. The list shows each voice's preferred version: the approved one, or the newest
+when none is approved. **All recording versions** shows the others. This filter does not
+silently replace a recording you have already chosen.
 
-For Chatterbox, **Clone the selected reference voice** switches between conditioning on your
-chosen saved recording and the checkpoint's default speaker. It is no longer
-limited to the old `af_heart` test clip. The reference supplies the voice identity;
-the dialogue field supplies what the model should say.
+For Chatterbox, **Clone the chosen voice recording** switches between cloning the saved
+recording you chose and the model's default voice. It is no longer limited to the old
+`af_heart` test clip. The recording gives the voice; the dialogue field gives what the
+model should say.
 
 Every recent studio result has **Save as a reusable Cast voice**. This opens Voice
 cloning with the audio, proposed transcript and source/model terms carried into
 the form. Name it, listen, correct the proposed words and record permission before
-saving. Qwen VoiceDesign output becomes a reference for Qwen Base cloning because
-the design and cloning checkpoints are separate. Saving a fixed/preset speaker's
-rendered audio for another cloning model does not change the original preset.
+saving. Qwen VoiceDesign output becomes a voice recording for Qwen Base to clone,
+because the design and cloning checkpoints are separate. Saving a preset voice's audio
+for another model to clone does not change the preset.
 
 **Cast library** opens with named saved-voice cards. Search by name, character
 role or model, and play each card's saved audition.
 **Created with** identifies the model that produced the audition when recorded.
-**Generate dialogue with** appears when the reusable identity uses another model,
+**Generate dialogue with** appears when the saved voice uses another model,
 such as a Qwen VoiceDesign sample reused through Qwen Base.
 
-Choose **Use in Model studio** to select its reference, preset or fixed speaker
-blend; **Perform lines** to select the saved character identity for new dialogue;
-or **Edit voice** to open the character and reference editor. A fixed speaker or
-blend can have a playable audition without a cloning reference. A missing audition
-or reference is reported rather than replaced with invented audio. Opening a card
+Choose **Use in Model studio** to select its voice recording, preset voice or blend of
+preset voices; **Perform lines** to select the saved voice for new dialogue; or **Edit
+voice** to open the editor for the character, its voices and its recordings. A preset voice
+or blend can have a playable audition without a voice recording. A missing audition or
+recording is reported rather than replaced with invented audio. Opening a card
 does not generate speech or approve the voice.
 
-In the editor, record/import a reference, review waveform and edits, enter its
-transcript, origin and allowed use, then approve an immutable version. A new
-recording/edit creates another version. Source recordings remain distinct from
-processed references. Voice Slate clip imports are documented in
+In the editor, record or import a voice recording, look at its waveform and edits, enter
+its **Exact words in the recording**, **Where it comes from** and **Who may use it, and
+how**, then **Approve this version**. A saved version never changes: a new recording or
+edit makes another version. The file you imported is kept apart from the edited versions. Voice Slate clip imports are documented in
 [the bridge guide](RECORDER_BRIDGE.md).
 
-**Perform lines** reuses a Cast identity, stable line ID, exact script and supported
-acting settings. Generate seed variants, listen, rate/reject/select, and retain
-the model/reference/settings receipt. **Seed variants** sets how many takes one click makes,
+**Perform lines** reuses a Cast voice, the exact script and the acting settings its model
+has. Make several takes, listen, then rate, reject or select them; each take keeps a record
+of its model, voice recording and settings. The **Line name** under **Details** is filled
+in for you: takes for the same line name are listed together, and exports name the line by
+it. **Takes to make** sets how many takes **Make takes** makes,
 from 1 to 8 (3 by default), each on the next seed after the one you entered; it appears for
 models that take a seed, and the others make one take. The takes are made one after
 another and the status line counts the seconds on the current one. **Stop after this take**
@@ -164,11 +165,11 @@ highest point of the signal as a converter would play it, so it can be above eve
 above -1 dBTP gets a note, because MP3, AAC and Ogg export can clip there. A take under 0.4 seconds, a silent one
 and one below the -70 LUFS gate have no loudness figure and the card says which. The numbers are measured when a
 take is saved, and for takes made earlier the first time the service starts after the update. The checks and the
-numbers never judge words, identity or acting, so listen
+numbers never judge the words, the voice or the acting, so listen
 before you select. Takes saved before this check existed show that no record exists.
 Pronunciation rules and saved performances
-keep written dialogue separate from the model's spoken spelling. A derived
-reference inherits its source restrictions. Native preset identities do not
+keep written dialogue separate from the model's spoken spelling. A voice recording
+made from a take keeps the restrictions of its source. Preset voices do not
 silently become cloned audition WAVs.
 
 **Edit take…** is a button on every take in Perform lines. It opens an editor under the take, with the whole take drawn as
@@ -178,7 +179,7 @@ removes the quiet before and after the speech inside that range. It counts anyth
 unless you change it) as silence, leaves **Silence to keep** (80 ms) at each end, and never touches a pause inside the
 speech. **Fade in** and **Fade out** turn the ends down over the milliseconds you give. **Gain** makes the result louder
 or quieter, from -60 to 24 dB; a gain that would clip is refused, and the message says how much that take can take.
-**Hear the edit** plays the result and saves nothing. **Save as new take** saves it as a new candidate take that names its
+**Hear the edit** plays the result and saves nothing. **Save as new take** saves it as a new take that names its
 original. The steps run in that order: trim, silence, fades, gain. A trim alone copies the audio exactly, and an edit may not
 leave less than 0.05 seconds. Edits of edits are allowed.
 
@@ -188,11 +189,11 @@ measured again on the new audio, so a trim that leaves too little speech gets th
 phoneme times, when the original has them, move with the trim, and a word the trim removes leaves the record; fades and
 gain change no time. Retiring a take blocks its edits too, and purging it deletes them. A scene can choose an edited take
 like any other take for its line. An exported package names the take it used and does not list the edit steps; look the take
-up in Cast to see them. This is not the Drama model's own previous-take editing, which the backend does not offer.
+up in Cast to see them. This is not the Drama model's own previous-take editing, which the model does not offer.
 
 **Scenes & batch** imports CSV/JSON or starts from Perform. The script is a table, one row per line: its number, character,
 the start of its text, its voice and model, and its status. **Open** on a row shows the line's takes, then its full form
-(character, voice, text, language, pauses and settings) and its line ID, which exports and the API use. The status says where
+(character, voice, text, language, pauses and settings) and its line name, which exports and the API use. The status says where
 the line stands:
 
 - **Not rendered**: it has no take yet.
@@ -209,13 +210,16 @@ the line stands:
 line, or **Render what is missing or out of date** for the lines that are not rendered, failed or out of date. Each saves the
 scene first. The filters show one character's lines, or the lines with one status; **Tick all shown** ticks what they show,
 and **Render ticked** renders the ticked lines that are shown. A long line is split into parts, and its row opens to show each
-part with its own takes and **Render this part**. **Preview segments** shows how each line splits before you render.
+part with its own takes and **Render this part**. **Show the parts of long lines** shows how each line splits before you
+render.
 
-Jobs run one take at a time, with pause, resume, cancel and retry. A batch renders all of one model's lines before it loads
+A batch renders one take at a time, and **Pause**, **Resume**, **Cancel** and **Try the failed lines again** work on it. A batch renders all of one model's lines before it loads
 the next model, so a scene that switches between voices on two models loads each model once; while it runs, the status line
 says the order, such as "Kokoro 82M: 7 of 12, then Qwen3-TTS 1.7B Base: 8". The scene is still assembled in script order. A
-take whose waveform checks flag something says so under it, and **Audition rendered takes** lists one batch's takes with
-the same checks as Perform. Preview assembles ordered speech and pauses; a timing target is advisory.
+take whose waveform checks flag something says so under it, and **Takes from this batch** lists one batch's takes with
+the same checks as Perform, each with **Use this take**. **Build the scene from the chosen takes** puts the chosen takes and
+the pauses together in script order, as **Scene, exactly as rendered** and **Scene, evened out in loudness**; a timing target
+is advisory.
 See [the scene schema](scenes/scene-schema-v1.md).
 
 Undo (Ctrl+Z) and redo (Ctrl+Y or Ctrl+Shift+Z) reverse script edits, including typing, line changes, moves and
@@ -223,10 +227,10 @@ removals. Saving, opening another scene, importing, starting from Perform and ch
 scene) clear the undo history. Ctrl+S saves the scene, and Alt+Up or Alt+Down moves the line you are in. In a text box,
 Ctrl+Z is that box's own undo. The shortcuts only work while Scenes & batch is open.
 
-**Export package** uses a saved scene and selected takes. Dry-run provenance,
-choose WAV, FLAC, Ogg, MP3 or AAC (M4A) and optional trims/fades/loudness, then export and verify.
-Raw take copies, manifests and subtitle outputs preserve source provenance.
-Segment captions are not forced-aligned word timings. Existing exports are
+**Export package** uses a saved scene and its chosen takes. **Check what goes in** first,
+choose WAV, FLAC, Ogg, MP3 or AAC (M4A) and any trims, fades and loudness, then **Create package**
+and **Check the chosen package**. Copies of the takes, the manifests and the captions keep where
+each take came from. A caption without word times is not timed to the words. Existing exports are
 never silently overwritten.
 
 FFmpeg writes every format, so the panel checks it when you open it. Without FFmpeg it says so and
@@ -246,7 +250,7 @@ Verifying a package checks each file's codec as well as its hash.
 voices produced by the same model. Search **Compare saved performances**, play
 their previews, select 2–20 takes, name the comparison and choose **Create
 comparison from selected takes**. Every selected take must have a partner with
-identical written/spoken text, language and delivery direction. If not, generate
+identical written/spoken text, language and acting direction. If not, generate
 the same test line in Perform first; different languages remain separate cases.
 
 The import verifies source hashes, preserves Cast metadata and inherited use
@@ -258,11 +262,11 @@ A/B/tie preference is optional. Choose **Save A and B ratings** for each trial.
 **Reveal model mapping and ratings** becomes available after both sides of every
 trial are rated. Old pair-level scores remain visible as legacy history; they do
 not supply either sample's scores. Revealed mappings identify
-the saved character/voice/take, including same-model candidates. Ratings persist;
+the saved character/voice/take, including two voices on the same model. Ratings persist;
 revealed sessions are read-only.
 
-This auditions candidate voices. Different references, identities or model settings
-do not make it a controlled model benchmark. Saved evaluation runs remain
+This auditions voices. Different voice recordings, voices or model settings do not
+make it a controlled model benchmark. Saved evaluation runs remain
 available. Raw audio is preserved. Automatic
 loudness/clipping/transcript checks do not approve speaker likeness or acting.
 Optional transcript suggestions are drafts;
@@ -275,20 +279,20 @@ that comes with Chatterbox Turbo (installing Turbo installs it). Its two bands
 (likely the same voice from 0.847, likely a different one below 0.796) were measured
 on one target voice, not all speakers or languages; the statistics of the clips they
 were measured from are in [catalog/speaker_similarity.json](../catalog/speaker_similarity.json).
-A missing encoder must not be treated as a successful identity check.
+A missing encoder must not be treated as a voice match.
 
-**Voice conversion** separates source performance from target identity, retains
-its receipt, and preserves Chatterbox's native watermark. It is not training.
-Its two lists offer recordings already in the Lab's folders. To use a file from
-this computer instead, choose it under the list: **Use a source file from this
-computer** for the performance (WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds; its
-voice is replaced, so it needs no permission), or **Use a target voice file from
-this computer** for the voice to convert to (up to 10 seconds). For a target voice,
-fill in its origin and allowed use and tick that you own the recording or have
-permission to clone the voice first, as Voice cloning asks; the tick clears after
+**Voice conversion** keeps the **Performance to convert** apart from the **Voice to convert
+it to**, keeps a record of each conversion, and preserves Chatterbox's native watermark. It is
+not training. Its two lists offer recordings already in the Lab's folders. To use a file from
+this computer instead, choose it under the list: **Use a recording from this computer** for
+the performance (WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds; its voice is replaced, so it
+needs no permission), or **Use a voice recording from this computer** for the voice to convert
+to (up to 10 seconds). For a voice recording, fill in **Where it comes from** and **Who may
+use it, and how** and tick that you own the recording or have permission to clone the voice
+first, as Voice cloning asks; the tick clears after
 each file. The file is then kept, and chosen in its list under its own name. Every
-conversion's manifest records the original name of each file, and the target's
-origin and allowed use. The Lab keeps these files as mono WAVs in
+conversion's manifest records the original name of each file, and where the voice
+recording comes from and who may use it. The Lab keeps these files as mono WAVs in
 `out\conversions\uploads\source` and `out\conversions\uploads\target`, named by the
 SHA-256 of the file you chose, so the same file chosen twice is kept once, each with
 a small JSON of its name and terms beside it. Backups leave out `out\conversions`,
@@ -300,16 +304,16 @@ automatic voice improvement or unrestricted output rights are implied.
 ## Drama scene and narration studio
 
 Select Drama 3 and open **Drama scene & narration studio**. Assign up to sixteen
-approved saved references with exact transcripts, insert speaker tags and acting
-cues, then audition incremental audio. Scripts can contain up to 8,000 characters;
+approved voice recordings with their exact words, insert speaker tags and acting
+directions, then audition incremental audio. Scripts can contain up to 8,000 characters;
 the worker's context, duration and ten-minute audio caps still apply. Select one
-of 83 language labels plus Auto. The label is metadata: it does not translate text or reach the model, and [the language screen](LANGUAGE_MATRIX.md) records which languages each engine was checked in.
+of 83 language labels plus Auto. The label is metadata: it does not translate text or reach the model, and [the language screen](LANGUAGE_MATRIX.md) records which languages each model was checked in.
 
 Completed jobs retain mixed WAV, script, cue-free transcript, model/cast receipts
 and ZIP downloads. Reopen recent jobs to restore settings for a fresh generation.
 There are no isolated stems, reliable word/speaker timing, previous-take VQ editing
 or automatic conversion of joint audio into separately timed game dialogue.
-Cues may be ignored or spoken. All studio jobs and cloning run on CPU after a
+The model may ignore an acting direction or speak it. All studio jobs and cloning run on CPU after a
 local Vulkan driver-loss incident. See [Drama details](DRAMA3.md).
 
 ## Retire and purge
@@ -317,7 +321,7 @@ local Vulkan driver-loss incident. See [Drama details](DRAMA3.md).
 **Retire** stops new use without deleting anything. Retire a voice in the Cast library,
 a recording version with **Retire this recording** in the Cast editor, or a take in
 Perform lines. A retired item still plays for review, but Perform, Scenes, Compare,
-voice conversion, the Drama studio, reference pickers and exports refuse it. Retiring
+voice conversion, the Drama studio, the lists of voice recordings and exports refuse it. Retiring
 a voice also blocks its recordings and takes. Retiring a recording also blocks its
 takes and any versions or recordings made from it. Retiring a take blocks the edits made from it. Retiring a voice or a recording
 clears its approval, and restoring never approves it again.
@@ -327,8 +331,8 @@ recording or take it came from stays blocked until that source is restored. The 
 library hides retired voices unless you tick **Show retired voices**, where you can
 restore or purge them.
 
-**Purge** permanently deletes a retired item, everything made from it, and their audio
-from Cast storage. It cannot be undone, and the confirmation lists what will go.
+**Purge** (on a recording, **Delete this recording for good…**) permanently deletes a
+retired item, everything made from it, and their audio from Cast storage. It cannot be undone, and the confirmation lists what will go.
 Cast keeps a tombstone with the time, the reason and the audio's checksums, but not the
 audio. Copies outside Cast storage, such as exported packages and comparison copies under
 `out/`, are listed after the purge and are never deleted. Remove them yourself. Back up
@@ -340,11 +344,11 @@ the local API but has no button yet. Make a [library backup](#back-up-and-restor
 
 ## Check which models can speak
 
-Open **Models & features** to see each engine's state. **Integrated** means this build contains
+Open **Models & features** to see each model's state. **Integrated** means this build contains
 its adapter. **Installed** means its Python environment and pinned checkpoint files are on disk;
 the page checks this without loading a model. **Usable** means a test on the current device
-loaded the model and spoke one short sentence. A test describes the engine as it was when it ran, so it
-records the model pin and the packages installed in the engine's environment. If either changes, the card
+loaded the model and spoke one short sentence. A test describes the model as it was when it ran, so it
+records the model pin and the packages installed in the model's environment. If either changes, the card
 reads **test out of date** until you press **Test again**. Tests saved by an older build have no record
 of either and read as out of date once.
 
@@ -381,12 +385,12 @@ graphics card their build runs on, an NVIDIA card and driver or an AMD Radeon wh
 and Breeze only on a card with enough memory; on another computer their cards gather under **more models need manual setup**
 and say why the app cannot install them there.
 
-The speed table lists the median real-time factor (seconds to generate divided by seconds of
-audio) for each engine and device, from clips and checks this service generated. It records speed
-only; precision is not measured.
+**Measured speed on this computer** lists each model, where it **Runs on**, and its **Typical time per second of
+speech**: the median of the seconds it took to generate divided by the seconds of audio, from the clips and tests this
+computer made. It records speed only; precision is not measured.
 
 Language choices are checked the same way. A language marked **(unscreened)** in a picker is one the
-[language screen](LANGUAGE_MATRIX.md) did not clear for that engine: the recognizer heard it as partial or
+[language screen](LANGUAGE_MATRIX.md) did not clear for that model: the recognizer heard it as partial or
 not understood. The app keeps those choices so existing scenes still open, but listen before relying on one.
 
 ## Word times and captions
@@ -394,7 +398,7 @@ not understood. The app keeps those choices so existing scenes still open, but l
 Run `.venv\Scripts\python.exe align_takes.py --all` to record word times for every Cast take that has none.
 The run takes about a minute for 150 takes and writes nothing else. Scene exports then write captions as word
 phrases wherever every take of a line has word times; any other line keeps one caption. The times are
-approximate and have not been checked against a reference, so listen before relying on a caption's timing.
+approximate and have not been checked against trusted timings, so listen before relying on a caption's timing.
 [Alignment notes](ALIGNMENT.md) describe the limits. A take made by editing another take starts with its original's word
 times, moved with the trim, so it needs no run; if the original had none, the run records the edit's own, from the full line
 of text, which fits badly when the trim cut words away.
@@ -427,7 +431,7 @@ The same page shows how a script [edits a saved take](API.md#edit-a-saved-take):
 loaded model can cause HTTP 409; unload from its owning app or wait for its idle
 timeout. Never delete an ownership lock file to bypass a running owner.
 
-Closing the desktop window stops only its backend and active workers. Stop a
+Closing the desktop window stops only its own service and the workers it started. Stop a
 foreground/browser service with its terminal. Stop all services sharing a state
 root before copying its `data/cast`, `data/scenes`, `data/evaluations`,
 `out/comparisons` and `out/scenes` directories together. `out/comparisons` holds
@@ -438,7 +442,7 @@ retaining offline use.
 
 Recent simple studio clips are browser-session history rather than the durable
 Cast store. The desktop shell uses a private WebView session; download those
-clips or save them to Cast before closing. Saved references, takes, scenes and
+clips or save them to Cast before closing. Saved voice recordings, takes, scenes and
 Drama job history remain on disk. Logs and manifests can include private scripts
 or paths; do not upload them without review.
 
@@ -521,10 +525,10 @@ Each run of the service writes `out/logs/service-<date>-<time>-<id>.log`, and th
 line names the file. It has a line for each action and each failure (generating, saving,
 deleting, importing, exporting) and for any request that is refused, fails or takes a second
 or more. A line gives the time, a request ID, the request, the status, the seconds, the
-engine and, for a failure, the error and the worker log it names. The ID also comes back to
+model and, for a failure, the error and the worker log it names. The ID also comes back to
 the page in the `X-Request-Id` header, and a script or assistant that sends its own
 `X-Request-Id` (letters, digits, `.`, `_` and `-`) finds that ID in the log. The log never
-holds script text, reference transcripts or request bodies, and the query part of an address
+holds script text, the words of voice recordings or request bodies, and the query part of an address
 is dropped. An error message or a path can still carry a fragment of a name, so read the log
 before you share it. One run's log stops growing at about 6 MB.
 

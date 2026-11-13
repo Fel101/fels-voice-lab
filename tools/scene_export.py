@@ -1170,7 +1170,7 @@ def verify_export(args):
             raise ExportError(f"Character pack line count mismatch: {pack_path}")
     print("Export verification passed")
     print(f"Re-imported selected scene: {scene['scene_id']} revision {scene['revision']}")
-    print(f"Selected line/segment takes reproduced: {len(take_ids)}")
+    print(f"Chosen takes reproduced, one for each line or part: {len(take_ids)}")
     print(f"Assets hash-checked: {checked}; original take WAVs match Cast and copied hashes.")
     print(f"Subtitles/transcript verified: {len(line_ids)} line-level cues; no word timing.")
     print("Deliverable codecs (WAV, FLAC, Ogg, MP3, AAC), durations and the AI-generated speech label were verified with "

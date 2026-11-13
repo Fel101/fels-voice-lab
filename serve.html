@@ -155,34 +155,34 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
-  <p class="meta">Use a permitted reference recording to guide a local text-to-speech model. This creates performances from the clip; it does not train or fine-tune a model.</p>
+  <p class="meta">Use a voice recording you may use to guide a local text-to-speech model. This creates performances from the clip; it does not train or fine-tune a model.</p>
   <fieldset class="workflow-controls" id="cloneControls">
   <div class="cast-grid">
-    <label class="field">Voice / character name<input id="cloneName" type="text" maxlength="80" placeholder="Name this voice"></label>
-    <label class="field">Cloning model<select id="cloneEngine"></select></label>
+    <label class="field">Name for this voice<input id="cloneName" type="text" maxlength="80" placeholder="Name this voice"></label>
+    <label class="field">Model<select id="cloneEngine"></select></label>
   </div>
   <p class="meta" id="cloneModelHelp"></p>
   <h3>1. Choose a recording</h3>
   <div class="row"><label class="field">Upload your voice — browse files<input id="cloneFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-    <button type="button" id="cloneMicStart">Record microphone</button><button type="button" id="cloneMicStop" hidden>Stop recording</button></div>
+    <button type="button" id="cloneMicStart">Record from the microphone</button><button type="button" id="cloneMicStop" hidden>Stop recording</button></div>
   <p class="meta">WAV, FLAC, OGG, MP3 or M4A (M4A needs FFmpeg), up to 32 MB. Use a clean 6–30 second passage with one speaker. Files stay on this PC. Trim or clean longer recordings in Cast.</p>
-  <label class="field">Or use a saved reference<select id="cloneReference"></select></label>
+  <label class="field">Or use a saved voice recording<select id="cloneReference"></select></label>
   <audio id="cloneSourcePlayer" controls preload="metadata" aria-label="Uploaded or recorded voice preview"></audio>
   <p class="meta" id="cloneSourceInfo" role="status"></p>
-  <label class="field">Exact words in the reference<textarea id="cloneTranscript" maxlength="1200" placeholder="Type the words you actually hear. Required except for VoxCPM2 identity cloning."></textarea></label>
-  <div class="cast-grid"><label class="field">Origin / source<input id="cloneOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
-    <label class="field">Allowed use / restrictions<input id="cloneAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label></div>
+  <label class="field">Exact words in the recording<textarea id="cloneTranscript" maxlength="1200" placeholder="Type the words you actually hear. Required except for VoxCPM2, which can clone without them."></textarea></label>
+  <div class="cast-grid"><label class="field">Where it comes from<input id="cloneOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
+    <label class="field">Who may use it, and how<input id="cloneAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label></div>
   <label><input id="clonePermission" type="checkbox"> I own this recording or have permission to clone this voice.</label>
   <h3>2. Try the voice</h3>
   <label class="field">New words to speak<textarea id="cloneText" maxlength="1200">The gate is open. Keep your lantern close, and follow me across the bridge.</textarea></label>
-  <label class="field" id="cloneDirectionWrap">Delivery instruction (optional)<input id="cloneDirection" type="text" maxlength="1000" placeholder="For example: calmly, with quiet confidence"></label>
-  <div class="cast-actions"><button class="go" type="button" id="cloneGenerate">Save voice and generate test</button>
-    <button type="button" id="cloneSave">Save reference only</button><a id="cloneOpenCast" href="#cast" hidden>Review and edit in Cast</a>
-    <button type="button" id="refreshReferenceLibrary">Refresh saved references</button></div>
+  <label class="field" id="cloneDirectionWrap">Acting direction (optional)<input id="cloneDirection" type="text" maxlength="1000" placeholder="For example: calmly, with quiet confidence"></label>
+  <div class="cast-actions"><button class="go" type="button" id="cloneGenerate">Save the voice and hear it</button>
+    <button type="button" id="cloneSave">Save the recording only</button><a id="cloneOpenCast" href="#cast" hidden>Review and edit in Cast</a>
+    <button type="button" id="refreshReferenceLibrary">Refresh saved recordings</button></div>
   </fieldset>
   <p class="meta" id="cloneStatus" role="status" aria-live="polite"></p>
   <audio id="cloneResult" controls preload="none" aria-label="Cloned test performance" hidden></audio>
-  <p class="meta">Saving creates a named candidate in Cast and adds it to every Model studio reference picker. Listen before approving it in Cast; approval is never automatic. Test performances also appear in Perform lines.</p>
+  <p class="meta">Saving creates a named voice in Cast, not yet approved, and adds its recording to every Model studio recording picker. Listen before approving it in Cast; approval is never automatic. Test performances also appear in Perform lines.</p>
   <details><summary>Finding permitted speech samples</summary>
   <h3>Public speech samples</h3>
   <div class="model-grid">
@@ -203,48 +203,48 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <label class="meta"><input id="showRetiredVoices" type="checkbox"> Show retired voices</label>
   <p id="voiceLibraryStatus" class="meta" role="status" aria-live="polite"></p>
   <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
-  <details id="castEditor"><summary>Create or edit a character voice and reference versions</summary>
-  <p class="meta">Build your cast and approve a reference for each character. Your recordings and every saved version stay on this PC.</p>
+  <details id="castEditor"><summary>Create or edit a character, its voices and its recordings</summary>
+  <p class="meta">Build your cast and approve a voice recording for each character. Your recordings and every saved version stay on this PC.</p>
   <div class="cast-grid">
     <label class="field">Character name<input id="characterName" type="text" maxlength="80" placeholder="Character name"></label>
-    <label class="field">Identity description<input id="characterDescription" type="text" maxlength="2000" placeholder="Who this character is; keep acting out of this field"></label>
+    <label class="field">Description<input id="characterDescription" type="text" maxlength="2000" placeholder="Who this character is; keep acting out of this field"></label>
   </div>
   <div class="cast-actions"><button type="button" id="createCharacter">Create character</button><label class="field compact">Open character<select id="characterSelect"></select></label></div>
-  <label class="field">Character notes<textarea id="characterNotes" placeholder="Stable identity traits and continuity notes"></textarea></label>
+  <label class="field">Character notes<textarea id="characterNotes" placeholder="What stays the same about this character, and continuity notes"></textarea></label>
   <div class="cast-actions"><button type="button" id="saveCharacter">Save notes</button></div>
   <hr>
   <div class="cast-grid">
-    <label class="field">Engine identity<select id="identityEngine"></select></label>
-    <label class="field">Candidate label<input id="identityLabel" type="text" maxlength="80" value="Neutral candidate"></label>
+    <label class="field">Model<select id="identityEngine"></select></label>
+    <label class="field">Voice name<input id="identityLabel" type="text" maxlength="80" value="Neutral candidate"></label>
   </div>
-  <div class="row" id="fixedVoiceRow" hidden><label class="field compact">Fixed voice or equal blend<select id="fixedVoice" multiple size="5"></select>
-    <span class="meta">Select one or more cached voices; multi-voice identities use an equal-weight mean.</span></label></div>
+  <div class="row" id="fixedVoiceRow" hidden><label class="field compact">Preset voices (one, or several blended equally)<select id="fixedVoice" multiple size="5"></select>
+    <span class="meta">Select one or more installed voices; several are blended equally.</span></label></div>
   <div class="cast-grid" id="customVoiceIdentityRow" hidden>
     <button type="button" id="loadCustomVoiceIdentity">Load CustomVoice speakers</button>
-    <label class="field compact">Preset speaker<select id="presetSpeaker"><option value="">Load the local checkpoint first</option></select></label>
-    <label class="field compact">Preset language<select id="presetLanguage"><option value="">Load the local checkpoint first</option></select></label>
-    <label class="field">Default delivery instruction (optional)<textarea id="presetDirection" maxlength="1000" placeholder="A reusable acting starting point; each performance can override it."></textarea></label>
+    <label class="field compact">Preset voice<select id="presetSpeaker"><option value="">Load the local checkpoint first</option></select></label>
+    <label class="field compact">Language<select id="presetLanguage"><option value="">Load the local checkpoint first</option></select></label>
+    <label class="field">Default acting direction (optional)<textarea id="presetDirection" maxlength="1000" placeholder="A reusable acting starting point; each performance can override it."></textarea></label>
     <p class="meta" id="customVoiceIdentityStatus" role="status"></p>
   </div>
   <div class="cast-grid" id="phononIdentityRow" hidden>
     <label class="field compact">Phonon voice<select id="phononIdentityVoice"></select></label>
     <p class="meta" id="phononIdentityInfo" role="status"></p>
   </div>
-  <label class="field">Voice-specific notes<textarea id="identityNotes" placeholder="Keep this voice's stable qualities separate from per-line acting"></textarea></label>
-  <div class="cast-actions"><button type="button" id="createIdentity">Add voice candidate</button><label class="field compact">Character voice<select id="identitySelect"></select></label><span class="meta" id="identityState"></span><button type="button" id="approveFixedIdentity" hidden>Approve fixed voice</button></div>
+  <label class="field">Notes on this voice<textarea id="identityNotes" placeholder="Keep this voice's stable qualities separate from per-line acting"></textarea></label>
+  <div class="cast-actions"><button type="button" id="createIdentity">Add voice</button><label class="field compact">Voice<select id="identitySelect"></select></label><span class="meta" id="identityState"></span><button type="button" id="approveFixedIdentity" hidden>Approve this preset voice</button></div>
   <div id="referenceEditor" hidden>
-    <hr><h3>Reference recording and versions</h3>
-    <p class="meta">Original audio is saved unchanged. Each trim, channel choice, resample, or transcript edit creates a new immutable version. Breeze's native reference limit is 60 seconds; the local studio also caps other reference candidates at 60 seconds.</p>
+    <hr><h3>Voice recording and its versions</h3>
+    <p class="meta">Original audio is saved unchanged. Each trim, channel choice, resample, or transcript edit creates a new immutable version. Breeze takes a voice recording of up to 60 seconds, and the Lab keeps every other recording to 60 seconds too.</p>
     <div class="row"><label class="field">Import WAV, FLAC, OGG, MP3 or M4A<input id="referenceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-      <button id="micStart" type="button">Record microphone</button><button id="micStop" type="button" hidden>Stop recording</button></div>
-    <div class="row"><label class="field compact">Saved reference version<select id="referenceVersion"></select></label>
+      <button id="micStart" type="button">Record from the microphone</button><button id="micStop" type="button" hidden>Stop recording</button></div>
+    <div class="row"><label class="field compact">Saved recording version<select id="referenceVersion"></select></label>
       <label class="field compact">Trim start (seconds)<input id="trimStart" type="number" min="0" step="0.01" value="0"></label>
       <label class="field compact">Trim end (seconds)<input id="trimEnd" type="number" min="0.5" step="0.01"></label></div>
-    <div class="row"><label class="field compact">Downmix channel<select id="referenceChannel"><option value="mono">Average to mono</option><option value="left">Use left channel</option><option value="right">Use right channel</option></select></label>
-      <label class="field compact">Reference sample rate<select id="referenceRate"><option value="24000">24 kHz (recommended)</option><option value="16000">16 kHz</option><option value="48000">48 kHz</option><option value="0">Keep source rate</option></select></label>
-      <button id="previewReference" type="button">Preview processed clip</button></div>
+    <div class="row"><label class="field compact">Channel (for a stereo recording)<select id="referenceChannel"><option value="mono">Average to mono</option><option value="left">Use left channel</option><option value="right">Use right channel</option></select></label>
+      <label class="field compact">Sample rate<select id="referenceRate"><option value="24000">24 kHz (recommended)</option><option value="16000">16 kHz</option><option value="48000">48 kHz</option><option value="0">Keep source rate</option></select></label>
+      <button id="previewReference" type="button">Hear the edited clip</button></div>
     <div class="workflow-note">
-      <label><input id="noiseReductionEnabled" type="checkbox"> Reduce steady background noise in this reference version</label>
+      <label><input id="noiseReductionEnabled" type="checkbox"> Reduce steady background noise in this version</label>
       <p class="meta">Choose a short noise-only part of the trimmed clip (no speech) as the noise profile. This spectral gate can reduce steady fan or hiss noise; it may color the voice and cannot separate overlapping speech or music. The original recording stays unchanged.</p>
       <div id="noiseProfileFields" class="row" hidden>
         <label class="field compact">Noise profile start (seconds in trimmed clip)<input id="noiseProfileStart" type="number" min="0" step="0.01" value="0"></label>
@@ -252,17 +252,17 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
         <label class="field compact">Reduction strength<input id="noiseReductionStrength" type="range" min="0.1" max="1" step="0.05" value="0.75"><span class="meta" id="noiseReductionStrengthValue">0.75</span></label>
       </div>
     </div>
-    <canvas class="wave" id="referenceWave" width="900" height="120" aria-label="Reference waveform preview"></canvas>
+    <canvas class="wave" id="referenceWave" width="900" height="120" aria-label="Waveform of the voice recording"></canvas>
     <audio id="referencePlayer" controls></audio>
     <p class="meta" id="referenceAnalysis"></p>
-    <label class="field">Exact reference transcript<textarea id="referenceTranscript" placeholder="Type and verify every word; guessed transcripts are never marked exact"></textarea></label>
-    <div class="cast-actions"><button type="button" id="suggestTranscript">Suggest transcript from the saved clip</button><span class="meta">A local draft to check word by word. It is not saved or marked exact.</span></div>
-    <div class="cast-grid"><label class="field">Origin and source description<input id="referenceOrigin" type="text" maxlength="1000" placeholder="Where this recording/design came from"></label>
-      <label class="field">Allowed use and inherited restrictions<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="Permission and use limits; restrictions carry forward"></label></div>
-    <div class="cast-actions"><button type="button" id="saveReference">Save uploaded reference</button><button type="button" id="saveReferenceVersion" hidden>Save edited version</button>
-      <label class="field compact">Approve exact version<select id="approveReference"></select></label><button type="button" id="approveIdentity">Approve voice</button></div>
+    <label class="field">Exact words in the recording<textarea id="referenceTranscript" placeholder="Type and verify every word; guessed transcripts are never marked exact"></textarea></label>
+    <div class="cast-actions"><button type="button" id="suggestTranscript">Suggest the words from the saved clip</button><span class="meta">A local draft to check word by word. It is not saved or marked exact.</span></div>
+    <div class="cast-grid"><label class="field">Where it comes from<input id="referenceOrigin" type="text" maxlength="1000" placeholder="Where this recording/design came from"></label>
+      <label class="field">Who may use it, and how<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="Permission and use limits; restrictions carry forward"></label></div>
+    <div class="cast-actions"><button type="button" id="saveReference">Save the recording</button><button type="button" id="saveReferenceVersion" hidden>Save edited version</button>
+      <label class="field compact">Approve this version<select id="approveReference"></select></label><button type="button" id="approveIdentity">Approve voice</button></div>
     <p class="meta" id="referenceStatus"></p>
-    <div class="cast-actions"><button type="button" id="retireReference">Retire this recording</button><button type="button" id="restoreReference" hidden>Restore this recording</button><button type="button" id="purgeReference" hidden>Purge this recording…</button></div>
+    <div class="cast-actions"><button type="button" id="retireReference">Retire this recording</button><button type="button" id="restoreReference" hidden>Restore this recording</button><button type="button" id="purgeReference" hidden>Delete this recording for good…</button></div>
     <p class="meta" id="referenceRetirement"></p>
   </div>
   </details>
@@ -270,26 +270,28 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="perform">
   <h2>Perform lines</h2>
-  <p class="meta">Choose a character voice, direct a line, and audition variations. Every take is saved with the voice, reference, and settings that created it.</p>
+  <p class="meta">Choose a character voice, direct a line, and audition variations. Every take is saved with the voice, voice recording and settings that made it.</p>
   <div class="cast-grid"><label class="field">Character<select id="performCharacter"></select></label>
-    <label class="field">Voice identity<select id="performIdentity"></select></label></div>
-  <div class="row"><label class="field compact">Stable line ID<input id="lineId" type="text" maxlength="100" value="line-01"></label>
-    <label class="field compact">Candidate reference version<select id="performReference"></select></label>
+    <label class="field">Voice<select id="performIdentity"></select></label></div>
+  <div class="row"><label class="field compact">Voice recording to use<select id="performReference"></select></label>
     <label class="field compact">Language<select id="performLanguage"><option>English</option><option>Chinese</option><option>Japanese</option><option>Korean</option><option>German</option><option>French</option><option>Italian</option><option>Portuguese</option><option>Russian</option><option>Spanish</option><option>Auto</option></select></label>
     <label class="field compact">Starting seed<input id="performSeed" type="number" min="0" max="2147483647" value="42"></label></div>
+  <details id="performLineDetails"><summary>Details</summary>
+    <label class="field compact">Line name<input id="lineId" type="text" maxlength="100" value="line-01"></label>
+    <p class="meta">Filled in for you. Takes made for the same line name are listed together, and exports name the line by it.</p></details>
   <label class="field">Dialogue line<textarea id="performText" maxlength="1200">I kept the porch light on. I hoped you'd find your way back.</textarea></label>
-  <div class="row"><label class="field compact">Acting preset<select id="actingPreset"><option value="">Neutral / custom instruction</option><option value="Speak warmly and gently, with a reassuring tone.">Warm and reassuring</option><option value="Speak with bright excitement, almost laughing.">Excited</option><option value="Whisper softly and intimately, close to the listener.">Intimate whisper</option><option value="Speak sadly, with a trembling and tearful voice.">Sad and trembling</option><option value="Speak sharply and coldly, with controlled anger.">Angry and cold</option></select></label>
-    <label class="field compact" id="performDirectionWrap">Backend acting instruction<textarea id="performDirection" placeholder="Text directions are supported by Breeze; Qwen Base is experimental"></textarea></label></div>
+  <div class="row"><label class="field compact">Acting preset<select id="actingPreset"><option value="">Neutral, or your own acting direction</option><option value="Speak warmly and gently, with a reassuring tone.">Warm and reassuring</option><option value="Speak with bright excitement, almost laughing.">Excited</option><option value="Whisper softly and intimately, close to the listener.">Intimate whisper</option><option value="Speak sadly, with a trembling and tearful voice.">Sad and trembling</option><option value="Speak sharply and coldly, with controlled anger.">Angry and cold</option></select></label>
+    <label class="field compact" id="performDirectionWrap">Acting direction<textarea id="performDirection" placeholder="Breeze takes an acting direction; with Qwen Base it is experimental"></textarea></label></div>
   <div class="row"><label><input id="usePronunciations" type="checkbox"> Apply this character's pronunciation dictionary</label>
-    <label class="field compact" title="Each variant uses the next seed after the starting seed. A model without a seed control makes one take.">Seed variants<select id="variantCount"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+    <label class="field compact" title="Each take uses the next seed after the starting seed. A model without a seed control makes one take.">Takes to make<select id="variantCount"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
     <span class="meta" id="performSupport"></span></div>
-  <details id="performSettingsPanel"><summary>Model controls and generation settings</summary>
-    <p class="meta" id="performSettingsHelp">Controls shown here come from this checkpoint's supported performance schema. The persisted take records the effective values after backend defaults are applied.</p>
+  <details id="performSettingsPanel"><summary>Model settings</summary>
+    <p class="meta" id="performSettingsHelp">Controls shown here come from this checkpoint's supported performance schema. Each take keeps the values the model used, its defaults included.</p>
     <div id="performSettingsControls" class="cast-grid"></div>
   </details>
-  <div class="cast-actions"><button class="go" type="button" id="performGenerate">Generate take set</button><button type="button" id="performStop" hidden>Stop after this take</button><button type="button" id="refreshTakes">Refresh saved takes</button></div>
+  <div class="cast-actions"><button class="go" type="button" id="performGenerate">Make takes</button><button type="button" id="performStop" hidden>Stop after this take</button><button type="button" id="refreshTakes">Refresh saved takes</button></div>
   <p id="performError" role="alert"></p><p class="meta" id="performStatus"></p><div class="take" id="takeList"></div>
-  <details><summary>Character pronunciation dictionary</summary>
+  <details><summary>Pronunciations for this character</summary>
     <div class="cast-grid"><label class="field">Written form<input id="pronunciationSource" type="text" maxlength="100"></label><label class="field">Spoken form<input id="pronunciationReplacement" type="text" maxlength="200"></label></div>
     <div class="row"><button type="button" id="savePronunciation">Save pronunciation</button><span class="meta" id="pronunciationList"></span></div>
   </details>
@@ -298,19 +300,19 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="conversion">
   <h2>Chatterbox voice conversion</h2>
-  <p class="meta">Convert an existing spoken performance into a separate target voice. Source performance and target reference remain separate; output is watermarked and saved with both input hashes and the pinned model revision. Source limit: 60 seconds; target reference limit: 10 seconds.</p>
+  <p class="meta">Convert an existing spoken performance into a separate target voice. The performance and the voice recording stay separate; output is watermarked and saved with both input hashes and the pinned model revision. The performance can be up to 60 seconds, the voice recording up to 10.</p>
   <div class="row">
-    <label class="field">Source performance<select id="conversionSource"></select></label>
-    <label class="field">Target voice reference<select id="conversionTarget"></select></label>
+    <label class="field">Performance to convert<select id="conversionSource"></select></label>
+    <label class="field">Voice to convert it to<select id="conversionTarget"></select></label>
     <button class="go" type="button" id="convertVoice">Convert voice</button>
   </div>
   <div class="cast-grid">
-    <div><label class="field">Use a source file from this computer<input id="conversionSourceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+    <div><label class="field">Use a recording from this computer<input id="conversionSourceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
       <p class="meta">WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds. Its voice is replaced, so it needs no permission.</p></div>
-    <div><label class="field">Origin / source<input id="conversionTargetOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
-      <label class="field">Allowed use / restrictions<input id="conversionTargetAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label>
+    <div><label class="field">Where it comes from<input id="conversionTargetOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
+      <label class="field">Who may use it, and how<input id="conversionTargetAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label>
       <label><input id="conversionTargetPermission" type="checkbox"> I own this recording or have permission to clone this voice.</label>
-      <label class="field">Use a target voice file from this computer<input id="conversionTargetFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <label class="field">Use a voice recording from this computer<input id="conversionTargetFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
       <p class="meta">Up to 10 seconds. Fill in its origin and allowed use and tick the box first: every conversion to this voice records them in its manifest.</p></div>
   </div>
   <p id="conversionError" role="alert"></p><p class="meta" id="conversionStatus"></p>
@@ -319,15 +321,15 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="scenes">
-  <h2>Scenes &amp; Batch</h2>
+  <h2>Scenes &amp; batch</h2>
   <p class="meta">Write dialogue, render a batch, and choose the takes for your scene. Jobs run one take at a time and can resume after a restart.</p>
   <div class="row"><label class="field compact">Saved scene<select id="sceneSelect"></select></label>
     <button type="button" id="sceneRefresh">Refresh scenes</button>
-    <label class="field compact">Import UTF-8 JSON or CSV<input id="sceneImportFile" type="file" accept=".json,.csv,application/json,text/csv"></label>
-    <button type="button" id="sceneStarter">Start from current performer</button></div>
+    <label class="field compact">Import a script (JSON or CSV)<input id="sceneImportFile" type="file" accept=".json,.csv,application/json,text/csv"></label>
+    <button type="button" id="sceneStarter">Start from the Perform line</button></div>
   <div class="cast-actions"><a href="/api/scenes/template.json">JSON template</a><a href="/api/scenes/template.csv">CSV template</a>
     <a id="sceneExportJson" href="#" hidden>Export JSON</a><a id="sceneExportCsv" href="#" hidden>Export CSV</a></div>
-  <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. Advanced JSON includes identity assignments and model settings.</div>
+  <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. The scene as JSON includes each line’s voice and model settings.</div>
   <p class="meta" id="sceneShortcuts">Keyboard: Ctrl+Z undo · Ctrl+Y or Ctrl+Shift+Z redo · Ctrl+S save · Alt+↑ or Alt+↓ moves the line you are in. In a text box, Ctrl+Z is that box's own undo.</p>
   <label class="field">Scene name<input id="sceneName" type="text" maxlength="120" disabled></label>
   <div id="sceneTableTools" hidden>
@@ -338,17 +340,17 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label class="field compact">Status<select id="sceneFilterStatus"><option value="">Any status</option></select></label>
       <p class="meta" id="sceneTableSummary"></p></div></div>
   <div id="sceneLineEditor"><p class="meta">Open a scene or start one from the current performer.</p></div>
-  <details id="sceneAdvanced"><summary>Advanced scene JSON</summary><p class="meta">Edits here update the script form. Identity IDs, reference versions, model settings, and take selections are retained.</p><label class="field">Scene manifest JSON<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="Import a scene or start from the current performer."></textarea></label></details>
-  <div class="cast-actions"><button type="button" id="sceneLineAdd">Add dialogue line</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="Undo the last script change (Ctrl+Z)">Undo</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="Redo the change you undid (Ctrl+Y or Ctrl+Shift+Z)">Redo</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">Validate and save scene</button><button type="button" id="sceneSegments">Preview segments</button>
-    <button type="button" id="scenePreview">Assemble selected takes</button></div>
+  <details id="sceneAdvanced"><summary>The scene as JSON (advanced)</summary><p class="meta">Edits here update the table. Voices, voice recordings, model settings and chosen takes are kept.</p><label class="field">The scene as JSON<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="Import a scene or start from the Perform line."></textarea></label></details>
+  <div class="cast-actions"><button type="button" id="sceneLineAdd">Add a line</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="Undo the last script change (Ctrl+Z)">Undo</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="Redo the change you undid (Ctrl+Y or Ctrl+Shift+Z)">Redo</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">Save scene</button><button type="button" id="sceneSegments">Show the parts of long lines</button>
+    <button type="button" id="scenePreview">Build the scene from the chosen takes</button></div>
   <p id="sceneError" role="alert"></p><p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
-  <div class="row"><label class="field compact">Batch job<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh job</button>
+  <div class="row"><label class="field compact">Batch<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh batch</button>
     <button type="button" id="scenePause">Pause</button><button type="button" id="sceneResume">Resume</button>
-    <button type="button" id="sceneCancel">Cancel</button><button type="button" id="sceneRetry">Retry failed rows</button>
-    <a id="sceneJobManifest" href="#" hidden>Verified batch manifest</a></div>
-  <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="Batch progress"></progress><details><summary>Audition rendered takes</summary><div id="sceneJobRows" class="take"></div></details>
-  <label class="field">Raw scene assembly<audio id="scenePreviewPlayer" controls></audio></label>
-  <label class="field">Loudness-normalized preview<audio id="sceneMasteredPlayer" controls></audio></label>
+    <button type="button" id="sceneCancel">Cancel</button><button type="button" id="sceneRetry">Try the failed lines again</button>
+    <a id="sceneJobManifest" href="#" hidden>Batch record (JSON)</a></div>
+  <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="Batch progress"></progress><details><summary>Takes from this batch</summary><div id="sceneJobRows" class="take"></div></details>
+  <label class="field">Scene, exactly as rendered<audio id="scenePreviewPlayer" controls></audio></label>
+  <label class="field">Scene, evened out in loudness<audio id="sceneMasteredPlayer" controls></audio></label>
   <p class="meta" id="scenePreviewMeta"></p>
   <details id="sceneExport"><summary>Export package</summary>
     <p class="meta">Writes WAV, FLAC, Ogg, MP3 or AAC (M4A) line files, the raw scene mix, captions, a transcript and a checksummed manifest under <code>out/exports/</code>. FFmpeg writes the files. Original Cast takes are copied byte for byte. Save the scene before exporting.</p>
@@ -361,8 +363,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label><input type="checkbox" name="exportFormat" value="ogg"> Ogg</label>
       <label><input type="checkbox" name="exportFormat" value="mp3"> MP3</label>
       <label><input type="checkbox" name="exportFormat" value="m4a"> AAC (M4A)</label></fieldset>
-      <label class="field compact">Filename template<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{character}__{line_id}"></label>
-      <label class="field compact">Sample rate (blank keeps source)<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
+      <label class="field compact">File names<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{character}__{line_id}"></label>
+      <label class="field compact">Sample rate (blank keeps the take’s)<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
     <div class="row"><label class="field compact">Trim start (s)<input id="exportTrimStart" type="number" min="0" step="0.01" value="0"></label>
       <label class="field compact">Trim end (s)<input id="exportTrimEnd" type="number" min="0" step="0.01" value="0"></label>
       <label class="field compact">Fade in (ms)<input id="exportFadeIn" type="number" min="0" step="1" value="0"></label>
@@ -370,29 +372,29 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="row"><label class="field compact">Loudness target (LUFS, blank = off)<input id="exportLufs" type="number" min="-70" max="-5" step="0.1"></label>
       <label class="field compact">True peak (dBTP)<input id="exportTruePeak" type="number" min="-9" max="0" step="0.1" value="-1"></label>
       <label class="field compact">Limiter ceiling (dBFS, blank = off)<input id="exportLimiter" type="number" min="-24" max="0" step="0.1"></label></div>
-    <div class="cast-actions"><button type="button" id="exportPreview">Review provenance</button><button class="go" type="button" id="exportCreate">Create package</button></div>
+    <div class="cast-actions"><button type="button" id="exportPreview">Check what goes in</button><button class="go" type="button" id="exportCreate">Create package</button></div>
     <p id="exportError" role="alert"></p><p class="meta" id="exportStatus"></p>
     <pre id="exportLog" class="meta" style="white-space:pre-wrap"></pre>
-    <div class="row"><label class="field compact">Existing packages<select id="exportSelect"></select></label><button type="button" id="exportRefresh">Refresh list</button><button type="button" id="exportVerify">Verify selected package</button></div>
+    <div class="row"><label class="field compact">Existing packages<select id="exportSelect"></select></label><button type="button" id="exportRefresh">Refresh list</button><button type="button" id="exportVerify">Check the chosen package</button></div>
   </details>
 </section>
 
 <section class="card" id="studio">
-  <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or audition a reference. Save the voice you like, then build its character in the Cast library.</p>
+  <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or try a voice recording. Save the voice you like, then build its character in the Cast library.</p>
   <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
-  <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including fixed speaker blends that do not use a reference recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
+  <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including blends of preset voices that need no voice recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
   <label class="field">Text to speak
     <textarea id="text">Hey, you're back. I was hoping you'd stop by tonight. How was your day?</textarea>
   </label>
   <div class="row">
     <label class="field compact">Model<select id="engine"></select><span class="meta" id="engineHint" hidden></span></label>
-    <label class="field compact" id="voiceWrap" hidden>Kokoro speaker presets / equal blend<select id="voice" multiple size="5"></select>
+    <label class="field compact" id="voiceWrap" hidden>Kokoro voices (one, or several blended equally)<select id="voice" multiple size="5"></select>
       <span class="meta">Licensed Kokoro speaker packs, not uploaded recordings. Select one or more to blend equally. New recordings belong in Voice cloning; Kokoro cannot clone them.</span></label>
-    <label class="field compact" id="kokoroLanguageWrap" hidden>Spoken language<select id="kokoroLanguage"><option>American English</option></select></label>
+    <label class="field compact" id="kokoroLanguageWrap" hidden>Language<select id="kokoroLanguage"><option>American English</option></select></label>
     <label class="field compact" id="speedWrap" hidden>Speed<input id="speed" type="range" min="0.7" max="1.3" step="0.05" value="1"><span id="speedV" class="meta">1.00</span></label>
   </div>
-  <div id="kokoroTools" hidden><button type="button" id="previewKokoroPhonemes">Preview Kokoro pronunciation</button>
-    <button type="button" id="refreshKokoroVoices">Refresh installed speaker packs</button>
+  <div id="kokoroTools" hidden><button type="button" id="previewKokoroPhonemes">Show how Kokoro will say it</button>
+    <button type="button" id="refreshKokoroVoices">Read the installed voices again</button>
     <p class="meta">Kokoro presets are from hexgrad/Kokoro-82M under Apache 2.0. Model downloads and your local recordings are not part of this application. Use Generate to audition a preset or blend.</p>
     <pre id="kokoroPhonemes" class="meta"></pre></div>
 
@@ -410,25 +412,25 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
   <div id="breezePanel" hidden>
     <p class="meta">Breeze weights and self-hosted outputs use a research and non-commercial license. <a href="https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Read the model terms</a> before exporting or reusing a voice.</p>
-    <h2>Breeze voice and performance</h2>
+    <h2>Breeze TTS 2</h2>
     <div class="row">
-      <label class="field compact">Mode<select id="mode"><option value="design">Design a voice</option><option value="clone">Clone reference</option><option value="direction">Direct a reference voice</option></select></label>
-      <label class="field compact">Decode profile<select id="profile"><option value="eager">Eager</option><option value="cuda_graphs">CUDA graphs</option></select></label>
+      <label class="field compact">Mode<select id="mode"><option value="design">Design a voice</option><option value="clone">Clone a voice recording</option><option value="direction">Direct a voice recording</option></select></label>
+      <label class="field compact">Decoding<select id="profile"><option value="eager">Eager</option><option value="cuda_graphs">CUDA graphs</option></select></label>
       <label class="field compact">Seed<input id="seed" type="number" min="1" max="2147483647" value="42"></label>
     </div>
     <div id="designFields">
       <div class="row">
-        <label class="field compact">Starting description<select id="voicePreset"><option value="warm">Warm and close</option><option value="playful">Bright and playful</option><option value="low">Low and unhurried</option><option value="custom">Custom description</option></select></label>
+        <label class="field compact">Example description<select id="voicePreset"><option value="warm">Warm and close</option><option value="playful">Bright and playful</option><option value="low">Low and unhurried</option><option value="custom">Custom description</option></select></label>
       </div>
       <label class="field">Voice description<textarea id="voiceDescription">A warm, soft-spoken young woman with a gentle, affectionate tone.</textarea></label>
-      <div class="row"><label><input id="saveVoice" type="checkbox"> Save this take as a reusable local voice reference</label>
-        <label class="field compact">Asset name<input id="voiceAssetName" type="text" maxlength="48" value="my-character"></label></div>
+      <div class="row"><label><input id="saveVoice" type="checkbox"> Save this take as a voice recording to reuse</label>
+        <label class="field compact">Name<input id="voiceAssetName" type="text" maxlength="48" value="my-character"></label></div>
     </div>
     <div id="referenceFields" hidden>
       <div class="row">
-        <label class="field">Local reference<select id="reference"></select></label>
+        <label class="field">Saved voice recording<select id="reference"></select></label>
       </div>
-      <label class="field">Reference transcript<textarea id="referenceText"></textarea></label>
+      <label class="field">Exact words in the recording<textarea id="referenceText"></textarea></label>
     </div>
     <div id="directionFields" hidden>
       <div class="row">
@@ -441,7 +443,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
           <option value="Speak sharply and coldly, with controlled anger.">Angry and cold</option>
         </select></label>
       </div>
-      <label class="field">Direction<textarea id="direction" placeholder="Describe the delivery, not the speaker identity."></textarea></label>
+      <label class="field">Acting direction<textarea id="direction" placeholder="Describe the acting, not the voice."></textarea></label>
     </div>
     <p class="meta">Breeze vocal event examples: <code>(laugh)</code>, <code>(sigh)</code>. Keep the tags in the text. Inference is offline and uses the installed BF16 checkpoint.</p>
     <details><summary>Sampling controls</summary>
@@ -463,9 +465,9 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <details id="dramaStudioDetails"><summary>Open Drama scene & narration studio</summary><div id="dramaStudioMount"></div></details>
     <h2>Fish Audio Drama 3</h2>
     <p class="meta">Cloning runs on CPU and can take several minutes. GPU voice design is experimental; a Vulkan cloning test caused a graphics-driver crash on this PC, so GPU cloning is disabled.</p>
-    <p class="meta">Built with Fish Audio · 35B MoE / 3B active · Q4_K · Windows Vulkan. Experimental community runtime. Language follows the text. Voice descriptions and delivery cues may be ignored or spoken; audition the result.</p>
+    <p class="meta">Built with Fish Audio · 35B MoE / 3B active · Q4_K · Windows Vulkan. Experimental community runtime. Language follows the text. Voice descriptions and acting directions may be ignored or spoken; audition the result.</p>
     <div class="row">
-      <label class="field compact">Voice source<select id="dramaMode"><option value="design">Design from a description</option><option value="clone">Clone a reference</option></select></label>
+      <label class="field compact">Voice source<select id="dramaMode"><option value="design">Design from a description</option><option value="clone">Clone a voice recording</option></select></label>
       <label class="field compact">Seed<input id="dramaSeed" type="number" min="0" max="2147483647" value="42"></label>
       <label class="field compact">Temperature<input id="dramaTemperature" type="number" min="0.05" max="2" step="0.05" value="1"></label>
       <label class="field compact">Top-k<input id="dramaTopK" type="number" min="1" max="4097" value="30"></label>
@@ -474,14 +476,14 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     </div>
     <label class="field" id="dramaDescriptionWrap">Voice description<input id="dramaDescription" maxlength="1000" value="A warm, clear adult narrator"></label>
     <div id="dramaReferenceWrap" hidden>
-      <label class="field">Reference recording<select id="dramaReference"></select></label>
+      <label class="field">Voice recording<select id="dramaReference"></select></label>
       <label class="field">Exact words in the recording<textarea id="dramaTranscript" maxlength="1200"></textarea></label>
     </div>
-    <label class="field">Delivery cue (optional)<input id="dramaDirection" maxlength="1000" placeholder="quietly, with concern"></label>
-    <p class="meta">Use [laughs], [sighs], or [whispers] in dialogue. Speaker tags &lt;|speaker:0|&gt; through &lt;|speaker:15|&gt; select characters in one text; an unreferenced speaker gets a model-selected voice. This page returns a complete WAV. <a href="https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE" target="_blank" rel="noopener">Fish Audio license conditions</a> apply.</p>
+    <label class="field">Acting direction (optional)<input id="dramaDirection" maxlength="1000" placeholder="quietly, with concern"></label>
+    <p class="meta">Use [laughs], [sighs], or [whispers] in dialogue. Speaker tags &lt;|speaker:0|&gt; through &lt;|speaker:15|&gt; select characters in one text; a speaker with no voice recording gets a voice the model chooses. This page returns a complete WAV. <a href="https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE" target="_blank" rel="noopener">Fish Audio license conditions</a> apply.</p>
   </div>
   <div id="qwenPanel" hidden>
-    <h2>Qwen3-TTS voice production</h2>
+    <h2>Qwen3-TTS</h2>
     <div class="row">
       <label class="field compact">Language<select id="qwenLanguage">
         <option>English</option><option>Chinese</option><option>Japanese</option><option>Korean</option>
@@ -492,23 +494,23 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     </div>
     <div id="qwenDesignFields">
       <label class="field">Voice description<textarea id="qwenDescription">A warm, clear voice with a gentle, lightly playful delivery.</textarea></label>
-      <div class="row"><label><input id="qwenSaveVoice" type="checkbox"> Save this designed voice as a reusable local reference</label>
-        <label class="field compact">Asset name<input id="qwenVoiceAssetName" type="text" maxlength="48" value="qwen-character"></label></div>
+      <div class="row"><label><input id="qwenSaveVoice" type="checkbox"> Save this designed voice as a voice recording to reuse</label>
+        <label class="field compact">Name<input id="qwenVoiceAssetName" type="text" maxlength="48" value="qwen-character"></label></div>
     </div>
     <div id="qwenCloneFields" hidden>
-      <div class="row"><label class="field">Local reference<select id="qwenReference"></select></label></div>
-      <label class="field">Reference transcript<textarea id="qwenReferenceText"></textarea></label>
-      <div class="row"><label><input id="qwenXvecOnly" type="checkbox"> Speaker-embedding-only clone (experimental; transcript-free)</label></div>
-      <label class="field">Base instruction <span class="meta">Experimental: Base is not trained specifically for direction adherence.</span>
-        <textarea id="qwenCloneDirection" placeholder="Optional acting instruction; results are experimental."></textarea></label>
+      <div class="row"><label class="field">Saved voice recording<select id="qwenReference"></select></label></div>
+      <label class="field">Exact words in the recording<textarea id="qwenReferenceText"></textarea></label>
+      <div class="row"><label><input id="qwenXvecOnly" type="checkbox"> Clone without a transcript (experimental)</label></div>
+      <label class="field">Acting direction (experimental with Base) <span class="meta">Experimental: Base is not trained specifically for direction adherence.</span>
+        <textarea id="qwenCloneDirection" placeholder="Optional; experimental with Base."></textarea></label>
     </div>
     <div id="qwenCustomFields" hidden>
-      <div class="row"><label class="field compact">Model speaker<select id="qwenSpeaker"><option value="">Load CustomVoice to query speakers</option></select></label></div>
-      <label class="field">CustomVoice delivery instruction<textarea id="qwenCustomDirection" placeholder="Optional style instruction for this preset voice."></textarea></label>
+      <div class="row"><label class="field compact">Preset voice<select id="qwenSpeaker"><option value="">Load CustomVoice to query speakers</option></select></label></div>
+      <label class="field">Acting direction<textarea id="qwenCustomDirection" placeholder="Optional, for this preset voice."></textarea></label>
     </div>
     <details><summary>Qwen sampling controls</summary>
       <div class="row">
-        <label class="field compact">Maximum codec tokens<input id="qwenMaxTokens" type="range" min="8" max="2048" step="8" value="512"><span id="qwenMaxTokensV" class="meta">512</span></label>
+        <label class="field compact">Maximum length (codec tokens)<input id="qwenMaxTokens" type="range" min="8" max="2048" step="8" value="512"><span id="qwenMaxTokensV" class="meta">512</span></label>
         <label class="field compact">Temperature<input id="qwenTemperature" type="range" min="0.05" max="2" step="0.05" value="0.9"><span id="qwenTemperatureV" class="meta">0.90</span></label>
         <label class="field compact">Top-k<input id="qwenTopK" type="range" min="0" max="200" step="1" value="50"><span id="qwenTopKV" class="meta">50</span></label>
         <label class="field compact">Top-p<input id="qwenTopP" type="range" min="0.05" max="1" step="0.01" value="1"><span id="qwenTopPV" class="meta">1.00</span></label>
@@ -519,23 +521,23 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   </div>
 
   <div id="voxPanel" hidden>
-    <h2>VoxCPM2 character production</h2>
+    <h2>VoxCPM2</h2>
     <div class="row">
-      <label class="field compact">Mode<select id="voxMode"><option value="design">Design voice</option><option value="clone">Clone reference</option><option value="continuation">Continue reference audio</option></select></label>
+      <label class="field compact">Mode<select id="voxMode"><option value="design">Design voice</option><option value="clone">Clone a voice recording</option><option value="continuation">Continue a voice recording</option></select></label>
       <label class="field compact">Seed<input id="voxSeed" type="number" min="0" max="2147483647" value="42"></label>
     </div>
     <div id="voxDesignFields">
       <label class="field">Voice description<textarea id="voxDescription">A warm, steady adult female voice, clear and reassuring.</textarea></label>
-      <div class="row"><label><input id="voxSaveVoice" type="checkbox"> Save this designed sample as a reusable local voice reference</label>
-        <label class="field compact">Asset name<input id="voxVoiceAssetName" type="text" maxlength="48" value="voxcpm-character"></label></div>
+      <div class="row"><label><input id="voxSaveVoice" type="checkbox"> Save this designed voice as a voice recording to reuse</label>
+        <label class="field compact">Name<input id="voxVoiceAssetName" type="text" maxlength="48" value="voxcpm-character"></label></div>
     </div>
     <div id="voxCloneFields" hidden>
-      <div class="row"><label class="field">Local identity reference<select id="voxReference"></select></label></div>
+      <div class="row"><label class="field">Saved voice recording<select id="voxReference"></select></label></div>
     </div>
     <div id="voxContinuationFields" hidden>
-      <div class="row"><label class="field">Prompt / identity reference<select id="voxPromptReference"></select></label></div>
-      <label class="field">Exact transcript of prompt audio<textarea id="voxPromptText"></textarea></label>
-      <p class="meta">Continuation uses the selected reference audio as both the transcript prompt and identity reference.</p>
+      <div class="row"><label class="field">Voice recording<select id="voxPromptReference"></select></label></div>
+      <label class="field">Exact words in the recording<textarea id="voxPromptText"></textarea></label>
+      <p class="meta">Continuing uses the chosen voice recording both for its words and for the voice.</p>
     </div>
     <label class="field" id="voxCloneDirectionWrap" hidden>Acting direction <span class="meta">Experimental: passed as a parenthesized text prefix during cloning.</span>
       <textarea id="voxDirection" placeholder="For example: Speak softly, with worried restraint."></textarea></label>
@@ -560,18 +562,18 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label class="field compact">Top-p <input id="cbTopP" type="range" min="0.05" max="1" step="0.01" value="1"><span id="cbTopPV" class="meta">1.00</span></label>
       <label class="field compact">Repetition penalty <input id="cbRepetition" type="range" min="0.5" max="2" step="0.05" value="1.2"><span id="cbRepetitionV" class="meta">1.20</span></label>
     </div>
-    <p class="meta">Original exposes exaggeration, CFG weight, temperature, top-p, repetition penalty, and min-p. Turbo exposes temperature, top-k, top-p, and repetition penalty. Controls are sent to the installed backend and reported in response metadata.</p>
+    <p class="meta">Original exposes exaggeration, CFG weight, temperature, top-p, repetition penalty, and min-p. Turbo exposes temperature, top-k, top-p, and repetition penalty. The model gets these values, and each take records them.</p>
   </details>
-  <div id="cloneWrap" hidden><label><input id="clone" type="checkbox"> Clone the selected reference voice</label>
-    <div id="chatterboxReferenceWrap"><label class="field">Reference recording<select id="chatterboxReference"></select></label></div>
-    <p class="meta">The reference supplies the speaker's vocal identity. Turn cloning off to use the checkpoint's default speaker. Turbo needs a recording longer than 5 seconds.</p></div>
+  <div id="cloneWrap" hidden><label><input id="clone" type="checkbox"> Clone the chosen voice recording</label>
+    <div id="chatterboxReferenceWrap"><label class="field">Voice recording<select id="chatterboxReference"></select></label></div>
+    <p class="meta">The recording gives the voice. Turn cloning off to use the checkpoint's default speaker. Turbo needs a recording longer than 5 seconds.</p></div>
   <p class="meta" id="hint"></p>
   <div class="row">
     <button class="go" id="go" type="button">Generate</button>
-    <button id="stream" type="button" hidden>Stream Qwen (native)</button>
+    <button id="stream" type="button" hidden>Stream (Qwen3-TTS)</button>
     <button id="stopWaiting" type="button" hidden>Stop waiting</button>
     <button id="stopStream" type="button" hidden>Stop and clear</button>
-    <button id="reroll" type="button" hidden>Reroll seed</button>
+    <button id="reroll" type="button" hidden>New seed</button>
     <button id="load" type="button">Load model</button>
     <button id="unload" type="button">Unload models</button>
     <span class="meta" id="status"></span>
@@ -585,10 +587,10 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <p class="meta" id="modelsRam"></p><p class="meta" id="modelsDevice"></p><div id="modelOverview" class="model-grid"></div>
 <dialog id="installDialog" class="install-dialog" aria-labelledby="installTitle"><h3 id="installTitle"></h3><p class="meta" id="installState" aria-live="polite"></p><div id="installPlan" class="install-plan"></div><pre id="installLog" class="install-log" hidden></pre><div class="cast-actions"><button id="installGo" type="button" class="go" hidden>Install now</button><button id="installClose" type="button">Cancel</button></div></dialog>
 <details id="modelsMoreBox" hidden><summary id="modelsMoreSummary">More models</summary><p class="meta">The app cannot install these yet. docs/SETUP.md (Model runtimes) says what each one needs.</p><div id="modelMore" class="model-grid"></div></details>
-<h3>Measured speed on this service</h3><p class="meta">Real-time factor is seconds to generate divided by seconds of audio, so below 1 is faster than real time. Rows come from the clips and checks this service ran on each device. Precision is not measured; this table records speed only.</p>
-<div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Device</th><th scope="col">Clips</th><th scope="col">Median real-time factor</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>
-<div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset speakers and Phonon voices are reusable Cast identities and do not require a cloned reference. Qwen VoiceDesign creates references for a cloning identity.</p></div>
-<h3>Available outside this interface</h3><p class="meta">Dataset preparation (<code>tools/dataset_workbench.py</code>) and word times for captions and lip-sync (<code>align_takes.py</code>) run from a terminal; the user guide describes both. Training is not enabled.</p>
+<h3>Measured speed on this computer</h3><p class="meta">Time per second of speech is the seconds it took to make one second of audio, the median of the clips, so below 1 is faster than real time. Rows come from the clips and tests this computer ran on each device. Precision is not measured; this table records speed only.</p>
+<div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Runs on</th><th scope="col">Clips</th><th scope="col">Typical time per second of speech</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>
+<div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset voices and Phonon voices become Cast voices with no voice recording. Qwen VoiceDesign makes voice recordings for a voice that clones.</p></div>
+<h3>Available outside the Lab's pages</h3><p class="meta">Dataset preparation (<code>tools/dataset_workbench.py</code>) and word times for captions and lip-sync (<code>align_takes.py</code>) run from a terminal; the user guide describes both. Training is not enabled.</p>
 <details><summary>Current limits</summary><p class="meta">Only the Qwen engines stream audio while it is made; the others return the whole clip. Kokoro's Japanese and Mandarin voices need language packages its installer does not add. Automated signal checks do not establish voice quality: a person still has to listen.</p></details></section>
 <section class="card" id="system"><h2>System &amp; backups</h2>
 <p class="meta">What this PC is running, whether FFmpeg is ready, how much room is left, and a checked backup of your library. Nothing here loads a model.</p>

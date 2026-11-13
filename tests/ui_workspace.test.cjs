@@ -280,8 +280,8 @@ test('engine reassignment resets only unsupported generation values and reports 
   assert.equal(line.selected_take_id,'fresh-take');
 });
 
-test('both Character and Voice identity dropdowns preserve authored lines through their actual change handlers', () => {
-  for(const selectorLabel of ['Character','Voice identity']){
+test('both Character and Voice dropdowns preserve authored lines through their actual change handlers', () => {
+  for(const selectorLabel of ['Character','Voice']){
     const {c,scene,identity}=reassignmentFixture({languages:['French'],direction:{status:'supported'},controls:[]});
     const labels={};
     function element(tag){return {tag,children:[],options:[],events:{},setAttribute(){},setCustomValidity(){},
@@ -358,7 +358,7 @@ test('the variant count sets how many takes are made, each on the next seed', as
   const fixture = performFixture({variants: '3'});
   fixture.c.generatePerformanceSet(); await settle();
   assert.deepEqual(fixture.calls.map(body => body.settings.seed), [42, 43, 44]);
-  assert.match(fixture.field('performStatus').textContent, /Candidate set complete/);
+  assert.match(fixture.field('performStatus').textContent, /^Takes made\. /);
   assert.equal(fixture.field('performGenerate').disabled, false);
   assert.equal(fixture.field('performStop').hidden, true);
   assert.equal(fixture.ticking(), false);
@@ -399,11 +399,11 @@ test('while a take is made the status counts the seconds, and a single take offe
   const fixture = performFixture({variants: '1', fetch: () => pending.then(okResponse)});
   fixture.c.generatePerformanceSet();
   assert.equal(fixture.field('performStop').hidden, true);
-  assert.match(fixture.field('performStatus').textContent, /Generating candidate 1 of 1\.\.\. 0 s$/);
+  assert.match(fixture.field('performStatus').textContent, /Making take 1 of 1\.\.\. 0 s$/);
   fixture.advance(12);
-  assert.match(fixture.field('performStatus').textContent, /Generating candidate 1 of 1\.\.\. 12 s$/);
+  assert.match(fixture.field('performStatus').textContent, /Making take 1 of 1\.\.\. 12 s$/);
   release(); await settle();
-  assert.match(fixture.field('performStatus').textContent, /Candidate set complete/);
+  assert.match(fixture.field('performStatus').textContent, /^Takes made\. /);
   assert.equal(fixture.ticking(), false);
 });
 
@@ -557,7 +557,7 @@ test('the Generate buttons come back when speaking does not start after the voic
   openedBeforeTheInstall(fixture);
   fixture.c.bodyForRequest = () => ({engine: 'turbo', text: 'hello', clone: true});  // cloning, with no recording chosen
   fixture.c.generate(); await settle();
-  assert.match(fixture.field('err').textContent, /^Choose a reference recording/);
+  assert.match(fixture.field('err').textContent, /^Choose a voice recording/);
   assert.equal(fixture.field('go').disabled, false);
   assert.equal(fixture.field('reroll').disabled, false);
 });
@@ -860,7 +860,7 @@ test('the installation facts name the version, the machine, the library and what
   assert.deepEqual(JSON.parse(JSON.stringify(context.systemFacts(systemReport()))), [
     ['Version', "Fel's Voice Lab 0.3.0"], ['Python and system', '3.12.4, Windows-11'], ['Device', 'cuda, 21.5 GB of memory free'],
     ['Library folder', 'D:\\VoiceLab'], ['Database schemas', 'evaluations 2, scenes 1, cast 8'],
-    ['Library contents', '3 characters, 5 voice identities, 4 references, 120 takes, 2 scenes'],
+    ['Library contents', '3 characters, 5 voices, 4 voice recordings, 120 takes, 2 scenes'],
     ['Service log', 'D:\\lab\\out\\logs\\service-1.log']]);
   const python = source => context.systemFacts(systemReport({system: {...systemReport().system, python: '3.12.10', python_source: source}}))[1][1];
   assert.equal(python("the Lab's own"), "3.12.10 (the Lab's own), Windows-11");
@@ -871,7 +871,7 @@ test('the installation facts name the version, the machine, the library and what
   const single = JSON.parse(JSON.stringify(context.systemFacts(systemReport({library: {path: 'D:\\One', schemas: {cast: null, scenes: 1},
     counts: {characters: 1, identities: 1, references: 1, takes: 1, scenes: 1}}}))));
   assert.deepEqual(single.slice(4), [['Database schemas', 'cast unreadable, scenes 1'],
-    ['Library contents', '1 character, 1 voice identity, 1 reference, 1 take, 1 scene'], ['Service log', 'D:\\lab\\out\\logs\\service-1.log']]);
+    ['Library contents', '1 character, 1 voice, 1 voice recording, 1 take, 1 scene'], ['Service log', 'D:\\lab\\out\\logs\\service-1.log']]);
 });
 
 test('FFmpeg is described by what it can write, and what is missing is said in the server’s words', () => {

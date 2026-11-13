@@ -553,7 +553,7 @@ class BrowserFlowTests(unittest.TestCase):
                 # The save message is replaced when the cast refreshes, so wait for the version in the approval list.
                 page.wait_until("document.getElementById('approveReference').options.length > 0")
                 page.click("#approveIdentity")
-                page.wait_until("document.getElementById('identityState').textContent.includes('approved reference v1')")
+                page.wait_until("document.getElementById('identityState').textContent.includes('approved recording v1')")
 
                 # Perform: a set of two takes of one line from the approved voice, made one after the other.
                 page.show("perform")
@@ -563,7 +563,7 @@ class BrowserFlowTests(unittest.TestCase):
                 page.set_value("#variantCount", "2")
                 page.click("#performGenerate")
                 page.wait_until("document.querySelectorAll('#takeList audio').length >= 2")
-                page.wait_until("document.getElementById('performStatus').textContent.startsWith('Candidate set complete')")
+                page.wait_until("document.getElementById('performStatus').textContent.startsWith('Takes made.')")
                 self.assertTrue(page.evaluate("document.getElementById('performStop').hidden"
                                               " && !document.getElementById('performGenerate').disabled"))
                 page.screenshot("perform", "#perform", to="#takeList article")

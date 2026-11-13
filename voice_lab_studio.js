@@ -3,16 +3,16 @@
  * @param {string} id @returns {any} */
 var $ = function (id) { return document.getElementById(id); };
 var hints = {
-  kokoro: 'Kokoro has fixed voices and speed control. It does not accept reference audio or perform vocal events.',
-  'phonon-31m-en': 'Phonon speaks English with one of 37 fixed preset voices, 12 of them characters. It does not accept reference audio, design a voice or take a direction.',
-  turbo: 'Chatterbox Turbo clones a reference and supports tags such as [laugh], [chuckle] and [cough].',
-  orig: 'Chatterbox supports reference cloning plus exaggeration and CFG controls. It ignores event tags.',
-  'breeze-tts-2': 'Breeze supports voice design, reference cloning, text direction and parenthesized vocal events. Outputs are full WAV files.',
+  kokoro: 'Kokoro has fixed voices and speed control. It does not take a voice recording or perform vocal events.',
+  'phonon-31m-en': 'Phonon speaks English with one of 37 fixed preset voices, 12 of them characters. It does not take a voice recording, design a voice or take an acting direction.',
+  turbo: 'Chatterbox Turbo clones a voice recording and supports tags such as [laugh], [chuckle] and [cough].',
+  orig: 'Chatterbox clones a voice recording and has exaggeration and CFG controls. It ignores event tags.',
+  'breeze-tts-2': 'Breeze designs voices, clones voice recordings, and takes acting directions and parenthesized vocal events. Outputs are full WAV files.',
   'qwen3-tts-1.7b-voice-design': 'Qwen VoiceDesign creates a reusable voice from a spoken sample and natural-language voice description.',
-  'qwen3-tts-1.7b-base': 'Qwen Base clones a local reference and transcript. Optional Base acting instruction is experimental.',
-  'qwen3-tts-0.6b-base': 'Qwen Base clones a local reference and transcript. Optional Base acting instruction is experimental.',
-  'qwen3-tts-1.7b-custom-voice': 'Qwen CustomVoice uses one of the actual speaker presets reported by the loaded checkpoint, with optional delivery instruction.',
-  'voxcpm2': 'VoxCPM2 supports voice design, reference cloning, and transcript-conditioned continuation. Clone direction is experimental; output is native 48 kHz.'
+  'qwen3-tts-1.7b-base': 'Qwen Base clones a voice recording from its exact words. An acting direction is experimental with Base.',
+  'qwen3-tts-0.6b-base': 'Qwen Base clones a voice recording from its exact words. An acting direction is experimental with Base.',
+  'qwen3-tts-1.7b-custom-voice': 'Qwen CustomVoice uses one of the preset voices the loaded model reports, with an optional acting direction.',
+  'voxcpm2': 'VoxCPM2 designs voices, clones voice recordings and continues a recording from its words. An acting direction when it clones is experimental; output is native 48 kHz.'
 };
 var descriptions = {
   warm: 'A warm, soft-spoken young woman with a gentle, affectionate tone.',
@@ -106,7 +106,7 @@ function loadReferences(choosePath) {
   return fetchJson('/api/references').then(function (result) {
     referenceRows = result.references || [];
     VoiceLabWorkflows.render(referenceRows, choosePath);
-  }).catch(function (e) { $('err').textContent = 'Could not list local references: ' + e.message; });
+  }).catch(function (e) { $('err').textContent = 'Could not list the saved voice recordings: ' + e.message; });
 }
 function unscreenedLanguages(engine) { return performanceUnscreenedByEngine[engine] || []; }
 function languageOptionLabel(engine, language) { return unscreenedLanguages(engine).indexOf(language) >= 0 ? language + ' (unscreened)' : language; }
@@ -274,7 +274,7 @@ function engineDetailText(row,device,job){
     return 'The app cannot install this model yet.';
   }
   if(row.state==='conversion_task'){return 'Tested from Voice conversion, because it needs source audio.';}
-  if(row.state==='not_integrated'){return 'This build does not expose the engine.';}
+  if(row.state==='not_integrated'){return 'This build does not offer this model.';}
   if(!check){return 'Press Test to load the model and speak one short sentence on this device.';}
   if(row.state==='check_outdated'){return 'The last test ('+utcStamp(check.checked_at)+') was made before this model or its packages changed, or before tests recorded that. Press Test again to confirm it still speaks.';}
   if(check.status==='passed'){
@@ -596,7 +596,7 @@ function renderSpeedRows(status){
   rows.forEach(function(row){
     var tr=document.createElement('tr');
     var name=modelCards[row.engine]?modelCards[row.engine].name:row.engine;
-    var cells=[name,deviceLabel(row.device),String(row.clips),row.median_real_time_factor==null?'—':row.median_real_time_factor.toFixed(2),row.last_total_s.toFixed(2)+' s for '+row.last_audio_seconds.toFixed(2)+' s of audio'];
+    var cells=[name,deviceLabel(row.device),String(row.clips),row.median_real_time_factor==null?'—':row.median_real_time_factor.toFixed(2)+' s',row.last_total_s.toFixed(2)+' s for '+row.last_audio_seconds.toFixed(2)+' s of audio'];
     cells.forEach(function(text){var td=document.createElement('td');td.textContent=text;tr.appendChild(td);});
     body.appendChild(tr);
   });

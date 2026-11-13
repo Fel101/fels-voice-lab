@@ -33,7 +33,7 @@
       if(voice.identity_kind==='reference'){
         await global.loadReferences();
         reference=(global.referenceRows||[]).find(function(row){return row.reference_version_id===voice.preferred_reference_id;});
-        if(!reference)throw new Error('The saved reference is unavailable. Open Edit voice to inspect its versions.');
+        if(!reference)throw new Error('The saved voice recording is unavailable. Open Edit voice to see its versions.');
       }
       if(!Array.from(el('engine').options).some(function(option){return option.value===voice.engine_id;}))
         throw new Error('This voice’s model is not in the installed catalogue.');
@@ -117,8 +117,8 @@
         audio.setAttribute('aria-label','Listen to '+voice.character_name);
         audio.addEventListener('play',function(){gallery.querySelectorAll('audio').forEach(function(other){if(other!==audio)other.pause();});});card.appendChild(audio);
       }else card.appendChild(node('p','No saved audition yet. Generate one in Perform lines.','meta'));
-      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p','Saved Kokoro blend: '+(voice.engine_options.voice||'')+'. No reference recording needed.','meta'));
-      else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+' saved reference '+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?'Ready to use.':'Reference audio unavailable.'),'meta'));
+      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p','Saved Kokoro blend: '+(voice.engine_options.voice||'')+'. No voice recording needed.','meta'));
+      else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+' saved recording '+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?'Ready to use.':'Voice recording unavailable.'),'meta'));
       var buttons=node('div',undefined,'cast-actions');
       var studio=action(voice,'Use in Model studio','studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
       var perform=action(voice,'Perform lines','perform');

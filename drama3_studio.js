@@ -34,8 +34,8 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
   function insert(token){const r=insertCue(script.value,script.selectionStart,script.selectionEnd,token);script.value=r.text;
     script.focus();script.setSelectionRange(r.cursor,r.cursor);updatePlain();}
   for(const cue of info.cues)cueBar.append(button('['+cue+']',()=>insert('['+cue+']')));
-  const custom=el('input',null,{'aria-label':'Custom acting cue',maxlength:'160',placeholder:'Custom delivery cue'});
-  cueBar.append(custom,button('Insert cue',()=>{if(!custom.value.trim()||/[\[\]<>\r\n]/.test(custom.value))throw new Error('Use plain text for the delivery cue.');insert('['+custom.value.trim()+']');}));
+  const custom=el('input',null,{'aria-label':'Custom acting cue',maxlength:'160',placeholder:'Custom acting direction'});
+  cueBar.append(custom,button('Insert cue',()=>{if(!custom.value.trim()||/[\[\]<>\r\n]/.test(custom.value))throw new Error('Use plain text for the acting direction.');insert('['+custom.value.trim()+']');}));
   const cast=el('div',null,{'aria-label':'Drama cast slots'}),castRows=[];
   function sourceOptions(chosen='') {return [['','Model-selected voice'],...info.sources.map(s=>[s.id,s.label]),
     ...(chosen&&!info.sources.some(s=>s.id===chosen)?[[chosen,'Previously selected voice (refresh or replace)']]:[])];}
@@ -56,7 +56,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
   const listenLabel=label('Play audio as it arrives',listen);listenLabel.className='ds-check';
   const language=select(info.languages.map(l=>[l.code,l.label]));language.setAttribute('aria-label','Script language');
   const description=el('input',null,{maxlength:'1000','aria-label':'Global voice description',placeholder:'Optional voice description for generated voices'});
-  const direction=el('input',null,{maxlength:'1000','aria-label':'Global delivery cue',placeholder:'Optional direction for the whole script'});
+  const direction=el('input',null,{maxlength:'1000','aria-label':'Acting direction for the whole text',placeholder:'Optional direction for the whole script'});
   const controls=el('div',null,{class:'ds-grid'}),settings={};
   for(const [key,title,value,min,max,step] of [['seed','Seed',42,0,2147483647,1],['temperature','Temperature',1,.05,2,.05],
     ['top_k','Top-k',30,1,4097,1],['top_p','Top-p',.9,.05,1,.05],['max_seconds','Seconds per chunk',47.6,.5,95.1,.1]]) {
@@ -80,7 +80,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
     outputs.append(el('audio',null,{controls:'',preload:'none',src:base+'/jobs/'+row.id+'/audio','aria-label':'Completed Drama take'}));
     const links=el('div',null,{class:'ds-row'});
     for(const [kind,title] of [['audio','Download WAV'],['metadata','Model & cast receipt'],['package','Download take ZIP']])links.append(el('a',title,{href:base+'/jobs/'+row.id+'/'+kind,download:''}));
-    outputs.append(links,el('p','Mixed cast audio. Individual speaker stems and word timing are not generated. Review the words, speaker identity and acting before using the take.'));
+    outputs.append(links,el('p','Mixed cast audio. Individual speaker stems and word timing are not generated. Review the words, the voices and the acting before using the take.'));
     if(row.quality?.flags?.length)outputs.append(el('p','Review flags: '+row.quality.flags.join(', '),{role:'alert'}));
   }
   function restoreRequest(row) {
@@ -122,9 +122,9 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
   actions.append(start,stop,history);
   root.replaceChildren(heading,help,label('Script language (does not translate)',language),label('Voice description',description),label('Global delivery',direction),
     el('h4','Cast'),cast,castActions,allowLabel,el('h4','Script & acting'),cueBar,
-    el('p','Insert a cue or speaker tag at the cursor. Delivery cues apply from that point; use another cue to change delivery. Cues may be ignored or spoken.'),
+    el('p','Insert an acting direction or a speaker tag at the cursor. A direction applies from that point; add another to change it. The model may ignore a direction or speak it.'),
     label('Dialogue or narration',script),preview,controls,listenLabel,actions,status,outputs,
     el('p','Jobs and scripts are retained locally. You can reopen recent takes after closing this panel. Previous-take editing is unavailable in the installed runtime. Built with Fish Audio.'));
-  status.textContent=info.sources.length+' approved reference voices available. Use the regular voice workflow to save and approve more voices.';
+  status.textContent=info.sources.length+' approved voices with a voice recording available. Save and approve more in Voice cloning and Cast.';
   return {stopListening(){listen.checked=false;stopListening();}};
 }

@@ -2,14 +2,14 @@
 // Transcript draft for the selected saved reference version. It only fills the form; saving stays a separate, deliberate step.
 $('suggestTranscript').addEventListener('click',function(){
   var id=$('referenceVersion').value;
-  if(!id){$('referenceStatus').textContent='Choose a saved reference version first, then suggest its transcript.';return;}
+  if(!id){$('referenceStatus').textContent='Choose a saved recording version first, then suggest its words.';return;}
   if($('referenceTranscript').value.trim()&&!window.confirm('Replace the transcript in this form with a draft from the audio?'))return;
   var button=this;button.disabled=true;$('referenceStatus').textContent='Listening to the saved clip for a draft transcript…';
   fetchJson('/api/references/'+id+'/transcript-suggestion',{}).then(function(result){
     var draft=result.suggestion;
     if(!draft.text){$('referenceStatus').textContent='No speech was recognised in this clip. Type the transcript yourself.';return;}
     $('referenceTranscript').value=draft.text;
-    $('referenceStatus').textContent='Draft from '+draft.model+' (detected '+draft.language+'). Check every word against the recording and correct it. Nothing is saved or marked exact until you save the reference.';
+    $('referenceStatus').textContent='Draft from '+draft.model+' (detected '+draft.language+'). Check every word against the recording and correct it. Nothing is saved or marked exact until you save the recording.';
   }).catch(apiFailure).then(function(){button.disabled=false;});
 });
 function apiFailure(error){$('referenceStatus').textContent=error.message||String(error);}
@@ -44,9 +44,9 @@ $('previewReference').addEventListener('click',previewReferenceClip);
 ['trimStart','trimEnd','referenceChannel','referenceRate'].forEach(function(id){$(id).addEventListener('input',function(){if(referenceBuffer){try{var r=activeTrim();drawReferenceWave(referenceBuffer,r.start,r.end);}catch(_){}}});});
 $('micStart').addEventListener('click',beginMicCapture);$('micStop').addEventListener('click',stopMicCapture);
 $('saveReference').addEventListener('click',saveUploadedReference);$('saveReferenceVersion').addEventListener('click',saveEditedReferenceVersion);
-$('approveIdentity').addEventListener('click',function(){var ref=$('approveReference').value;if(!ref){apiFailure(new Error('Choose a saved reference version to approve.'));return;}
+$('approveIdentity').addEventListener('click',function(){var ref=$('approveReference').value;if(!ref){apiFailure(new Error('Choose a saved recording version to approve.'));return;}
   saveIdentityUpdate({status:'approved',reference_version_id:ref}).then(function(){return refreshCast($('characterSelect').value,$('identitySelect').value);})
-    .then(function(){$('referenceStatus').textContent='Voice identity now approves the selected immutable reference version.';}).catch(apiFailure);});
+    .then(function(){$('referenceStatus').textContent='The voice now uses the version you approved.';}).catch(apiFailure);});
 $('referenceVersion').addEventListener('change',updateReferenceRetirement);
 $('retireReference').addEventListener('click',function(){var identity=activeIdentity(),ref=selectedReferenceVersion();if(!identity||!ref)return;retireAction('reference',ref.id,'this recording version').then(function(message){if(message)$('referenceStatus').textContent=message;return refreshCast(identity.character_id,identity.id);}).catch(apiFailure);});
 $('restoreReference').addEventListener('click',function(){var identity=activeIdentity(),ref=selectedReferenceVersion();if(!identity||!ref)return;restoreAction('reference',ref.id,'this recording version').then(function(message){$('referenceStatus').textContent=message;return refreshCast(identity.character_id,identity.id);}).catch(apiFailure);});
@@ -56,7 +56,7 @@ $('performCharacter').addEventListener('change',function(){renderPerformanceChar
 $('performIdentity').addEventListener('change',function(){renderPerformanceIdentity();loadCurrentTakes();});
 $('performReference').addEventListener('change',loadCurrentTakes);$('lineId').addEventListener('change',loadCurrentTakes);
 $('performLanguage').addEventListener('change',function(){var identity=performanceIdentity();if(identity&&identity.kind==='preset_voice'){
-  $('performSupport').textContent='Checkpoint preset: '+identity.engine_options.speaker+' / '+this.value+'. No reference recording is used.';
+  $('performSupport').textContent='Checkpoint preset: '+identity.engine_options.speaker+' / '+this.value+'. No voice recording is used.';
 }});
 $('performGenerate').addEventListener('click',generatePerformanceSet);$('performStop').addEventListener('click',stopPerformanceSet);
 $('refreshTakes').addEventListener('click',loadCurrentTakes);

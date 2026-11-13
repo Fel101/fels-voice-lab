@@ -21,7 +21,7 @@
       (row.generation_engine_name ? '\nCreated with: ' + row.generation_engine_name : '') +
       (row.engine_name ? '\nSaved voice uses: ' + row.engine_name : '') +
       (row.identity_status ? '\nVoice status: ' + row.identity_status : '') +
-      (row.version ? '\nReference version: ' + row.version : '') +
+      (row.version ? '\nRecording version: ' + row.version : '') +
       '\nOrigin: ' + (row.origin || 'Unknown — source not documented.') +
       '\nAllowed use: ' + (row.allowed_use || 'Unknown — do not assume permission to clone or redistribute.') +
       (row.description ? '\nDescription: ' + row.description : '') +
@@ -30,7 +30,7 @@
   function label(row) {
     var peers=rows.filter(function(other){return row.character_id&&other.character_id===row.character_id;});
     var identities=Array.from(new Set(peers.map(function(other){return other.identity_id;})));
-    var identitySuffix=identities.length>1?' · '+(row.identity_label||'Voice candidate'):'';
+    var identitySuffix=identities.length>1?' · '+(row.identity_label||'Voice'):'';
     if(identities.length>1&&peers.some(function(other){return other.identity_id!==row.identity_id&&other.identity_label===row.identity_label&&other.engine_id===row.engine_id;}))
       identitySuffix+=' ['+String(row.identity_id).slice(0,6)+']';
     var multipleVersions=row.identity_id&&peers.filter(function(other){return other.identity_id===row.identity_id;}).length>1;
@@ -61,7 +61,7 @@
   }
   function addReferenceFilters(container, select) {
     var filters=document.createElement('div');filters.className='reference-filters';
-    /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([['All reference versions',function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
+    /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([['All recording versions',function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
       var wrap=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=item[1]();
       input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',item[0]+' for '+select.id);
       input.addEventListener('change',function(){item[2](input.checked);
@@ -157,10 +157,10 @@
     el('cloneModelHelp').textContent = missing + (engine === 'drama-3' ?
       'Fish Audio: exact transcript required. Runs on CPU; a cold test can take several minutes. Fish license conditions apply.' :
       engine === 'breeze-tts-2' ? 'Breeze: exact transcript required. Model and self-hosted outputs are non-commercial.' :
-      engine.indexOf('qwen') === 0 ? 'Qwen Base: use the exact transcript. Delivery instructions are experimental.' :
-      engine === 'voxcpm2' ? 'VoxCPM2: a transcript is optional for identity cloning. Delivery instructions are experimental.' :
-      engine === 'turbo' ? 'Chatterbox Turbo: the reference must be longer than 5 seconds. Put supported event tags in your new dialogue.' :
-      'Chatterbox Original: the recording supplies the speaker identity. Put only spoken dialogue in the test text.');
+      engine.indexOf('qwen') === 0 ? 'Qwen Base: type the exact words. Acting directions are experimental.' :
+      engine === 'voxcpm2' ? 'VoxCPM2: the words are optional when it clones. Acting directions are experimental.' :
+      engine === 'turbo' ? 'Chatterbox Turbo: the recording must be longer than 5 seconds. Put supported event tags in your new dialogue.' :
+      'Chatterbox Original: the recording gives the voice. Put only spoken dialogue in the test text.');
   }
   function replaceSource(file) {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
@@ -190,7 +190,7 @@
     el('cloneName').value = body.save_voice_as || '';
     el('cloneTranscript').value = body.text || '';
     var parent = body._reference_provenance;
-    if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:'Historical reference provenance was not captured.',allowed_use:'Source reference rights unknown; verify before reuse or redistribution.'};
+    if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:'Where this recording came from was not recorded.',allowed_use:'Who may use the recording is unknown; check before you reuse or share it.'};
     el('cloneOrigin').value = 'Generated locally with ' + body.engine + (parent && parent.origin ? '; source: ' + parent.origin : '');
     el('cloneAllowedUse').value = (parent && parent.allowed_use ? parent.allowed_use + '; ' : '') +
       (body.engine === 'breeze-tts-2' ? 'Non-commercial only; Breeze model/output terms apply.' :
@@ -202,8 +202,8 @@
     var snapshot = JSON.parse(JSON.stringify(body));
     if (body.reference_path && body.mode!=='design' && body.mode!=='custom_voice' && body.engine!=='kokoro') {
       var source = rows.find(function (row) { return row.path === body.reference_path; });
-      snapshot._reference_provenance = source ? {origin:source.origin || 'Unknown source',allowed_use:source.allowed_use || 'Reference rights unknown; verify before reuse or redistribution.',
-        reference_version_id:source.reference_version_id || null} : {origin:'Unknown source',allowed_use:'Reference rights unknown; verify before reuse or redistribution.'};
+      snapshot._reference_provenance = source ? {origin:source.origin || 'Unknown source',allowed_use:source.allowed_use || 'Who may use the recording is unknown; check before you reuse or share it.',
+        reference_version_id:source.reference_version_id || null} : {origin:'Unknown source',allowed_use:'Who may use the recording is unknown; check before you reuse or share it.'};
     }
     return snapshot;
   }
@@ -220,7 +220,7 @@
     if (!el('clonePermission').checked || !origin || !allowedUse) throw new Error('Confirm your permission and record the origin and allowed use.');
     if (cloneEngines.indexOf(engine) < 0) throw new Error('Choose a cloning model.');
     if (engine !== 'voxcpm2' && !transcript)
-      throw new Error('Add the exact words spoken in the reference. This model’s Cast workflow requires a transcript.');
+      throw new Error('Add the exact words spoken in the recording. This model needs them.');
     if (sourceTerms) {
       if (allowedUse.indexOf(sourceTerms.allowed_use) < 0) allowedUse += '; inherited: ' + sourceTerms.allowed_use;
       if (origin.indexOf(sourceTerms.origin) < 0) origin += '; source: ' + sourceTerms.origin;
@@ -228,27 +228,27 @@
     var file = sourceFile;
     if (!file && row) {
       var response = await fetch(row.audio_url);
-      if (!response.ok) throw new Error('Could not read the selected reference.');
+      if (!response.ok) throw new Error('Could not read the chosen recording.');
       file = new File([await response.blob()], row.name || 'reference.wav', {type:'audio/wav'});
       // Existing restrictions cannot be silently dropped while copying a library reference.
       if (row.allowed_use && allowedUse.indexOf(row.allowed_use) < 0) allowedUse += '; inherited: ' + row.allowed_use;
       if (row.origin && origin.indexOf(row.origin) < 0) origin += '; source: ' + row.origin;
     }
-    if (!file) throw new Error('Upload, record, or select a reference first.');
-    if (file.size > 32 * 1024 * 1024) throw new Error('The reference is larger than 32 MB.');
+    if (!file) throw new Error('Upload, record or choose a recording first.');
+    if (file.size > 32 * 1024 * 1024) throw new Error('The recording is larger than 32 MB.');
     if (!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)) throw new Error('Choose WAV, FLAC, OGG, MP3 or M4A audio.');
     var decoded = await global.decodeBlob(file);
     if (decoded.duration < 0.5 || decoded.duration > 60) throw new Error('Use a 0.5–60 second clip. Trim longer recordings in Cast first.');
-    if (engine === 'turbo' && decoded.duration <= 5) throw new Error('Turbo needs a reference longer than 5 seconds.');
-    if (global.bufferAnalysis(decoded).rms < 0.001) throw new Error('The reference is silent or too quiet.');
+    if (engine === 'turbo' && decoded.duration <= 5) throw new Error('Turbo needs a recording longer than 5 seconds.');
+    if (global.bufferAnalysis(decoded).rms < 0.001) throw new Error('The recording is silent or too quiet.');
     var key = name + '\n' + engine;
     if (!context || context.key !== key || !context.characterId) {
       context = {key:key};
-      var created = await json('/api/characters', {name:name, description:'Reference voice created in Voice cloning', tags:['cloning']});
+      var created = await json('/api/characters', {name:name, description:'Voice cloned from a recording in Voice cloning', tags:['cloning']});
       context.characterId = created.character.id;
     }
     if (!context.identityId) {
-      var identity = await json('/api/characters/' + context.characterId + '/identities', {engine_id:engine,label:name,notes:'Listen before approving this candidate.'});
+      var identity = await json('/api/characters/' + context.characterId + '/identities', {engine_id:engine,label:name,notes:'Listen before approving this voice.'});
       context.identityId = identity.identity.id;
     }
     // Hash actual bytes: retrying a failed generation reuses the saved immutable reference.
@@ -261,7 +261,7 @@
       var uploaded = await fetch('/api/identities/' + context.identityId + '/references', {method:'POST',
         headers:{'Content-Type':file.type || 'application/octet-stream','X-Reference-Metadata':metadataHeader(metadata)}, body:file});
       var saved = await uploaded.json();
-      if (!uploaded.ok) throw new Error(saved.error || 'Could not save reference.');
+      if (!uploaded.ok) throw new Error(saved.error || 'Could not save the recording.');
       context.reference = saved.reference; context.signature = signature;
     }
     await global.refreshCast(context.characterId, context.identityId);
@@ -274,12 +274,12 @@
     if (generate && !el('cloneText').value.trim()) { el('cloneStatus').textContent = 'Enter the new words to speak.'; return; }
     busy = true; el('cloneSave').disabled = true; el('cloneGenerate').disabled = true;
     el('cloneControls').disabled = true;
-    el('cloneStatus').textContent = 'Validating and saving the local reference…';
+    el('cloneStatus').textContent = 'Checking and saving the recording…';
     try {
       var saved = await saveCandidate();
-      el('cloneStatus').textContent = 'Saved candidate reference v' + saved.reference.version + '. Review it in Cast.';
+      el('cloneStatus').textContent = 'Saved recording v' + saved.reference.version + '. Review it in Cast.';
       if (generate) {
-        el('cloneStatus').textContent = 'Reference saved. Generating the test; the first request loads the model. Fish runs on CPU and can take several minutes.';
+        el('cloneStatus').textContent = 'Recording saved. Making the test; the first request loads the model. Fish runs on CPU and can take several minutes.';
         var engine = el('cloneEngine').value;
         var body = {identity_id:saved.identityId,reference_version_id:saved.reference.id,
           line_id:'cloning-test',text:el('cloneText').value,language:'English',settings:{},
@@ -288,9 +288,9 @@
         if (!result.ok) { var failure = await result.json(); throw new Error(failure.error || result.status); }
         if (resultUrl) URL.revokeObjectURL(resultUrl);
         resultUrl = URL.createObjectURL(await result.blob()); el('cloneResult').src = resultUrl; el('cloneResult').hidden = false;
-        el('cloneStatus').textContent = 'Test saved in Perform lines. Listen to the source and result; the voice remains a candidate until you approve it in Cast.';
+        el('cloneStatus').textContent = 'Test saved in Perform lines. Listen to the source and result; the voice is not approved until you approve it in Cast.';
       }
-    } catch (error) { el('cloneStatus').textContent = error.message + (context && context.reference ? ' Your saved reference is retained; retrying does not duplicate it.' : ''); }
+    } catch (error) { el('cloneStatus').textContent = error.message + (context && context.reference ? ' Your saved recording is kept; trying again does not save it twice.' : ''); }
     finally { busy = false; el('cloneControls').disabled = false; el('cloneSave').disabled = false; el('cloneGenerate').disabled = false; }
   }
   async function beginRecording() {

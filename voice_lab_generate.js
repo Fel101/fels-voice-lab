@@ -112,7 +112,7 @@ function generate() {
 }
 function requestSpeech() {
   var body = bodyForRequest();
-  if((body.engine==='orig'||body.engine==='turbo')&&body.clone&&!body.reference_path){$('err').textContent='Choose a reference recording, or turn cloning off to use the default speaker.';return;}
+  if((body.engine==='orig'||body.engine==='turbo')&&body.clone&&!body.reference_path){$('err').textContent='Choose a voice recording, or turn cloning off to use the default voice.';return;}
   var historyBody=VoiceLabWorkflows.freezeRequest(body);
   $('go').disabled = true; $('reroll').disabled = true; $('stopWaiting').hidden = false; $('err').textContent = '';
   var started = performance.now(), request = {controller:new AbortController(), stopped:false};
@@ -135,9 +135,9 @@ function requestSpeech() {
     var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += ' / effective sampling ' + sampling; }
     var language = r.headers.get('X-Voice-Language'); if (language) { meta += ' / ' + language; }
     var speaker = r.headers.get('X-Voice-Speaker'); if (speaker) { meta += ' / ' + speaker; }
-    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += ' / reference cache hit: ' + cacheHit; }
+    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += ' / voice recording cached: ' + cacheHit; }
     var savedAsset = r.headers.get('X-Voice-Asset-Path');
-    if (savedAsset) { meta += ' / saved reference: ' + savedAsset; }
+    if (savedAsset) { meta += ' / saved voice recording: ' + savedAsset; }
     return r.blob().then(function (blob) { return {blob:blob, meta:meta, savedAsset:savedAsset}; });
   }).then(function (result) {
     clearInterval(ticker);
@@ -288,8 +288,8 @@ function streamGenerate() {
       +' / '+completion.chunk_count+' transport chunks';
     if(completion.backend){meta+=' / '+completion.backend;}
     if(completion.checkpoint){meta+=' / '+completion.checkpoint;}
-    if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / reference cache hit: '+completion.reference_cache_hit;}
-    if(completion.saved_asset){meta+=' / saved reference: '+completion.saved_asset;}
+    if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / voice recording cached: '+completion.reference_cache_hit;}
+    if(completion.saved_asset){meta+=' / saved voice recording: '+completion.saved_asset;}
     makeHistory(wav,historyBody,meta); $('status').textContent=meta;
     persistHistory(wav,historyBody,meta).catch(function(error){$('status').textContent+=' / local history was not saved: '+error.message;});
     if(completion.saved_asset){$('qwenSaveVoice').checked=false;$('qwenReferenceText').value=body.text;loadReferences(completion.saved_asset);}

@@ -38,7 +38,7 @@ fetch('/api/info').then(function(r){return r.json();}).then(function(i){
 }).catch(function(){});
 $('convertVoice').addEventListener('click',function(){
   var source=$('conversionSource').selectedOptions[0],target=$('conversionTarget').selectedOptions[0];
-  if(!source||!target){$('conversionError').textContent='Choose a source performance and a target reference.';return;}
+  if(!source||!target){$('conversionError').textContent='Choose a performance to convert and a voice to convert it to.';return;}
   if(source.value===target.value){$('conversionError').textContent='Source and target must be separate files.';return;}
   $('convertVoice').disabled=true;$('conversionError').textContent='';$('conversionManifest').textContent='';
   $('conversionStatus').textContent='Loading the isolated Chatterbox VC worker and converting...';
@@ -94,7 +94,7 @@ return Promise.all([fetchJson('/api/conversion/sources'),fetchJson('/api/convers
     if(item.character_name){label+=' — '+item.character_name+' / '+item.identity_label+' v'+(item.version||'?');}
     option(targets,item.path,label);targets.options[targets.options.length-1].dataset.referenceId=item.reference_version_id||'';});
   if(!sources.options.length){option(sources,'','No local source WAVs found',true);}
-  if(!targets.options.length){option(targets,'','No local target references found',true);}
+  if(!targets.options.length){option(targets,'','No saved voice recordings found',true);}
 if(Array.from(sources.options).some(function(item){return item.value===previousSource;}))sources.value=previousSource;
   if(Array.from(targets.options).some(function(item){return item.value===previousTarget;}))targets.value=previousTarget;
 }).catch(function(error){$('conversionError').textContent='Could not list local conversion inputs: '+error.message;});

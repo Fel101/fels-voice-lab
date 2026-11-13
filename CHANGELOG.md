@@ -97,8 +97,8 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   not rendered, waiting, rendering, failed (with the reason), choose a take, done, and out of date (with what changed after
   the take was made); a row with unsaved edits says so. Above the table: **Tick all shown**, **Render ticked**, **Render
   all**, **Render what is missing or out of date**, **Use the newest take where none is chosen**, and filters by character
-  and by status. The box for typing line ids to render is gone; a line's id is in its details. Rendered takes are still
-  listed by batch under **Audition rendered takes**.
+  and by status. The box for typing line ids to render is gone; a line's name is in its details. Rendered takes are still
+  listed by batch, under **Takes from this batch**.
 - **Two scene routes.** `GET /api/scenes/{scene_id}/lines` says where every line and segment stands, with its takes, in one
   answer. `POST /api/scenes/{scene_id}/choose-newest` chooses the newest take that fits for every segment without one, in one
   new revision.
@@ -109,6 +109,26 @@ off, and the installers did not notice, so they now ask NVIDIA's driver itself b
   status line now names the model rendering and the ones to come, with how many lines each has, and a test fails if a scene
   that alternates two models makes them take turns. The scene is still assembled in script order. Each row of
   `GET /api/scenes/jobs/{job_id}` gains `engine_id`, and the job gains `models`.
+
+### Plain words on the page
+
+- **One word for one thing.** The page used several words for one thing, and some that only a programmer would know.
+  Labels, messages and the [user guide](docs/USER_GUIDE.md) now keep to five: a *voice recording* is the recording a model
+  clones (it was a reference, identity reference, prompt reference or local reference), an *acting direction* tells a model
+  how to say a line (delivery instruction, acting instruction, delivery cue), a *voice* is a character's voice in Cast
+  (voice identity, voice candidate), a *model* is what speaks (engine, backend), and a long line is split into *parts*
+  (segments). 109 labels changed, among them **Record from the microphone**, **Exact words in the recording**, **Where it
+  comes from**, **Who may use it, and how**, **Save the voice and hear it**, **Save the recording only**, **Takes to
+  make**, **Make takes**, **Model settings**, **Show the parts of long lines**, **Build the scene from the chosen takes**
+  and **Try the failed lines again**. The Breeze TTS 2, Qwen3-TTS and VoxCPM2 panels are headed by the model's name, and
+  Scenes & batch by the menu's. Element ids, API fields, file formats and stored data are unchanged, and the guide's
+  screenshots are new.
+- **Perform's line name is under Details.** **Stable line ID** sat between the voice and the dialogue, a box most people
+  never need. It is **Line name** now, under **Details**, and still filled in for you; a scene's line says the same.
+- **The speed table says what it measures.** **Measured speed on this service**, with its *Device* and *Median real-time
+  factor* columns, is **Measured speed on this computer**, with **Runs on** and **Typical time per second of speech**, and
+  the figure has its unit ("0.25 s").
+- The library backup names its first part *Cast voices, voice recordings and takes*.
 
 ### Releases
 

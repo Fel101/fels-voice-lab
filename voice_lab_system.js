@@ -10,7 +10,7 @@ function formatBytes(count){
 function whenText(iso){var date=new Date(iso);return isNaN(date.getTime())?String(iso||'an unknown time'):date.toLocaleString();}
 function systemFacts(report){
   var schemas=report.library.schemas,counts=report.library.counts,schemaText=Object.keys(schemas).map(function(key){return key+' '+(schemas[key]===null?'unreadable':schemas[key]);}).join(', ');
-  var countText=[['characters','character','characters'],['identities','voice identity','voice identities'],['references','reference','references'],['takes','take','takes'],['scenes','scene','scenes']].filter(function(row){
+  var countText=[['characters','character','characters'],['identities','voice','voices'],['references','voice recording','voice recordings'],['takes','take','takes'],['scenes','scene','scenes']].filter(function(row){
     return counts[row[0]]!==null&&counts[row[0]]!==undefined;}).map(function(row){return plural(counts[row[0]],row[1],row[2]);}).join(', ');
   var source=report.system.python_source,python=report.system.python+(source==="the Lab's own"?' (the Lab\'s own)':source?' (from '+source+')':'');
   var rows=[['Version',report.app.name+' '+report.app.version],['Python and system',python+', '+report.system.platform],

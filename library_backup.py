@@ -68,7 +68,7 @@ class Section:
 
 
 SECTIONS = (
-    Section("cast", "Cast voices, references and takes", ("data/cast",)),
+    Section("cast", "Cast voices, voice recordings and takes", ("data/cast",)),
     Section("scenes", "Scenes and rendered lines", ("data/scenes", "out/scenes")),
     # A library that has not been opened since the comparison folder was renamed still has the old name, so both are listed:
     # its backup holds whichever it has, and a backup made before the rename restores and is moved when the store opens.

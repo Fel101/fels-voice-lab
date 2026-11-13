@@ -223,7 +223,7 @@ function sceneDefaultLine(character, identity, lineId) {
 function changeSceneIdentity(index, identityId) {
   var scene = sceneBody(),
     found = sceneIdentityById(identityId);
-  if (!found) throw new Error('Choose a voice identity from the selected character.');
+  if (!found) throw new Error('Choose a voice from the chosen character.');
   var old = scene.lines[index];
   if (!old) throw new Error('Scene line no longer exists.');
   if (old.identity_id === identityId) return;
@@ -364,7 +364,7 @@ function renderSceneLineEditor(line, index, article) {
       }, this),
       next = selected && (selected.identities || [])[0];
     if (!next) {
-      showSceneError(new Error('Add a voice identity to this character before assigning a line.'));
+      showSceneError(new Error('Add a voice to this character before giving it a line.'));
       return;
     }
     changeSceneIdentity(index, next.id);
@@ -376,7 +376,7 @@ function renderSceneLineEditor(line, index, article) {
     });
   }
   voices.value = line.identity_id || '';
-  sceneLabel('Voice identity', voices, assignment, true);
+  sceneLabel('Voice', voices, assignment, true);
   voices.addEventListener('change', function () {
     try {
       changeSceneIdentity(index, this.value);
@@ -405,10 +405,10 @@ function renderSceneLineEditor(line, index, article) {
             ' s',
         );
       });
-    if (!references.options.length) option(references, '', 'No saved reference version', true);
+    if (!references.options.length) option(references, '', 'No saved voice recording', true);
     references.value =
       line.reference_version_id || identity.approved_reference_id || ((identity.references || [])[0] || {}).id || '';
-    sceneLabel('Reference version', references, assignment, true);
+    sceneLabel('Voice recording', references, assignment, true);
     references.addEventListener('change', function () {
       changeSceneField(index, 'reference_version_id', this.value || null);
     });
@@ -533,7 +533,7 @@ function renderSceneLineEditor(line, index, article) {
   });
   var settingsHelp = document.createElement('p');
   settingsHelp.className = 'meta';
-  settingsHelp.textContent = 'The take stores effective backend values. Unsupported settings are not shown.';
+  settingsHelp.textContent = 'Each take keeps the values the model used. Settings this model does not have are not shown.';
   settings.appendChild(settingsHelp);
   article.appendChild(settings);
   var actions = document.createElement('div');
@@ -564,7 +564,7 @@ function renderSceneLineEditor(line, index, article) {
   article.appendChild(actions);
   var lineId = document.createElement('p');
   lineId.className = 'meta';
-  lineId.textContent = 'Line ID: ' + line.line_id + '. Exports and the API name the line by it.';
+  lineId.textContent = 'Line name: ' + line.line_id + '. Exports and the API name the line by it.';
   article.appendChild(lineId);
 }
 // The scenes table: one row per line, its status from GET /api/scenes/{id}/lines (one answer for the whole scene). A row's
@@ -1127,7 +1127,7 @@ function refreshSceneList(preferred) {
 function startSceneFromPerformer() {
   var character = performanceCharacter(),
     identity = performanceIdentity();
-  if (!character || !identity) throw new Error('Choose a character and voice identity in Perform first.');
+  if (!character || !identity) throw new Error('Choose a character and voice in Perform first.');
   if (sceneDirty && !window.confirm('Discard unsaved scene edits and start a new script from Perform?')) return;
   var seed = Number($('performSeed').value);
   if (!Number.isFinite(seed)) seed = 42;
@@ -1267,7 +1267,7 @@ function refreshSceneJob() {
         );
         var choose = document.createElement('button');
         choose.type = 'button';
-        choose.textContent = 'Select for scene';
+        choose.textContent = 'Use this take';
         choose.disabled = !!row.retirement;
         choose.addEventListener('click', function () {
           if (sceneDirty) {
@@ -1513,7 +1513,7 @@ $('sceneSegments').addEventListener('click', function () {
   try {
     sceneBody();
     if (!activeSceneId || sceneDirty) {
-      $('sceneSegmentPreview').textContent = 'Save the current scene before validating and previewing its generated segments.';
+      $('sceneSegmentPreview').textContent = 'Save the scene before showing how its long lines split into parts.';
       return;
     }
     fetchJson('/api/scenes/' + activeSceneId + '/segments')
@@ -1524,7 +1524,7 @@ $('sceneSegments').addEventListener('click', function () {
               line.line_id +
               ': ' +
               line.segments.length +
-              ' segment(s) — ' +
+              ' part(s) — ' +
               line.segments
                 .map(function (segment) {
                   return segment.id + ' (' + segment.text.length + ' chars)';

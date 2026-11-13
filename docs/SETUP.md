@@ -210,7 +210,7 @@ than real time.
 
 Phonon 31M English is a very small speech model: its checkpoint is 65 MB, and it runs on an ordinary computer without a graphics card
 and without PyTorch. It speaks English in 37 preset voices (12 American, 13 British and 12 characters, among them a demon, an ogre and
-a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone a recording, design a voice or take a direction.
+a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone a recording, design a voice or take an acting direction.
 `setup.bat` offers it; to add it later, run
 
 ```powershell
@@ -315,7 +315,7 @@ Chatterbox on a graphics card, use `--gpu` (see [NVIDIA graphics cards](#nvidia-
 CPU recipe and AMD's build have been tried; NVIDIA's has not.
 
 To clone a voice, open **Voice cloning**, choose Chatterbox Turbo, record or choose a recording longer than five seconds, write
-down its words, where it came from and what it may be used for, and press **Save voice and generate test**. **Test** on the Models
+down its words, where it came from and what it may be used for, and press **Save the voice and hear it**. **Test** on the Models
 page speaks in the built-in voice, unless `reference\af_heart.wav` exists (the synthetic clip Kokoro's installer and Kokoro's first
 load make), which it then clones. A call to
 `/api/speak` that clones must name its `reference_path` unless that clip exists; with `clone` set to false it uses the built-in
@@ -552,7 +552,7 @@ setup-qwen.bat --model 1.7b-custom-voice
 | Qwen3-TTS 0.6B Base (`0.6b-base`) | clones a voice from a short recording; the smallest and fastest | 2.5 GB |
 | Qwen3-TTS 1.7B Base (`1.7b-base`) | clones a voice from a short recording | 4.5 GB |
 | Qwen3-TTS 1.7B VoiceDesign (`1.7b-voice-design`) | makes a new voice from a written description | 4.5 GB |
-| Qwen3-TTS 1.7B CustomVoice (`1.7b-custom-voice`) | speaks in nine preset voices that take direction | 4.5 GB |
+| Qwen3-TTS 1.7B CustomVoice (`1.7b-custom-voice`) | speaks in nine preset voices that take an acting direction | 4.5 GB |
 
 The installer prints its plan and asks first (`--dry-run` and `--yes` work as for the other installers), and installs into this
 folder, in `.venv-fqwen`, `hf-cache` and `out\qwen`:

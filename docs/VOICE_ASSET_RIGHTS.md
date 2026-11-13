@@ -42,14 +42,14 @@ be told when speech is synthetic where that matters to them.
 
 ## Where the picker finds audio
 
-The reference picker looks in three places and labels each one, because where a file sits is not evidence of where it came
+The lists of voice recordings look in three places and label each one, because where a file sits is not evidence of where it came
 from:
 
 | Source | What it means | Publication decision |
 |---|---|---|
 | Local reference folder (`reference/`) | Files you put there. It includes `af_heart.wav`, a synthetic Kokoro test reference that `engines.ensure_reference()` can generate from `af_heart` and the application's test text, and then reuses. That WAV has no complete per-file generation receipt, and its name is not evidence of a recorded person's permission. | Review a file's generation record and planned use before choosing it as a public demo. The folder is not part of this repository (Git ignores `reference/`). |
 | Saved designed voice (`data/voices/`) | Audio written when you save a designed voice. It is generated under the engine's own terms, and Breeze's are non-commercial. | Keep the engine's restrictions with the file, and do not present saved designs as unrestricted starter voices. |
-| Cast reference | A saved recording or generated audio with versioned origin and allowed-use notes. A prepared copy and its original source can appear separately. | Follow the saved terms for that exact version and its source chain. A human approval records a decision; it does not prove ownership. |
+| Cast voice recording | A saved recording or generated audio with versioned origin and allowed-use notes. A prepared copy and its original source can appear separately. | Follow the saved terms for that exact version and its source chain. A human approval records a decision; it does not prove ownership. |
 | Any other file | A filename or containing directory alone does not establish an engine, a speaker's permission or an allowed use. | Show unknown provenance until a matching generation record or rights record establishes it. |
 
 Audit what your own library holds before you share any of it; this repository includes none of it, and no private speaker
