@@ -1,9 +1,29 @@
 # Fel's Voice Lab guide
 
-Updated 25 October 2026. Start with [setup](SETUP.md) and
+Updated 13 November 2026. Start with [setup](SETUP.md) and
 [model capabilities](../MODEL_CAPABILITIES.md). Models work offline after their
 packages and pinned assets have been installed. The version you are running is
 at the foot of every page and in `/api/health`; `python serve.py --version` prints it.
+
+## What do you want to do?
+
+- [Install a first model](#the-first-time)
+- [Clone your own voice](#clone-your-own-voice)
+- [Hear a line in a model's voice, or design a voice from a description](#hear-a-line-in-model-studio)
+- [Keep a voice for a character](#keep-voices-in-the-cast-library)
+- [Perform a line, with acting direction, and choose a take](#perform-lines)
+- [Trim, fade or quieten a take](#edit-a-take)
+- [Turn a script into a scene and render it](#scenes-and-batch)
+- [Bring in a script you already have (plain text or Fountain)](#import-a-script)
+- [Export a scene for an editor or a game](#export-a-package)
+- [Compare takes or models, blind](#compare-and-diagnose)
+- [Convert one voice into another, or check a voice match](#other-voice-tools)
+- [Write a scene for Drama 3 and hear it as it is made](#drama-scene-and-narration-studio)
+- [Retire a voice or a take, or delete it for good](#retire-restore-and-delete-for-good)
+- [See which models can speak which languages](#check-which-models-can-speak)
+- [Get word times, captions or lip-sync tracks](#word-times-and-captions)
+- [Use the Lab from a script](#use-the-lab-from-a-script)
+- [Back up, restore or clean up](#stop-and-back-up)
 
 ## The first time
 
@@ -83,6 +103,8 @@ or a starter voice pack.
 
 ## Design, cast and perform
 
+### Hear a line in Model studio
+
 **Model studio** auditions text with a model's own settings. Kokoro speaks in its
 preset voices, one or several blended equally (**Kokoro voices**). Its list holds
 licensed Kokoro voice files, not uploaded WAVs; choosing several averages them
@@ -129,6 +151,8 @@ saving. Qwen VoiceDesign output becomes a voice recording for Qwen Base to clone
 because the design and cloning checkpoints are separate. Saving a preset voice's audio
 for another model to clone does not change the preset.
 
+### Keep voices in the Cast library
+
 **Cast library** opens with named saved-voice cards. Search by name, character
 role or model, and play each card's saved audition.
 **Created with** identifies the model that produced the audition when recorded; a preset voice
@@ -148,6 +172,8 @@ its **Exact words in the recording**, **Where it comes from** and **Who may use 
 how**, then **Approve this version**. A saved version never changes: a new recording or
 edit makes another version. The file you imported is kept apart from the edited versions. Voice Slate clip imports are documented in
 [the bridge guide](RECORDER_BRIDGE.md).
+
+### Perform lines
 
 **Perform lines** reuses a Cast voice, the exact script and the acting settings its model
 has. Make several takes, listen, then rate, reject or select them; each take keeps a record
@@ -174,6 +200,8 @@ keep written dialogue separate from the model's spoken spelling. A voice recordi
 made from a take keeps the restrictions of its source. Preset voices do not
 silently become cloned audition WAVs.
 
+### Edit a take
+
 **Edit take…** is a button on every take in Perform lines. It opens an editor under the take, with the whole take drawn as
 a waveform, the part you keep tinted, and a line under the waveform where the speech is (anything louder than -50 dB). Drag
 across the waveform to choose the part to keep, or type **Start** and **End** in seconds. **Cut the silence at both ends**
@@ -192,6 +220,8 @@ phoneme times, when the original has them, move with the trim, and a word the tr
 gain change no time. Retiring a take blocks its edits too, and purging it deletes them. A scene can choose an edited take
 like any other take for its line. An exported package names the take it used and does not list the edit steps; look the take
 up in Cast to see them. This is not the Drama model's own previous-take editing, which the model does not offer.
+
+### Scenes and batch
 
 **Scenes & batch** imports a script (plain text, Fountain, JSON or CSV) or starts from Perform. The script is a table, one row per line: its number, character,
 the start of its text, its voice and model, and its status. **Open** on a row shows the line's takes, then its full form
@@ -226,6 +256,8 @@ the pauses together in script order, as **Scene, exactly as rendered** and **Sce
 is advisory.
 See [the scene schema](scenes/scene-schema-v1.md).
 
+### Import a script
+
 **Import a script from text or Fountain** takes a script you already have, from a `.txt` or `.fountain` file or pasted
 in. Plain text has one speech per line, written `NAME: words`. A direction in brackets or parentheses at the start of the
 words, or after the name (`MARA (quietly): words`), becomes the line's acting direction. Fountain is the screenplay format,
@@ -246,6 +278,8 @@ Undo (Ctrl+Z) and redo (Ctrl+Y or Ctrl+Shift+Z) reverse script edits, including 
 removals. Saving, opening another scene, importing, starting from Perform and choosing a take (which reloads the saved
 scene) clear the undo history. Ctrl+S saves the scene, and Alt+Up or Alt+Down moves the line you are in. In a text box,
 Ctrl+Z is that box's own undo. The shortcuts only work while Scenes & batch is open.
+
+### Export a package
 
 **Export package** uses a saved scene and its chosen takes. **Check what goes in** first,
 choose WAV, FLAC, Ogg, MP3 or AAC (M4A) and any trims, fades and loudness, then **Create package**
