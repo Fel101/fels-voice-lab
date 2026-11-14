@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from local_ownership import LocalOwnership
+import self_update
 
 ROOT = Path(__file__).resolve().parent
 
@@ -79,6 +80,25 @@ class DesktopBackend:
             self.close()
             raise
 
+    def wait_for_update(self, close_window):
+        """Close the window when the service has stopped for Update now. The service's own update.json in the session
+        folder says so; a service that stops for any other reason leaves the window as it is."""
+        if self.process is None:
+            return
+        self.process.wait()
+        if self_update.requested(self.session):
+            logging.info("The service stopped for Update now; closing the window")
+            close_window()
+
+    def hand_over_update(self, starter=subprocess.Popen):
+        """Once the window has closed and its service has ended: start the updater the service asked for. It runs outside
+        this window's job, so it outlives the window, and it opens the window again when it is done."""
+        if not self_update.requested(self.session):
+            return False
+        logging.info("Starting the updater")
+        self_update.start_updater(self.root, "window", starter=starter)
+        return True
+
     def close(self):
         try:
             if self.process and self.process.poll() is None:
@@ -135,6 +155,8 @@ def main(argv=None):
             if args.smoke_seconds is not None:
                 time.sleep(args.smoke_seconds)
                 window.destroy()
+                return
+            backend.wait_for_update(window.destroy)
         webview.start(started, gui="edgechromium", private_mode=True,
                       icon=str(ROOT / "assets/voice-lab.ico"))
     finally:
@@ -142,6 +164,7 @@ def main(argv=None):
             backend.close()
         finally:
             owner.release()
+    backend.hand_over_update()
     return 0
 
 

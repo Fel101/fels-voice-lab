@@ -842,6 +842,11 @@ class SceneStore:
         result["manifest_path"] = str(self._job_manifest_path(job_id))
         return result
 
+    def rendering_jobs(self):
+        """How many batches are rendering or waiting to render, in every scene. Update now waits for them."""
+        with self._connect() as db:
+            return db.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
+
     def list_jobs(self, scene_id):
         scene_id = self._validate_scene_id(scene_id)
         with self._connect() as db:

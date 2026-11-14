@@ -37,6 +37,7 @@ from routes import Router
 import route_groups
 import library_backup
 import updates
+from self_update import SelfUpdate
 from app_version import APP_NAME, VERSION
 from housekeeping import run_startup_sweep
 from request_log import NullRequestLog, RequestLog, new_request_id
@@ -329,7 +330,7 @@ class Lab:
     lab.serve.NAME, so that a test which points serve.LAB elsewhere moves the routes too."""
 
     def __init__(self, engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
-                 request_log=None, engine_installer=None, update_checks=None):
+                 request_log=None, engine_installer=None, update_checks=None, self_update=None):
         self.serve = sys.modules[__name__]
         self.engines, self.port = engines, port
         self.log = request_log or NullRequestLog()
@@ -342,6 +343,8 @@ class Lab:
         # Check for updates answers about this program folder, so its last answer lives in out\update beside update.bat's
         # files.
         self.checks = update_checks or updates.UpdateChecks(OUT / "update")
+        # Update now hands over to tools/update.py, which updates this program folder.
+        self.updater = self_update or SelfUpdate(APP_ROOT)
         self.scenes = scene_store or SceneStore(self.cast, engines.entries)
         self.batches = batch_runner or SceneBatchRunner(self.scenes, f"http://127.0.0.1:{port}")
         # Scenes and Comparisons default to the Cast store's own library, so a handler built on a temporary Cast store
@@ -685,11 +688,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=None, evaluation_store=None,
-                 request_log=None, engine_installer=None, update_checks=None):
+                 request_log=None, engine_installer=None, update_checks=None, self_update=None):
     """A handler class for one service: Handler, with the Lab its routes share and the router that answers the rows of
     api_spec.ROUTES."""
     lab = Lab(engines, port, cast_store, scene_store, batch_runner, evaluation_store, request_log, engine_installer,
-              update_checks)
+              update_checks, self_update)
     router = Router()  # the rows of api_spec.ROUTES, each answered by a function of a route group
     for group in route_groups.GROUPS:
         group.register(router, lab)
@@ -810,6 +813,7 @@ def main():
     batch_runner.start()
     if args.desktop_session:
         from desktop_lifecycle import publish_session
+        server.RequestHandlerClass.lab.updater.desktop_session = args.desktop_session
         publish_session(args.desktop_session, server)
     try:
         server.serve_forever()

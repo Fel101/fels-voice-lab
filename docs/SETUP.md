@@ -822,7 +822,20 @@ it is newer than yours, with a link to what changed. It sends nothing about you 
 computer asked. The Lab never asks by itself unless you tick **Check when the Lab opens**, and then at most once a day, with a
 note in the page header when a newer version is out.
 
-To update, close the Lab and run `update.bat` in its folder:
+**Update now**, beside the note that a newer version is out, updates from the page. It first shows what the update will do,
+as `update.bat --dry-run` would, and changes nothing until you press **Update now** in that window. Then the Lab closes (the
+window, the service and any model), a window of its own shows the update's progress, and the Lab opens again when it is done.
+Leave that window open until it has finished. Update now waits while a model or FFmpeg installs, a backup runs or a scene
+batch renders, and says so; unsaved scene edits are asked about first. If the update fails, the window says why, everything it
+changed is put back, and the old version opens with the same sentence at the top of the page. Started with `serve.bat`, the
+Lab closes the same way, and you start it again with `serve.bat` when the window says it has finished. After an update the
+page says once which version it is now, with a link to what changed and an **Install** button for each model that needs its
+installer run again. **Open the Lab's folder**, on the same page, shows the folder in File Explorer: Setup.exe puts it under
+your hidden AppData folder.
+
+Version 0.3.0 has no Update now. To get from 0.3.0 to a newer version, run the new release's Setup.exe, or `update.bat`.
+
+The same update without the page: close the Lab and run `update.bat` in its folder:
 
 ```powershell
 update.bat            # shows what will change, asks, then updates

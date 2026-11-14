@@ -1954,6 +1954,11 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | POST | `/api/system/use-library` | Point the desktop app at a restored library the next time it starts. |
 | GET | `/api/updates` | Say which version this is and what the last check for a newer release found, without asking GitHub. |
 | POST | `/api/updates/check` | Ask GitHub which release is the newest and whether it is newer than this version. |
+| POST | `/api/update/plan` | Say what Update now would do: the plan of `update.bat --dry-run`. |
+| POST | `/api/update/start` | Close the Lab and update it: the updater runs in a window of its own and opens the Lab again. |
+| GET | `/api/update/notice` | What the last update, undo or Update now left for the page to say. |
+| POST | `/api/update/notice/dismiss` | Forget the notice once the page has shown it. |
+| POST | `/api/system/open-folder` | Show the Lab's folder in File Explorer. |
 | GET | `/api/drama3/*` | Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its `audio`, `metadata` and `package`. |
 | GET | `/api/drama3/info` | The Drama runtime's capabilities, sources and jobs. |
 | GET | `/api/drama3/jobs/{job_id}` | A Drama job, from an offset into its log. |

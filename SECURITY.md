@@ -20,6 +20,12 @@ you or your library. `update.bat` takes files only from github.com over HTTPS, r
 not match its tag, and keeps a copy of everything it replaces. Releases are not signed, so an update trusts this GitHub
 repository just as the first download did.
 
+**Update now** on **System & backups** is the same update started from the page. It runs `tools/update.py`, the program
+`update.bat` runs, first to show its plan and then, when you agree, in a window of its own once the Lab has closed: the same
+download from github.com, the same checks and the same copy of what it replaces. The page cannot choose what is downloaded
+or from where, and like every other request, one from another website is refused. The Lab opens again when the update is
+done.
+
 `tools/check_repo.py` is a heuristic check of the files Git would publish, not a
 guarantee that every possible secret, dependency vulnerability or rights issue is
 absent. It finds private keys and provider tokens, personal Windows home paths,

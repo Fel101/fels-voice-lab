@@ -531,8 +531,10 @@ home folder reads as `~`. Read it before you share it: a path can still carry a 
 
 **Updates** says which version this is. **Check for updates** asks GitHub for the newest release and, when it is newer, links
 to what changed in it; the request carries nothing about you or your library. Tick **Check when the Lab opens** to have the page
-ask by itself, at most once a day; a newer version then also shows in the page header. Updating is `update.bat`'s job, with the
-Lab closed: [Updating the Lab](SETUP.md#updating-the-lab) says what it does and how `update.bat --undo` goes back.
+ask by itself, at most once a day; a newer version then also shows in the page header. **Update now**, here and in the header,
+shows what the update will do and asks; then the Lab closes, updates in a window of its own and opens again.
+[Updating the Lab](SETUP.md#updating-the-lab) says what it does and how `update.bat --undo` goes back. **Open the Lab's
+folder** shows the Lab's folder in File Explorer.
 
 **Measure folders** adds the size of each library folder (and whether a backup holds it) and of the backups, voice
 conversions, logs, worker scratch folders and desktop sessions. It waits for the button because it walks those folders,

@@ -152,6 +152,11 @@ pre { white-space:pre-wrap; }
 .speed-table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .speed-table th, .speed-table td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
 .workflow-note { background:var(--soft); border-radius:10px; padding:16px 18px; margin:20px 0; }
+.update-notice { margin:12px 0 0; }
+.update-advice { margin:8px 0; padding-left:20px; }
+.update-advice li { margin:6px 0; }
+.update-advice button { margin-left:8px; }
+.update-now { margin-right:8px; }
 #firstRun { border:1px solid var(--accent); }
 .reference-tools { margin:8px 0 18px; padding:12px; border:1px solid var(--line); border-radius:10px; min-width:0; }
 .reference-details,#cloneSourceInfo { white-space:pre-line; }
@@ -161,7 +166,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:700px){.queue-panel{flex-basis:100%;margin-top:8px;padding:10px 0 0}.workspace-nav .queue-panel .eyebrow{display:block}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script src="/theme.js" defer></script></head><body><main>
-<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
+<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
+<div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
 <nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
@@ -624,11 +630,13 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <details><summary>Show the report</summary><p class="meta">This is exactly what is copied. It holds no scripts, transcripts, names of characters or voices, or recordings, and your home folder reads as ~.</p><pre id="systemDiagnostics" class="meta"></pre></details>
 <h3>This installation</h3>
 <dl class="facts" id="systemFacts"></dl>
+<div class="cast-actions"><button type="button" id="openLabFolder">Open the Lab's folder</button></div>
+<p class="meta" id="openLabFolderStatus" role="status"></p>
 <h3>Updates</h3>
 <p class="meta" id="updateStatus" role="status">This is version __APP_VERSION__.</p>
-<div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>
+<div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><button type="button" class="go" id="updateNow" hidden>Update now</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>
 <label class="meta"><input id="updateAuto" type="checkbox"> Check when the Lab opens, at most once a day</label>
-<p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. To update, close the Lab and run <code>update.bat</code> in its folder: it shows what will change and asks first, keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> puts the previous version back.</p>
+<p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. <strong>Update now</strong> shows what the update will do and asks first; then the Lab closes, a window of its own shows the update, and the Lab opens again. It keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> in the Lab's folder puts the previous version back. <code>update.bat</code> does the same update with the Lab closed.</p>
 <h3>FFmpeg</h3>
 <p class="meta" id="systemFfmpeg" role="status"></p>
 <p class="meta" id="systemFfmpegProgress" role="status" hidden></p>
@@ -662,6 +670,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 </main>
 <dialog id="installDialog" class="install-dialog" aria-labelledby="installTitle"><h3 id="installTitle"></h3><p class="meta" id="installState" aria-live="polite"></p><div id="installPlan" class="install-plan"></div><pre id="installLog" class="install-log" hidden></pre><div class="cast-actions"><button id="installGo" type="button" class="go" hidden>Install now</button><button id="installClose" type="button">Cancel</button></div></dialog>
+<dialog id="updateDialog" class="install-dialog" aria-labelledby="updateTitle"><h3 id="updateTitle">Update now</h3><p class="meta" id="updateState" aria-live="polite"></p><div id="updatePlan" class="install-plan"></div><div class="cast-actions"><button id="updateGo" type="button" class="go" hidden>Update now</button><button id="updateClose" type="button">Cancel</button></div></dialog>
 <footer class="app-footer">Fel's Voice Lab <span id="appVersion">__APP_VERSION__</span></footer>
 <script src="/voice_lab_queue.js"></script>
 <script src="/voice_workflows.js"></script>

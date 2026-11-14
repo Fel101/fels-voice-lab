@@ -1,6 +1,6 @@
 """System and backups: the System tab's report on this computer and on the Lab's storage (system_report.py), library
 backups, their checks and restores (library_backup.py), cleaning up out/ (housekeeping.py), checking for updates
-(updates.py), and choosing the library the desktop app opens."""
+(updates.py), Update now (self_update.py), and choosing the library the desktop app opens."""
 
 from urllib.parse import parse_qs
 
@@ -11,6 +11,7 @@ import housekeeping
 import library_backup
 import system_report
 import updates
+from self_update import UpdateNowError
 
 
 def register(router, lab):
@@ -43,6 +44,55 @@ def register(router, lab):
             self._json(200, checks.check_now())
         except updates.UpdateError as exc:
             self._json(502, {"error": str(exc)})
+
+    def update_blocked():
+        """Why Update now must wait, or None: closing the Lab would stop an install, a backup or a batch half done."""
+        for kind in ("engine", "tool"):
+            job = lab.installer.snapshot(kind)
+            if job and job["state"] == "running":
+                return f"{job['name']} is installing. Update now works once it has finished."
+        task = backup_task.status()
+        if task.get("status") == "running":
+            return f"{task['label']} is running. Update now works once it has finished."
+        if lab.scenes.rendering_jobs():
+            return "A scene batch is rendering. Wait for it to finish, or stop it in Scenes, then press Update now."
+        return None
+
+    @router.post("/api/update/plan")
+    def update_plan(self, parsed, req):
+        try:
+            plan = lab.updater.plan()
+        except UpdateNowError as exc:
+            return self._json(502, {"error": str(exc)})
+        self._json(200, {"plan": plan, "blocked": update_blocked(), "how": lab.updater.how})
+
+    @router.post("/api/update/start")
+    def update_start(self, parsed, req):
+        reason = update_blocked()
+        if reason:
+            return self._json(409, {"error": reason})
+        try:
+            result = lab.updater.start(self.server.shutdown)
+        except UpdateNowError as exc:
+            return self._json(409, {"error": str(exc)})
+        log.event(f"update now: the Lab closes for the updater ({result['how']})")
+        self._json(202, result)
+
+    @router.get("/api/update/notice")
+    def update_notice(self, parsed, req):
+        self._json(200, {"notice": lab.updater.notice()})
+
+    @router.post("/api/update/notice/dismiss")
+    def update_notice_dismiss(self, parsed, req):
+        lab.updater.dismiss()
+        self._json(200, {"ok": True})
+
+    @router.post("/api/system/open-folder")
+    def open_folder(self, parsed, req):
+        try:
+            self._json(200, lab.updater.open_folder())
+        except (UpdateNowError, OSError) as exc:
+            self._json(400, {"error": f"The folder could not be opened: {exc}"})
 
     @router.get("/api/system")
     def system(self, parsed, req):

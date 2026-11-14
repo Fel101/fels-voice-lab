@@ -198,8 +198,8 @@ FFmpeg is not bundled. Scene export, reference cleaning and M4A references need 
 backups** puts a pinned build in the Lab's own `ffmpeg` folder, and an FFmpeg you installed yourself
 (`winget install Gyan.FFmpeg`) works too. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
 the header's **Theme** menu; the choice is saved locally. **Check for updates** on **System & backups** says when a newer
-release is out, and `update.bat` installs it with the Lab closed, keeping your library and models
-([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
+release is out, and **Update now** installs it: the Lab closes, updates in a window of its own and opens again, keeping your
+library and models ([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
 
 Browser mode, without the desktop window:
 

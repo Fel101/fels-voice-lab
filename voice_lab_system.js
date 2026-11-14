@@ -190,7 +190,7 @@ function useRestoredLibrary(){
   }).catch(function(e){$('systemError').textContent=e.message;});
 }
 // Updates: the service asks GitHub only when Check for updates is pressed, or once a day when the page opens if that is on.
-// A newer release shows here and in the header; the update itself is update.bat's job, with the Lab closed.
+// A newer release shows here and in the header, each with Update now.
 function updateMessage(result){
   if(result.error)return 'The last check failed: '+result.error;
   return result.message+(result.checked_at?' Checked '+whenText(result.checked_at)+'.':'');
@@ -198,9 +198,97 @@ function updateMessage(result){
 function renderUpdate(result){
   var newer=!!(result.newer&&result.release&&!result.error),link=$('updateRelease'),badge=$('updateBadge');
   systemNote('updateStatus',updateMessage(result),!!result.error);
-  link.hidden=!newer;badge.hidden=!newer;
+  link.hidden=!newer;badge.hidden=!newer;$('updateNow').hidden=!newer;$('updateNowHeader').hidden=!newer;
   if(newer){link.href=result.release.url;link.textContent='What’s new in '+result.latest;badge.textContent='Version '+result.latest+' is available';}
   return result;
+}
+// Update now: first the plan update.bat would show (POST /api/update/plan), in a window over the page; on yes the Lab closes,
+// an updater in a window of its own updates it, and the Lab opens again (POST /api/update/start). The update itself is
+// tools/update.py's, as update.bat's is. Afterwards the page says once what the update said (GET /api/update/notice).
+var updateNowState={closing:false};
+function updateNowParts(){return {box:$('updateDialog'),title:$('updateTitle'),state:$('updateState'),plan:$('updatePlan'),go:$('updateGo'),close:$('updateClose')};}
+function updateLine(parent,text,className){var line=document.createElement('p');line.className=className||'meta';line.textContent=text;parent.appendChild(line);return line;}
+function updateComesBack(how){
+  return how==='window'
+    ?'The Lab closes, a window of its own shows the update, and the Lab opens again when it is done. Leave that window open until it has finished.'
+    :'The Lab closes and a window of its own shows the update. When it has finished, start the Lab again with serve.bat. Leave that window open until it has finished.';
+}
+function renderUpdatePlan(parts,result){
+  var plan=result.plan||{};
+  parts.plan.textContent='';parts.close.textContent='Close';parts.go.hidden=true;
+  if(!plan.ok){parts.state.textContent=plan.problem||'The update cannot go ahead.';return;}
+  if(!plan.newer){parts.state.textContent=plan.message;return;}
+  parts.title.textContent='Update from '+plan.from+' to '+plan.to;
+  parts.state.textContent=result.blocked||'This is what it will do. Nothing has changed yet.';
+  (plan.steps||[]).forEach(function(text,index){updateLine(parts.plan,(index+1)+'. '+text);});
+  (plan.notes||[]).forEach(function(text){updateLine(parts.plan,text);});
+  updateLine(parts.plan,updateComesBack(result.how));
+  if(plan.release&&plan.release.url){
+    var link=document.createElement('a');link.href=plan.release.url;link.target='_blank';link.rel='noopener noreferrer';
+    link.textContent='What’s new in '+plan.to;updateLine(parts.plan,'').appendChild(link);
+  }
+  parts.close.textContent='Cancel';parts.go.hidden=false;parts.go.disabled=!!result.blocked;
+}
+function openUpdateNow(){
+  var parts=updateNowParts();
+  updateNowState={closing:false};
+  parts.title.textContent='Update now';parts.plan.textContent='';
+  parts.state.textContent='Reading what the update will do. It downloads the new release to compare it with this copy, so it can take a minute.';
+  parts.go.hidden=true;parts.go.disabled=false;parts.close.disabled=false;parts.close.textContent='Cancel';
+  if(!parts.box.open&&parts.box.showModal)parts.box.showModal();
+  return fetchJson('/api/update/plan',{}).then(function(result){if(parts.box.open)renderUpdatePlan(parts,result);}).catch(function(e){
+    parts.state.textContent='Could not read what the update will do: '+e.message;parts.close.textContent='Close';
+  });
+}
+function startUpdateNow(){
+  var parts=updateNowParts();
+  if(typeof sceneDirty!=='undefined'&&sceneDirty&&!window.confirm('The scene has changes that are not saved. Update anyway, and lose them?'))return Promise.resolve();
+  parts.go.disabled=true;parts.close.disabled=true;parts.state.textContent='Closing the Lab for the update…';
+  return fetchJson('/api/update/start',{}).then(function(result){
+    updateNowState.closing=true;parts.go.hidden=true;parts.plan.textContent='';
+    parts.state.textContent=updateComesBack(result.how);
+  }).catch(function(e){parts.state.textContent='The update did not start: '+e.message;parts.go.disabled=false;parts.close.disabled=false;});
+}
+function closeUpdateNow(){var box=$('updateDialog');if(!updateNowState.closing&&box.open&&box.close)box.close();}
+// The note an update leaves: shown once, at the top of every page, until Close this note.
+function renderUpdateNotice(notice){
+  var box=$('updateNotice'),title=$('updateNoticeTitle'),text=$('updateNoticeText'),list=$('updateNoticeAdvice'),link=$('updateNoticeLink');
+  list.textContent='';link.hidden=true;box.hidden=!notice;
+  if(!notice)return;
+  var advice=notice.advice||[];
+  if(notice.state==='updated'){
+    title.textContent='Updated to version '+notice.to;
+    text.textContent=advice.length?'Your voices, scenes and settings are as they were. Some models need installing again before they speak:':'Your voices, scenes, models and settings are as they were.';
+    if(notice.release_url){link.href=notice.release_url;link.textContent='What changed in '+notice.to;link.hidden=false;}
+  }else if(notice.state==='undone'){
+    title.textContent='Back to version '+notice.from;
+    text.textContent=advice.length?'The update was undone. Some models need installing again before they speak:':'The update was undone. Your voices, scenes, models and settings are as they were.';
+  }else if(notice.state==='current'){
+    title.textContent='Nothing to update';text.textContent=notice.message||'This is the newest version.';
+  }else{
+    title.textContent='The update did not finish';
+    text.textContent=(notice.message||'')+' This is still version '+notice.from+'.';
+  }
+  (notice.problems||[]).forEach(function(problem){var item=document.createElement('li');item.className='warn';item.textContent=problem;list.appendChild(item);});
+  advice.forEach(function(entry){
+    var item=document.createElement('li');item.appendChild(document.createTextNode(entry.text));
+    if(entry.folder){
+      var folder=document.createElement('button');folder.type='button';folder.textContent='Open the Lab’s folder';
+      folder.addEventListener('click',openLabFolder);item.appendChild(folder);
+    }
+    (entry.models||[]).forEach(function(model){
+      var install=document.createElement('button');install.type='button';install.textContent='Install '+model.name;
+      install.addEventListener('click',function(){location.hash='#models';planInstall(model.engine,(modelCards[model.engine]||{}).installGpu);});
+      item.appendChild(install);
+    });
+    list.appendChild(item);
+  });
+}
+function refreshUpdateNotice(){return fetchJson('/api/update/notice').then(function(result){renderUpdateNotice(result.notice);}).catch(function(){});}
+function dismissUpdateNotice(){$('updateNotice').hidden=true;return fetchJson('/api/update/notice/dismiss',{}).catch(function(){});}
+function openLabFolder(){
+  return fetchJson('/api/system/open-folder',{}).then(function(result){systemNote('openLabFolderStatus','Opened '+result.folder+' in File Explorer.',false);})
+    .catch(function(e){systemNote('openLabFolderStatus',e.message,true);});
 }
 function checkForUpdates(quiet){
   $('updateCheck').disabled=true;
@@ -279,4 +367,12 @@ $('restoreCancel').addEventListener('click',function(){$('restoreBox').hidden=tr
 $('restoreUse').addEventListener('click',useRestoredLibrary);
 $('updateCheck').addEventListener('click',function(){checkForUpdates(false);});
 $('updateAuto').addEventListener('change',saveUpdateChoice);
+$('updateNow').addEventListener('click',openUpdateNow);
+$('updateNowHeader').addEventListener('click',openUpdateNow);
+$('updateGo').addEventListener('click',startUpdateNow);
+$('updateClose').addEventListener('click',closeUpdateNow);
+$('updateDialog').addEventListener('cancel',function(event){if(updateNowState.closing)event.preventDefault();});
+$('updateNoticeClose').addEventListener('click',dismissUpdateNotice);
+$('openLabFolder').addEventListener('click',openLabFolder);
 refreshUpdates();
+refreshUpdateNotice();

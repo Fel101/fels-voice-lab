@@ -794,6 +794,27 @@ ROUTES = [
       reply="`current`, `latest` (null while no release is published), `newer`, `message`, `checked_at` and `release` (its "
             "`tag`, `name`, `url`, `published_at` and `notes`).",
       errors=((502, "GitHub could not be reached, or refused to answer."),)),
+    R("POST", "/api/update/plan", "Page helpers", "Say what Update now would do: the plan of `update.bat --dry-run`.",
+      internal=True, body_kind="none",
+      reply="`plan` (`ok`, and `problem` when there is no plan; else `newer`, `message`, `from`, `to`, `release`, `steps` and "
+            "`notes`, sentences the page shows), `blocked` (why Update now must wait, or null) and `how` (`window` when "
+            "the Lab opens again by itself, `console` when serve.bat must be started again).",
+      errors=((502, "The updater could not be started or did not answer."),)),
+    R("POST", "/api/update/start", "Page helpers", "Close the Lab and update it: the updater runs in a window of its own and "
+                                                   "opens the Lab again.", internal=True, body_kind="none", status=202,
+      reply="`how`, as the plan says it.",
+      errors=((409, "A model or FFmpeg is installing, a backup is running, a scene batch is rendering, or the update has "
+                    "already started."),),
+      notes="The service stops a moment after it answers. A service the desktop window started leaves the updater to the "
+            "window, which starts it once it has closed."),
+    R("GET", "/api/update/notice", "Page helpers", "What the last update, undo or Update now left for the page to say.",
+      internal=True,
+      reply="`notice`: null, or `state` (`updated`, `undone`, `current` or `failed`), `from`, `to`, `at`, and `release_url`, "
+            "`advice` (each a `text` and the `engines` it is about) and `problems`, or `message`."),
+    R("POST", "/api/update/notice/dismiss", "Page helpers", "Forget the notice once the page has shown it.", internal=True,
+      body_kind="none", reply="`{\"ok\": true}`."),
+    R("POST", "/api/system/open-folder", "Page helpers", "Show the Lab's folder in File Explorer.", internal=True,
+      body_kind="none", reply="`folder`: the folder's path."),
 
     # ---------------------------------------------------------------- Drama (internal)
     R("GET", "/api/drama3/*", "Drama", "Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its "

@@ -48,11 +48,18 @@ from app_version import REPOSITORY, VERSION  # noqa: E402
 
 FOLDER = "out/update"
 RECORD = "last.json"
+# What the Lab's page says when it next opens: an update or an undo that finished (finish), or one the Lab started that did not
+# (from_lab). The page removes it once it has been shown and closed.
+NOTICE = "notice.json"
 DOWNLOADS = "downloads"
 BACKUPS_KEPT = 3
 DOWNLOAD_LIMIT = 300 * 10**6
 WIDTH = 110
 NOTES_LINES = 12
+# Update now: how long the updater waits for the Lab's programs to end, and how long its window stays after an update that
+# worked.
+LAB_CLOSE_SECONDS = 120
+CLOSE_SECONDS = 10
 SCHEMA = 1
 # Never written, replaced or removed by an update, whatever a release holds: git's own folder, the environments, the model
 # caches, run output, backups and the library's own folders, all of which the repository keeps out (see .gitignore).
@@ -116,6 +123,20 @@ MODELS = {
     "VoxCPM2": (".venv-voxcpm", "setup-voxcpm.bat", ("catalog/voxcpm2_snapshot.json", VOXCPM_SOURCE)),
     "Breeze TTS 2": (".venv-breeze", "setup-breeze.bat", ("catalog/breeze_tts2_snapshot.json",)),
     "Drama 3": (None, "setup-drama3.bat", ("tools/install_drama3.py",)),
+}
+# The model each name in MODELS is installed as on the Models page, so the page can give the advice an Install button.
+MODEL_ENGINES = {
+    "Kokoro": "kokoro",
+    "Phonon": "phonon-31m-en",
+    "Chatterbox Turbo": "turbo",
+    "Chatterbox 500M and Voice Conversion": "orig",
+    "Qwen3-TTS 0.6B Base": "qwen3-tts-0.6b-base",
+    "Qwen3-TTS 1.7B Base": "qwen3-tts-1.7b-base",
+    "Qwen3-TTS 1.7B VoiceDesign": "qwen3-tts-1.7b-voice-design",
+    "Qwen3-TTS 1.7B CustomVoice": "qwen3-tts-1.7b-custom-voice",
+    "VoxCPM2": "voxcpm2",
+    "Breeze TTS 2": "breeze-tts-2",
+    "Drama 3": "drama-3",
 }
 DRAMA_RECEIPT = "out/drama3/installation.json"
 # A snapshot holds a model when one of these is in it, as the Models page judges (engine_checks.WEIGHT_SUFFIXES).
@@ -533,6 +554,20 @@ def read_record(root):
     return record if isinstance(record, dict) and record.get("schema") == SCHEMA else None
 
 
+def release_url(tag):
+    return f"https://github.com/{REPOSITORY}/releases/tag/{tag}" if tag else f"https://github.com/{REPOSITORY}/releases"
+
+
+def notice_path(root):
+    return Path(root) / FOLDER / NOTICE
+
+
+def save_notice(root, notice):
+    """What the page says the next time it opens (NOTICE)."""
+    data = json.dumps({"schema": SCHEMA, "at": now_text(), **notice}, indent=2) + "\n"
+    write_file(notice_path(root), data.encode("utf-8"))
+
+
 # ------------------------------------------------------------------------------------------------ the plan
 
 
@@ -552,7 +587,9 @@ def names(paths, limit=6):
     return shown + (f" and {len(paths) - limit} more" if len(paths) > limit else "")
 
 
-def zip_plan_text(plan, old, new, old_known):
+def zip_plan_sentences(plan, old, new, old_known):
+    """(the steps, the notes) of an update from a ZIP, each one sentence or a few, unwrapped: update.bat wraps them
+    (zip_plan_text), and the page's Update now shows them as they are."""
     counts = [f"{len(plan['replace'])} to replace", f"{len(plan['add'])} new", f"{len(plan['remove'])} to remove"]
     first = (
         f"The Lab's own files, from the release on GitHub: {', '.join(counts)}; {plan['same']} are unchanged. Your voices, "
@@ -562,18 +599,12 @@ def zip_plan_text(plan, old, new, old_known):
         first += (
             f" GitHub has no release {old} to compare with, so files that version had and {new} does not are left in place."
         )
-    lines = [
-        step(1, first),
-        step(
-            2,
-            f"First a copy of every file it replaces or removes goes to {shown_path(FOLDER)}\\{backup_name(old, new)}, "
-            f"so update.bat --undo can put version {old} back.",
-        ),
-        step(
-            3,
-            "Then the new version's last steps: the core packages in .venv when their list changed, and which "
-            "models need their installer run again.",
-        ),
+    steps = [
+        first,
+        f"First a copy of every file it replaces or removes goes to {shown_path(FOLDER)}\\{backup_name(old, new)}, "
+        f"so update.bat --undo can put version {old} back.",
+        "Then the new version's last steps: the core packages in .venv when their list changed, and which "
+        "models need their installer run again.",
     ]
     notes = []
     if plan["yours"]:
@@ -589,26 +620,35 @@ def zip_plan_text(plan, old, new, old_known):
         notes.append(
             f"The release holds files in folders an update never writes, so they are left out: {names(plan['protected'])}."
         )
-    return "\n".join(lines) + "".join("\n\n" + fill(note) for note in notes)
+    return steps, notes
+
+
+def plan_text(steps, notes):
+    """The steps numbered and the notes after them, wrapped for update.bat's window."""
+    return "\n".join(step(number, text) for number, text in enumerate(steps, start=1)) + "".join(
+        "\n\n" + fill(note) for note in notes
+    )
+
+
+def zip_plan_text(plan, old, new, old_known):
+    return plan_text(*zip_plan_sentences(plan, old, new, old_known))
+
+
+def git_plan_sentences(plan, tag, old):
+    """(the steps, no notes) of an update with git, as zip_plan_sentences gives them."""
+    steps = [
+        f"git moves this checkout from {plan['from'][:7]} to {tag} ({plan['to'][:7]}), a fast-forward: "
+        f"{len(plan['changed'])} files change. Files git does not track (your voices, scenes, takes, models, the .venv "
+        "environments, runtime.local.json and out\\) are not touched.",
+        f"update.bat --undo moves it back to {plan['from'][:7]}, version {old} (git reset --keep).",
+        "Then the new version's last steps: the core packages in .venv when their list changed, and which models "
+        "need their installer run again.",
+    ]
+    return steps, []
 
 
 def git_plan_text(plan, tag, old):
-    return "\n".join(
-        [
-            step(
-                1,
-                f"git moves this checkout from {plan['from'][:7]} to {tag} ({plan['to'][:7]}), a fast-forward: "
-                f"{len(plan['changed'])} files change. Files git does not track (your voices, scenes, takes, models, the .venv "
-                "environments, runtime.local.json and out\\) are not touched.",
-            ),
-            step(2, f"update.bat --undo moves it back to {plan['from'][:7]}, version {old} (git reset --keep)."),
-            step(
-                3,
-                "Then the new version's last steps: the core packages in .venv when their list changed, and which models "
-                "need their installer run again.",
-            ),
-        ]
-    )
+    return plan_text(*git_plan_sentences(plan, tag, old))
 
 
 def confirmed(args, *, ask=input, interactive=None):
@@ -749,12 +789,18 @@ def reinstall_text(environment, models, lists, *, gpu, fresh):
 
 
 def model_advice(root, changed):
+    """The sentences of advice_items."""
+    return [text for text, _models, _folder in advice_items(root, changed)]
+
+
+def advice_items(root, changed):
     """What to do about each installed model whose pinned packages or files this update changed, as sentences.
 
     An environment whose packages changed is named once, with the command for each model installed in it (with --gpu for a
     GPU build of Kokoro or Chatterbox): installing again also fetches the models' new files. Only the lists that the
     environment's build of PyTorch was installed from count. A model whose files changed is named when its installer would
-    fetch some of them now, so a list that names files already here says nothing."""
+    fetch some of them now, so a list that names files already here says nothing. Each is (the sentence, the names in MODELS of
+    the models it is about, the environment it says to delete or None)."""
     root = Path(root)
     advice, reinstalled = [], set()
     for environment, builds in ENVIRONMENTS.items():
@@ -769,7 +815,13 @@ def model_advice(root, changed):
         if models:
             reinstalled.update(models)
             fresh = [name for name in models if files_changed(root, name, changed)]
-            advice.append(reinstall_text(environment, models, changed_lists, gpu=gpu_build(root, environment), fresh=fresh))
+            advice.append(
+                (
+                    reinstall_text(environment, models, changed_lists, gpu=gpu_build(root, environment), fresh=fresh),
+                    models,
+                    environment,
+                )
+            )
     for name, (environment, command, listings) in MODELS.items():
         if name in reinstalled or not changed.intersection(listings) or not model_present(root, name):
             continue
@@ -779,10 +831,10 @@ def model_advice(root, changed):
                 f" It then no longer uses {old}, which you can delete to free {old.stat().st_size / 1e9:.1f} GB." if old else ""
             )
             if fetches:
-                advice.append(f"{name}'s pinned files changed. Run {whole(command)} to fetch them.{unused}")
+                advice.append((f"{name}'s pinned files changed. Run {whole(command)} to fetch them.{unused}", [name], None))
         elif files_changed(root, name, changed):
             gpu = " --gpu" if gpu_build(root, environment) else ""
-            advice.append(f"{name}'s model files changed. Run {whole(command + gpu)} to fetch them.")
+            advice.append((f"{name}'s model files changed. Run {whole(command + gpu)} to fetch them.", [name], None))
     return advice
 
 
@@ -798,7 +850,7 @@ def finish(root, *, runner=subprocess.run, say=say):
         say("There is no finished update or undo to complete.")
         return 0
     changed = set(record.get("changed", []))
-    status = 0
+    status, problems = 0, []
     for environment, listing in SYNCED:
         python = root / environment / "Scripts" / "python.exe"
         if listing in changed and python.is_file():
@@ -809,18 +861,42 @@ def finish(root, *, runner=subprocess.run, say=say):
             ).returncode
             if code:
                 status = 1
-                say(
-                    fill(
-                        f"pip stopped with exit code {code}, so {environment} may still have the old packages. Fix what its "
-                        "message says, then run update.bat --finish to try again."
-                    )
+                problems.append(
+                    f"pip stopped with exit code {code}, so {environment} may still have the old packages. Fix what its "
+                    "message says, then run update.bat --finish to try again."
                 )
+                say(fill(problems[-1]))
     try:
-        advice = model_advice(root, changed)
+        advice = advice_items(root, changed)
     except (ImportError, OSError, ValueError) as exc:  # a file list or a receipt that cannot be read stops no update
-        advice = [f"The installed models could not be checked ({exc}). Run the installer of any model that no longer loads."]
-    for text in advice:
+        advice = [
+            (
+                f"The installed models could not be checked ({exc}). Run the installer of any model that no longer loads.",
+                [],
+                None,
+            )
+        ]
+    for text, _models, _folder in advice:
         say(fill(text, initial_indent="  - ", subsequent_indent="    ", break_long_words=False).replace(KEEP, " "))
+    notice = {
+        "state": "updated" if record["state"] == "applied" else "undone",
+        "from": record["from"],
+        "to": record["to"],
+        "release_url": release_url(record.get("tag")),
+        "advice": [
+            {
+                "text": text.replace(KEEP, " "),
+                "models": [{"engine": MODEL_ENGINES[name], "name": name} for name in models],
+                "folder": folder,
+            }
+            for text, models, folder in advice
+        ],
+        "problems": problems,
+    }
+    try:
+        save_notice(root, notice)
+    except OSError as exc:  # the page then has nothing to say; the window has said it all
+        say(f"The note for the Lab's page could not be written ({exc}).")
     if record["state"] == "applied":
         say(f"Updated to version {record['to']}. Start the Lab as usual; update.bat --undo puts version {record['from']} back.")
     else:
@@ -895,8 +971,12 @@ def update(
     ask=input,
     interactive=None,
     say=say,
+    report=None,
 ):
+    """update.bat's update. `report`, a dict, is filled with what a dry run found, for --json: the page's Update now shows
+    it (plan_report)."""
     root = Path(root)
+    report = {} if report is None else report
     running = [] if args.check else processes(root)
     if running and not args.dry_run:
         raise UpdateStopped(running_problem(running))
@@ -905,10 +985,12 @@ def update(
     except updates.UpdateError as exc:
         raise UpdateStopped(str(exc)) from exc
     say(result["message"])
+    report.update({"from": VERSION, "newer": bool(result["newer"]), "message": result["message"], "running": bool(running)})
     if args.check or not result["newer"]:
         return 0
     release = result["release"]
     new, tag = result["latest"], release["tag"]
+    report.update({"to": new, "release": {key: release.get(key) for key in ("name", "url", "notes", "published_at")}})
     say("")
     say(f"Fel's Voice Lab: update from {VERSION} to {new}")
     say("")
@@ -918,6 +1000,7 @@ def update(
     if git_checkout(root):
         plan = git_plan(root, tag, runner=runner)
         say(git_plan_text(plan, tag, VERSION))
+        report["steps"], report["notes"] = git_plan_sentences(plan, tag, VERSION)
         record.update({"method": "git", "git": {"from": plan["from"], "to": plan["to"]}, "changed": plan["changed"]})
     else:
         downloads = root / FOLDER / DOWNLOADS
@@ -939,7 +1022,9 @@ def update(
         plan = zip_plan(root, new_files, old_files)
         say("")
         say(zip_plan_text(plan, VERSION, new, old_files is not None))
+        report["steps"], report["notes"] = zip_plan_sentences(plan, VERSION, new, old_files is not None)
         record.update({"method": "zip", "backup": f"{FOLDER}/{backup_name(VERSION, new)}", "changed": plan["changed"]})
+    report["method"] = record["method"]
     say("")
     if args.dry_run:
         if running:
@@ -965,24 +1050,144 @@ def update(
     return run_finish(root, runner=runner)
 
 
+# ------------------------------------------------------------------------------------------------ Update now, in the Lab
+
+
+def open_lab(root, *, starter=subprocess.Popen):
+    """Open the Lab's window again, as its shortcut does. False when this folder has no window (setup-desktop.bat never
+    ran), so whoever started the Lab another way is told how to start it."""
+    root = Path(root)
+    window = root / ".venv-desktop" / "Scripts" / "pythonw.exe"
+    if not window.is_file():
+        return False
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    starter([str(window), str(root / "desktop.py")], cwd=root, close_fds=True, creationflags=flags)
+    return True
+
+
+def window_title(text):
+    if os.name == "nt":
+        import ctypes
+
+        ctypes.windll.kernel32.SetConsoleTitleW(text)
+
+
+def from_lab(
+    root,
+    *,
+    args,
+    processes=lab_processes,
+    wait=time.sleep,
+    clock=time.monotonic,
+    run=update,
+    opener=open_lab,
+    ask=input,
+    say=say,
+    **options,
+):
+    """The update that Update now on the System page starts, in a window of its own, after the Lab has closed: it waits for
+    the Lab's programs to end, updates as update.bat --yes does, and opens the Lab again (--reopen window) or says how to
+    start it. update() has put back anything it changed before it fails; a failure is said here and kept in NOTICE for the
+    page, and so is the answer that there is nothing newer. The new version's --finish keeps the notice of an update that
+    worked. `options` reach update(): the tests give it stand-ins for GitHub and pip."""
+    root = Path(root)
+    say("Fel's Voice Lab: Update now")
+    say("")
+    say("Waiting for the Lab to close...")
+    deadline = clock() + LAB_CLOSE_SECONDS
+    running = processes(root)
+    while running and clock() < deadline:
+        wait(0.5)
+        running = processes(root)
+    report = {}
+    if running:
+        message = f"The Lab did not close within {LAB_CLOSE_SECONDS // 60} minutes, so nothing was changed. " + running_problem(
+            running
+        ).replace("then run update.bat again", "then press Update now again")
+        say(fill(message))
+        save_notice(root, {"state": "failed", "from": VERSION, "message": message})
+        status = 1
+    else:
+        try:
+            status = run(
+                root, args=build_parser().parse_args(["--yes"]), processes=processes, say=say, report=report, **options
+            )
+        except UpdateStopped as exc:
+            status, message = 1, str(exc)
+        except Exception as exc:  # anything else: the window closes when this ends, so it is said and kept, not raised
+            status = 1
+            message = (
+                f"The update stopped: {type(exc).__name__}: {exc}. If it had begun changing files, it put back what it had "
+                "changed."
+            )
+        else:
+            message = None
+            if not report.get("newer"):
+                save_notice(root, {"state": "current", "from": VERSION, "message": report.get("message", "")})
+        if message:
+            say("")
+            say(fill(message) if "\n" not in message else message)
+            save_notice(root, {"state": "failed", "from": VERSION, "to": report.get("to"), "message": message})
+        say("")
+        if args.reopen == "window" and opener(root):
+            say("The Lab is opening again.")
+        else:
+            say("Start the Lab again: run serve.bat in its folder, or open Fel's Voice Lab from the Start menu.")
+    if status:
+        say("Press Enter to close this window.")
+        try:
+            ask()
+        except EOFError:
+            pass
+    else:
+        say(f"This window closes in {CLOSE_SECONDS} seconds.")
+        wait(CLOSE_SECONDS)
+    return status
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--check", action="store_true", help="only say whether GitHub has a newer release")
     action.add_argument("--undo", action="store_true", help="put back the version the last update replaced")
     action.add_argument("--finish", action="store_true", help=argparse.SUPPRESS)
+    # Update now on the System page: the plan as JSON, and the update itself once the Lab has closed (from_lab).
+    action.add_argument("--from-lab", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--reopen", choices=("window", "none"), default="none", help=argparse.SUPPRESS)
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="show the plan; change nothing")
     parser.add_argument("--yes", action="store_true", help="accept the plan without asking")
     return parser
 
 
+def plan_report(root, *, args, **options):
+    """--dry-run --json: what update() found, as one line of JSON, ASCII only so any console can carry it. {"ok": false,
+    "problem": why} when it could not make a plan."""
+    report = {}
+    try:
+        update(root, args=args, say=lambda text="": None, report=report, **options)
+    except UpdateStopped as exc:
+        return {"ok": False, "problem": str(exc)}
+    return {"ok": True, **report}
+
+
 def main(argv=None):
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.json and not args.dry_run:
+        parser.error("--json goes with --dry-run")
     try:
         if args.finish:
             return finish(ROOT)
         if args.undo:
             return undo(ROOT, args=args)
+        if args.from_lab:
+            window_title("Fel's Voice Lab: updating")
+            return from_lab(ROOT, args=args)
+        if args.json:
+            report = plan_report(ROOT, args=args)
+            print(json.dumps(report), flush=True)
+            return 0 if report["ok"] else 1
         return update(ROOT, args=args)
     except UpdateStopped as exc:
         say("")
