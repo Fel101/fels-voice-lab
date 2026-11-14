@@ -25,9 +25,10 @@ From starting Setup.exe to the first sentence took about 6½ minutes with the CP
 12 November 2026 on the development PC (an AMD mini PC with a Radeon AI PRO R9700, Windows 11), with nothing in pip's cache.
 A slower connection or disk takes longer.
 
-**An early release (0.2.0) for Windows 10/11 and Python 3.12.** It runs from source: Setup.exe or `setup.bat` sets up the core
-and the desktop window, the speech models install from the page or with `setup.bat`, and each model runs in a Python environment
-of its own. It was built and checked on one Windows machine with an AMD GPU, and every NVIDIA build the installers offer was
+**An early release for Windows 10 and 11.** Python comes with the Lab: Setup.exe carries its own, and `setup.bat` downloads
+one for the Lab alone when the computer has none. It runs from source: Setup.exe or `setup.bat` sets up the core and the
+desktop window, the speech models install from the page or with `setup.bat`, and each model runs in a Python environment of
+its own. It was built and checked on one Windows machine with an AMD GPU, and every NVIDIA build the installers offer was
 checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB). There are no Linux or macOS results. Original application code
 is MIT; borrowed code and optional models keep their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
 

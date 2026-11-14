@@ -12,6 +12,9 @@ $('voxMode').addEventListener('change', refresh);
 $('voicePreset').addEventListener('change', function () { if (descriptions[$('voicePreset').value]) { $('voiceDescription').value = descriptions[$('voicePreset').value]; } });
 $('directionPreset').addEventListener('change', function () { if ($('directionPreset').value !== 'custom') { $('direction').value = $('directionPreset').value; } });
 $('go').addEventListener('click', generate);
+// The install window and the first-run note are in the page from the start, so they work before the first answer about
+// the models arrives.
+wireInstallDialog(); wireFirstRun();
 $('stopWaiting').addEventListener('click', stopWaiting);
 $('stream').addEventListener('click', streamGenerate);
 $('stopStream').addEventListener('click', function(){stopStreamPlayback(activeStream);});

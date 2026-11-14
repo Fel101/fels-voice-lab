@@ -14,9 +14,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Reuse Kokoro's model files and pip's downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             hf-cache
@@ -41,7 +41,7 @@ jobs:
         run: .venv\Scripts\python.exe tools\real_model_smoke.py kokoro --device cpu
       - name: Keep the clip, its report and the service's log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kokoro-smoke
           path: out/smoke/

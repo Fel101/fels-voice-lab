@@ -413,7 +413,6 @@ function placeCards(status){
 function cardNode(tag,className,text){var node=document.createElement(tag);if(className){node.className=className;}if(text!==undefined){node.textContent=text;}return node;}
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
-  wireInstallDialog();wireFirstRun();
   (result.engines||[]).forEach(function(entry){
     var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),integrated=cardNode('p','eyebrow'),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('p','meta'),ram=cardNode('p','meta');
     var more=cardNode('details','model-more'),moreText=cardNode('p','meta');

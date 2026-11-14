@@ -340,6 +340,11 @@ class DevToolsPage:
         self.wait_until(f"!document.getElementById({json.dumps(section)}).hidden")
 
     def set_value(self, selector, value):
+        """A list's options can come from an answer the page is still waiting for, so a list waits for the option first."""
+        self.wait_until(f"""(() => {{
+            const el = document.querySelector({json.dumps(selector)});
+            return !!el && (el.tagName !== 'SELECT' || [...el.options].some((o) => o.value === {json.dumps(value)}));
+        }})()""")
         self.evaluate(f"""(() => {{
             const el = document.querySelector({json.dumps(selector)});
             if (!el) throw new Error('no element {selector}');
@@ -350,6 +355,10 @@ class DevToolsPage:
         }})()""")
 
     def choose(self, selector, text):
+        self.wait_until(f"""(() => {{
+            const select = document.querySelector({json.dumps(selector)});
+            return !!select && [...select.options].some((o) => o.textContent === {json.dumps(text)});
+        }})()""")
         self.evaluate(f"""(() => {{
             const select = document.querySelector({json.dumps(selector)});
             const wanted = {json.dumps(text)};
@@ -444,9 +453,12 @@ class DevToolsPage:
 
 
 class FlowServer:
-    """The real request handler over temporary stores, with the fake worker and a running batch runner."""
+    """The real request handler over temporary stores, with the fake worker and a running batch runner.
 
-    def __init__(self, root):
+    With `hold`, a threading.Event, every GET /api/ answer waits until it is set, as on a slow computer: the page and its
+    scripts arrive, but none of the data they ask for. close() sets it, so no answer is left waiting."""
+
+    def __init__(self, root, hold=None):
         self.cast = CastStore(root)
         self.engines = BrowserFakeEngines()
         self.server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
@@ -455,12 +467,24 @@ class FlowServer:
         self.scenes = SceneStore(self.cast, self.engines.entries, root=root)
         self.runner = SceneBatchRunner(self.scenes, self.base)
         evaluations = EvaluationStore(root / "data" / "evaluations" / "evaluations.sqlite3", lab_root=root)
-        self.server.RequestHandlerClass = serve.make_handler(self.engines, port, self.cast, self.scenes,
-                                                             self.runner, evaluations)
+        handler = serve.make_handler(self.engines, port, self.cast, self.scenes, self.runner, evaluations)
+        self.hold = hold
+        if hold is not None:
+
+            class Held(handler):
+                def do_GET(self):
+                    if self.path.startswith("/api/"):
+                        hold.wait(60)
+                    super().do_GET()
+
+            handler = Held
+        self.server.RequestHandlerClass = handler
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.runner.start()
 
     def close(self):
+        if self.hold is not None:
+            self.hold.set()
         self.runner.close(timeout=5)
         self.server.shutdown()
         self.server.server_close()
@@ -794,6 +818,28 @@ class InstallWindowTests(unittest.TestCase):
                 self.assertGreater(size[1], 0)
                 page.click("#installClose")
                 page.wait_until("!document.getElementById('installDialog').open")
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+    def test_the_install_window_closes_before_the_page_has_heard_about_the_models(self):
+        """The install window's buttons work as soon as the page is there. On a slow computer the first answer about the
+        models can come seconds after the page, and Close used to do nothing until it had (a CI run failed on that)."""
+        hold = threading.Event()
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp), hold=hold)
+            page = None
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#studio")
+                page.evaluate("openInstallDialog('kokoro', false, 'plan', 'Install Kokoro 82M') && true")
+                page.click("#installClose")
+                page.wait_until("!document.getElementById('installDialog').open", timeout=5)
+                self.assertEqual(page.evaluate("Object.keys(modelCards).length"), 0, "an answer about the models had arrived")
+                hold.set()
+                page.wait_until("Object.keys(modelCards).length > 0")
                 self.assertEqual(page.problems, [])
             finally:
                 if page is not None:

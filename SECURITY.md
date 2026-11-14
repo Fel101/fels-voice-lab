@@ -34,14 +34,14 @@ the release's tag, with a [GitHub attestation](https://docs.github.com/actions/s
 that records which workflow run built both. In PowerShell, in the folder you downloaded them to:
 
 ```powershell
-Get-FileHash .\FelsVoiceLab-Setup-0.3.0.exe -Algorithm SHA256
+Get-FileHash .\FelsVoiceLab-Setup-*.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS
 ```
 
 The two hashes must be the same. With the [GitHub CLI](https://cli.github.com/),
-`gh attestation verify FelsVoiceLab-Setup-0.3.0.exe --repo Fel101/fels-voice-lab` checks that this repository's release
-workflow built the file. Setup.exe is not signed yet, so Windows SmartScreen warns before it runs; until it is, the hash and
-the attestation are how to check it.
+`gh attestation verify FelsVoiceLab-Setup-<version>.exe --repo Fel101/fels-voice-lab`, with the file's own name, checks
+that this repository's release workflow built the file. Setup.exe is not signed yet, so Windows SmartScreen warns before it
+runs; until it is, the hash and the attestation are how to check it.
 
 ## Reporting a security problem
 

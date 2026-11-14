@@ -18,13 +18,13 @@ jobs:
   windows-core:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: Lint
@@ -50,7 +50,7 @@ jobs:
     # setup.bat on a computer with no Python: it fetches the Lab's own (tools/get_python.ps1), sets up the core, and the Lab starts.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - name: Hide this runner's Python, run setup.bat, start the Lab
@@ -79,10 +79,10 @@ jobs:
     # the Lab, put one character in its library, then uninstall it and find the library still there and the program gone.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Build Setup.exe
