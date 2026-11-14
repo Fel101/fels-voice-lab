@@ -95,10 +95,13 @@ and preserved rather than repaired or upgraded automatically. If its import chec
 requirements in a separate environment, or, when nothing else has been installed into it, delete `.venv` and run `setup.bat`
 again. Never replace working AMD/model pins by running a generic `pip install --upgrade`.
 
-The shortcut starts a dedicated window and hidden backend on a free loopback
-port. Closing that window cancels its work and stops its backend/children.
-Closing just an inner studio panel does not close the app. Another instance
-started through a terminal or by another program remains independent.
+The shortcut starts a dedicated window and a hidden backend on `127.0.0.1:8765`, or on a free port when another program
+has that one (**Connect other apps** on **System & backups** says so). **Port for the Lab's window** there changes the port,
+or sets 0 for any free port; it is kept in `desktop.local.json` and used the next time the window opens. Closing that window
+cancels its work and stops its backend/children. Closing just an inner studio panel does not close the app. When this Lab
+is already running on the window's port with the same library, started by `serve.bat`, the window opens on that service
+instead of starting a second one, leaves it running when it closes, and closes itself if that service stops. A Lab of
+another folder or library on that port is not used: the window takes a free port.
 Logs are under `out/desktop/session-*/backend.log` and `out/desktop/launcher.log`.
 No model preloads; the normal idle unload timeout remains ten minutes.
 
@@ -117,10 +120,11 @@ For browser/API mode:
 .venv\Scripts\python.exe serve.py --device cpu
 ```
 
-Open `http://127.0.0.1:8765/`, the port `serve.bat`, the command-line tool and the API guide use;
-choose a free port with `--port` if another app uses it. In browser mode the
-terminal controls the service lifetime; closing a browser tab does not stop it.
-`serve.bat` is the foreground fallback.
+Open `http://127.0.0.1:8765/`, the known port: the window, `serve.bat`, the command-line tool and the API guide use it.
+When another program has that port, the service takes a free one and prints why; `--port` chooses another, and `--port 0`
+any free one. Started a second time from the same folder for the same library, it says the Lab is already running and
+where, and starts nothing. In browser mode the terminal controls the service lifetime; closing a browser tab does not stop
+it. `serve.bat` is the foreground fallback.
 
 ## Kokoro on the CPU
 

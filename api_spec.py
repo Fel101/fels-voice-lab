@@ -144,7 +144,8 @@ ROUTES = [
     # ---------------------------------------------------------------- Service
     R("GET", "/api/health", "Service", "Say whether the service is ready, and which version it is.",
       reply="`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry "
-            "per loaded engine), `last_worker_error` and `last_unload`."),
+            "per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab "
+            "from something else on the port) and `lab_id` (the same for every service of one Lab folder and library)."),
     R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
       reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
             "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "
@@ -815,6 +816,16 @@ ROUTES = [
       body_kind="none", reply="`{\"ok\": true}`."),
     R("POST", "/api/system/open-folder", "Page helpers", "Show the Lab's folder in File Explorer.", internal=True,
       body_kind="none", reply="`folder`: the folder's path."),
+    R("GET", "/api/system/connect", "Page helpers", "Say where other programs reach this service, for Connect other apps.",
+      internal=True,
+      reply="`url` (this service), `known_url` (where programs look first), `note` (why this service is not there, or null), "
+            "`in_address_file` (whether the address file names it), `address_file`, `window_port` (what the desktop window "
+            "asks for; 0 is any free port), `test` (a command that asks for its health) and `guide` (the API guide of this "
+            "version, on GitHub)."),
+    R("POST", "/api/system/connect/port", "Page helpers", "Choose the port the desktop window's service asks for, from the next "
+                                                          "time the window opens.",
+      internal=True, body=(F("port", "integer", "0 for any free port, or 1024 to 65535; 8765 is the default.", True),),
+      reply="`window_port`."),
 
     # ---------------------------------------------------------------- Drama (internal)
     R("GET", "/api/drama3/*", "Drama", "Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its "

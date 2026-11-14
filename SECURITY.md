@@ -26,6 +26,13 @@ download from github.com, the same checks and the same copy of what it replaces.
 or from where, and like every other request, one from another website is refused. The Lab opens again when the update is
 done.
 
+The Lab listens on a known port, `127.0.0.1:8765`, and writes its address to a file in your local application data
+(`FelsVoiceLabService\service.json`) while it runs, so that programs on this computer can find it without being told. This
+makes the address predictable; it does not widen who can reach it. Any program running as you on this computer could already
+call the service on whatever port it had, and the service still listens on `127.0.0.1` only and still refuses requests made
+by other websites' pages. The port is the Lab's alone while it runs (Windows' exclusive use), so another program cannot bind
+it alongside the Lab.
+
 `tools/check_repo.py` is a heuristic check of the files Git would publish, not a
 guarantee that every possible secret, dependency vulnerability or rights issue is
 absent. It finds private keys and provider tokens, personal Windows home paths,

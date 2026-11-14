@@ -4,10 +4,11 @@ backups, their checks and restores (library_backup.py), cleaning up out/ (housek
 
 from urllib.parse import parse_qs
 
-from app_version import APP_NAME, VERSION
+from app_version import APP_NAME, REPOSITORY, VERSION
 from common import ram_report
 import export_panel
 import housekeeping
+import lab_address
 import library_backup
 import system_report
 import updates
@@ -93,6 +94,28 @@ def register(router, lab):
             self._json(200, lab.updater.open_folder())
         except (UpdateNowError, OSError) as exc:
             self._json(400, {"error": f"The folder could not be opened: {exc}"})
+
+    @router.get("/api/system/connect")
+    def connect(self, parsed, req):
+        url = f"http://127.0.0.1:{lab.port}"
+        self._json(
+            200,
+            {
+                "url": url,
+                "known_url": lab_address.KNOWN_URL,
+                "note": lab.address_note,
+                "in_address_file": lab.in_address_file,
+                "address_file": str(lab_address.address_file()),
+                "window_port": lab_address.window_port(serve.APP_ROOT),
+                "test": f"curl.exe {url}/api/health",
+                "guide": f"https://github.com/{REPOSITORY}/blob/v{VERSION}/docs/API.md",
+            },
+        )
+
+    @router.post("/api/system/connect/port")
+    def connect_port(self, parsed, req):
+        port = lab_address.save_window_port(serve.APP_ROOT, req.get("port"))
+        self._json(200, {"window_port": port})
 
     @router.get("/api/system")
     def system(self, parsed, req):

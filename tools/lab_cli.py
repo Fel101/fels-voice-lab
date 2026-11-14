@@ -6,8 +6,9 @@
     python tools\\lab_cli.py perform --character Nell --text "We made it home." --line-id scene1-001 --out nell.wav
 
 Each command makes one call to the service, which docs/API.md describes. The service is the one at --url, else the
-VOICE_LAB_URL environment variable, else http://127.0.0.1:8765 (start it with serve.py; the desktop app picks a port of its
-own). This file uses only the standard library, so any Python 3.8 or later runs it, with or without the Lab's packages.
+VOICE_LAB_URL environment variable, else the one the address file names (a running Lab writes it: lab_address.py), else
+http://127.0.0.1:8765, where the Lab's window and serve.bat listen. This file uses only the standard library, so any Python 3.8
+or later runs it, with or without the Lab's packages.
 
 Exit status: 0 when the call worked; 1 when the service refused it or failed (its message goes to standard error); 2 for a
 mistake in the command line; 3 when nothing answered.
@@ -24,7 +25,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-DEFAULT_URL = "http://127.0.0.1:8765"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import lab_address  # noqa: E402 - beside this folder, standard library only
+
+DEFAULT_URL = lab_address.KNOWN_URL
 QUICK_SECONDS = 10           # health and cast answer at once
 GENERATE_SECONDS = 900       # a first call also loads the model; a long line takes a while after that
 # What the service says about a take, as the keys a --json answer uses.
@@ -46,6 +50,10 @@ class Refused(Failed):
 
 class NoAnswer(Failed):
     pass
+
+
+class NotRunning(NoAnswer):
+    """Nothing listens at the address."""
 
 
 class Usage(Exception):
@@ -79,7 +87,7 @@ def call(base, method, path, *, body=None, timeout):
         reason = getattr(error, "reason", error)
         if isinstance(reason, (TimeoutError, socket.timeout)):
             raise NoAnswer(f"no answer from {base} within {timeout:g} seconds (--timeout changes this)") from None
-        raise NoAnswer(f"no answer from {base}: {reason}. Is the service running?") from None
+        raise NotRunning(f"no answer from {base}: {reason}. Is the service running?") from None
     except http.client.HTTPException as error:
         raise NoAnswer(f"the connection to {base} ended before the answer was complete ({error})") from None
 
@@ -291,7 +299,8 @@ def cast(args, base):
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--url", default=argparse.SUPPRESS,
-                        help=f"where the service listens (default: $VOICE_LAB_URL, else {DEFAULT_URL})")
+                        help=f"where the service listens (default: $VOICE_LAB_URL, else the address file a running Lab "
+                             f"writes, else {DEFAULT_URL})")
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, metavar="SECONDS",
                         help=f"how long to wait for an answer (default: {QUICK_SECONDS} for health and cast, "
                              f"{GENERATE_SECONDS} for speak and perform)")
@@ -360,12 +369,20 @@ def main(argv=None):
             stream.reconfigure(errors="replace")
     args = build_parser().parse_args(argv)
     try:
-        base = normalize_url(getattr(args, "url", None) or os.environ.get("VOICE_LAB_URL") or DEFAULT_URL)
+        url, source = lab_address.find_url(getattr(args, "url", None), os.environ, default=DEFAULT_URL)
+        base = normalize_url(url)
         args.timeout = timeout_for(args)
         return args.handler(args, base)
     except Usage as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
+    except NotRunning as error:
+        if source in ("--url", "VOICE_LAB_URL"):
+            print(f"error: {error}", file=sys.stderr)
+        else:
+            print(f"error: Fel's Voice Lab is not running: nothing answered at {base}. Open it from the Start menu, or run "
+                  "serve.bat in its folder, then try again.", file=sys.stderr)
+        return 3
     except NoAnswer as error:
         print(f"error: {error}", file=sys.stderr)
         return 3

@@ -64,7 +64,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error` and `last_unload`.",
+            "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port) and `lab_id` (the same for every service of one Lab folder and library).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5404,6 +5404,7 @@
     "GET /api/preferences",
     "GET /api/reference-audio",
     "GET /api/references",
+    "GET /api/system/connect",
     "GET /api/update/notice",
     "GET /api/updates",
     "GET /api/voice-library",
@@ -5428,6 +5429,7 @@
     "POST /api/drama3/jobs",
     "POST /api/drama3/jobs/{job_id}/cancel",
     "POST /api/preferences",
+    "POST /api/system/connect/port",
     "POST /api/system/open-folder",
     "POST /api/system/use-library",
     "POST /api/update/notice/dismiss",

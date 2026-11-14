@@ -209,7 +209,9 @@ Browser mode, without the desktop window:
 ```
 
 Open `http://127.0.0.1:8765/`. Closing a browser tab does not stop a foreground service. The desktop
-launcher owns a separate backend on a free port and never closes independently started services.
+window listens on the same address; when this Lab is already running there, started by `serve.bat`, the window opens on it
+and leaves it running when it closes. Other programs on this computer find the Lab there too: **Connect other apps** on
+**System & backups** shows the address and a command that tests it ([the API guide](docs/API.md)).
 Read [desktop and state behavior](docs/SETUP.md).
 
 ## Roadmap

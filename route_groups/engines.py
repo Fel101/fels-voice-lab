@@ -8,7 +8,7 @@ import re
 import time
 
 import api_spec
-from app_version import VERSION
+from app_version import APP_NAME, VERSION
 from cast_store import DIRECTION_ENGINES, generation_identity_snapshot
 from common import free_ram_gb
 import engine_adapters
@@ -38,7 +38,7 @@ def register(router, lab):
 
     @router.get("/api/health")
     def health(self, parsed, req):
-        self._json(200, {**engines.health(), "version": VERSION})
+        self._json(200, {**engines.health(), "version": VERSION, "app": APP_NAME, "lab_id": lab.lab_id})
 
     @router.get("/api/info")
     def info(self, parsed, req):

@@ -143,6 +143,7 @@ pre { white-space:pre-wrap; }
 .install-dialog::backdrop { background:rgba(0,0,0,.45); }
 .install-dialog h3 { margin:0 0 8px; font-size:1.1rem; }
 .install-plan { max-height:min(55vh,520px); overflow:auto; } .install-plan p { max-width:80ch; }
+.connect-url { font-size:1.05rem; user-select:all; overflow-wrap:anywhere; } .connect-port { align-items:center; } .connect-port input { width:9ch; }
 .install-log { margin:12px 0; padding:8px 10px; height:16em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
 .table-wrap { overflow-x:auto; margin:12px 0; }
 .facts { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 18px; margin:14px 0; }
@@ -632,6 +633,16 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <dl class="facts" id="systemFacts"></dl>
 <div class="cast-actions"><button type="button" id="openLabFolder">Open the Lab's folder</button></div>
 <p class="meta" id="openLabFolderStatus" role="status"></p>
+<h3>Connect other apps</h3>
+<p class="meta">While the Lab is open, programs on this computer, such as your own scripts, can make it speak at this address. Programs on other computers cannot reach it.</p>
+<p><code id="connectUrl" class="connect-url"></code></p>
+<p class="meta" id="connectNote" role="status" hidden></p>
+<div class="cast-actions"><button type="button" id="connectCopy">Copy the address</button><button type="button" id="connectCopyTest">Copy the test command</button><a id="connectGuide" href="#" target="_blank" rel="noopener noreferrer">How programs use it (API guide)</a></div>
+<p class="meta">The test command, for a command window: <code id="connectTest"></code></p>
+<p class="meta" id="connectStatus" role="status"></p>
+<div class="cast-actions connect-port"><label for="connectPort">Port for the Lab's window</label><input type="number" id="connectPort" min="0" max="65535" step="1" inputmode="numeric"><button type="button" id="connectPortSave">Save</button></div>
+<p class="meta">8765 is where other programs look first. 0 lets the window take any free port, and programs then find it through the address file. A change takes effect the next time the window opens.</p>
+<p class="meta" id="connectPortStatus" role="status"></p>
 <h3>Updates</h3>
 <p class="meta" id="updateStatus" role="status">This is version __APP_VERSION__.</p>
 <div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><button type="button" class="go" id="updateNow" hidden>Update now</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>

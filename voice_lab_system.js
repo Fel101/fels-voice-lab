@@ -353,7 +353,48 @@ function startFfmpegInstall(){
   return fetchJson('/api/ffmpeg/install',{}).then(function(result){renderFfmpegJob(result.install);}).catch(function(e){
     ffmpegError='FFmpeg was not installed: '+e.message;renderFfmpegOffer('system');renderFfmpegOffer('export');});
 }
-function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall()]);}
+// Connect other apps: where programs on this computer reach this service, a command that tests it, and the port the Lab's
+// window asks for (desktop.local.json). The address file and the known port are lab_address.py's.
+var connectInfo=null;
+function connectNoteText(info){
+  if(info.url===info.known_url)return '';
+  var why=info.note||'The Lab’s window took a free port, as its setting below asks.';
+  return why+' '+(info.in_address_file?'Programs that read the address file ('+info.address_file+') still find it; give any other program this address.'
+    :'Give programs this address: the address file names another Lab that is running.');
+}
+function renderConnect(info){
+  connectInfo=info;
+  $('connectUrl').textContent=info.url;
+  $('connectTest').textContent=info.test;
+  $('connectGuide').href=info.guide;
+  var note=connectNoteText(info);$('connectNote').textContent=note;$('connectNote').hidden=!note;
+  $('connectPort').value=String(info.window_port);
+}
+function refreshConnect(){
+  return fetchJson('/api/system/connect').then(renderConnect).catch(function(e){systemNote('connectStatus','Could not read the Lab’s address: '+e.message,true);});
+}
+function copyText(text){
+  var fallback=function(){var box=document.createElement('textarea');box.value=text;box.setAttribute('readonly','');document.body.appendChild(box);box.select();
+    var copied=false;try{copied=document.execCommand('copy');}catch(e){copied=false;}document.body.removeChild(box);return copied;};
+  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text).then(function(){return true;},fallback);
+  return Promise.resolve(fallback());
+}
+function copyConnect(which){
+  if(!connectInfo)return Promise.resolve();
+  var test=which==='test',text=test?connectInfo.test:connectInfo.url;
+  return copyText(text).then(function(copied){
+    systemNote('connectStatus',!copied?'Your browser blocked copying. Select the text above and copy it yourself.'
+      :test?'Copied the test command. Paste it into a command window; it prints the Lab’s health as one line of JSON.':'Copied '+text+'.',!copied);
+  });
+}
+function saveConnectPort(){
+  var text=$('connectPort').value.trim(),port=Number(text);
+  if(!text||!Number.isInteger(port)){systemNote('connectPortStatus','Type a whole number: 0, or 1024 to 65535.',true);return Promise.resolve();}
+  return fetchJson('/api/system/connect/port',{port:port}).then(function(result){
+    systemNote('connectPortStatus',(result.window_port===0?'Saved. The window takes any free port':'Saved. The window asks for port '+result.window_port)+' the next time it opens.',false);
+  }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
+}
+function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall(),refreshConnect()]);}
 $('systemRefresh').addEventListener('click',function(){refreshSystemPage();});
 $('systemCopy').addEventListener('click',function(){copyDiagnostics();});
 $('systemFfmpegCheck').addEventListener('click',function(){refreshSystem(true);});
@@ -374,5 +415,8 @@ $('updateClose').addEventListener('click',closeUpdateNow);
 $('updateDialog').addEventListener('cancel',function(event){if(updateNowState.closing)event.preventDefault();});
 $('updateNoticeClose').addEventListener('click',dismissUpdateNotice);
 $('openLabFolder').addEventListener('click',openLabFolder);
+$('connectCopy').addEventListener('click',function(){copyConnect('url');});
+$('connectCopyTest').addEventListener('click',function(){copyConnect('test');});
+$('connectPortSave').addEventListener('click',saveConnectPort);
 refreshUpdates();
 refreshUpdateNotice();

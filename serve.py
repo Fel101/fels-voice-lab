@@ -35,6 +35,7 @@ import soundfile as sf
 import job_queue
 from routes import Router
 import route_groups
+import lab_address
 import library_backup
 import updates
 from self_update import SelfUpdate
@@ -352,6 +353,11 @@ class Lab:
         self.evaluations = evaluation_store or EvaluationStore(lab_root=self.library_root)
         self.backups_folder = self.library_root / library_backup.BACKUP_FOLDER
         self.backup_task = library_backup.Task()
+        # How other programs find this service (lab_address.py): /api/health's lab_id says which Lab folder and library it
+        # serves; main() says why it is not on the known port, if it is not, and whether the address file names it.
+        self.lab_id = lab_address.lab_id(APP_ROOT, self.library_root)
+        self.address_note = None
+        self.in_address_file = False
         self._drama, self._drama_lock = [], threading.Lock()
 
     def logged(self, kind, work, describe):
@@ -702,10 +708,41 @@ def make_handler(engines, port, cast_store=None, scene_store=None, batch_runner=
 
 class LocalThreadingHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
+    # The port is this service's alone. With SO_REUSEADDR, which HTTPServer sets, Windows lets a second service bind the same
+    # port and share its connections; exclusive use also keeps any other program from binding it while the Lab listens.
+    allow_reuse_address = False
     # A page asks for its ten scripts side by side, and while the server is busy for a moment they wait in the listen queue.
     # The default of 5 is too short for that: Windows refuses the connection that finds the queue full, so the browser shows
     # ERR_CONNECTION_REFUSED for that script and the page comes up with a part missing.
     request_queue_size = 128
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+class AlreadyRunning(Exception):
+    """This Lab, with this library, already answers on the known port; the message says where."""
+
+
+def bind_service(port, lab_id, *, ask=lab_address.ask_health):
+    """(the server, why it is not on `port` or None). The known port (8765) is where other programs look first: when
+    another program has it, this service takes a free port and says so, but when this same Lab with this same library
+    already answers there, nothing more starts (AlreadyRunning). Any other port must be free."""
+    try:
+        return LocalThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler), None
+    except OSError as exc:
+        if port != lab_address.KNOWN_PORT:
+            raise SystemExit(f"Port {port} cannot be used ({exc.strerror or exc}). Choose another with --port, or 0 for "
+                             "any free port.") from exc
+    answer = ask(lab_address.KNOWN_URL)
+    if lab_address.is_lab(answer) and answer.get("lab_id") == lab_id:
+        raise AlreadyRunning(f"Fel's Voice Lab is already running from this folder at {lab_address.KNOWN_URL} (version "
+                             f"{answer.get('version', '?')}). Open that address in a browser, or close it before you start "
+                             "it again.")
+    server = LocalThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
+    return server, lab_address.moved_note(port, server.server_address[1], answer)
 
 
 def preload(engines, keys):
@@ -762,7 +799,9 @@ def exit_with_parent(pid, engines, server=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {VERSION}")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=lab_address.KNOWN_PORT,
+                        help=f"where to listen (default {lab_address.KNOWN_PORT}, the known port, or a free one when "
+                             "another program has it; 0 for any free port)")
     parser.add_argument("--device", default="auto", choices=DEVICES,
                         help="auto (the default) uses a graphics card when there is one; cpu or cuda chooses")
     parser.add_argument("--idle-minutes", type=float, default=10, help="unload models after this long idle (0 = never)")
@@ -791,16 +830,30 @@ def main():
     scenes = SceneStore(cast, engines.entries, root=state_root)
     evaluations = EvaluationStore(state_root / "data/evaluations/evaluations.sqlite3",
                                   lab_root=state_root)
-    server = LocalThreadingHTTPServer(("127.0.0.1", args.port), BaseHTTPRequestHandler)
-    batch_runner = SceneBatchRunner(scenes, f"http://127.0.0.1:{server.server_address[1]}")
+    try:
+        server, address_note = bind_service(args.port, lab_address.lab_id(APP_ROOT, state_root))
+    except AlreadyRunning as exc:
+        print(exc, flush=True)
+        engines.close()
+        return
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    batch_runner = SceneBatchRunner(scenes, url)
     request_log = RequestLog(args.log_dir)
     server.RequestHandlerClass = make_handler(engines, server.server_address[1], cast, scenes, batch_runner, evaluations,
                                               request_log)
+    lab = server.RequestHandlerClass.lab
+    lab.address_note = address_note
+    try:
+        lab.in_address_file = lab_address.write(url, version=VERSION, root=APP_ROOT)
+    except OSError as exc:  # other programs then look on the known port; the Lab itself works as before
+        request_log.event(f"startup: the address file could not be written: {exc}")
     request_log.start(APP_NAME, VERSION, port=server.server_address[1], device=device, state_root=state_root)
-    for note in (*folder_notes, *evaluations.migration_notes):
+    for note in (*folder_notes, *evaluations.migration_notes, *([address_note] if address_note else [])):
         request_log.event(f"startup: {note}")
-    print(f"Fel's Voice Lab on http://127.0.0.1:{server.server_address[1]}  (version {VERSION}, device: {device}, "
+    print(f"Fel's Voice Lab on {url}  (version {VERSION}, device: {device}, "
           f"free RAM {free_ram_gb():.1f} GB, log {request_log.path})", flush=True)
+    if address_note:
+        print(address_note, flush=True)
     if not args.no_cleanup:
         threading.Thread(target=run_startup_sweep, args=(OUT, request_log), kwargs={"keep": [request_log.path]},
                          name="startup-sweep", daemon=True).start()
@@ -826,6 +879,8 @@ def main():
         server.RequestHandlerClass.close_drama()
         batch_runner.close(timeout=10)
         server.server_close()
+        if lab.in_address_file:
+            lab_address.remove()
         request_log.event("stopped")
         request_log.close()
 

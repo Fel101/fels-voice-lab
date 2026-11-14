@@ -10,8 +10,14 @@ service answers `GET /api/openapi.json` with it.
 
 ## The basics
 
-**Address.** `http://127.0.0.1:8765` when you start `serve.py` or `serve.bat`; `--port 8770` picks another. The desktop app starts
-its own copy on a free port that it does not announce, so for scripts start `serve.py` yourself and use its address.
+**Address.** `http://127.0.0.1:8765`, the known port: the Lab's window, `serve.bat` and `serve.py` all listen there. When
+another program has that port, the Lab takes a free one and says so on **System & backups**, under **Connect other apps**;
+`serve.py --port 8770` asks for another port, and `--port 0` for any free one. Every running Lab service also writes its
+address to the address file, `%LOCALAPPDATA%\FelsVoiceLabService\service.json` (`url`, `version`, `pid`, `root` and
+`started_at`), and removes it when it stops; a file whose process has gone is stale and is ignored. When several Labs run, it
+names the one that started first. A program should look for the Lab in this order, as the command-line tool does: an address
+it was given, the `VOICE_LAB_URL` environment variable, the address file, then `http://127.0.0.1:8765`.
+`GET /api/health` answers with `"app": "Fel's Voice Lab"`, so a program can tell the Lab from something else on the port.
 
 **Local only.** The service listens on 127.0.0.1. A request whose `Host` is not `127.0.0.1` or `localhost`, or that a web page
 from another site made (it carries a foreign `Origin`, or a `Sec-Fetch-Site` other than `same-origin` or `none`), gets `403`;
@@ -183,7 +189,9 @@ lab_cli.py [--url URL] [--timeout SECONDS] health | speak | perform | cast
 | `perform --text TEXT --out FILE` | `POST /api/performance`. Name the voice with `--character NAME` (and `--voice LABEL` when the character has more than one), or give `--identity-id`. Also `--line-id` (default `cli`), `--reference-version-id`, `--direction`, `--language`, `--setting KEY=VALUE`, `--pronunciations` and `--idempotency-key`. |
 | `cast` | List the characters and voices with their ids (`--json` for the raw answer). |
 
-`--url` is where the service listens (default the `VOICE_LAB_URL` environment variable, else `http://127.0.0.1:8765`).
+`--url` is where the service listens (default the `VOICE_LAB_URL` environment variable, else the address file, else
+`http://127.0.0.1:8765`; see [the basics](#the-basics)). With neither `--url` nor `VOICE_LAB_URL`, a Lab that is not running is
+said plainly, with how to open it.
 `--timeout` is how long to wait for an answer: 10 seconds for `health` and `cast`, 900 for `speak` and `perform`. `--json`
 prints what the call returned as one JSON object instead of a sentence. The WAV is written under a temporary name and moved
 into place only when it has arrived whole, so a failed call leaves no half file.
@@ -224,7 +232,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 
 Say whether the service is ready, and which version it is.
 
-**Answer:** `200`, JSON. `status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error` and `last_unload`.
+**Answer:** `200`, JSON. `status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port) and `lab_id` (the same for every service of one Lab folder and library).
 
 <a id="get-api-info"></a>
 
@@ -1959,6 +1967,8 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/api/update/notice` | What the last update, undo or Update now left for the page to say. |
 | POST | `/api/update/notice/dismiss` | Forget the notice once the page has shown it. |
 | POST | `/api/system/open-folder` | Show the Lab's folder in File Explorer. |
+| GET | `/api/system/connect` | Say where other programs reach this service, for Connect other apps. |
+| POST | `/api/system/connect/port` | Choose the port the desktop window's service asks for, from the next time the window opens. |
 | GET | `/api/drama3/*` | Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its `audio`, `metadata` and `package`. |
 | GET | `/api/drama3/info` | The Drama runtime's capabilities, sources and jobs. |
 | GET | `/api/drama3/jobs/{job_id}` | A Drama job, from an offset into its log. |

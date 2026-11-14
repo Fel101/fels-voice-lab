@@ -536,6 +536,13 @@ shows what the update will do and asks; then the Lab closes, updates in a window
 [Updating the Lab](SETUP.md#updating-the-lab) says what it does and how `update.bat --undo` goes back. **Open the Lab's
 folder** shows the Lab's folder in File Explorer.
 
+**Connect other apps** shows the address where programs on this computer, such as your own scripts, can make the Lab speak
+while it is open: `http://127.0.0.1:8765` unless another program has that port, and then it says why and which port the Lab
+took. **Copy the address** and **Copy the test command** put them on the clipboard; the test command, pasted into a command
+window, prints the Lab's health. Programs on other computers cannot reach it. **Port for the Lab's window** chooses the port
+the window asks for the next time it opens, or 0 for any free port; programs then find it through the address file that
+[the API guide](API.md#the-basics) describes.
+
 **Measure folders** adds the size of each library folder (and whether a backup holds it) and of the backups, voice
 conversions, logs, worker scratch folders and desktop sessions. It waits for the button because it walks those folders,
 and it never walks the Drama model folder. **Clean up old scratch folders and logs** runs the sweep described below and

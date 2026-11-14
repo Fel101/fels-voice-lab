@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service
+import lab_address
 from tools import lab_cli
 
 CLI = ROOT / "tools" / "lab_cli.py"
@@ -55,6 +56,9 @@ class CliCase(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(prefix="voice-lab-cli-", ignore_cleanup_errors=True)
         self.addCleanup(temp.cleanup)
         self.folder = Path(temp.name)
+        # Nor the address file a real Lab on this computer wrote.
+        self.address_file = self.folder / "service.json"
+        os.environ["VOICE_LAB_ADDRESS_FILE"] = str(self.address_file)
 
     def run_cli(self, *argv, url=True, stdin=None):
         """(exit status, what it printed, what it printed to standard error)."""
@@ -542,6 +546,24 @@ class CommandLineTests(CliCase):
         self.assertFalse(self.reaches_the_test_service("health"), "setUp points the default at a port nothing listens on")
         self.assertEqual(DOCUMENTED_DEFAULT_URL, "http://127.0.0.1:8765")
 
+    def test_without_a_flag_or_the_environment_the_address_file_comes_before_the_known_address(self):
+        self.assertFalse(self.reaches_the_test_service("health"))
+        lab_address.write(self.service.base, version="0.4.0", root=ROOT, path=self.address_file)
+        self.assertTrue(self.reaches_the_test_service("health"))
+        with mock.patch.dict(os.environ, {"VOICE_LAB_URL": f"http://127.0.0.1:{unused_port()}"}):
+            self.assertFalse(self.reaches_the_test_service("health"), "the environment comes first")
+        lab_address.remove(path=self.address_file)
+        self.assertFalse(self.reaches_the_test_service("health"))
+
+    def test_a_lab_that_is_not_running_is_said_plainly_with_how_to_open_it(self):
+        code, out, err = self.run_cli("health", url=False)
+        self.assertEqual((code, out), (3, ""))
+        self.assertIn("Fel's Voice Lab is not running: nothing answered at http://127.0.0.1:", err)
+        self.assertIn("Open it from the Start menu, or run serve.bat in its folder", err)
+        code, _out, err = self.run_cli("speak", "--text", "Hello.", "--out", str(self.folder / "a.wav"), url=False)
+        self.assertEqual(code, 3)
+        self.assertIn("is not running", err)
+
     def test_an_address_that_is_not_a_web_address_is_a_mistake(self):
         code, _out, err = self.run_cli("--url", "127.0.0.1:8765", "health", url=False)
         self.assertEqual(code, 2)
@@ -579,18 +601,25 @@ class CommandLineTests(CliCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("is ready", result.stdout)
 
+    # The Lab's own modules the tool imports, which follow the same two rules: where the address file is (lab_address.py)
+    # and the app's name (app_version.py).
+    LAB_MODULES = {"lab_address": ROOT / "lab_address.py", "app_version": ROOT / "app_version.py"}
+
     def test_it_imports_nothing_but_the_standard_library(self):
-        tree = ast.parse(CLI.read_text(encoding="utf-8"))
-        names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names |= {item.name.split(".")[0] for item in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.level == 0:
-                names.add(node.module.split(".")[0])
-        self.assertEqual(sorted(names - set(sys.stdlib_module_names)), [])
+        allowed = set(sys.stdlib_module_names) | set(self.LAB_MODULES)
+        for path in (CLI, *self.LAB_MODULES.values()):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            names = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names |= {item.name.split(".")[0] for item in node.names}
+                elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                    names.add(node.module.split(".")[0])
+            self.assertEqual(sorted(names - allowed), [], path.name)
 
     def test_it_uses_only_syntax_that_python_3_8_reads(self):
-        ast.parse(CLI.read_text(encoding="utf-8"), feature_version=(3, 8))
+        for path in (CLI, *self.LAB_MODULES.values()):
+            ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 8))
 
     def test_a_name_the_terminal_cannot_show_is_replaced_and_is_not_a_crash(self):
         self.service.add_voice("Zoë", "Chaleureuse")

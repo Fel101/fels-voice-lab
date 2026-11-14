@@ -1,4 +1,8 @@
-"""Fel's Voice Lab desktop window. Own only the service started by this launch."""
+"""Fel's Voice Lab desktop window. Own only the service started by this launch.
+
+The window's service listens on the known port, 8765, unless desktop.local.json's "port" says another (0 is any free port), so
+other programs on this computer find it (lab_address.py). When this Lab's own service already answers there, started by
+serve.bat, the window opens on it instead of starting a second one, and leaves it running when it closes."""
 from __future__ import annotations
 
 import argparse
@@ -10,8 +14,10 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
+import lab_address
 from local_ownership import LocalOwnership
 import self_update
 
@@ -22,7 +28,7 @@ class DesktopBackend:
     """The service one desktop window owns. Its session folder goes in `sessions` (out/desktop by default), and
     `service_args` are added to the service's command line; the tests use both to keep a run out of the real out/ folder."""
 
-    def __init__(self, *, root=ROOT, state_root=None, python=None, device="auto", sessions=None, service_args=()):
+    def __init__(self, *, root=ROOT, state_root=None, python=None, device="auto", sessions=None, service_args=(), port=0):
         self.root = Path(root).resolve()
         self.state_root = Path(state_root or root).resolve()
         self.python = Path(python or self.root / ".venv/Scripts/python.exe").resolve()
@@ -35,8 +41,30 @@ class DesktopBackend:
         self.session = None
         self.nonce = secrets.token_hex(32)
         self.url = None
+        # The port the service asks for (0: any free port); serve.py takes a free one when another program has the known
+        # port. joined: the window shows a service it did not start; joined_stopped: that service went away.
+        self.port = port
+        self.joined = False
+        self.joined_stopped = False
+        self.closing = threading.Event()  # set by close(), so the watch of a joined service ends with the window
+
+    def find_running(self, ask=lab_address.ask_health):
+        """The address of this Lab's own service when it already answers on the window's port, as when serve.bat started
+        it, or None. A service of another Lab folder or library is not this window's to show."""
+        if not self.port:
+            return None
+        url = f"http://127.0.0.1:{self.port}"
+        answer = ask(url)
+        if lab_address.is_lab(answer) and answer.get("lab_id") == lab_address.lab_id(self.root, self.state_root):
+            return url
+        return None
 
     def start(self, timeout=90):
+        running = self.find_running()
+        if running:
+            logging.info("This Lab's service already runs at %s; the window opens on it", running)
+            self.joined, self.url = True, running
+            return running
         if not self.python.is_file():
             raise RuntimeError("The backend Python is missing. Run setup.bat first.")
         from desktop_process import OwnedJob
@@ -48,7 +76,7 @@ class DesktopBackend:
         # The gate holds the child before it can create any descendant processes.
         gate = "import sys; permit=sys.stdin.buffer.read(1); permit==b'1' or sys.exit(1); import runpy; sys.argv=sys.argv[1:]; runpy.run_path(sys.argv[0],run_name='__main__')"
         command = [str(self.python), "-X", "utf8", "-u", "-c", gate,
-                   str(self.root / "serve.py"), "--port", "0", "--device", self.device,
+                   str(self.root / "serve.py"), "--port", str(self.port), "--device", self.device,
                    "--state-root", str(self.state_root), "--desktop-session", str(self.session),
                    "--parent-pid", str(os.getpid()), *self.service_args]
         try:
@@ -80,9 +108,21 @@ class DesktopBackend:
             self.close()
             raise
 
-    def wait_for_update(self, close_window):
+    def wait_for_update(self, close_window, ask=lab_address.ask_health, pause=2.0):
         """Close the window when the service has stopped for Update now. The service's own update.json in the session
-        folder says so; a service that stops for any other reason leaves the window as it is."""
+        folder says so; a service that stops for any other reason leaves the window as it is. A service the window joined
+        is watched instead: when it stops answering (serve.bat was closed, or it stopped for Update now), the window closes
+        too, and main says why."""
+        if self.joined:
+            misses = 0
+            while misses < 3:
+                if self.closing.wait(pause):
+                    return
+                misses = 0 if ask(self.url) else misses + 1
+            logging.info("The service at %s stopped answering; closing the window", self.url)
+            self.joined_stopped = True
+            close_window()
+            return
         if self.process is None:
             return
         self.process.wait()
@@ -100,6 +140,7 @@ class DesktopBackend:
         return True
 
     def close(self):
+        self.closing.set()
         try:
             if self.process and self.process.poll() is None:
                 if self.session:
@@ -119,10 +160,10 @@ class DesktopBackend:
                 self.log = None
 
 
-def show_error(message):
+def show_error(message, icon=0x10):
     if os.name == "nt":
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, str(message), "Fel's Voice Lab", 0x10)
+        ctypes.windll.user32.MessageBoxW(None, str(message), "Fel's Voice Lab", icon)
     else:
         print(message, file=sys.stderr)
 
@@ -144,7 +185,7 @@ def main(argv=None):
         return 0
     logs = ROOT / "out/desktop"
     logging.basicConfig(filename=str(logs / "launcher.log"), encoding="utf-8", level=logging.INFO)
-    backend = DesktopBackend(state_root=state_root, device=args.device)
+    backend = DesktopBackend(state_root=state_root, device=args.device, port=lab_address.window_port(ROOT))
     try:
         import webview
         # Downloads remain ordinary local exports; no Python API is exposed to the page.
@@ -165,6 +206,9 @@ def main(argv=None):
         finally:
             owner.release()
     backend.hand_over_update()
+    if backend.joined_stopped:
+        show_error(f"The Lab's service at {backend.url} has stopped, so its window has closed. Open Fel's Voice Lab again "
+                   "to start it.", icon=0x40)
     return 0
 
 

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 
@@ -20,14 +21,19 @@ ROOT = Path(__file__).resolve().parents[1]
 class DesktopTests(unittest.TestCase):
     def test_owned_backend_is_ready_isolated_and_stops_on_close(self):
         with tempfile.TemporaryDirectory() as temp:
-            # The session folder and the service log go in the temporary folder, and the service skips its sweep of out/, so
-            # the run leaves the real out/ folder as it found it.
+            # The session folder, the service log and the address file go in the temporary folder, and the service skips its
+            # sweep of out/, so the run leaves the real out/ folder and this user's address file as it found them.
+            address = Path(temp, "service.json")
+            environment = mock.patch.dict(os.environ, {"VOICE_LAB_ADDRESS_FILE": str(address)})
+            environment.start()
+            self.addCleanup(environment.stop)
             backend = DesktopBackend(root=ROOT, state_root=temp, python=sys.executable, device="cpu",
                                      sessions=Path(temp, "desktop"),
                                      service_args=("--no-cleanup", "--log-dir", Path(temp, "logs")))
             try:
                 url = backend.start(timeout=45)
                 ready = json.loads((backend.session / "ready.json").read_text("utf-8"))
+                self.assertEqual(json.loads(address.read_text("utf-8"))["url"], url, "other programs find it")
                 with urllib.request.urlopen(url + "/api/health", timeout=10) as response:
                     health = json.load(response)
                 self.assertEqual(health["workers"], [])
@@ -66,6 +72,7 @@ class DesktopTests(unittest.TestCase):
             finally:
                 backend.close()
             self.assertFalse(process_is_running(ready["pid"]))
+            self.assertFalse(address.exists(), "a service that stops takes its address away")
             self.assertIsNotNone(backend.process.returncode)
             backend.close()  # Repeated close is harmless.
 
