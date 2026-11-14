@@ -30,8 +30,15 @@ class KokoroM7ContractTests(unittest.TestCase):
                          ["af_heart", "am_fenrir"])
         with self.assertRaisesRegex(ValueError, "more than once"):
             normalize_kokoro_voices("af_heart,af_heart", ["af_heart"])
-        with self.assertRaisesRegex(ValueError, "not cached locally"):
+        with self.assertRaisesRegex(ValueError, r"^This Kokoro voice is not installed: af_missing\. Run setup-kokoro\.bat "
+                                                r"--voices af_missing in the lab folder to add it\.$"):
             normalize_kokoro_voices("af_missing", ["af_heart"])
+        with self.assertRaisesRegex(ValueError, "These Kokoro voices are not installed: af_missing, bf_missing"):
+            normalize_kokoro_voices("af_missing,bf_missing", ["af_heart"])
+
+    def test_a_lab_with_no_kokoro_voice_is_told_to_install_kokoro(self):
+        with self.assertRaisesRegex(ValueError, "^Kokoro 82M is not installed. Open Models & features and press Install"):
+            normalize_kokoro_voices("af_heart", [])
 
     def test_language_routing_supports_aliases_and_infers_british_pipeline(self):
         self.assertEqual(resolve_kokoro_language("English", ["bf_emma"]), "b")

@@ -45,7 +45,7 @@ class FakeEngines:
         if self.gate is not None:
             self.gate.wait(15)
         if self.busy:
-            raise WorkerBusy("The GPU worker is busy with another load or generation request.")
+            raise WorkerBusy("The model worker is busy with another load or generation request.")
         if request.get("text") == "bad":
             raise ValueError("The text is not allowed.")
         axis = np.arange(RATE // 10, dtype=np.float32) / RATE

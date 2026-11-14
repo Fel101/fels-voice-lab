@@ -213,7 +213,7 @@ def import_clip(clip, *, character, engine_id=DEFAULT_ENGINE, label=None, create
     warnings = list(clip.warnings)
     if status == "registered" and plan["reference"]["earlier_import_with_other_details"]:
         warnings.append("this audio was registered before with a different transcript, origin or allowed use; "
-                        "this is a new reference version and the earlier one is kept")
+                        "this is a new version of the voice recording, and the earlier one is kept")
     folder = store.get_media_path("reference_source", reference["id"]).parent
     record = (json.dumps(_import_record(clip, ids, warnings, stamp), indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     written = [name for name, payload in ((CLIP_FILE, clip.sidecar_bytes), (IMPORT_FILE, record))

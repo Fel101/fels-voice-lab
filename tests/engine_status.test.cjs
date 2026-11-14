@@ -456,11 +456,11 @@ test('another card is held while an install runs, and shows nothing of it', () =
 test('an install that could not start says so in the window and still refreshes the status', async () => {
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};
   const {context: c, fields, calls} = harness({'/api/engines/kokoro/install': body => body.dry_run ? {plan}
-    : new Error('The GPU worker is busy while a clip is made.'), '/api/engines/status': status});
+    : new Error('The model worker is busy while a clip is made.'), '/api/engines/status': status});
   c.modelCards = {kokoro: card('Kokoro')};
   await c.planInstall('kokoro', false);
   await c.startInstall();
-  assert.equal(fields.installState.textContent, 'The install did not start: The GPU worker is busy while a clip is made.');
+  assert.equal(fields.installState.textContent, 'The install did not start: The model worker is busy while a clip is made.');
   assert.equal(calls[calls.length - 1].url, '/api/engines/status');
   assert.equal(fields.installGo.disabled, false);
   assert.equal(fields.installGo.hidden, true);
@@ -558,10 +558,10 @@ test('choosing a device posts it, holds the switch while it saves, and shows a r
   assert.deepEqual(calls.slice(0, 2).map(call => [call.url, JSON.stringify(call.body)]),
     [['/api/engines/kokoro/device', '{"device":"cpu"}'], ['/api/engines/status', undefined]]);
   assert.equal(view.pendingDevice, false);
-  answer = new Error('The GPU worker is busy with another load or generation request.');
+  answer = new Error('The model worker is busy with another load or generation request.');
   view.radios.cpu.checked = true;
   await view.radios.cpu.handlers.change();
-  assert.equal(view.note.textContent, 'Could not switch it: The GPU worker is busy with another load or generation request.');
+  assert.equal(view.note.textContent, 'Could not switch it: The model worker is busy with another load or generation request.');
   assert.equal(view.note.className, 'meta device-note warn');
   assert.deepEqual([view.radios.gpu.checked, view.radios.cpu.checked], [true, false]);    // the status puts it back
 });

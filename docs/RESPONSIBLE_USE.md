@@ -2,7 +2,7 @@
 
 Use recordings you made yourself or whose speaker and rights holder permit
 the proposed cloning and distribution. Keep the exact transcript, origin,
-permission evidence and allowed uses with the immutable reference version.
+permission evidence and allowed uses with the voice recording, which never changes once saved.
 An approval checkbox records a human decision; it cannot verify ownership.
 
 Do not use this software for deceptive impersonation, fraud, non-consensual

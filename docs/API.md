@@ -10,7 +10,7 @@ service answers `GET /api/openapi.json` with it.
 
 ## The basics
 
-**Address.** `http://127.0.0.1:8765` when you start `serve.py`; `serve.py --port 8768` picks another. The desktop app starts
+**Address.** `http://127.0.0.1:8765` when you start `serve.py` or `serve.bat`; `--port 8770` picks another. The desktop app starts
 its own copy on a free port that it does not announce, so for scripts start `serve.py` yourself and use its address.
 
 **Local only.** The service listens on 127.0.0.1. A request whose `Host` is not `127.0.0.1` or `localhost`, or that a web page
@@ -22,13 +22,16 @@ sign-in and no key: anything on this computer can call the service, so do not fo
 reference recordings 32 MiB. Answers are JSON, except where a call returns audio, CSV or a file.
 
 **Errors.** A failure is a JSON object, `{"error": "what went wrong"}`, with a status: `400` the request was refused (the
-message says why), `403` not local, `404` nothing there, `409` busy, or already exists, `413` too large, `500` the service
-failed, `504` an engine did not answer in time. A body over its limit is read through before the `413` goes out, so a client
-that is still sending gets the answer; one that declares more than 512 MiB is not read, and its client may see the connection
-reset instead.
+message says why), `403` not local, `404` nothing there, `409` busy, or already exists, `413` too large, `499` cancelled
+while it waited or ran, `500` the service failed, `504` an engine did not answer in time. A body over its limit is read
+through before the `413` goes out, so a client that is still sending gets the answer; one that declares more than 512 MiB is
+not read, and its client may see the connection reset instead.
 
-**One generation at a time.** The GPU worker does one load or generation at once. A second speaking request while one runs
-is refused with `409`, not queued: wait, then send it again. Scene batches queue their own work and take one turn at a time.
+**One generation at a time.** The model worker does one load, clip, take, test or install at a time. A request that needs
+it while it is busy gets `409` at once, unless its JSON body has `wait_seconds`: then it waits in line for up to that many
+seconds (at most 3600) and runs when its turn comes. `GET /api/queue` shows what runs and what waits, and
+`POST /api/queue/{request_id}/cancel` takes a request out of the line or stops it while it runs; the request then answers
+`499`. A scene batch's lines wait behind other requests. Send your own `X-Request-Id` so you know which id to cancel.
 
 **Request ids.** Every answer carries `X-Request-Id`. Send your own (letters, digits, `.`, `_` and `-`, up to 64 characters)
 and the same id is in the service log, so your logs and the Lab's can be matched.
@@ -290,7 +293,7 @@ Install an engine with its guided installer (every engine in the catalog has one
 | Also answers | When |
 |---|---|
 | `400` | The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or `dry_run` or `nvidia` is not true or false. |
-| `409` | An install is already running, or the GPU worker is busy. |
+| `409` | An install is already running, or the model worker is busy. |
 
 <a id="post-api-engines-engine_id-device"></a>
 
@@ -311,7 +314,7 @@ Run one engine on the graphics card or on the CPU from its next load, as the swi
 | Also answers | When |
 |---|---|
 | `400` | The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or `gpu` was asked of a service that runs on the CPU. |
-| `409` | The GPU worker is busy. |
+| `409` | The model worker is busy. |
 
 <a id="post-api-load"></a>
 
@@ -589,12 +592,12 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 | POST | [`/api/characters/{character_id}`](#post-api-characters-character_id) | Rename a character or change its description. |
 | POST | [`/api/characters/{character_id}/identities`](#post-api-characters-character_id-identities) | Add a voice to a character. |
 | POST | [`/api/identities/{identity_id}/update`](#post-api-identities-identity_id-update) | Rename a voice, change its notes or Kokoro voice, or approve or reject it. |
-| POST | [`/api/identities/{identity_id}/references`](#post-api-identities-identity_id-references) | Upload a recording for a cloning voice and save it as a reference version. |
+| POST | [`/api/identities/{identity_id}/references`](#post-api-identities-identity_id-references) | Upload a recording for a cloning voice and save it as a voice recording. |
 | POST | [`/api/identities/{identity_id}/references/preview`](#post-api-identities-identity_id-references-preview) | Process a recording the way an upload would, and return the result without saving anything. |
 | POST | [`/api/identities/{identity_id}/references/from-take`](#post-api-identities-identity_id-references-from-take) | Save a take as a new reference recording for a cloning voice. |
 | POST | [`/api/references/{reference_id}/versions`](#post-api-references-reference_id-versions) | Save a new version of a reference recording with a different transcript or trim. |
-| GET | [`/api/references/{reference_id}/audio`](#get-api-references-reference_id-audio) | Download a reference version's processed WAV. |
-| GET | [`/api/references/{reference_id}/source`](#get-api-references-reference_id-source) | Download the recording a reference version was made from. |
+| GET | [`/api/references/{reference_id}/audio`](#get-api-references-reference_id-audio) | Download a voice recording's processed WAV. |
+| GET | [`/api/references/{reference_id}/source`](#get-api-references-reference_id-source) | Download the file a voice recording was made from, as it was uploaded. |
 | POST | [`/api/references/{reference_id}/transcript-suggestion`](#post-api-references-reference_id-transcript-suggestion) | Draft a transcript of a reference recording. Nothing is saved. |
 | GET | [`/api/pronunciations`](#get-api-pronunciations) | List pronunciation entries. |
 | POST | [`/api/pronunciations`](#post-api-pronunciations) | Add a pronunciation, or change the one with the same term. |
@@ -692,7 +695,7 @@ Approving a cloning voice needs a recording with its exact transcript. Approving
 
 #### `POST /api/identities/{identity_id}/references`
 
-Upload a recording for a cloning voice and save it as a reference version.
+Upload a recording for a cloning voice and save it as a voice recording.
 
 | Path parameter | Meaning |
 |---|---|
@@ -782,7 +785,7 @@ Save a new version of a reference recording with a different transcript or trim.
 
 #### `GET /api/references/{reference_id}/audio`
 
-Download a reference version's processed WAV.
+Download a voice recording's processed WAV.
 
 | Path parameter | Meaning |
 |---|---|
@@ -798,7 +801,7 @@ Download a reference version's processed WAV.
 
 #### `GET /api/references/{reference_id}/source`
 
-Download the recording a reference version was made from.
+Download the file a voice recording was made from, as it was uploaded.
 
 | Path parameter | Meaning |
 |---|---|
@@ -1781,7 +1784,7 @@ Say a recording again in another voice, with Chatterbox voice conversion.
 |---|---|---|
 | `source_path` (required) | string | The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's reference, saved-voice, Cast, scene or conversion folders, such as a file kept with `POST /api/conversion/uploads`. |
 | `target_reference_path` (required) | string | The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in the reference, saved-voice, Cast reference or conversion folders. A file kept with `POST /api/conversion/uploads` must have been sent as a target. |
-| `target_reference_id` | string | A Cast reference version; its recording must be the target file. |
+| `target_reference_id` | string | A Cast voice recording; its file must be the target file. |
 | `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
 | `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 

@@ -158,7 +158,7 @@ class CharacterAuthoringTests(unittest.TestCase):
         self.assertEqual(take["model"]["voice_identity"]["engine_options"]["language"], "French")
         self.assertIsNone(take["reference_version_id"])
         self.assertEqual(reopened.get_generation_identity(identity["id"])["reference"], None)
-        with self.assertRaisesRegex(ValueError, "does not use a reference"):
+        with self.assertRaisesRegex(ValueError, "does not use a voice recording"):
             reopened.get_generation_identity(identity["id"], "0" * 32)
         with self.assertRaisesRegex(ValueError, "immutable"):
             reopened.update_identity(identity["id"], {"engine_options": {"speaker": "Serena"}})

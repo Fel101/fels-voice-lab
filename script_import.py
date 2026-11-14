@@ -94,20 +94,34 @@ class _Reader:
         }
 
 
+def _speaker_line(line):
+    """`NAME: words`, `NAME (direction): words` or `NAME: [direction] words` as (name, words, direction); None for a line
+    that names nobody."""
+    match = _TEXT_LINE.fullmatch(line)
+    if not match or len(match.group("name").split()) > 4 or "//" in match.group("rest")[:2]:
+        return None
+    rest, direction = match.group("rest").strip(), match.group("inline") or ""
+    leading = _LEADING_DIRECTION.fullmatch(rest)
+    if leading:
+        direction = " ".join(filter(None, (direction, leading.group("square") or leading.group("round"))))
+        rest = leading.group("rest").strip()
+    return _clean(match.group("name")), rest, _clean(direction)
+
+
 def _plain(text):
     reader = _Reader()
     for number, raw in enumerate(text.split("\n"), 1):
         line = raw.strip()
         if not line:
             continue
-        match = _TEXT_LINE.fullmatch(line)
-        if match and len(match.group("name").split()) <= 4 and "//" not in match.group("rest")[:2]:
-            name = _clean(match.group("name"))
-            rest, direction = match.group("rest").strip(), match.group("inline") or ""
-            leading = _LEADING_DIRECTION.fullmatch(rest)
-            if leading:
-                direction = _clean(" ".join(filter(None, (direction, leading.group("square") or leading.group("round")))))
-                rest = leading.group("rest").strip()
+        spoken = _speaker_line(line)
+        before = None if spoken else _LEADING_DIRECTION.fullmatch(line)
+        if before and (after := _speaker_line(before.group("rest").strip())):
+            # `[softly] MIRA: Did you?`: a direction before the name is that line's direction, not words for a narrator.
+            name, rest, direction = after
+            spoken = name, rest, _clean(" ".join(filter(None, (before.group("square") or before.group("round"), direction))))
+        if spoken:
+            name, rest, direction = spoken
             if not rest:
                 reader.skip(number, line, "a name with no words to say")
             else:

@@ -207,7 +207,7 @@ class PerformanceTests(ServiceCase):
                                ({"settings": {"speed": 1.2}}, "does not support performance setting"),
                                ({"settings": {"temperature": "warm"}}, "must be a finite number"),
                                ({"settings": []}, "settings must be an object"),
-                               ({"reference_version_id": "0" * 32}, "does not use a reference")):
+                               ({"reference_version_id": "0" * 32}, "does not use a voice recording")):
             with self.subTest(extra=extra):
                 status, result, _ = self.perform(identity, **extra)
                 self.assertEqual(status, 400)

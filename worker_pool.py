@@ -344,8 +344,8 @@ class EnginePool:
     @staticmethod
     def _refusal(running):
         if running is not None and running.held_for:
-            return f"The GPU worker is busy while {running.held_for}."
-        return "The GPU worker is busy with another load or generation request."
+            return f"The model worker is busy while {running.held_for}."
+        return "The model worker is busy with another load or generation request."
 
     def _acquire_job(self, engine=None, what="Model work", can_stop=True):
         """Take the worker for this thread's request, in its place in line (see queued()). The ticket's stop ends the
@@ -384,7 +384,7 @@ class EnginePool:
 
     def hold(self, reason, request_id=None):
         """Keep every load, test and clip out while something long changes what is installed, such as an install from the
-        Models page. `reason` finishes the sentence "The GPU worker is busy while ..." in the refusals, and the queue shows it
+        Models page. `reason` finishes the sentence "The model worker is busy while ..." in the refusals, and the queue shows it
         to those waiting. Raises WorkerBusy at once when a request already holds the worker; release_hold() gives it back."""
         ticket = Ticket(request_id, "Install", can_stop=False)
         ticket.held_for = reason

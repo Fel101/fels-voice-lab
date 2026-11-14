@@ -124,7 +124,7 @@ package back and checks every hash, the captions, and each file's codec and leng
 - **Voice cloning:** browse for a recording or record one locally, listen, document its source and
   allowed use, save it as a named Cast candidate and generate a test line.
 - **Cast and Perform:** voice cards with audio previews and model labels, a search box,
-  immutable reference versions with transcripts and provenance, approvals, pronunciation, saved
+  voice recordings that never change once saved, with transcripts and provenance, approvals, pronunciation, saved
   performances, seed variants, take review with loudness and peak readings, and a take editor that
   saves each edit as a new take.
 - **Scenes and batch:** script import from plain text and Fountain, line names, long lines split
@@ -204,10 +204,10 @@ release is out, and `update.bat` installs it with the Lab closed, keeping your l
 Browser mode, without the desktop window:
 
 ```powershell
-.venv\Scripts\python.exe serve.py --port 8768
+.venv\Scripts\python.exe serve.py
 ```
 
-Open `http://127.0.0.1:8768/`. Closing a browser tab does not stop a foreground service. The desktop
+Open `http://127.0.0.1:8765/`. Closing a browser tab does not stop a foreground service. The desktop
 launcher owns a separate backend on a free port and never closes independently started services.
 Read [desktop and state behavior](docs/SETUP.md).
 

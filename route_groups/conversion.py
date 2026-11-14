@@ -49,7 +49,7 @@ def register(router, lab):
             reference = cast.get_reference(reference_id)
             recorded_target = Path(cast.get_media_path("reference", reference_id)).resolve()
             if recorded_target != target_path:
-                raise ValueError("Target reference path does not match the selected Cast reference version.")
+                raise ValueError("The target file is not the selected Cast voice recording.")
             target_metadata = {
                 "reference_version_id": reference["id"],
                 "origin": reference.get("origin", ""),

@@ -300,7 +300,7 @@
             }
           },
           "409": {
-            "description": "An install is already running, or the GPU worker is busy.",
+            "description": "An install is already running, or the model worker is busy.",
             "content": {
               "application/json": {
                 "schema": {
@@ -376,7 +376,7 @@
             }
           },
           "409": {
-            "description": "The GPU worker is busy.",
+            "description": "The model worker is busy.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1646,7 +1646,7 @@
     "/api/identities/{identity_id}/references": {
       "post": {
         "operationId": "post_api_identities_identity_id_references",
-        "summary": "Upload a recording for a cloning voice and save it as a reference version.",
+        "summary": "Upload a recording for a cloning voice and save it as a voice recording.",
         "tags": [
           "Cast"
         ],
@@ -1962,7 +1962,7 @@
     "/api/references/{reference_id}/audio": {
       "get": {
         "operationId": "get_api_references_reference_id_audio",
-        "summary": "Download a reference version's processed WAV.",
+        "summary": "Download a voice recording's processed WAV.",
         "tags": [
           "Cast"
         ],
@@ -2008,7 +2008,7 @@
     "/api/references/{reference_id}/source": {
       "get": {
         "operationId": "get_api_references_reference_id_source",
-        "summary": "Download the recording a reference version was made from.",
+        "summary": "Download the file a voice recording was made from, as it was uploaded.",
         "tags": [
           "Cast"
         ],
@@ -4956,7 +4956,7 @@
                   },
                   "target_reference_id": {
                     "type": "string",
-                    "description": "A Cast reference version; its recording must be the target file."
+                    "description": "A Cast voice recording; its file must be the target file."
                   },
                   "wait_seconds": {
                     "type": "number",

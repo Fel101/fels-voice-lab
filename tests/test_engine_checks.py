@@ -782,7 +782,7 @@ class FailedLoadTests(TempTree):
             pool.load("kokoro")
         pool.hold("a test holds the worker")
         try:
-            with self.assertRaisesRegex(WorkerBusy, "^The GPU worker is busy"):
+            with self.assertRaisesRegex(WorkerBusy, "^The model worker is busy"):
                 pool.speak({"engine": "kokoro", "text": "Hello there."})
         finally:
             pool.release_hold()

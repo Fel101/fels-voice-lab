@@ -348,7 +348,7 @@ class CastApiTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as rejected:
             urllib.request.urlopen(request, timeout=10)
         self.assertEqual(rejected.exception.code, 400)
-        self.assertIn("reference version", rejected.exception.read().decode("utf-8").lower())
+        self.assertIn("no approved voice recording", rejected.exception.read().decode("utf-8").lower())
         self.assertEqual(self.engines.calls, [])
 
     def test_transcript_silence_and_overlong_uploads_are_rejected_before_engine_call(self):

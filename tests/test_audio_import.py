@@ -98,7 +98,7 @@ class Mp3ImportTests(ImportBase):
 
         data = mp3_bytes(3.0)
         with mock.patch.object(cast_store, "MAX_SOURCE_SECONDS", 1.0), mock.patch.object(cast_store.sf, "SoundFile", Recording):
-            with self.assertRaisesRegex(ValueError, "Source audio duration must be"):
+            with self.assertRaisesRegex(ValueError, "A voice recording must be"):
                 CastStore._decode_audio(data, "voice.mp3")
         self.assertEqual(requests, [RATE + 1])  # one second and a frame, not the three seconds in the file
         audio, rate, duration, suffix = CastStore._decode_audio(data, "voice.mp3")
@@ -184,7 +184,7 @@ class M4aImportTests(ImportBase):
     def test_an_m4a_longer_than_the_ceiling_is_refused_with_the_usual_message(self):
         data = m4a_bytes(self.temp.name, 3.0)
         with mock.patch.object(cast_store, "MAX_SOURCE_SECONDS", 1.0):
-            with self.assertRaisesRegex(ValueError, "Source audio duration must be"):
+            with self.assertRaisesRegex(ValueError, "A voice recording must be"):
                 self.store.add_reference(self.identity["id"], "voice.m4a", data, **TERMS)
         self.assertEqual(self.reference_folders(), [])
 

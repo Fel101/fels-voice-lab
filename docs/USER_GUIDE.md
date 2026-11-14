@@ -258,13 +258,13 @@ See [the scene schema](scenes/scene-schema-v1.md).
 
 ### Import a script
 
-**Import a script from text or Fountain** takes a script you already have, from a `.txt` or `.fountain` file or pasted
-in. Plain text has one speech per line, written `NAME: words`. A direction in brackets or parentheses at the start of the
-words, or after the name (`MARA (quietly): words`), becomes the line's acting direction. Fountain is the screenplay format,
-with each name in capitals above its lines: a parenthetical is the direction of the words after it, extensions such as
-(V.O.) and (CONT'D) come off the names, and the title page's Title names the scene. Scene headings, transitions, notes,
-sections and the boneyard are left out. **Read the script** says how many lines and speakers it found, and lists by line
-number the lines it could not read, such as a name with no words or a direction on its own.
+**Import a script from text or Fountain** takes a script you already have, from a `.txt` or `.fountain` file or pasted in.
+Plain text has one speech per line, written `NAME: words`. A direction in brackets or parentheses at the start of the words,
+after the name (`MARA (quietly): words`) or before it (`[quietly] MARA: words`), becomes the line's acting direction.
+Fountain is the screenplay format, with each name in capitals above its lines: a parenthetical is the direction of the words
+after it, extensions such as (V.O.) and (CONT'D) come off the names, and the title page's Title names the scene. Scene
+headings, transitions, notes, sections and the boneyard are left out. **Read the script** says how many lines and speakers
+it found, and lists by line number the lines it could not read, such as a name with no words or a direction on its own.
 
 Then each speaker gets a voice. A speaker with the same name as a Cast character starts on that character's approved voice;
 the others start on **Choose a voice…**, and **Create the scene** stays off until every speaker has a voice or **Leave these

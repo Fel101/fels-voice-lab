@@ -141,6 +141,21 @@ class PlainTextTests(unittest.TestCase):
         )
         self.assertEqual([line["speaker"] for line in script["lines"]], [None, None, None, "Dr. Ruiz"])
 
+    def test_a_direction_before_the_name_is_that_lines_direction(self):
+        """Read as narration, a narrator would have spoken the bracket and the name."""
+        script = parse_script(
+            "[softly] MIRA: Did you?\n(angrily) TOBIN (low): [beat] No.\n[Thunder] The rain fell.\n[softly] MIRA:\n", "text"
+        )
+        self.assertEqual(
+            said(script),
+            [
+                (1, "MIRA", "softly", "Did you?"),
+                (2, "TOBIN", "angrily low beat", "No."),
+                (3, None, "", "[Thunder] The rain fell."),
+            ],
+        )
+        self.assertEqual(script["unread"], [{"number": 4, "text": "[softly] MIRA:", "reason": "a name with no words to say"}])
+
     def test_the_same_name_in_another_case_is_the_same_speaker(self):
         script = parse_script("MARA: One.\nMara: Two.\n", "text")
         self.assertEqual(script["speakers"], [{"name": "MARA", "lines": 2}])

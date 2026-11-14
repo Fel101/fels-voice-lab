@@ -324,7 +324,7 @@ class InstallTests(InstallerCase):
         status = self.pool.engine_status()
         self.assertTrue(status["busy"])
         self.assertEqual(self.argv(), "--yes")
-        with self.assertRaisesRegex(WorkerBusy, r"^The GPU worker is busy while Kokoro 82M is being installed\.$"):
+        with self.assertRaisesRegex(WorkerBusy, r"^The model worker is busy while Kokoro 82M is being installed\.$"):
             self.pool.load("kokoro")
         self.release()
         done = self.wait_until(self.finished, "the install to end")
@@ -358,7 +358,7 @@ class InstallTests(InstallerCase):
         self.stub("print('working', flush=True)\n")
         self.pool.hold("a clip is made")
         try:
-            with self.assertRaisesRegex(WorkerBusy, r"^The GPU worker is busy while a clip is made\.$"):
+            with self.assertRaisesRegex(WorkerBusy, r"^The model worker is busy while a clip is made\.$"):
                 self.installer.start("kokoro")
         finally:
             self.pool.release_hold()

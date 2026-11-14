@@ -1,6 +1,6 @@
 # Scene manifest schema v1
 
-Scenes are ordered scripts whose lines point to existing cast voice identities. This reference documents the current script-schema-v1 contract in `scene_store.py`, including later identity and model integrations. JSON is UTF-8; CSV import/export uses UTF-8 with a BOM for spreadsheet compatibility. API paths are local to the voice-lab service (for example `http://127.0.0.1:8768`).
+Scenes are ordered scripts whose lines point to existing cast voice identities. This reference documents the current script-schema-v1 contract in `scene_store.py`, including later identity and model integrations. JSON is UTF-8; CSV import/export uses UTF-8 with a BOM for spreadsheet compatibility. API paths are local to the voice-lab service (for example `http://127.0.0.1:8765`).
 
 ## Minimal JSON
 

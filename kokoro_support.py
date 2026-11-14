@@ -29,6 +29,9 @@ _LANGUAGE_LOOKUP = {alias.casefold(): code for code, data in KOKORO_LANGUAGES.it
 _LANGUAGE_LOOKUP.update({"english": "a", "en": "a"})
 _VOICE_RE = re.compile(r"[a-z][fm]_[a-z][a-z0-9_]*\Z")
 _OPTIONAL_FRONTEND_MODULES = {"j": "pyopenjtalk", "z": "ordered_set"}
+# No voice at all means Kokoro is not installed; the words are those engine_checks.install_pointer uses for any model.
+KOKORO_NOT_INSTALLED = ("Kokoro 82M is not installed. Open Models & features and press Install on its card, or run "
+                        "setup-kokoro.bat in the lab folder, then try again.")
 
 
 def kokoro_snapshot_dir() -> Path:
@@ -69,10 +72,13 @@ def normalize_kokoro_voices(value, available=None) -> list[str]:
         raise ValueError("A Kokoro blend cannot include the same voice more than once.")
     if available is None:
         available = discover_kokoro_voices()
+    if not available:
+        raise ValueError(KOKORO_NOT_INSTALLED)
     missing = [voice for voice in voices if voice not in available]
     if missing:
-        raise ValueError("Kokoro voice pack(s) are not cached locally: " + ", ".join(missing) +
-                         ". Add them with: setup-kokoro.bat --voices " + " ".join(missing))
+        raise ValueError(("This Kokoro voice is" if len(missing) == 1 else "These Kokoro voices are") + " not installed: "
+                         + ", ".join(missing) + ". Run setup-kokoro.bat --voices " + " ".join(missing)
+                         + " in the lab folder to add " + ("it." if len(missing) == 1 else "them."))
     return sorted(voices)
 
 

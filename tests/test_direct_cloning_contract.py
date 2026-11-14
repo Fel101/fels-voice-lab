@@ -208,7 +208,7 @@ class DirectCloningContractTests(unittest.TestCase):
         _, second = self.create_identity("Second voice", "drama-3")
         foreign = self.upload(second["id"])["reference"]
         body, _ = self.perform(first, foreign, status=400)
-        self.assertIn("identity", json.loads(body)["error"].lower())
+        self.assertIn("belongs to another voice", json.loads(body)["error"].lower())
         self.assertEqual(self.engines.calls, [])
 
     def test_unsupported_corrupt_empty_and_missing_rights_uploads_are_rejected_without_media(self):

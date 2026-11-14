@@ -177,7 +177,7 @@ ROUTES = [
       reply="`check`: `status` (`passed`, `failed` or `not_installed`), `device`, `ran_on`, `checked_at`, `reason`, "
             "`load_seconds`, `total_s`, `audio_seconds`, `real_time_factor` and, for a missing install, `missing`. Takes "
             "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
-      errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The GPU worker is busy."))),
+      errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The model worker is busy."))),
     R("POST", "/api/engines/{engine_id}/install", "Service",
       "Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the "
       "installer.",
@@ -194,7 +194,7 @@ ROUTES = [
             "the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
       errors=((400, "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or "
                     "`dry_run` or `nvidia` is not true or false."),
-              (409, "An install is already running, or the GPU worker is busy."))),
+              (409, "An install is already running, or the model worker is busy."))),
     R("POST", "/api/engines/{engine_id}/device", "Service",
       "Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.",
       body=(F("device", "string", "`gpu` or `cpu`.", required=True),),
@@ -204,15 +204,15 @@ ROUTES = [
             "is chosen, until its GPU build is installed.",
       errors=((400, "The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or "
                     "`gpu` was asked of a service that runs on the CPU."),
-              (409, "The GPU worker is busy."))),
+              (409, "The model worker is busy."))),
     R("POST", "/api/load", "Service", "Load an engine into memory ahead of its first use.",
       body=(F("engine", "string", "An engine id. Default `kokoro`."),
             F("profile", "string", "Breeze only: its decode profile. Default `eager`.")),
       reply="`engine`, `loaded`, `load_seconds`, `sample_rate`, `memory`, `backend`, `checkpoint`, `checkpoint_revision`, "
             "`supported_speakers` and `supported_languages`.",
-      errors=((409, "The GPU worker is busy."), (500, ENGINE_NOT_INSTALLED))),
+      errors=((409, "The model worker is busy."), (500, ENGINE_NOT_INSTALLED))),
     R("POST", "/api/unload", "Service", "Unload every engine and free the GPU.",
-      body_kind="none", reply="`{\"ok\": true}`.", errors=((409, "The GPU worker is busy."),)),
+      body_kind="none", reply="`{\"ok\": true}`.", errors=((409, "The model worker is busy."),)),
     R("POST", "/api/prepare-reference", "Service", "Prepare a reference recording for an engine so its first clone is quick.",
       body=(F("engine", "string", "An engine id that clones from a recording.", True),
             F("path", "string", "A recording inside the Lab's reference storage.", True),
@@ -220,7 +220,7 @@ ROUTES = [
             F("exaggeration", "number", "Chatterbox: how strongly to act. Default 0.5."),
             F("profile", "string", "Breeze only: its decode profile."),
             F("xvec_only", "boolean", "Qwen Base only: use the speaker embedding alone, without a transcript.")),
-      reply="What the engine reports about the prepared reference.", errors=((409, "The GPU worker is busy."),)),
+      reply="What the engine reports about the prepared reference.", errors=((409, "The model worker is busy."),)),
     R("GET", "/api/performance/settings", "Service",
       "Describe the settings each engine's performance takes, and the languages its picker offers.",
       reply="`engines`: for each engine its controls (name, type, range, default), whether it takes a direction, and its "
@@ -333,7 +333,7 @@ ROUTES = [
                     "settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit "
                     "of a take."),
               (404, "The identity or the recording does not exist."),
-              (409, "The GPU worker is busy. One generation runs at a time; a second request is refused, not queued."),
+              (409, "The model worker is busy."),
               (504, "The engine did not answer in time.")),
       notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does."),
     R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text.",
@@ -381,7 +381,7 @@ ROUTES = [
       notes="Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another "
             "approved voice of the same character and engine back to `candidate`."),
     R("POST", "/api/identities/{identity_id}/references", "Cast", "Upload a recording for a cloning voice and save it as a "
-                                                                  "reference version.",
+                                                                  "voice recording.",
       status=201, body_kind="audio",
       reply="`reference`: the saved version with its quality readings and `audio_url`.",
       errors=((413, "The recording is over 32 MiB."),),
@@ -417,9 +417,9 @@ ROUTES = [
             F("channel", "string", "`mono`, `left` or `right`."),
             F("noise_reduction", "object", "`enabled`, `profile_start_seconds`, `profile_end_seconds`, `strength`.")),
       reply="`reference`: the new version. The earlier one is kept as it was."),
-    R("GET", "/api/references/{reference_id}/audio", "Cast", "Download a reference version's processed WAV.",
+    R("GET", "/api/references/{reference_id}/audio", "Cast", "Download a voice recording's processed WAV.",
       reply_kind="wav", reply="The WAV.", headers=(F("X-Reference-Version", "string", "The version's id."),)),
-    R("GET", "/api/references/{reference_id}/source", "Cast", "Download the recording a reference version was made from.",
+    R("GET", "/api/references/{reference_id}/source", "Cast", "Download the file a voice recording was made from, as it was uploaded.",
       reply_kind="audio", reply="The recording as it was uploaded."),
     R("POST", "/api/references/{reference_id}/transcript-suggestion", "Cast",
       "Draft a transcript of a reference recording. Nothing is saved.", body_kind="none",
@@ -704,11 +704,11 @@ ROUTES = [
                                                  "the reference, saved-voice, Cast reference or conversion folders. A file "
                                                  "kept with `POST /api/conversion/uploads` must have been sent as a target.",
               True),
-            F("target_reference_id", "string", "A Cast reference version; its recording must be the target file.")),
+            F("target_reference_id", "string", "A Cast voice recording; its file must be the target file.")),
       reply="`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both "
             "inputs by checksum, and for a file chosen from this computer its original name and, for the target, the origin "
             "and allowed use it was given.",
-      errors=((409, "The GPU worker is busy."),)),
+      errors=((409, "The model worker is busy."),)),
     R("POST", "/api/conversion/uploads", "Conversion", "Keep a recording from this computer as a source performance or a "
                                                        "target voice for voice conversion.",
       status=201, body_kind="audio",

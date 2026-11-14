@@ -87,7 +87,7 @@ def _safe_relative(root: Path, relative: str) -> Path:
     return target
 
 
-REFERENCE_LENGTH = "Source audio duration must be {minimum:g}–{maximum:g} seconds; trim it before saving a reference version."
+REFERENCE_LENGTH = "A voice recording must be {minimum:g}–{maximum:g} seconds long; trim this one before saving it."
 
 
 def decode_audio(source_bytes, filename, *, what="Reference", max_seconds=None, length=REFERENCE_LENGTH):
@@ -667,15 +667,15 @@ class CastStore:
             raise ValueError("Identity status must be candidate, approved, or rejected.")
         selected_reference = changes.get("reference_version_id", row["approved_reference_id"])
         if status == "approved" and row["kind"] == "reference":
-            selected_reference = _validate_id(selected_reference, "reference version id")
+            selected_reference = _validate_id(selected_reference, "voice recording id")
             ref = self._row("SELECT * FROM reference_versions WHERE id=? AND identity_id=?",
                             (selected_reference, identity_id))
             if ref is None:
-                raise ValueError("Approve a reference version belonging to this identity.")
+                raise ValueError("Approve this voice with one of its own voice recordings.")
             if self.retirement_state("reference", selected_reference) or self.retirement_state("identity", identity_id):
-                raise ValueError("This voice or reference recording is retired; restore it before approving.")
+                raise ValueError("This voice or its voice recording is retired; restore it before approving.")
             if REFERENCE_POLICIES.get(row["engine_id"], {}).get("requires_transcript_for_cast", True) and not ref["transcript"].strip():
-                raise ValueError("Add the exact reference transcript before approving this voice.")
+                raise ValueError("Add the exact words of the voice recording before approving this voice.")
             self._validate_reference(ref, row["engine_id"])
         elif row["kind"] in {"fixed_voice", "preset_voice"}:
             selected_reference = None
@@ -835,7 +835,7 @@ class CastStore:
         transcript = str(transcript or "").strip()
         origin, allowed_use = str(origin or "").strip(), str(allowed_use or "").strip()
         if len(transcript) > MAX_REFERENCE_TEXT:
-            raise ValueError(f"Reference transcript must be {MAX_REFERENCE_TEXT} characters or fewer.")
+            raise ValueError(f"The exact words of a voice recording must be {MAX_REFERENCE_TEXT} characters or fewer.")
         if len(origin) > 1000 or len(allowed_use) > 1000:
             raise ValueError("Reference origin and allowed-use notes must be 1000 characters or fewer.")
         if not origin or not allowed_use:
@@ -846,7 +846,7 @@ class CastStore:
         derived, metrics = self._make_reference(audio, sample_rate, source_duration, edits, policy["max_seconds"],
                                                 speakers=self.speakers)
         if not transcript and identity["engine_id"] in TRANSCRIPT_ENGINES:
-            raise ValueError(f"{identity['engine_id']} requires the exact transcript before saving this reference version.")
+            raise ValueError(f"{identity['engine_id']} needs the exact transcript, the words in the recording, before it is saved.")
         source_hash = hashlib.sha256(source_bytes).hexdigest()
         audio_buf = io.BytesIO()
         sf.write(audio_buf, derived, metrics["sample_rate"], format="WAV", subtype="PCM_16")
@@ -895,10 +895,10 @@ class CastStore:
         return saved
 
     def add_reference_version(self, reference_id, changes):
-        reference_id = _validate_id(reference_id, "reference version id")
+        reference_id = _validate_id(reference_id, "voice recording id")
         previous = self._row("SELECT * FROM reference_versions WHERE id=?", (reference_id,))
         if previous is None:
-            raise KeyError("Reference version not found.")
+            raise KeyError("Voice recording not found.")
         if self.retirement_state("reference", reference_id) or self.retirement_state("identity", previous["identity_id"]):
             raise ValueError("This recording or its voice is retired; restore it before saving a new version.")
         identity = self._row("SELECT * FROM identities WHERE id=?", (previous["identity_id"],))
@@ -906,18 +906,18 @@ class CastStore:
         source_bytes = source_path.read_bytes()
         transcript = str(changes.get("transcript", previous["transcript"]) or "").strip()
         if len(transcript) > MAX_REFERENCE_TEXT:
-            raise ValueError(f"Reference transcript must be {MAX_REFERENCE_TEXT} characters or fewer.")
+            raise ValueError(f"The exact words of a voice recording must be {MAX_REFERENCE_TEXT} characters or fewer.")
         edit = json.loads(previous["edit_json"])
         edit.update({key: changes[key] for key in ("start_seconds", "end_seconds", "target_sample_rate", "channel", "noise_reduction") if key in changes})
         origin = str(changes.get("origin", previous["origin"]) or "").strip()
         allowed_use = str(changes.get("allowed_use", previous["allowed_use"]) or "").strip()
         if not origin or not allowed_use:
-            raise ValueError("Reference origin and allowed-use terms cannot be erased in a new version.")
+            raise ValueError("A new version of a voice recording keeps its origin and allowed use; they cannot be left empty.")
         audio, sr, duration, _suffix = self._decode_audio(source_bytes, previous["source_name"])
         policy = REFERENCE_POLICIES[identity["engine_id"]]
         derived, metrics = self._make_reference(audio, sr, duration, edit, policy["max_seconds"], speakers=self.speakers)
         if not transcript and identity["engine_id"] in TRANSCRIPT_ENGINES:
-            raise ValueError(f"{identity['engine_id']} requires the exact transcript before saving this reference version.")
+            raise ValueError(f"{identity['engine_id']} needs the exact transcript, the words in the recording, before it is saved.")
         audio_buf = io.BytesIO()
         sf.write(audio_buf, derived, metrics["sample_rate"], format="WAV", subtype="PCM_16")
         audio_bytes = audio_buf.getvalue()
@@ -969,16 +969,16 @@ class CastStore:
         if row["kind"] == "reference":
             reference_id = reference_version_id or row["approved_reference_id"]
             if not reference_id:
-                raise ValueError("Choose a complete reference version to audition before generating performance takes.")
+                raise ValueError("This voice has no approved voice recording yet. Approve one in Cast before making takes.")
             reference = self.get_reference(reference_id)
             if reference["retired"]:
-                raise ValueError("This reference recording is retired; choose another reference.")
+                raise ValueError("This voice recording is retired; choose another.")
             if reference["identity_id"] != identity_id:
-                raise ValueError("Reference version must belong to the selected voice identity.")
+                raise ValueError("That voice recording belongs to another voice.")
             self._validate_reference(reference, row["engine_id"])
             reference["audio_path"] = str(self._media_path(reference["audio_path_relative"]))
         elif reference_version_id is not None:
-            raise ValueError("This fixed/preset identity does not use a reference version.")
+            raise ValueError("This voice is one of a model's preset voices, so it does not use a voice recording.")
         identity["reference"] = reference
         return identity
 
@@ -1018,11 +1018,11 @@ class CastStore:
         )
 
     def get_reference(self, reference_id):
-        reference_id = _validate_id(reference_id, "reference version id")
+        reference_id = _validate_id(reference_id, "voice recording id")
         with self._connect() as db:
             row = db.execute("SELECT * FROM reference_versions WHERE id=?", (reference_id,)).fetchone()
             if row is None:
-                raise KeyError("Reference version not found.")
+                raise KeyError("Voice recording not found.")
             result = self._reference_dict(row)
             result.update(_retirement_fields(RetirementReader(db), "reference", reference_id))
         return result
@@ -1514,7 +1514,7 @@ class CastStore:
                 parents = {value for value in pending.values() if value}
                 leaves = [item for item in pending if item not in parents]
                 if not leaves:
-                    raise RuntimeError("Reference versions form a cycle; nothing further was purged.")
+                    raise RuntimeError("The versions of a voice recording form a cycle; nothing more was deleted.")
                 for item in leaves:
                     db.execute("DELETE FROM reference_versions WHERE id=?", (item,))
                     del pending[item]

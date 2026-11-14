@@ -114,11 +114,11 @@ the repository. Separate state roots keep separate theme preferences.
 For browser/API mode:
 
 ```powershell
-.venv\Scripts\python.exe serve.py --port 8768 --device cpu
+.venv\Scripts\python.exe serve.py --device cpu
 ```
 
-Open `http://127.0.0.1:8768/`. The default CLI port remains 8765 for compatibility;
-choose a free port explicitly if another app uses it. In browser mode the
+Open `http://127.0.0.1:8765/`, the port `serve.bat`, the command-line tool and the API guide use;
+choose a free port with `--port` if another app uses it. In browser mode the
 terminal controls the service lifetime; closing a browser tab does not stop it.
 `serve.bat` is the foreground fallback.
 
