@@ -3,7 +3,7 @@
     .venv\\Scripts\\python.exe tools\\build_installer.py                  the commit checked out now
     .venv\\Scripts\\python.exe tools\\build_installer.py --ref v0.3.0     a release's tag (the release workflow does this)
 
-It stages three things in out\\installer\\staging and hands them to Inno Setup (installer\\FelsVoiceLab.iss):
+It stages four things in out\\installer\\staging and hands them to Inno Setup (installer\\FelsVoiceLab.iss):
 
 - app: the commit's files from `git archive`, which is how GitHub packs the release's source ZIP. The installed folder holds
   exactly the release's files, so update.bat treats it like an unpacked ZIP.
@@ -11,6 +11,9 @@ It stages three things in out\\installer\\staging and hands them to Inno Setup (
   fetches it on a computer with none.
 - wheels: the packages of requirements\\core.txt and requirements\\desktop.txt and the pip setup_core moves to, built for
   this Python (64-bit CPython 3.12 on Windows) by `pip wheel`. Setup installs them with no internet, and deletes them.
+- releases.json: the SHA-256 of every file of the commit and of each release before it (the tags v<major>.<minor>.<patch>
+  up to its version), as `git archive` gives them. Setup run over an installed Lab hands it to update.py --after-setup,
+  which removes the files the new version no longer has, without the internet. The tags must be in this clone.
 
 It needs git, Windows PowerShell, Inno Setup 6.7 or later (ISCC.exe: --iscc, the ISCC environment variable, the PATH, or
 where Inno Setup installs) and this Python to be 64-bit 3.12. The internet is needed for Python and the wheels.
@@ -19,6 +22,7 @@ where Inno Setup installs) and this Python to be 64-bit 3.12. The internet is ne
 import argparse
 import hashlib
 import io
+import json
 import os
 import re
 import shutil
@@ -33,7 +37,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app_version import REPOSITORY  # noqa: E402
-from tools import setup_core  # noqa: E402
+from tools import setup_core, update  # noqa: E402
 
 SCRIPT = ROOT / "installer" / "FelsVoiceLab.iss"
 STAGING = ROOT / "out" / "installer" / "staging"
@@ -48,6 +52,7 @@ ISCC_PLACES = (
     Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Inno Setup 6" / "ISCC.exe",
 )
 VERSION_LINE = re.compile(r'^VERSION = "(?P<version>[^"]+)"$', re.MULTILINE)
+RELEASE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
 class BuildError(Exception):
@@ -87,6 +92,44 @@ def stage_app(ref, target):
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(archive.read(item))
     return sum(1 for path in target.rglob("*") if path.is_file())
+
+
+def file_hashes(ref):
+    """{path: SHA-256} of a commit's files as `git archive` gives them, which is what its release ZIP and Setup.exe hold."""
+    with zipfile.ZipFile(io.BytesIO(git("archive", "--format=zip", ref))) as archive:
+        return {
+            item.filename: hashlib.sha256(archive.read(item)).hexdigest() for item in archive.infolist() if not item.is_dir()
+        }
+
+
+def version_key(version):
+    found = RELEASE_TAG.match(f"v{version}")
+    return tuple(int(part) for part in found.groups()) if found else None
+
+
+def release_tags(version):
+    """The release tags in this clone, v<major>.<minor>.<patch>, up to `version` and oldest first."""
+    limit = version_key(version)
+    tags = [line.strip() for line in git("tag", "--list", "v*").decode("utf-8").splitlines()]
+    tags = [tag for tag in tags if RELEASE_TAG.match(tag) and (limit is None or version_key(tag[1:]) <= limit)]
+    return sorted(tags, key=lambda tag: version_key(tag[1:]))
+
+
+def stage_release_files(ref, version, target):
+    """releases.json for update.py --after-setup (read_setup_files): the files of `ref` and of each release up to it."""
+    tags = release_tags(version)
+    if not tags:
+        raise BuildError(
+            "No release tags (v0.3.0 and the like) are in this clone, so Setup could not tell which files an update removes. "
+            "Fetch them (git fetch --tags; in a workflow, actions/checkout with fetch-depth: 0) and build again."
+        )
+    lists = {
+        "schema": update.SETUP_FILES_SCHEMA,
+        "this": file_hashes(ref),
+        "releases": {tag[1:]: file_hashes(f"refs/tags/{tag}") for tag in tags},
+    }
+    target.write_text(json.dumps(lists, sort_keys=True), encoding="utf-8")
+    return tags
 
 
 def stage_python(target):
@@ -164,6 +207,9 @@ def build(ref, *, output, iscc=None, keep_staging=False):
     say("The release's files (git archive) ...")
     count = stage_app(ref, STAGING / "app")
     say(f"  {count} files.")
+    say("The file lists of the releases up to it, for updates ...")
+    tags = stage_release_files(ref, version, STAGING / "releases.json")
+    say(f"  {', '.join(tags)}.")
     say("The Lab's own Python ...")
     stage_python(STAGING / "python")
     say("The wheels for the core and the desktop window ...")

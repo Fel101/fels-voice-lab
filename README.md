@@ -199,7 +199,8 @@ backups** puts a pinned build in the Lab's own `ffmpeg` folder, and an FFmpeg yo
 (`winget install Gyan.FFmpeg`) works too. Choose **Light**, **Dark** (neutral grey), **Forest** (dark green) or **System** from
 the header's **Theme** menu; the choice is saved locally. **Check for updates** on **System & backups** says when a newer
 release is out, and **Update now** installs it: the Lab closes, updates in a window of its own and opens again, keeping your
-library and models ([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
+library and models. Running a newer release's Setup.exe over the Lab updates it the same way
+([Updating the Lab](docs/SETUP.md#updating-the-lab)). To remove the Lab, see [Removing the Lab](docs/SETUP.md#removing-the-lab).
 
 Browser mode, without the desktop window:
 

@@ -38,6 +38,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          # Setup.exe carries the file lists of the releases before it (tools/build_installer.py), read from their tags.
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

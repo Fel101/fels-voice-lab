@@ -99,9 +99,11 @@ version number, a tag and a GitHub release that agree:
    the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), and
    publishes the release. GitHub packs the source ZIP that `update.bat` downloads. Before publishing, it builds
    `FelsVoiceLab-Setup-<version>.exe` from the tag with `tools/build_installer.py` (Inno Setup is on GitHub's Windows
-   runner), writes `SHA256SUMS`, records a GitHub attestation of both, and attaches both to the release. Every push also
-   builds Setup.exe, installs it silently, starts the Lab and uninstalls it (the `installer` job of
-   [verify.yml](.github/workflows/verify.yml)). To build it here, install Inno Setup 6.7 or later
+   runner), writes `SHA256SUMS`, records a GitHub attestation of both, and attaches both to the release. Setup.exe carries
+   the file lists of every release tag up to its version, so an update can remove what the new version dropped; the build
+   needs the tags (`git fetch --tags`), and the workflows check out the whole history for them. Every push also builds
+   Setup.exe, installs it silently, starts the Lab and uninstalls it, then installs the release before this version from
+   GitHub and runs this Setup.exe over it (the `installer` job of [verify.yml](.github/workflows/verify.yml)). To build it here, install Inno Setup 6.7 or later
    (`winget install JRSoftware.InnoSetup`) and run `.venv\Scripts\python.exe tools/build_installer.py`; it writes to
    `out\installer\`.
 

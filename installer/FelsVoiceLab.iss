@@ -4,6 +4,11 @@
 ; It installs for the current user, with no administrator prompt: the Lab writes into its own folder, so it cannot live in
 ; Program Files. After copying, it sets up the core (.venv) and the desktop window (.venv-desktop) from the wheels it
 ; carries, so the window opens with no internet; the speech models are installed afterwards from the Models page.
+;
+; Over an installed Lab it is an update, as update.bat's: it says "update from X to Y", refuses an older version over a newer
+; one and waits for the Lab to close (the installed Lab's own update.py checks, with the Lab's own Python), and after copying
+; it runs the new update.py --after-setup, which removes the files the new version no longer has (by the releases' file lists
+; it carries, releases.json), records the update and finishes it as update.bat does. Its last page says what that found.
 ; Uninstalling asks before it touches the library and keeps it unless told otherwise (tools\uninstall_lab.py).
 
 #ifndef AppVersion
@@ -57,8 +62,9 @@ Name: "desktopicon"; Description: "Put a shortcut on the &desktop"; Flags: unche
 [Files]
 Source: "{#Staging}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Staging}\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Only for setting up the core and the window; {tmp} is deleted when Setup ends.
+; Only for setting up the core and the window, and for an update; {tmp} is deleted when Setup ends.
 Source: "{#Staging}\wheels\*"; DestDir: "{tmp}\wheels"; Flags: ignoreversion
+Source: "{#Staging}\releases.json"; DestDir: "{tmp}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{#WindowPython}"; Parameters: """{app}\desktop.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\voice-lab.ico"; Comment: "Local voice design, casting and dialogue studio"
@@ -70,6 +76,8 @@ Filename: "{#WindowPython}"; Parameters: """{app}\desktop.py"""; WorkingDir: "{a
 [Code]
 var
   SetUpOk: Boolean;
+  { The version of the Lab in the chosen folder before Setup copies anything, or '' when there is none. }
+  InstalledVersion: String;
 
 function SetUpWorked: Boolean;
 begin
@@ -101,6 +109,96 @@ begin
   end;
 end;
 
+{ VERSION in a Lab's app_version.py, or '' when the folder holds no Lab. }
+function LabVersionIn(Folder: String): String;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+  Line: String;
+begin
+  Result := '';
+  if not LoadStringsFromFile(AddBackslash(Folder) + 'app_version.py', Lines) then
+    Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if (Copy(Line, 1, 11) = 'VERSION = "') and (Copy(Line, Length(Line), 1) = '"') then
+    begin
+      Result := Copy(Line, 12, Length(Line) - 12);
+      Exit;
+    end;
+  end;
+end;
+
+{ The first number of a version such as 0.3.0, taken off its front. }
+function TakeNumber(var Version: String): Integer;
+var
+  Dot: Integer;
+begin
+  Dot := Pos('.', Version);
+  if Dot = 0 then
+    Dot := Length(Version) + 1;
+  Result := StrToIntDef(Copy(Version, 1, Dot - 1), 0);
+  Version := Copy(Version, Dot + 1, Length(Version));
+end;
+
+{ Below 0 when version A is older than B, 0 when they are the same, above 0 when A is newer. }
+function CompareVersions(A, B: String): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 1 to 3 do
+    if Result = 0 then
+      Result := TakeNumber(A) - TakeNumber(B);
+end;
+
+{ Whether a program runs from one of the folder's environments (.venv and the rest): the window, the service, a model or an
+  installer. The installed Lab's own update.py says, with the Lab's own Python, as update.bat checks. False when it cannot
+  tell, as in a folder with no Lab's Python. }
+function LabIsRunning(Folder: String): Boolean;
+var
+  Code: Integer;
+begin
+  Result := False;
+  if not FileExists(Folder + '\python\python.exe') or not FileExists(Folder + '\tools\update.py') then
+    Exit;
+  if Exec(Folder + '\python\python.exe', '-c "import sys; sys.path.insert(0, sys.argv[1]); from tools import update; ' +
+      'sys.exit(3 if update.lab_processes(sys.argv[1]) else 0)" "' + Folder + '"', Folder, SW_HIDE, ewWaitUntilTerminated,
+      Code) then
+  begin
+    Log(Format('Whether the Lab runs from %s: exit code %d (3 is yes).', [Folder, Code]));
+    Result := Code = 3;
+  end;
+end;
+
+{ What the ready page says over an installed Lab, or '' over none. }
+function UpdateText(Version: String): String;
+begin
+  Result := '';
+  if Version = '' then
+    Exit;
+  if CompareVersions(Version, '{#AppVersion}') < 0 then
+    Result := 'Setup is ready to update Fel''s Voice Lab in this folder from version ' + Version + ' to {#AppVersion}.'
+  else if CompareVersions(Version, '{#AppVersion}') = 0 then
+    Result := 'Setup is ready to install version {#AppVersion} again in this folder.'
+  else
+    Exit;
+  Result := Result + #13#10#13#10 + 'Your voices, scenes, takes, models and settings stay as they are. Files the new ' +
+    'version no longer has are removed, and the end of Setup says which models need installing again, if any.' + #13#10#13#10 +
+    'Close the Lab before you go on.';
+end;
+
+{ Why Setup will not go on in this folder, or ''. }
+function NewerInstalled(Version: String): String;
+begin
+  Result := '';
+  if (Version <> '') and (CompareVersions(Version, '{#AppVersion}') > 0) then
+    Result := 'This folder has version ' + Version + ' of Fel''s Voice Lab, which is newer than this Setup''s ' +
+      '{#AppVersion}. Setup does not put an older version over a newer one, so nothing was changed.' + #13#10#13#10 +
+      'To use {#AppVersion} anyway, uninstall the Lab first and keep your library, then run this Setup again.';
+end;
+
 procedure InitializeWizard;
 begin
   { Room for the line about the models under the folder box. }
@@ -111,7 +209,7 @@ end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
-  Sync: String;
+  Sync, Refusal: String;
 begin
   Result := True;
   if CurPageID = wpSelectDir then
@@ -122,7 +220,76 @@ begin
         'packages and models the Lab installs, and can lock its databases while it syncs them. Choose a folder OneDrive ' +
         'does not sync, such as the one Setup offers.' + #13#10#13#10 + 'Install here anyway?',
         mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES;
+    Refusal := NewerInstalled(LabVersionIn(RemoveBackslash(WizardDirValue)));
+    if Result and (Refusal <> '') then
+    begin
+      SuppressibleMsgBox(Refusal, mbError, MB_OK, IDOK);
+      Result := False;
+    end;
   end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+  Version, Text: String;
+  Lines: TArrayOfString;
+  I, Grown: Integer;
+begin
+  if CurPageID = wpReady then
+  begin
+    Version := LabVersionIn(RemoveBackslash(WizardDirValue));
+    Text := UpdateText(Version);
+    if Text <> '' then
+    begin
+      if CompareVersions(Version, '{#AppVersion}') < 0 then
+      begin
+        WizardForm.PageNameLabel.Caption := 'Ready to update';
+        WizardForm.PageDescriptionLabel.Caption := 'From version ' + Version + ' to {#AppVersion}, keeping your library.';
+      end
+      else
+      begin
+        WizardForm.PageNameLabel.Caption := 'Ready to install again';
+        WizardForm.PageDescriptionLabel.Caption := 'Version {#AppVersion} again, keeping your library.';
+      end;
+      { The label is one line high; make room for the paragraphs and move the list below it down. }
+      Grown := WizardForm.ReadyLabel.Height;
+      WizardForm.ReadyLabel.Caption := Text;
+      WizardForm.AdjustLabelHeight(WizardForm.ReadyLabel);
+      Grown := WizardForm.ReadyLabel.Height - Grown;
+      WizardForm.ReadyMemo.Top := WizardForm.ReadyMemo.Top + Grown;
+      WizardForm.ReadyMemo.Height := WizardForm.ReadyMemo.Height - Grown;
+    end;
+  end;
+  { After an update, what update.py --after-setup found: the models to install again, if any. }
+  if (CurPageID = wpFinished) and LoadStringsFromFile(ExpandConstant('{tmp}\update-summary.txt'), Lines) then
+  begin
+    Text := '';
+    for I := 0 to GetArrayLength(Lines) - 1 do
+      Text := Text + Lines[I] + #13#10;
+    WizardForm.FinishedLabel.Caption := Text;
+    WizardForm.AdjustLabelHeight(WizardForm.FinishedLabel);
+    WizardForm.RunList.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(12);
+  end;
+end;
+
+{ Before anything is copied: the version in the folder, which must not be newer, and a Lab that must be closed. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Folder: String;
+begin
+  Folder := RemoveBackslash(WizardDirValue);
+  InstalledVersion := LabVersionIn(Folder);
+  Log('The Lab in ' + Folder + ' before copying: ' + InstalledVersion);
+  Result := NewerInstalled(InstalledVersion);
+  if (Result <> '') or (InstalledVersion = '') then
+    Exit;
+  while LabIsRunning(Folder) do
+    if SuppressibleMsgBox('Fel''s Voice Lab is open. Close its window, stop serve.bat and any installer that runs from ' +
+        Folder + ', then press Retry.', mbError, MB_RETRYCANCEL, IDCANCEL) <> IDRETRY then
+    begin
+      Result := 'The Lab is still open, so nothing was changed. Close it, then run Setup again.';
+      Exit;
+    end;
 end;
 
 { Run one setup step with its output added to the log, showing what it does. True when it ended with exit code 0. }
@@ -148,18 +315,27 @@ begin
   ForceDirectories(ExpandConstant('{app}\out\install'));
   WizardForm.ProgressGauge.Style := npbstMarquee;
   Failed := '';
+  { An update from an older version first removes what the new version no longer has and brings the packages up to date, so
+    the core's check below loads the new version. Installing the same version again skips it. }
+  if (InstalledVersion <> '') and (CompareVersions(InstalledVersion, '{#AppVersion}') < 0) then
+    if not SetUpStep('Finishing the update from ' + InstalledVersion + ' to {#AppVersion} ...',
+        ExpandConstant('{app}\python\python.exe'),
+        '"' + ExpandConstant('{app}\tools\update.py') + '" --after-setup --from ' + InstalledVersion + ' --setup-files "' +
+        ExpandConstant('{tmp}\releases.json') + '" --wheels "' + ExpandConstant('{tmp}\wheels') + '" --summary "' +
+        ExpandConstant('{tmp}\update-summary.txt') + '"') then
+      Failed := 'finish the update (update.py --after-setup)';
   if not SetUpStep('Setting up the core: the Python packages Setup carries, so no internet is needed ...',
       ExpandConstant('{app}\python\python.exe'),
       '"' + ExpandConstant('{app}\tools\setup_core.py') + '" --wheels "' + ExpandConstant('{tmp}\wheels') + '"') then
-    Failed := 'the core'
+    Failed := 'set up the core'
   else if not SetUpStep('Setting up the desktop window ...',
       ExpandConstant('{app}\.venv\Scripts\python.exe'),
       '"' + ExpandConstant('{app}\tools\setup_desktop.py') + '" --wheels "' + ExpandConstant('{tmp}\wheels') + '" --no-shortcut') then
-    Failed := 'the desktop window';
+    Failed := 'set up the desktop window';
   WizardForm.ProgressGauge.Style := npbstNormal;
   SetUpOk := Failed = '';
   if not SetUpOk then
-    SuppressibleMsgBox('Setup copied the Lab but could not set up ' + Failed + '. What went wrong is at the end of ' +
+    SuppressibleMsgBox('Setup copied the Lab but could not ' + Failed + '. What went wrong is at the end of ' +
       ExpandConstant('{#SetupLog}') + '.' + #13#10#13#10 + 'Run this installer again, or run setup.bat in ' +
       ExpandConstant('{app}') + ', to finish.', mbError, MB_OK, IDOK);
 end;

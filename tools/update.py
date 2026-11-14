@@ -23,9 +23,15 @@ the desktop window's) when their lists changed, and says which installed model n
 pinned packages or model files changed: per environment, by the build of PyTorch it holds, and per model, by the files its
 installer would fetch. --finish and the record in out\\update\\last.json are how one version hands over to the next: keep both
 working as they are.
+
+Setup.exe of a newer version, run over an installed Lab, is an update too. It has copied the new files itself, so it ends with
+--after-setup (installer\\FelsVoiceLab.iss): this removes the files the new version no longer has, by the file lists of the
+releases Setup carries (tools\\build_installer.py), records the update as "setup", and finishes it with the core packages
+from Setup's own wheels. Setup keeps no copy of the files it replaced, so --undo refuses that update.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -61,6 +67,8 @@ NOTES_LINES = 12
 LAB_CLOSE_SECONDS = 120
 CLOSE_SECONDS = 10
 SCHEMA = 1
+# The file lists of the releases Setup.exe carries for --after-setup (tools/build_installer.py writes them).
+SETUP_FILES_SCHEMA = 1
 # Never written, replaced or removed by an update, whatever a release holds: git's own folder, the environments, the model
 # caches, run output, backups and the library's own folders, all of which the repository keeps out (see .gitignore).
 PROTECTED_FOLDERS = {".git", "out", "hf-cache", "backups", "restored", "data", "reference", "python", "ffmpeg"}
@@ -841,22 +849,36 @@ def advice_items(root, changed):
 # ------------------------------------------------------------------------------------------------ after the files: --finish
 
 
-def finish(root, *, runner=subprocess.run, say=say):
+def finish(root, *, runner=subprocess.run, say=say, wheels=None, problems=()):
     """The new version's last steps (or, after --undo, the old version's): bring the core and desktop packages up to date when
-    their lists changed, and say which installed model needs its installer run again (model_advice)."""
+    their lists changed, and say which installed model needs its installer run again (model_advice). `wheels` is a folder to
+    install the packages from without the internet, as Setup.exe carries; `problems` are said first and kept in the notice."""
     root = Path(root)
     record = read_record(root)
     if record is None or record.get("state") not in ("applied", "undone"):
         say("There is no finished update or undo to complete.")
         return 0
     changed = set(record.get("changed", []))
-    status, problems = 0, []
+    status, problems = 0, list(problems)
+    for problem in problems:
+        say(fill(problem))
+    offline = ["--no-index", "--find-links", str(wheels)] if wheels else []
     for environment, listing in SYNCED:
         python = root / environment / "Scripts" / "python.exe"
         if listing in changed and python.is_file():
             say(f"The packages in {listing} changed: updating {environment} (pip prints its own progress).")
             code = runner(
-                [str(python), "-m", "pip", "install", "--no-input", "--disable-pip-version-check", "-r", str(root / listing)],
+                [
+                    str(python),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-input",
+                    "--disable-pip-version-check",
+                    *offline,
+                    "-r",
+                    str(root / listing),
+                ],
                 cwd=root,
             ).returncode
             if code:
@@ -897,7 +919,9 @@ def finish(root, *, runner=subprocess.run, say=say):
         save_notice(root, notice)
     except OSError as exc:  # the page then has nothing to say; the window has said it all
         say(f"The note for the Lab's page could not be written ({exc}).")
-    if record["state"] == "applied":
+    if record["state"] == "applied" and record.get("method") == "setup":
+        say(f"Updated from version {record['from']} to {record['to']}.")
+    elif record["state"] == "applied":
         say(f"Updated to version {record['to']}. Start the Lab as usual; update.bat --undo puts version {record['from']} back.")
     else:
         say(f"Back to version {record['from']}. Start the Lab as usual.")
@@ -908,6 +932,113 @@ def finish(root, *, runner=subprocess.run, say=say):
                 f"{names(record['yours'])}."
             )
         )
+    return status
+
+
+def digest(path):
+    """A file's SHA-256, or None when it is not there."""
+    data = read_bytes(path)
+    return None if data is None else hashlib.sha256(data).hexdigest()
+
+
+def read_setup_files(path):
+    """The file lists Setup.exe carries: {"this": {path: SHA-256} of the version it installs, "releases": {version: {path:
+    SHA-256}} of each release up to it}."""
+    try:
+        lists = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UpdateStopped(f"Setup's list of the releases' files could not be read ({exc}).") from exc
+    if not isinstance(lists, dict) or lists.get("schema") != SETUP_FILES_SCHEMA:
+        raise UpdateStopped("Setup's list of the releases' files is not one this version can read.")
+    return lists
+
+
+def summary_text(root, record, kept):
+    """What Setup.exe's last page says after --after-setup: the update, then what the notice says to do (finish)."""
+    try:
+        notice = json.loads(notice_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        notice = {}
+    paragraphs = [
+        f"Updated from version {record['from']} to {record['to']}. Your voices, scenes, models and settings are as they were."
+    ]
+    advice = notice.get("advice") or []
+    if advice:
+        lines = ["Some models need installing again before they speak:", *(f"- {item['text']}" for item in advice)]
+        paragraphs.append("\n".join(lines))
+    paragraphs.extend(notice.get("problems") or [])
+    if kept:
+        paragraphs.append(
+            f"Version {record['to']} no longer has these files, which you had changed, so they were left: {names(kept)}."
+        )
+    return "\n\n".join(paragraphs) + "\n"
+
+
+def after_setup(root, *, args, runner=subprocess.run, say=say):
+    """--after-setup: Setup.exe has copied this version over version `args.from_version` in this folder. Finish as update.bat
+    does once its files are in place: remove each file this version no longer has, when it is as that release shipped it
+    (copied first to out\\update\\<from>-to-<to>; one changed here is left), record the update with the method "setup", and
+    run finish with the packages from Setup's wheels. Setup's last page shows what it says (`args.summary`)."""
+    root = Path(root)
+    lists = read_setup_files(args.setup_files)
+    this, released = lists["this"], lists["releases"].get(args.from_version)
+    record = {
+        "schema": SCHEMA,
+        "from": args.from_version,
+        "to": VERSION,
+        "tag": f"v{VERSION}",
+        "at": now_text(),
+        "method": "setup",
+        "backup": f"{FOLDER}/{backup_name(args.from_version, VERSION)}",
+        "yours": [],
+    }
+    removed, kept, problems = [], [], []
+    if released is None:
+        # A version that was never released, such as a build of your own: what it had is not known.
+        changed = sorted({listing for _, listing in SYNCED})
+        problems.append(
+            f"This Setup does not have the list of version {args.from_version}'s files, so any file that version had and "
+            f"{VERSION} does not was left in place, and the installed models were not checked. If a model no longer loads, "
+            "run its installer again."
+        )
+    else:
+        changed = sorted(
+            path for path in set(this) | set(released) if this.get(path) != released.get(path) and not protected(path)
+        )
+        backup = root / record["backup"] / "files"
+        for path in sorted(set(released) - set(this)):
+            local = None if protected(path) else digest(root / path)
+            if local is None:
+                continue
+            if local != released[path]:
+                kept.append(path)
+                continue
+            (backup / path).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / path, backup / path)
+            remove_file(root, path)
+            removed.append(path)
+    record.update(
+        {
+            "changed": changed,
+            "added": sorted(set(this) - set(released or {})),
+            "replaced": sorted(path for path in set(this) & set(released or {}) if this[path] != released[path]),
+            "removed": removed,
+            "kept": kept,
+            "state": "applied",
+        }
+    )
+    save_record(root, record)
+    if removed:
+        say(f"Removed {len(removed)} file(s) version {VERSION} no longer has: {names(removed)}.")
+    if kept:
+        say(fill(f"Left in place because you had changed them, though version {VERSION} no longer has them: {names(kept)}."))
+    status = finish(root, runner=runner, say=say, wheels=args.wheels, problems=problems)
+    if args.summary:
+        text = summary_text(root, record, kept)
+        try:
+            write_file(Path(args.summary), text.encode("ascii", "replace"))  # Setup reads it as plain text
+        except OSError as exc:
+            say(f"Setup's last page could not be given the summary ({exc}).")
     return status
 
 
@@ -925,6 +1056,12 @@ def undo(root, *, args, runner=subprocess.run, processes=lab_processes, ask=inpu
     if record is None or record.get("state") != "applied":
         raise UpdateStopped(
             "There is no update to undo: update.bat --undo puts back the version the last update replaced, once."
+        )
+    if record.get("method") == "setup":
+        raise UpdateStopped(
+            f"Version {record['to']} was installed by Setup.exe, which keeps no copy of the files it replaced, so "
+            f"update.bat --undo cannot put version {record['from']} back. To go back, uninstall the Lab and keep your "
+            f"library, then install version {record['from']} with its Setup.exe from {release_url('v' + record['from'])}."
         )
     running = processes(root)
     if running:
@@ -1154,6 +1291,13 @@ def build_parser():
     # Update now on the System page: the plan as JSON, and the update itself once the Lab has closed (from_lab).
     action.add_argument("--from-lab", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--reopen", choices=("window", "none"), default="none", help=argparse.SUPPRESS)
+    # Setup.exe over an installed Lab (after_setup): the version that was there, Setup's file lists and wheels, and where
+    # its last page reads what to say.
+    action.add_argument("--after-setup", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--from", dest="from_version", help=argparse.SUPPRESS)
+    parser.add_argument("--setup-files", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--wheels", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--summary", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="show the plan; change nothing")
     parser.add_argument("--yes", action="store_true", help="accept the plan without asking")
@@ -1176,9 +1320,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.json and not args.dry_run:
         parser.error("--json goes with --dry-run")
+    if args.after_setup and not (args.from_version and args.setup_files):
+        parser.error("--after-setup needs --from and --setup-files")
     try:
         if args.finish:
             return finish(ROOT)
+        if args.after_setup:
+            return after_setup(ROOT, args=args)
         if args.undo:
             return undo(ROOT, args=args)
         if args.from_lab:

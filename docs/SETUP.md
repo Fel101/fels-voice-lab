@@ -835,6 +835,15 @@ your hidden AppData folder.
 
 Version 0.3.0 has no Update now. To get from 0.3.0 to a newer version, run the new release's Setup.exe, or `update.bat`.
 
+**A newer Setup.exe** run over an installed Lab is an update too. Close the Lab first: Setup checks, and asks you to close it
+if it is still open. It finds the Lab in the folder it was installed to and says "update from" the version there to its own,
+and it refuses to put an older version over a newer one. It replaces the Lab's files, removes the ones the new version no
+longer has (one you changed yourself is left, and named at the end), and brings the core and desktop packages up to date from
+the packages it carries, without the internet. Its last page, and the Lab's page the next time it opens, say which models
+need installing again, if any. Your library, the models, `runtime.local.json` and `out\` are not touched, as with
+`update.bat`. Setup keeps no copy of the files it replaced, so `update.bat --undo` cannot undo its update: to go back,
+uninstall the Lab and keep your library, then run the older version's Setup.exe.
+
 The same update without the page: close the Lab and run `update.bat` in its folder:
 
 ```powershell
