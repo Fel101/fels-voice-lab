@@ -490,8 +490,8 @@ phoneme times, moved with the trim. Nothing in the app plays the tracks yet.
 ## Use the Lab from a script
 
 The pages talk to a local web service, and a script or another program can too: `POST /api/speak` turns text into one
-finished WAV file, and `POST /api/performance` speaks a line as one of your Cast voices and saves it as a take. Start
-`serve.py` (the desktop app picks a port of its own) and try `tools\lab_cli.py health`, `speak` or `perform`. The
+finished WAV file, and `POST /api/performance` speaks a line as one of your Cast voices and saves it as a take. While the
+Lab is open, try `tools\lab_cli.py health`, `voices`, `speak` or `perform`. The
 [HTTP API page](API.md) lists every call, and [`openapi.json`](../openapi.json) describes them for tools that read OpenAPI.
 While the model worker is busy, a request that needs it is refused with 409 at once, unless its JSON body has
 `wait_seconds`: then it waits in line, `GET /api/queue` shows where it stands, and `POST /api/queue/{request_id}/cancel`
@@ -545,7 +545,10 @@ folder** shows the Lab's folder in File Explorer.
 **Connect other apps** shows the address where programs on this computer, such as your own scripts, can make the Lab speak
 while it is open: `http://127.0.0.1:8765` unless another program has that port, and then it says why and which port the Lab
 took. **Copy the address** and **Copy the test command** put them on the clipboard; the test command, pasted into a command
-window, prints the Lab's health. Programs on other computers cannot reach it. **Port for the Lab's window** chooses the port
+window, prints the Lab's health. Programs on other computers cannot reach it. **Copy the Claude Code line** copies the
+command that gives Claude Code the Lab's voices, and **Copy the settings for other MCP apps** the same for apps that read an
+`mcpServers` settings file; [connecting other apps](CONNECT.md) says what the assistant can then do, and that it starts the
+Lab's service by itself when the Lab is closed. **Port for the Lab's window** chooses the port
 the window asks for the next time it opens, or 0 for any free port; programs then find it through the address file that
 [the API guide](API.md#the-basics) describes.
 

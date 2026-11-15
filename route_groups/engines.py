@@ -215,7 +215,7 @@ def register(router, lab):
         try:
             wav, sr, info = engines.speak(req)
         except (ValueError, MemoryError, WorkerError) as exc:
-            return self._json(serve.error_status(exc), {"error": str(exc)})
+            return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
         except Exception as exc:
             return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
         audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", engine_adapters.DEFAULT_ENGINE))
@@ -387,11 +387,11 @@ def register(router, lab):
             )
         except (ValueError, MemoryError) as exc:
             if not state["headers_sent"]:
-                return self._json(serve.error_status(exc), {"error": str(exc)})
+                return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
             stream_error(str(exc))
         except WorkerError as exc:
             if not state["headers_sent"]:
-                return self._json(serve.error_status(exc), {"error": str(exc)})
+                return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
             stream_error(str(exc))
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
             pass  # a disconnected consumer has already cleared its own pending browser audio

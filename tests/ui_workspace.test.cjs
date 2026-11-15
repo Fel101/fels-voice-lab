@@ -996,9 +996,13 @@ test('storage lists each folder with its size and whether a backup holds it', ()
     'Cleanup would remove 2 worker scratch folders, 1 old service log (1.5 KB). It never touches Cast, Scenes, exports or backups.');
   assert.equal(panel.nodes.systemClean.disabled, false);
   panel.context.renderStorage(storageReport({cleanup: {count: 0, bytes: 0, by_kind: {}}}));
-  assert.equal(panel.nodes.systemCleanup.textContent, 'Nothing to clean up: no stopped-worker folders, old desktop sessions or old logs are waiting.');
+  assert.equal(panel.nodes.systemCleanup.textContent, 'Nothing to clean up: no stopped-worker folders, old desktop sessions, old logs or old clips for other apps are waiting.');
   assert.equal(panel.nodes.systemClean.disabled, true, 'nothing to remove, nothing to press');
   assert.equal(panel.nodes.systemStorage.children.length, 3, 'measuring again replaces the rows');
+  panel.context.renderStorage(storageReport({cleanup: {count: 1, bytes: 2048, by_kind: {worker: {count: 0, bytes: 0}, desktop: {count: 0, bytes: 0},
+    log: {count: 0, bytes: 0}, spoken: {count: 1, bytes: 2048}}}}));
+  assert.equal(panel.nodes.systemCleanup.textContent,
+    'Cleanup would remove 1 folder of old clips for other apps (2.0 KB). It never touches Cast, Scenes, exports or backups.');
 });
 
 test('measuring the folders waits for the button, shows the result and gives the button back even when it fails', async () => {

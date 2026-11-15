@@ -50,7 +50,18 @@ class ConnectRouteTests(unittest.TestCase):
                 "window_port": 8765,
                 "test": f"curl.exe {self.service.base}/api/health",
                 "guide": f"https://github.com/Fel101/fels-voice-lab/blob/v{VERSION}/docs/API.md",
+                "mcp": lab_address.mcp_settings(ROOT, sys.executable),
+                "connect_guide": f"https://github.com/Fel101/fels-voice-lab/blob/v{VERSION}/docs/CONNECT.md",
             },
+        )
+        line = answer["mcp"]["claude_code"]
+        self.assertEqual(
+            line,
+            f'claude mcp add --scope user --transport stdio voice-lab -- "{sys.executable}" "{ROOT / "tools" / "mcp_server.py"}"',
+        )
+        self.assertEqual(
+            json.loads(answer["mcp"]["settings"]),
+            {"mcpServers": {"voice-lab": {"command": sys.executable, "args": [str(ROOT / "tools" / "mcp_server.py")]}}},
         )
         lab = self.service.server.RequestHandlerClass.lab
         lab.address_note, lab.in_address_file = "Another program is using port 8765, so ...", True

@@ -341,6 +341,14 @@ def error_status(exc):
     return None
 
 
+def error_text(exc):
+    """An error's sentence for its answer. A KeyError's str() is the repr of its message, quotes and all, so its message
+    is used as it was written."""
+    if isinstance(exc, KeyError) and len(exc.args) == 1 and isinstance(exc.args[0], str):
+        return exc.args[0]
+    return str(exc)
+
+
 # What the queue (GET /api/queue) calls the work a route asks of the model worker.
 QUEUE_LABELS = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
                 "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
@@ -681,7 +689,7 @@ class Handler(BaseHTTPRequestHandler):
             status = error_status(exc)
             if status is None:
                 raise
-            return self._json(status, {"error": str(exc)})
+            return self._json(status, {"error": error_text(exc)})
 
     def _place_in_line(self, route, req):
         """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and

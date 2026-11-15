@@ -22,7 +22,7 @@ def register(router, lab):
         try:
             self._json(200, {"run": evaluations.get_run(run_id)})
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.post("/api/evaluations/runs/import")
     def import_evaluation_run(self, parsed, req):
@@ -54,7 +54,7 @@ def register(router, lab):
         try:
             self._json(200, {"session": evaluations.get_blind_session(session_id)})
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.post("/api/evaluations/blind-sessions/{session_id}/ratings")
     def rate_blind_session(self, parsed, req, session_id):
@@ -71,14 +71,14 @@ def register(router, lab):
         try:
             self._send(200, evaluations.get_blind_audio_path(item_id).read_bytes(), "audio/wav")
         except (KeyError, FileNotFoundError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.get("/api/evaluations/items/{item_id}")
     def evaluation_item(self, parsed, req, item_id):
         try:
             self._json(200, {"item": evaluations.get_item(item_id)})
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.post("/api/evaluations/items/{item_id}/transcript")
     def item_transcript(self, parsed, req, item_id):

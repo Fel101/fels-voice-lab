@@ -13,7 +13,10 @@ function sourceBetween(start, end) {
 const KNOWN = 'http://127.0.0.1:8765';
 const INFO = {url: KNOWN, known_url: KNOWN, note: null, in_address_file: true,
   address_file: 'D:\\Profiles\\AppData\\Local\\FelsVoiceLabService\\service.json', window_port: 8765,
-  test: 'curl.exe http://127.0.0.1:8765/api/health', guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/API.md'};
+  test: 'curl.exe http://127.0.0.1:8765/api/health', guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/API.md',
+  connect_guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/CONNECT.md',
+  mcp: {name: 'voice-lab', claude_code: 'claude mcp add --scope user --transport stdio voice-lab -- "D:\\Lab\\.venv\\Scripts\\python.exe" '
+    + '"D:\\Lab\\tools\\mcp_server.py"', settings: '{\n  "mcpServers": {\n    "voice-lab": {}\n  }\n}'}};
 
 function element(tag) {
   return {tag, textContent: '', className: '', hidden: false, value: '', href: '#', attributes: {},
@@ -25,7 +28,7 @@ function harness(replies, {clipboard = 'works', execCommand = false} = {}) {
   const copied = [];
   const fields = {};
   for (const id of ['connectUrl', 'connectNote', 'connectTest', 'connectGuide', 'connectStatus', 'connectPort',
-    'connectPortStatus']) {
+    'connectPortStatus', 'connectMcp', 'connectMcpGuide']) {
     fields[id] = element(id);
   }
   const body = {children: [], appendChild(child) { this.children.push(child); }, removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }};
@@ -58,6 +61,8 @@ test('on the known port it shows the address, the test command and the guide, an
   assert.equal(fields.connectUrl.textContent, KNOWN);
   assert.equal(fields.connectTest.textContent, 'curl.exe http://127.0.0.1:8765/api/health');
   assert.equal(fields.connectGuide.href, INFO.guide);
+  assert.equal(fields.connectMcp.textContent, INFO.mcp.claude_code);
+  assert.equal(fields.connectMcpGuide.href, INFO.connect_guide);
   assert.equal(fields.connectPort.value, '8765');
   assert.equal(fields.connectNote.hidden, true);
 });
@@ -74,6 +79,13 @@ test('a Lab moved off the known port says why and how programs still find it', a
   await chosen.context.refreshConnect();
   assert.match(chosen.fields.connectNote.textContent, /^The Lab’s window took a free port, as its setting below asks\. Give programs this address: the address file names another Lab that is running\.$/);
   assert.equal(chosen.fields.connectPort.value, '0');
+  const asked = harness({'/api/system/connect': {...moved, note: null, window_port: 50123}});
+  await asked.context.refreshConnect();
+  assert.match(asked.fields.connectNote.textContent, /^The Lab’s window asks for port 50123, as its setting below says\. Programs that read/);
+  const started = harness({'/api/system/connect': {...moved, note: null}});
+  await started.context.refreshConnect();
+  assert.match(started.fields.connectNote.textContent, /^This service was started on port 50123\. Programs that read/,
+    'serve.py --port 50123: the window\'s setting, 8765, did not choose it');
 });
 
 test('a service that cannot be asked says so', async () => {
@@ -124,4 +136,20 @@ test('the window’s port is saved for the next time it opens, and only a whole 
   await refused.context.saveConnectPort();
   assert.equal(refused.fields.connectPortStatus.textContent, 'The port must be 0, for any free port, or a number from 1024 to 65535.');
   assert.match(refused.fields.connectPortStatus.className, /flagged/);
+});
+
+test('the Claude Code line and the settings for other MCP apps are copied, and blocked copying shows the settings', async () => {
+  const {context, fields, copied} = harness({'/api/system/connect': INFO});
+  await context.refreshConnect();
+  await context.copyConnect('mcp');
+  assert.match(fields.connectStatus.textContent, /^Copied the Claude Code line\. Paste it into a command window, then start a new Claude Code session/);
+  await context.copyMcpSettings();
+  assert.deepEqual(copied, [INFO.mcp.claude_code, INFO.mcp.settings]);
+  assert.match(fields.connectStatus.textContent, /^Copied the settings\. Paste them into the app’s MCP settings/);
+  const blocked = harness({'/api/system/connect': INFO}, {clipboard: 'refused', execCommand: false});
+  await blocked.context.refreshConnect();
+  await blocked.context.copyMcpSettings();
+  assert.equal(blocked.fields.connectStatus.textContent,
+    'Your browser blocked copying. These are the settings: { "mcpServers": { "voice-lab": {} } }');
+  assert.match(blocked.fields.connectStatus.className, /flagged/);
 });

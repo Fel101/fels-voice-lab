@@ -62,9 +62,10 @@ function storageRows(storage){
   return rows.concat(storage.other.map(function(row){return {label:row.label,bytes:row.bytes,backup:'no'};}));
 }
 function cleanupText(cleanup){
-  if(!cleanup.count)return 'Nothing to clean up: no stopped-worker folders, old desktop sessions or old logs are waiting.';
-  var kinds={worker:['worker scratch folder','worker scratch folders'],desktop:['old desktop session','old desktop sessions'],log:['old service log','old service logs']};
-  var parts=Object.keys(kinds).filter(function(key){return cleanup.by_kind[key].count;}).map(function(key){return plural(cleanup.by_kind[key].count,kinds[key][0],kinds[key][1]);});
+  if(!cleanup.count)return 'Nothing to clean up: no stopped-worker folders, old desktop sessions, old logs or old clips for other apps are waiting.';
+  var kinds={worker:['worker scratch folder','worker scratch folders'],desktop:['old desktop session','old desktop sessions'],log:['old service log','old service logs'],
+    spoken:['folder of old clips for other apps','folders of old clips for other apps']};
+  var parts=Object.keys(kinds).filter(function(key){return cleanup.by_kind[key]&&cleanup.by_kind[key].count;}).map(function(key){return plural(cleanup.by_kind[key].count,kinds[key][0],kinds[key][1]);});
   return 'Cleanup would remove '+parts.join(', ')+' ('+formatBytes(cleanup.bytes)+'). It never touches Cast, Scenes, exports or backups.';
 }
 function renderStorage(storage){
@@ -81,7 +82,7 @@ function measureStorage(){
     .catch(function(e){$('systemStatus').textContent='';$('systemError').textContent='Could not measure the folders: '+e.message;}).then(function(){$('systemMeasure').disabled=false;});
 }
 function runCleanup(){
-  if(!window.confirm('Remove the stopped-worker folders, old desktop sessions and old service logs listed above? Cast, Scenes, exports and backups are not touched.'))return Promise.resolve();
+  if(!window.confirm('Remove the stopped-worker folders, old desktop sessions, old service logs and old clips for other apps listed above? Cast, Scenes, exports and backups are not touched.'))return Promise.resolve();
   $('systemClean').disabled=true;$('systemError').textContent='';
   return fetchJson('/api/system/cleanup',{}).then(function(result){
     var message='Removed '+plural(result.removed,'item','items')+' ('+formatBytes(result.bytes)+')'+(result.errors.length?'; '+result.errors.length+' could not be removed.':'.');
@@ -358,7 +359,11 @@ function startFfmpegInstall(){
 var connectInfo=null;
 function connectNoteText(info){
   if(info.url===info.known_url)return '';
-  var why=info.note||'The Lab’s window took a free port, as its setting below asks.';
+  // Without a note from the service, the port was chosen: by the window's setting below, or when the service was started.
+  var port=Number(info.url.split(':').pop());
+  var why=info.note||(info.window_port===0?'The Lab’s window took a free port, as its setting below asks.'
+    :port===info.window_port?'The Lab’s window asks for port '+port+', as its setting below says.'
+    :'This service was started on port '+port+'.');
   return why+' '+(info.in_address_file?'Programs that read the address file ('+info.address_file+') still find it; give any other program this address.'
     :'Give programs this address: the address file names another Lab that is running.');
 }
@@ -367,6 +372,8 @@ function renderConnect(info){
   $('connectUrl').textContent=info.url;
   $('connectTest').textContent=info.test;
   $('connectGuide').href=info.guide;
+  $('connectMcp').textContent=info.mcp.claude_code;
+  $('connectMcpGuide').href=info.connect_guide;
   var note=connectNoteText(info);$('connectNote').textContent=note;$('connectNote').hidden=!note;
   $('connectPort').value=String(info.window_port);
 }
@@ -379,12 +386,25 @@ function copyText(text){
   if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text).then(function(){return true;},fallback);
   return Promise.resolve(fallback());
 }
+// What each Copy button copies, and what the note says once it has.
+var CONNECT_COPIES={
+  url:function(info){return [info.url,'Copied '+info.url+'.'];},
+  test:function(info){return [info.test,'Copied the test command. Paste it into a command window; it prints the Lab’s health as one line of JSON.'];},
+  mcp:function(info){return [info.mcp.claude_code,'Copied the Claude Code line. Paste it into a command window, then start a new Claude Code session and ask it to say something aloud.'];},
+  settings:function(info){return [info.mcp.settings,'Copied the settings. Paste them into the app’s MCP settings, as the guide shows, and open the app again.'];}
+};
 function copyConnect(which){
   if(!connectInfo)return Promise.resolve();
-  var test=which==='test',text=test?connectInfo.test:connectInfo.url;
-  return copyText(text).then(function(copied){
-    systemNote('connectStatus',!copied?'Your browser blocked copying. Select the text above and copy it yourself.'
-      :test?'Copied the test command. Paste it into a command window; it prints the Lab’s health as one line of JSON.':'Copied '+text+'.',!copied);
+  var chosen=CONNECT_COPIES[which](connectInfo);
+  return copyText(chosen[0]).then(function(copied){
+    systemNote('connectStatus',!copied?'Your browser blocked copying. Select the text above and copy it yourself.':chosen[1],!copied);
+  });
+}
+// The settings for other MCP apps are not shown on the page, so a browser that blocks copying is answered with them.
+function copyMcpSettings(){
+  return copyConnect('settings').then(function(){
+    if(connectInfo&&/blocked copying/.test($('connectStatus').textContent))
+      systemNote('connectStatus','Your browser blocked copying. These are the settings: '+connectInfo.mcp.settings.replace(/\s+/g,' '),true);
   });
 }
 function saveConnectPort(){
@@ -417,6 +437,8 @@ $('updateNoticeClose').addEventListener('click',dismissUpdateNotice);
 $('openLabFolder').addEventListener('click',openLabFolder);
 $('connectCopy').addEventListener('click',function(){copyConnect('url');});
 $('connectCopyTest').addEventListener('click',function(){copyConnect('test');});
+$('connectCopyMcp').addEventListener('click',function(){copyConnect('mcp');});
+$('connectCopyMcpSettings').addEventListener('click',function(){copyMcpSettings();});
 $('connectPortSave').addEventListener('click',saveConnectPort);
 refreshUpdates();
 refreshUpdateNotice();

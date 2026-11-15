@@ -22,7 +22,7 @@ def register(router, lab):
         try:
             self._json(200, {"take": cast.get_take(take_id)})
         except (ValueError, KeyError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.get("/api/takes/{take_id}/audio")
     def take_audio(self, parsed, req, take_id):
@@ -30,14 +30,14 @@ def register(router, lab):
             target = cast.get_media_path("take", take_id)
             self._send(200, target.read_bytes(), "audio/wav", {"X-Take-Id": take_id})
         except (ValueError, KeyError, FileNotFoundError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.get("/api/takes/{take_id}/waveform")
     def take_waveform(self, parsed, req, take_id):
         try:
             self._json(200, cast.take_waveform(take_id, (parse_qs(parsed.query).get("points") or ["600"])[0]))
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
 
@@ -46,7 +46,7 @@ def register(router, lab):
         try:
             self._json(200, {"voice_match": speaker_similarity.voice_match(cast, take_id)})
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
         except FileNotFoundError as exc:
             self._json(503, {"error": str(exc)})
 

@@ -639,6 +639,9 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <p class="meta" id="connectNote" role="status" hidden></p>
 <div class="cast-actions"><button type="button" id="connectCopy">Copy the address</button><button type="button" id="connectCopyTest">Copy the test command</button><a id="connectGuide" href="#" target="_blank" rel="noopener noreferrer">How programs use it (API guide)</a></div>
 <p class="meta">The test command, for a command window: <code id="connectTest"></code></p>
+<p class="meta">Claude Code, and other assistants that use MCP, can speak aloud with the Lab's voices. This line, pasted into a command window, adds the Lab to Claude Code for all your projects. When the Lab is closed, the assistant opens its service by itself.</p>
+<p><code id="connectMcp" class="connect-url"></code></p>
+<div class="cast-actions"><button type="button" id="connectCopyMcp">Copy the Claude Code line</button><button type="button" id="connectCopyMcpSettings">Copy the settings for other MCP apps</button><a id="connectMcpGuide" href="#" target="_blank" rel="noopener noreferrer">How to connect apps (guide)</a></div>
 <p class="meta" id="connectStatus" role="status"></p>
 <div class="cast-actions connect-port"><label for="connectPort">Port for the Lab's window</label><input type="number" id="connectPort" min="0" max="65535" step="1" inputmode="numeric"><button type="button" id="connectPortSave">Save</button></div>
 <p class="meta">8765 is where other programs look first. 0 lets the window take any free port, and programs then find it through the address file. A change takes effect the next time the window opens.</p>
@@ -657,7 +660,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <h3>Models</h3>
 <p class="meta" id="systemModels"></p>
 <h3>Storage</h3>
-<p class="meta">Measuring walks your library and the run folders, so it waits for the button. It never walks the Drama model folder. Cleanup removes only the scratch folders of workers that have stopped, old desktop sessions and old service logs.</p>
+<p class="meta">Measuring walks your library and the run folders, so it waits for the button. It never walks the Drama model folder. Cleanup removes only the scratch folders of workers that have stopped, old desktop sessions, old service logs, and clips spoken for other apps a day after the app that asked for them stopped.</p>
 <div class="cast-actions"><button type="button" id="systemMeasure">Measure folders</button><button type="button" id="systemClean" disabled>Clean up old scratch folders and logs</button></div>
 <p class="meta" id="systemStatus" role="status"></p>
 <div class="table-wrap"><table class="speed-table storage-table"><thead><tr><th scope="col">Folder</th><th scope="col">Size</th><th scope="col">In a backup</th></tr></thead><tbody id="systemStorage"></tbody></table></div>

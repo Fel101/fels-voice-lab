@@ -27,6 +27,8 @@ FILE_NAME = "service.json"
 SCHEMA = 1
 # Beside the Lab: the desktop window's settings, which also name the library it opens (library_backup.use_library).
 SETTINGS = "desktop.local.json"
+# The name an app gives the Lab's MCP server (tools/mcp_server.py); Claude Code shows its tools as mcp__voice-lab__speak.
+MCP_NAME = "voice-lab"
 
 
 def address_file(environ=None):
@@ -175,6 +177,31 @@ def window_port(app_root):
         return KNOWN_PORT
     value = settings.get("port") if isinstance(settings, dict) else None
     return value if usable_port(value) else KNOWN_PORT
+
+
+def mcp_settings(app_root, python):
+    """How an app starts this Lab's MCP server with the Lab's own Python: the line that adds it to Claude Code for every
+    project, and the "mcpServers" entry other MCP apps read from their settings file (docs/CONNECT.md)."""
+    script = Path(app_root) / "tools" / "mcp_server.py"
+    entry = {"mcpServers": {MCP_NAME: {"command": str(python), "args": [str(script)]}}}
+    return {
+        "name": MCP_NAME,
+        "claude_code": f'claude mcp add --scope user --transport stdio {MCP_NAME} -- "{python}" "{script}"',
+        "settings": json.dumps(entry, indent=2),
+    }
+
+
+def window_library(app_root):
+    """The library the desktop window opens: "state_root" in desktop.local.json, relative to the Lab's folder, else the
+    Lab's folder itself (desktop.main reads it the same way). A program that starts the service for this Lab passes it as
+    --state-root, so the window and that service are one Lab (the same lab_id)."""
+    app_root = Path(app_root)
+    try:
+        settings = json.loads((app_root / SETTINGS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return app_root
+    value = settings.get("state_root") if isinstance(settings, dict) else None
+    return app_root / value if isinstance(value, str) and value else app_root
 
 
 def save_window_port(app_root, port):

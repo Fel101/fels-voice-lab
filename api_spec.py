@@ -282,7 +282,8 @@ ROUTES = [
     R("GET", "/api/voices", "Speaking", "List every voice a program can speak with by name.",
       reply="`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the "
             "one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and "
-            "`model_name`; `label`; `languages`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A "
+            "`model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and "
+            "`why_not`, a sentence saying what to do when it is not ready. A "
             "Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name "
             "for it.",
       notes="A Cast voice is named after its character when it is the character's only voice, or its only approved one; any "
@@ -870,8 +871,9 @@ ROUTES = [
       internal=True,
       reply="`url` (this service), `known_url` (where programs look first), `note` (why this service is not there, or null), "
             "`in_address_file` (whether the address file names it), `address_file`, `window_port` (what the desktop window "
-            "asks for; 0 is any free port), `test` (a command that asks for its health) and `guide` (the API guide of this "
-            "version, on GitHub)."),
+            "asks for; 0 is any free port), `test` (a command that asks for its health), `guide` (the API guide of this "
+            "version, on GitHub), `mcp` (`name`, `claude_code`: the line that adds this Lab's MCP server to Claude Code, and "
+            "`settings`: its `mcpServers` entry for other apps) and `connect_guide` (docs/CONNECT.md of this version)."),
     R("POST", "/api/system/connect/port", "Page helpers", "Choose the port the desktop window's service asks for, from the next "
                                                           "time the window opens.",
       internal=True, body=(F("port", "integer", "0 for any free port, or 1024 to 65535; 8765 is the default.", True),),

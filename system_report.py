@@ -203,6 +203,7 @@ def storage(state_root, out_dir):
     for key, label, folder in (("backups", "Backups", root / library_backup.BACKUP_FOLDER),
                                ("conversions", "Voice conversions (not in a backup)", out / "conversions"),
                                ("logs", "Service logs", out / "logs"), ("workers", "Worker scratch folders", out / "workers"),
-                               ("desktop", "Desktop sessions", out / "desktop")):
+                               ("desktop", "Desktop sessions", out / "desktop"),
+                               ("spoken", "Clips spoken for other apps", out / "spoken")):
         other.append({"key": key, "label": label, "bytes": housekeeping.tree_size(folder) if folder.is_dir() else 0})
     return {"library": sections, "other": other, "cleanup": housekeeping.summarize(housekeeping.plan(out))}

@@ -203,6 +203,14 @@ class ErrorCodeTests(ServiceCase):
         self.assertEqual(
             (status, answer), (503, {"error": "Kokoro 82M is not installed. Open ...", "code": "model_not_installed"})
         )
+
+    def test_a_thing_that_is_not_there_is_said_without_quotes_around_the_sentence(self):
+        # A KeyError's str() is its message's repr; 0.3.0 answered every such 404 in quotes.
+        status, answer = self.error("/api/speak", {"text": "Hello.", "voice": "Nobody"})
+        self.assertEqual((status, answer["code"]), (404, "not_found"))
+        self.assertEqual(answer["error"], "There is no voice called 'Nobody'. GET /api/voices lists the voices that can speak.")
+        status, answer = self.error("/api/queue/nothing-here/cancel", {})
+        self.assertEqual((status, answer["error"]), (404, "No request with that id is waiting or running."))
         status, _headers, raw = self.service.request("GET", "/api/nothing-here")
         self.assertEqual((status, json.loads(raw)["code"]), (404, "not_found"))
         status, _headers, raw = self.service.request("GET", "/api/health", headers={"Origin": "http://elsewhere.example"})

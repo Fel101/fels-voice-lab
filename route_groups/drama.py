@@ -39,7 +39,7 @@ def register(router, lab):
             offset = int(parse_qs(parsed.query).get("offset", ["0"])[0])
             self._json(200, studio.get(match.group(1), offset))
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
         except (ValueError, RuntimeError) as exc:
             self._json(400, {"error": str(exc)})
 

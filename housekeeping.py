@@ -1,8 +1,9 @@
 """Retention for the folders a running service leaves behind in out/.
 
-Three kinds, all disposable: the temporary-audio folder of a worker that has exited (out/workers/<engine>-<pid>), the
-folders of past desktop sessions (out/desktop/session-*) and the service logs of past runs (out/logs). Nothing here
-touches Cast, Scenes, exports or anything else a person made.
+Four kinds, all disposable: the temporary-audio folder of a worker that has exited (out/workers/<engine>-<pid>), the
+folders of past desktop sessions (out/desktop/session-*), the service logs of past runs (out/logs) and the clips an MCP
+server spoke for another app (out/spoken/mcp-<date>-<time>-<pid>, tools/mcp_server.py). Nothing here touches Cast,
+Scenes, exports, a file a caller named or anything else a person made.
 
 plan() only looks. apply() removes what a plan lists, and checks every path again before it does.
 """
@@ -22,16 +23,18 @@ DESKTOP_KEEP = 10           # the newest desktop sessions are kept whatever thei
 DESKTOP_MIN_AGE_DAYS = 1
 LOG_KEEP = 30               # the newest runs' service logs are kept
 LOG_MIN_AGE_DAYS = 7
+SPOKEN_MIN_AGE_DAYS = 1     # an MCP server's clips stay a day after it stopped, then go
 
 WORKER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*-(\d+)\Z")
 SESSION_NAME = re.compile(r"session-[A-Za-z0-9_]+\Z")
 LOG_NAME = re.compile(r"(service-\d{8}-\d{6}-\d+)\.log(?:\.\d+)?\Z")
-FOLDERS = {"worker": "workers", "desktop": "desktop", "log": "logs"}
+SPOKEN_NAME = re.compile(r"mcp-\d{8}-\d{6}-(\d+)\Z")
+FOLDERS = {"worker": "workers", "desktop": "desktop", "log": "logs", "spoken": "spoken"}
 
 
 @dataclass(frozen=True)
 class Item:
-    kind: str       # worker, desktop or log
+    kind: str       # worker, desktop, log or spoken
     path: Path
     reason: str
     size: int
@@ -147,6 +150,16 @@ def plan(out_dir, *, now=None, pid_alive=pid_may_be_alive, keep=()):
         for path in files:
             items.append(Item("log", path, f"service log from {age / DAY:.0f} days ago, beyond the newest {LOG_KEEP} runs",
                               path.stat().st_size, age / DAY))
+
+    for entry in _entries(out_dir / "spoken"):
+        match = SPOKEN_NAME.fullmatch(entry.name)
+        if not match or not entry.is_dir() or is_link(entry):
+            continue
+        age = now - entry.stat().st_mtime
+        if age < SPOKEN_MIN_AGE_DAYS * DAY or pid_alive(int(match.group(1))):
+            continue
+        items.append(Item("spoken", entry, f"clips an MCP server spoke {age / DAY:.0f} days ago; it has stopped",
+                          tree_size(entry), age / DAY))
     return items
 
 
@@ -167,7 +180,7 @@ def apply(items, out_dir):
         try:
             parent = (out_dir / FOLDERS[item.kind]).resolve()
             path = Path(item.path)
-            pattern = {"worker": WORKER_NAME, "desktop": SESSION_NAME, "log": LOG_NAME}[item.kind]
+            pattern = {"worker": WORKER_NAME, "desktop": SESSION_NAME, "log": LOG_NAME, "spoken": SPOKEN_NAME}[item.kind]
             if (path.parent.resolve() != parent or not pattern.fullmatch(path.name) or is_link(path)
                     or not path.exists()):
                 raise ValueError("not a sweepable path")

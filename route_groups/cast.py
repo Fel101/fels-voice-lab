@@ -141,7 +141,7 @@ def register(router, lab):
             target = cast.get_media_path("reference", reference_id)
             self._send(200, target.read_bytes(), "audio/wav", {"X-Reference-Version": reference_id})
         except (ValueError, KeyError, FileNotFoundError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.get("/api/references/{reference_id}/source")
     def reference_version_source(self, parsed, req, reference_id):
@@ -156,7 +156,7 @@ def register(router, lab):
             }.get(target.suffix.lower(), "application/octet-stream")
             self._send(200, target.read_bytes(), content_type, {"X-Reference-Version": reference_id})
         except (ValueError, KeyError, FileNotFoundError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
 
     @router.post("/api/references/{reference_id}/transcript-suggestion")
     def transcript_suggestion(self, parsed, req, reference_id):
@@ -165,7 +165,7 @@ def register(router, lab):
             audio = cast.get_media_path("reference", reference_id)
             self._json(200, {"suggestion": transcript_suggest.suggest(audio)})
         except (KeyError, FileNotFoundError) as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
         except transcript_suggest.TranscriptBusy as exc:
             self._json(409, {"error": str(exc)})
         except transcript_suggest.TranscriptUnavailable as exc:
@@ -206,7 +206,7 @@ def register(router, lab):
         try:
             self._json(200, cast.purge_preview((params.get("kind") or [None])[0], (params.get("id") or [None])[0]))
         except KeyError as exc:
-            self._json(404, {"error": str(exc)})
+            self._json(404, {"error": lab.serve.error_text(exc)})
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
 

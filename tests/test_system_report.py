@@ -311,7 +311,7 @@ class StorageTests(TempBase):
         self.assertGreater(cast["bytes"], 0)
         self.assertGreater(cast["files"], 2)
         other = {row["key"]: row["bytes"] for row in report["other"]}
-        self.assertEqual(list(other), ["backups", "conversions", "logs", "workers", "desktop"])
+        self.assertEqual(list(other), ["backups", "conversions", "logs", "workers", "desktop", "spoken"])
         self.assertEqual((other["backups"], other["conversions"], other["logs"], other["desktop"]), (500, 3000, 70, 0))
         self.assertEqual(report["cleanup"]["count"], 1)
         self.assertEqual(report["cleanup"]["by_kind"]["worker"]["count"], 1)

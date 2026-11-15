@@ -2,10 +2,11 @@
 backups, their checks and restores (library_backup.py), cleaning up out/ (housekeeping.py), checking for updates
 (updates.py), Update now (self_update.py), and choosing the library the desktop app opens."""
 
+import sys
 from urllib.parse import parse_qs
 
 from app_version import APP_NAME, REPOSITORY, VERSION
-from common import ram_report
+from common import LAB, ram_report
 import export_panel
 import housekeeping
 import lab_address
@@ -109,6 +110,9 @@ def register(router, lab):
                 "window_port": lab_address.window_port(serve.APP_ROOT),
                 "test": f"curl.exe {url}/api/health",
                 "guide": f"https://github.com/{REPOSITORY}/blob/v{VERSION}/docs/API.md",
+                # The MCP server runs with the Python this service runs with, from the Lab's folder.
+                "mcp": lab_address.mcp_settings(LAB, sys.executable),
+                "connect_guide": f"https://github.com/{REPOSITORY}/blob/v{VERSION}/docs/CONNECT.md",
             },
         )
 
