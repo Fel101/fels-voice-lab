@@ -84,7 +84,7 @@ class SpeakContractTests(unittest.TestCase):
         status, headers, raw = self.service.request("POST", "/api/speak", {"text": "bad"})
         self.assertEqual(status, 400)
         self.assertEqual(headers["Content-Type"], "application/json")
-        self.assertEqual(json.loads(raw), {"error": "The text is not allowed."})
+        self.assertEqual(json.loads(raw), {"error": "The text is not allowed.", "code": "invalid_request"})
 
     def test_a_busy_service_refuses_and_does_not_queue(self):
         self.engines.busy = True
@@ -147,7 +147,7 @@ class SpeakContractTests(unittest.TestCase):
         for _ in range(3):
             raw, _seconds = self.post_and_read(len(body), [body], origin="http://evil.example")
             self.assertIn(b" 403 ", raw.split(b"\r\n")[0])
-            self.assertEqual(json.loads(raw.partition(b"\r\n\r\n")[2]), {"error": "local requests only"})
+            self.assertEqual(json.loads(raw.partition(b"\r\n\r\n")[2]), {"error": "local requests only", "code": "not_local"})
 
     def test_a_body_from_another_website_too_big_to_read_through_is_not_waited_for(self):
         raw, seconds = self.post_and_read(serve.MAX_REQUEST_BYTES + 1, [], origin="http://evil.example")
@@ -184,10 +184,11 @@ class PerformContractTests(unittest.TestCase):
 
     def test_every_header_the_reference_lists_is_sent(self):
         _status, headers, _body = self.perform()
+        only = {"X-Idempotent-Replay": "a replay", "X-Take-Kept": "a clip that is not kept", "X-Parts": "a long text"}
         for field in documented("POST /api/performance").headers:
             with self.subTest(field.name):
-                if field.name == "X-Idempotent-Replay":
-                    self.assertIsNone(headers.get(field.name), "only a replay carries this")
+                if field.name in only:
+                    self.assertIsNone(headers.get(field.name), f"only {only[field.name]} carries this")
                 else:
                     self.assertIn(field.name, headers)
 

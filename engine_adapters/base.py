@@ -109,6 +109,16 @@ class Adapter:
         """Fields it adds to GET /api/info."""
         return {}
 
+    def named_voices(self, loaded):
+        """The model's own voices a program may speak with by name (GET /api/voices): dicts with voice_id (the model's name
+        for it), label, languages and request (the fields POST /api/speak sends for it besides the engine). `loaded` is what
+        the loaded checkpoint reported, or None while the model is not loaded. Read from installed files: nothing loads."""
+        return []
+
+    def voice_languages(self, engine_options):
+        """The languages a Cast voice of it speaks, from the options it keeps; None leaves them to `languages`."""
+        return None
+
     def checkpoint_missing(self, root):
         """(its checkpoint folder, the files missing from it) when its files are not a snapshot in hf-cache, else None."""
         return None

@@ -27,9 +27,24 @@ sign-in and no key: anything on this computer can call the service, so do not fo
 **JSON.** Send a JSON object with `Content-Type: application/json`. A body may be up to 64 KiB; scene calls take 2 MiB and
 reference recordings 32 MiB. Answers are JSON, except where a call returns audio, CSV or a file.
 
-**Errors.** A failure is a JSON object, `{"error": "what went wrong"}`, with a status: `400` the request was refused (the
-message says why), `403` not local, `404` nothing there, `409` busy, or already exists, `413` too large, `499` cancelled
-while it waited or ran, `500` the service failed, `504` an engine did not answer in time. A body over its limit is read
+**Errors.** A failure is a JSON object, `{"error": "what went wrong", "code": "busy"}`, with a status. `error` is a sentence
+for a person; `code` is for a program, which can act on it without reading the sentence:
+
+| Status | `code` | Means |
+|---|---|---|
+| `400` | `invalid_request` | The request was refused; the message says why. |
+| `403` | `not_local` | The request did not come from this computer, or came from another website's page. |
+| `404` | `not_found` | Nothing there: no such route, take, scene or voice. |
+| `409` | `busy` | The model worker, or an install, backup or export, is busy. Try again, or send `wait_seconds`. |
+| `409` | `already_exists`, `conflict` | Where a route says so: a name that is taken, a manifest that changed. |
+| `413` | `too_large` | The body is over its limit. |
+| `499` | `cancelled` | Cancelled while it waited or ran. |
+| `500` | `failed` | The service or an installed model failed. |
+| `502` | `upstream_failed` | GitHub did not answer an update check. |
+| `503` | `model_not_installed` | The model is not installed; the message says where to install it. |
+| `504` | `timeout` | A model did not answer in time. |
+
+Version 0.3.0 answered `500` for a model that was not installed, and sent no `code`. A body over its limit is read
 through before the `413` goes out, so a client that is still sending gets the answer; one that declares more than 512 MiB is
 not read, and its client may see the connection reset instead.
 
@@ -99,9 +114,13 @@ Or with the [command-line tool](#command-line-tool):
 - It is **blocking**. The service sends nothing until the clip is finished, then sends the whole 16-bit WAV file in one
   response with a `Content-Length`. There are no chunks, no partial file and nothing to poll. Set your client's timeout for
   the longest clip you expect: the first call for an engine also loads its model, which can take a minute or more.
-- `text` (1 to 1200 characters) is the one field every engine needs. `engine` picks the model (default `kokoro`); the rest
-  are that engine's own controls. The reference lists the common ones, `GET /api/catalog` lists what each engine supports,
-  and `GET /api/performance/settings` describes its performance controls.
+- `text` (1 to 10,000 characters) is the one field every engine needs. Text over 1,200 characters is split where a scene
+  splits a long line, spoken part by part in the same call and joined with a quarter-second pause: still one WAV, and
+  `X-Parts` says how many parts. The call can be cancelled between parts.
+- `voice` names a voice from [`GET /api/voices`](#get-api-voices): `{"voice": "Nell", "text": "..."}` speaks as the Cast voice
+  Nell and keeps nothing, and `{"voice": "af_heart", "text": "..."}` speaks with that Kokoro voice. Or name the model:
+  `engine` picks it (default `kokoro`); the rest are that engine's own controls. The reference lists the common ones,
+  `GET /api/catalog` lists what each engine supports, and `GET /api/performance/settings` describes its performance controls.
 - The answer's headers say how long it took (`X-Gen-Seconds`), how long the clip is (`X-Audio-Seconds`) and which checkpoint
   made it.
 - Nothing is saved except what you ask for with `save_voice_as`. To keep a take with its provenance, use the next call.
@@ -114,9 +133,14 @@ Or with the [command-line tool](#command-line-tool):
 with its text, settings, model and where the voice came from. Like `/api/speak` it answers with the WAV in one blocking
 response.
 
-**1. Find the voice.** `GET /api/cast` lists the characters, their voices (identities) and each voice's recordings. Use the
-identity's `id`. A voice that clones a recording must be `approved`, or you must name a `reference_version_id`; a Kokoro voice
-or a preset voice needs neither.
+**1. Find the voice.** [`GET /api/voices`](#get-api-voices) lists every voice that can speak, with the `name` to send back as
+`voice`: a character's name for its only voice, or `Character (Label)`. For ids, `GET /api/cast` lists the characters, their
+voices (identities) and each voice's recordings; send the identity's `id` as `identity_id`. A voice that clones a recording
+must be `approved`, or you must name a `reference_version_id`; a Kokoro voice or a preset voice needs neither.
+
+**A clip without a take.** With `"keep_take": false` nothing is saved in the library: a program that talks all day does not
+fill it. The text may then run to 10,000 characters, and `line_id` and `idempotency_key` are not used. The clip is labelled
+as AI-generated speech all the same, and `X-Take-Kept: false` says nothing was kept.
 
 **2. Ask for the line.**
 
@@ -179,22 +203,24 @@ engine, so they work while the service is generating.
 `tools/lab_cli.py` calls the service from a terminal or a script. It needs only Python 3.8 or later, not the Lab's packages.
 
 ```text
-lab_cli.py [--url URL] [--timeout SECONDS] health | speak | perform | cast
+lab_cli.py [--url URL] [--timeout SECONDS] health | speak | perform | voices | cast
 ```
 
 | Command | What it does |
 |---|---|
 | `health [--wait SECONDS] [--json]` | Ask `GET /api/health`. With `--wait` it keeps trying until the service answers, for a script that has just started it. |
-| `speak --text TEXT --out FILE` | `POST /api/speak`. Also `--text-file FILE`, `--engine`, `--voice`, `--speed`, `--language`, `--set KEY=VALUE` (repeatable; the value is read as JSON when it can be, else as text) and `--request-file FILE` (a whole request body). |
-| `perform --text TEXT --out FILE` | `POST /api/performance`. Name the voice with `--character NAME` (and `--voice LABEL` when the character has more than one), or give `--identity-id`. Also `--line-id` (default `cli`), `--reference-version-id`, `--direction`, `--language`, `--setting KEY=VALUE`, `--pronunciations` and `--idempotency-key`. |
+| `speak --text TEXT --out FILE` | `POST /api/speak`. Also `--text-file FILE`, `--engine`, `--voice` (a name from `voices`, or with `--engine kokoro` a Kokoro voice), `--speed`, `--language`, `--set KEY=VALUE` (repeatable; the value is read as JSON when it can be, else as text), `--request-file FILE` (a whole request body) and `--play`. |
+| `perform --text TEXT --out FILE` | `POST /api/performance`. Name the voice with `--character NAME` (and `--voice LABEL` when the character has more than one), or give `--identity-id`. Also `--line-id` (default `cli`), `--reference-version-id`, `--direction`, `--language`, `--setting KEY=VALUE`, `--pronunciations`, `--idempotency-key`, `--no-keep` (keep no take) and `--play`. |
+| `voices` | List the voices a program can speak with, by the name to send (`--json` for the raw answer). |
 | `cast` | List the characters and voices with their ids (`--json` for the raw answer). |
 
 `--url` is where the service listens (default the `VOICE_LAB_URL` environment variable, else the address file, else
 `http://127.0.0.1:8765`; see [the basics](#the-basics)). With neither `--url` nor `VOICE_LAB_URL`, a Lab that is not running is
 said plainly, with how to open it.
-`--timeout` is how long to wait for an answer: 10 seconds for `health` and `cast`, 900 for `speak` and `perform`. `--json`
-prints what the call returned as one JSON object instead of a sentence. The WAV is written under a temporary name and moved
-into place only when it has arrived whole, so a failed call leaves no half file.
+`--timeout` is how long to wait for an answer: 10 seconds for `health`, `voices` and `cast`, 900 for `speak` and `perform`.
+`--json` prints what the call returned as one JSON object instead of a sentence. The WAV is written under a temporary name and
+moved into place only when it has arrived whole, so a failed call leaves no half file. `--play` then plays it on this
+computer's speakers and waits until it ends (Windows' own player; `afplay`, `paplay` or `aplay` elsewhere).
 
 The exit status is `0` when the call worked, `1` when the service refused it or failed (the message is the service's own,
 on standard error), `2` for a mistake in the command line, and `3` when nothing answered.
@@ -217,6 +243,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
 | POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/uninstall`](#post-api-engines-engine_id-uninstall) | Uninstall a model: read what it would delete, or delete its files from the Lab's folder. |
 | POST | [`/api/engines/{engine_id}/device`](#post-api-engines-engine_id-device) | Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
@@ -303,6 +330,29 @@ Install an engine with its guided installer (every engine in the catalog has one
 | `400` | The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or `dry_run` or `nvidia` is not true or false. |
 | `409` | An install is already running, or the model worker is busy. |
 
+<a id="post-api-engines-engine_id-uninstall"></a>
+
+#### `POST /api/engines/{engine_id}/uninstall`
+
+Uninstall a model: read what it would delete, or delete its files from the Lab's folder.
+
+| Path parameter | Meaning |
+|---|---|
+| `engine_id` | An engine id from `GET /api/catalog`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `dry_run` | boolean | Only read the plan: what would be deleted and what stays. Nothing is changed. Default false, which deletes. |
+
+**Answer:** `200`, JSON. With `dry_run`, `plan`: `engine`, `name`, `remove` (each folder's `path` in the Lab's folder, its `bytes`, and `link` when it is a link or junction, which is removed as a link and never followed), `keep` (each folder that stays, with `why`), `bytes`, `ok`, `paragraphs` and `problems`. Otherwise `uninstall`: the plan with `removed`, `failed` (each `path` with its `reason`, such as a file another program has open) and `freed` bytes.
+
+| Also answers | When |
+|---|---|
+| `400` | The engine is unknown, or has no files of its own to delete (another installed model uses them all), or `dry_run` is not true or false. |
+| `409` | An install is running, or the model worker is busy. |
+
+A model's files are its checkpoint in `hf-cache`, with its preset voices' repository; the files it keeps elsewhere (Breeze in `breeze/models`, Drama 3 in `out/drama3`); its worker's source folders (VoxCPM2 in `out/voxcpm2`); and its own Python environment (`.venv-kokoro`). What another installed model uses stays: the Chatterbox models share a checkpoint and `.venv-chatterbox`, the Qwen3-TTS models `.venv-fqwen`, which VoxCPM2 also borrows from. The service's own `.venv` and the library are never touched. Every model is unloaded first, and the model worker refuses other work until the files are gone. Install on the model's card puts it back.
+
 <a id="post-api-engines-engine_id-device"></a>
 
 #### `POST /api/engines/{engine_id}/device`
@@ -341,7 +391,8 @@ Load an engine into memory ahead of its first use.
 
 | Also answers | When |
 |---|---|
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
+| `500` | The model is installed but could not load or run; `error` says what it reported. |
+| `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
@@ -438,10 +489,21 @@ Turn text into audio. `speak` and `performance` answer with the finished WAV fil
 
 | Method | Path | What it does |
 |---|---|---|
+| GET | [`/api/voices`](#get-api-voices) | List every voice a program can speak with by name. |
 | POST | [`/api/speak`](#post-api-speak) | Speak text with one engine and answer with the finished WAV file. |
 | POST | [`/api/stream`](#post-api-stream) | Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made. |
-| POST | [`/api/performance`](#post-api-performance) | Speak a line as a Cast voice and save it as a take. |
+| POST | [`/api/performance`](#post-api-performance) | Speak a line as a Cast voice, and save it as a take unless asked not to. |
 | POST | [`/api/kokoro/phonemize`](#post-api-kokoro-phonemize) | Show the phonemes Kokoro would speak for a text. |
+
+<a id="get-api-voices"></a>
+
+#### `GET /api/voices`
+
+List every voice a program can speak with by name.
+
+**Answer:** `200`, JSON. `voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.
+
+A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.
 
 <a id="post-api-speak"></a>
 
@@ -451,11 +513,11 @@ Speak text with one engine and answer with the finished WAV file.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `text` (required) | string | What to say, 1 to 1200 characters. |
+| `text` (required) | string | What to say, 1 to 10,000 characters. Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next. |
 | `engine` | string | An engine id from `GET /api/catalog` whose `integration.service_api` is true. Default `kokoro`. |
-| `voice` | string | Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`. |
+| `voice` | string | Without `engine`: a voice's `name` from `GET /api/voices`. A Cast voice speaks as that voice and nothing is kept (as `POST /api/performance` with `keep_take` false: `language`, `direction`, `settings` and `use_pronunciations` go with it); a preset voice speaks with its model. With `engine` `kokoro`, or no engine: a Kokoro voice id, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`. |
 | `speed` | number | Kokoro: speaking rate. Default 1.0. |
-| `language` | string | Kokoro and Qwen: the language. Default `English`. Phonon speaks English only. |
+| `language` | string | Kokoro and Qwen: the language. Default `English`, or for a Kokoro voice named without `engine`, the voice's own language. Phonon speaks English only. |
 | `voice_description` | string | Qwen VoiceDesign, VoxCPM2 and Breeze design mode: the voice to invent, in words. |
 | `mode` | string | For engines with several modes: `design`, `clone`, `continuation`, `custom_voice` or, for Breeze, `direction`. A checkpoint accepts the modes it supports. |
 | `reference_path` | string | Cloning: a recording inside the Lab's reference storage. |
@@ -480,13 +542,16 @@ Speak text with one engine and answer with the finished WAV file.
 | `X-Model-Checkpoint` | The checkpoint, when reported. |
 | `X-Checkpoint-Revision` | The checkpoint's pinned revision, when reported. |
 | `X-Voice-Asset-Path` | With `save_voice_as`: the file the voice was saved to. |
+| `X-Parts` | How many parts a text over 1,200 characters was spoken in. |
 
 | Also answers | When |
 |---|---|
+| `404` | `voice` names no voice in `GET /api/voices` and is not a Kokoro voice id. |
 | `413` | The request is over 64 KiB. |
-| `500` | The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
+| `500` | The model is installed but could not load or run; `error` says what it reported. |
+| `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
-| `409` | `save_voice_as` names a voice that already exists; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | `save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).
@@ -524,28 +589,32 @@ Use `POST /api/speak` when you want a file.
 
 #### `POST /api/performance`
 
-Speak a line as a Cast voice and save it as a take.
+Speak a line as a Cast voice, and save it as a take unless asked not to.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `identity_id` (required) | string | The voice identity to speak with, from `GET /api/cast`. |
-| `text` (required) | string | The line, 1 to 1200 characters. |
-| `line_id` (required) | string | Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line. |
+| `identity_id` | string | The voice identity to speak with, from `GET /api/cast`. Give this or `voice`. |
+| `voice` | string | A Cast voice's `name` from `GET /api/voices`, instead of `identity_id`. |
+| `text` (required) | string | The line, 1 to 1200 characters; with `keep_take` false, up to 10,000. Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next. |
+| `keep_take` | boolean | Default true: the clip is saved as a take. False saves nothing in the library, for a program that speaks all day; the clip is still labelled as AI-generated speech. |
+| `line_id` | string | Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line. Needed when the take is kept. |
 | `reference_version_id` | string | The recording to clone from. Default: the identity's approved recording. Refused for a fixed or preset voice. |
 | `language` | string | Default: the voice's own language, else `English`. |
 | `direction` | string | How to deliver the line, up to 1000 characters. An engine with no verified direction control refuses a non-empty one. |
 | `settings` | object | The engine's performance settings; see `GET /api/performance/settings`. |
 | `use_pronunciations` | boolean | Apply the character's pronunciation dictionary to the spoken text. The take keeps both texts. Default false. |
-| `idempotency_key` | string | 1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again. |
+| `idempotency_key` | string | 1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again. Only with a kept take. |
 | `identity_snapshot` | object | Used by scene batches: the voice's `identity_type`, `engine_id` and `engine_options` as the scene saved them. The call is refused if the voice has changed since. |
 | `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
 | `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
-**Answer:** `200`, `audio/wav`. The take's 16-bit WAV file, in one response. The call blocks until the clip is finished and saved.
+**Answer:** `200`, `audio/wav`. The clip's 16-bit WAV file, in one response. The call blocks until the clip is finished, and saved when kept.
 
 | Answer header | Meaning |
 |---|---|
-| `X-Take-Id` | The saved take's id. |
+| `X-Take-Id` | The saved take's id; absent when it was not kept. |
+| `X-Take-Kept` | `false` when `keep_take` was false. |
+| `X-Parts` | How many parts a text over 1,200 characters was spoken in. |
 | `X-Cast-Character` | The character's name. |
 | `X-Cast-Identity` | The voice's label. |
 | `X-Cast-Line-Id` | The `line_id` you sent. |
@@ -559,8 +628,9 @@ Speak a line as a Cast voice and save it as a take.
 
 | Also answers | When |
 |---|---|
-| `400` | The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit of a take. |
-| `404` | The identity or the recording does not exist. |
+| `400` | The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, `voice` names a preset voice, or `idempotency_key` was used before with different inputs or for an edit of a take, or sent with `keep_take` false. |
+| `404` | The identity, the recording or the voice named does not exist. |
+| `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
 | `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
@@ -1351,7 +1421,7 @@ Download a finished job's result manifest.
 
 | Also answers | When |
 |---|---|
-| `409` | The manifest's checksum does not match. |
+| `409` | The manifest's checksum does not match (`code` `conflict`). |
 
 <a id="post-api-scenes-jobs-job_id-pause"></a>
 

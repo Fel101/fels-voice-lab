@@ -20,6 +20,10 @@ from dataclasses import dataclass, replace
 from app_version import APP_NAME, VERSION
 
 OPENAPI_VERSION = "3.1.0"
+# The codes an error answer carries beside its message (serve.ERROR_CODES), for a program to act on.
+ERROR_CODE_DOC = ("A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` "
+                  "(409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), "
+                  "`failed` (500), `upstream_failed` (502), `model_not_installed` (503) or `timeout` (504).")
 DEFAULT_URL = "http://127.0.0.1:8765"
 
 
@@ -103,11 +107,21 @@ GROUPS = (
 )
 
 KOKORO_FIELDS = (
-    F("voice", "string", "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one "
-                         "voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."),
+    F("voice", "string", "Without `engine`: a voice's `name` from `GET /api/voices`. A Cast voice speaks as that voice and "
+                         "nothing is kept (as `POST /api/performance` with `keep_take` false: `language`, `direction`, "
+                         "`settings` and `use_pronunciations` go with it); a preset voice speaks with its model. With `engine` "
+                         "`kokoro`, or no engine: a Kokoro voice id, or several joined with commas to blend them. Default "
+                         "`af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."),
     F("speed", "number", "Kokoro: speaking rate. Default 1.0."),
-    F("language", "string", "Kokoro and Qwen: the language. Default `English`. Phonon speaks English only."),
+    F("language", "string", "Kokoro and Qwen: the language. Default `English`, or for a Kokoro voice named without `engine`, "
+                            "the voice's own language. Phonon speaks English only."),
 )
+
+# A text of more than one part, as POST /api/speak and a clip of POST /api/performance that is not kept take it.
+LONG_TEXT = ("Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call "
+             "and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. "
+             "The call can be cancelled between parts. A voice invented from a description (design mode) is refused for "
+             "such a text, since it would change from one part to the next.")
 
 # What an edit of a take takes. The preview and the save take the same fields; the save adds an idempotency key.
 EDIT_FIELDS = (
@@ -133,12 +147,12 @@ EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in t
               "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
               "a take retires its edits, and purging it deletes them.")
 
-ENGINE_NOT_INSTALLED = ("The engine could not load or run. When it is not installed and has a guided installer, `error` begins "
-                        "by saying where to install it: Install on its Models & features card, or its launcher in the lab "
-                        "folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, "
-                        "`setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), "
-                        "`setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or "
-                        "`setup-drama3.bat`.")
+ENGINE_NOT_INSTALLED = ("The model is not installed (`code` `model_not_installed`). `error` begins by saying where to "
+                        "install it: Install on its Models & features card, or its launcher in the lab folder with the "
+                        "arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` "
+                        "(Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with "
+                        "`--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.")
+ENGINE_FAILED = "The model is installed but could not load or run; `error` says what it reported."
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
@@ -196,6 +210,23 @@ ROUTES = [
       errors=((400, "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or "
                     "`dry_run` or `nvidia` is not true or false."),
               (409, "An install is already running, or the model worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/uninstall", "Service",
+      "Uninstall a model: read what it would delete, or delete its files from the Lab's folder.",
+      body=(F("dry_run", "boolean", "Only read the plan: what would be deleted and what stays. Nothing is changed. Default "
+                                    "false, which deletes."),),
+      reply="With `dry_run`, `plan`: `engine`, `name`, `remove` (each folder's `path` in the Lab's folder, its `bytes`, and "
+            "`link` when it is a link or junction, which is removed as a link and never followed), `keep` (each folder that "
+            "stays, with `why`), `bytes`, `ok`, `paragraphs` and `problems`. Otherwise `uninstall`: the plan with `removed`, "
+            "`failed` (each `path` with its `reason`, such as a file another program has open) and `freed` bytes.",
+      errors=((400, "The engine is unknown, or has no files of its own to delete (another installed model uses them all), "
+                    "or `dry_run` is not true or false."),
+              (409, "An install is running, or the model worker is busy.")),
+      notes="A model's files are its checkpoint in `hf-cache`, with its preset voices' repository; the files it keeps "
+            "elsewhere (Breeze in `breeze/models`, Drama 3 in `out/drama3`); its worker's source folders (VoxCPM2 in "
+            "`out/voxcpm2`); and its own Python environment (`.venv-kokoro`). What another installed model uses stays: the "
+            "Chatterbox models share a checkpoint and `.venv-chatterbox`, the Qwen3-TTS models `.venv-fqwen`, which VoxCPM2 "
+            "also borrows from. The service's own `.venv` and the library are never touched. Every model is unloaded first, "
+            "and the model worker refuses other work until the files are gone. Install on the model's card puts it back."),
     R("POST", "/api/engines/{engine_id}/device", "Service",
       "Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.",
       body=(F("device", "string", "`gpu` or `cpu`.", required=True),),
@@ -211,7 +242,7 @@ ROUTES = [
             F("profile", "string", "Breeze only: its decode profile. Default `eager`.")),
       reply="`engine`, `loaded`, `load_seconds`, `sample_rate`, `memory`, `backend`, `checkpoint`, `checkpoint_revision`, "
             "`supported_speakers` and `supported_languages`.",
-      errors=((409, "The model worker is busy."), (500, ENGINE_NOT_INSTALLED))),
+      errors=((409, "The model worker is busy."), (500, ENGINE_FAILED), (503, ENGINE_NOT_INSTALLED))),
     R("POST", "/api/unload", "Service", "Unload every engine and free the GPU.",
       body_kind="none", reply="`{\"ok\": true}`.", errors=((409, "The model worker is busy."),)),
     R("POST", "/api/prepare-reference", "Service", "Prepare a reference recording for an engine so its first clone is quick.",
@@ -248,8 +279,19 @@ ROUTES = [
       reply="The same document as `openapi.json` in the program folder, built from the route table."),
 
     # ---------------------------------------------------------------- Speaking
+    R("GET", "/api/voices", "Speaking", "List every voice a program can speak with by name.",
+      reply="`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the "
+            "one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and "
+            "`model_name`; `label`; `languages`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A "
+            "Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name "
+            "for it.",
+      notes="A Cast voice is named after its character when it is the character's only voice, or its only approved one; any "
+            "Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its "
+            "model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's "
+            "and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, "
+            "since only the loaded checkpoint reports them. Nothing is loaded to answer."),
     R("POST", "/api/speak", "Speaking", "Speak text with one engine and answer with the finished WAV file.",
-      body=(F("text", "string", "What to say, 1 to 1200 characters.", True),
+      body=(F("text", "string", "What to say, 1 to 10,000 characters. " + LONG_TEXT, True),
             F("engine", "string", "An engine id from `GET /api/catalog` whose `integration.service_api` is true. "
                                   "Default `kokoro`."),
             *KOKORO_FIELDS,
@@ -276,9 +318,11 @@ ROUTES = [
                F("X-Voice-Backend", "string", "The backend, when reported."),
                F("X-Model-Checkpoint", "string", "The checkpoint, when reported."),
                F("X-Checkpoint-Revision", "string", "The checkpoint's pinned revision, when reported."),
-               F("X-Voice-Asset-Path", "string", "With `save_voice_as`: the file the voice was saved to.")),
-      errors=((409, "`save_voice_as` names a voice that already exists."),
-              (413, "The request is over 64 KiB."), (500, ENGINE_NOT_INSTALLED),
+               F("X-Voice-Asset-Path", "string", "With `save_voice_as`: the file the voice was saved to."),
+               F("X-Parts", "string", "How many parts a text over 1,200 characters was spoken in.")),
+      errors=((404, "`voice` names no voice in `GET /api/voices` and is not a Kokoro voice id."),
+              (409, "`save_voice_as` names a voice that already exists (`code` `already_exists`)."),
+              (413, "The request is over 64 KiB."), (500, ENGINE_FAILED), (503, ENGINE_NOT_INSTALLED),
               (504, "The engine did not answer in time.")),
       notes="Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and "
             "name it in the 400. To keep what you generate as a Cast take, use "
@@ -298,11 +342,14 @@ ROUTES = [
             "the timings. A failure after the first line arrives as an `error` line, not a status code.",
       reply_kind="ndjson",
       notes="Use `POST /api/speak` when you want a file."),
-    R("POST", "/api/performance", "Speaking", "Speak a line as a Cast voice and save it as a take.",
-      body=(F("identity_id", "string", "The voice identity to speak with, from `GET /api/cast`.", True),
-            F("text", "string", "The line, 1 to 1200 characters.", True),
-            F("line_id", "string", "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line.",
-              True),
+    R("POST", "/api/performance", "Speaking", "Speak a line as a Cast voice, and save it as a take unless asked not to.",
+      body=(F("identity_id", "string", "The voice identity to speak with, from `GET /api/cast`. Give this or `voice`."),
+            F("voice", "string", "A Cast voice's `name` from `GET /api/voices`, instead of `identity_id`."),
+            F("text", "string", "The line, 1 to 1200 characters; with `keep_take` false, up to 10,000. " + LONG_TEXT, True),
+            F("keep_take", "boolean", "Default true: the clip is saved as a take. False saves nothing in the library, for a "
+                                      "program that speaks all day; the clip is still labelled as AI-generated speech."),
+            F("line_id", "string", "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line. "
+                                   "Needed when the take is kept."),
             F("reference_version_id", "string", "The recording to clone from. Default: the identity's approved recording. "
                                                 "Refused for a fixed or preset voice."),
             F("language", "string", "Default: the voice's own language, else `English`."),
@@ -312,13 +359,15 @@ ROUTES = [
             F("use_pronunciations", "boolean", "Apply the character's pronunciation dictionary to the spoken text. The take "
                                                "keeps both texts. Default false."),
             F("idempotency_key", "string", "1 to 200 characters. Repeating a call with the same key and the same inputs "
-                                           "returns that take's audio without generating again."),
+                                           "returns that take's audio without generating again. Only with a kept take."),
             F("identity_snapshot", "object", "Used by scene batches: the voice's `identity_type`, `engine_id` and "
                                              "`engine_options` as the scene saved them. The call is refused if the voice has "
                                              "changed since.")),
-      reply="The take's 16-bit WAV file, in one response. The call blocks until the clip is finished and saved.",
+      reply="The clip's 16-bit WAV file, in one response. The call blocks until the clip is finished, and saved when kept.",
       reply_kind="wav",
-      headers=(F("X-Take-Id", "string", "The saved take's id."),
+      headers=(F("X-Take-Id", "string", "The saved take's id; absent when it was not kept."),
+               F("X-Take-Kept", "string", "`false` when `keep_take` was false."),
+               F("X-Parts", "string", "How many parts a text over 1,200 characters was spoken in."),
                F("X-Cast-Character", "string", "The character's name."),
                F("X-Cast-Identity", "string", "The voice's label."),
                F("X-Cast-Line-Id", "string", "The `line_id` you sent."),
@@ -331,10 +380,11 @@ ROUTES = [
                F("X-Idempotent-Replay", "string", "`true` when the answer is an earlier take for the same key; then only "
                                                   "`X-Take-Id` and the three `X-Cast-*` headers come with it.")),
       errors=((400, "The identity is rejected or retired, has no usable recording, the text or direction is too long, the "
-                    "settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit "
-                    "of a take."),
-              (404, "The identity or the recording does not exist."),
+                    "settings do not fit the engine, `voice` names a preset voice, or `idempotency_key` was used before with "
+                    "different inputs or for an edit of a take, or sent with `keep_take` false."),
+              (404, "The identity, the recording or the voice named does not exist."),
               (409, "The model worker is busy."),
+              (503, ENGINE_NOT_INSTALLED),
               (504, "The engine did not answer in time.")),
       notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does."),
     R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text.",
@@ -572,7 +622,7 @@ ROUTES = [
             "`engine_id`, `name`, `total` and `done` (rows finished, failed or cancelled)."),
     R("GET", "/api/scenes/jobs/{job_id}/manifest.json", "Scenes", "Download a finished job's result manifest.",
       reply_kind="file", reply="The manifest, only when its checksum verifies.",
-      errors=((409, "The manifest's checksum does not match."),)),
+      errors=((409, "The manifest's checksum does not match (`code` `conflict`)."),)),
     R("POST", "/api/scenes/jobs/{job_id}/pause", "Scenes", "Pause a job after the take in progress.", body_kind="none",
       reply="`job`."),
     R("POST", "/api/scenes/jobs/{job_id}/resume", "Scenes", "Resume a paused job.", body_kind="none", reply="`job`."),
@@ -987,9 +1037,10 @@ def build_openapi():
         "tags": [{"name": name, "description": intro} for name, intro in groups_in_use(public)],
         "paths": paths,
         "components": {
-            "schemas": {"Error": {"type": "object", "required": ["error"],
-                                  "properties": {"error": {"type": "string", "description": "What went wrong."}}}},
-            "responses": {"Error": {"description": "Any other failure: a JSON object with an `error` message.",
+            "schemas": {"Error": {"type": "object", "required": ["error", "code"],
+                                  "properties": {"error": {"type": "string", "description": "What went wrong."},
+                                                 "code": {"type": "string", "description": ERROR_CODE_DOC}}}},
+            "responses": {"Error": {"description": "Any other failure: a JSON object with an `error` message and a `code`.",
                                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         },
         "x-internal-routes": sorted(key(route) for route in internal()),

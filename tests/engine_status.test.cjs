@@ -40,7 +40,7 @@ function dialog() {
 }
 
 function harness(responses = {}) {
-  const fields = {installDialog: dialog()}, calls = [], timers = [];
+  const fields = {installDialog: dialog(), uninstallDialog: dialog()}, calls = [], timers = [];
   const context = {
     document: {createElement: element},
     $: id => fields[id] || (fields[id] = element(id)),
@@ -65,8 +65,8 @@ function card(name) {
   for (const value of ['gpu', 'cpu']) element('label').appendChild(radios[value]);
   return {name, card: element('card'), state: element('state'), details: element('details'), more: element('details'),
     moreText: element('p'), ram: element('ram'), devices, radios,
-    note: element('note'), button: element('button'), extraButton: element('button'), action: 'test', extra: null,
-    installGpu: false, pendingDevice: false, deviceError: ''};
+    note: element('note'), button: element('button'), extraButton: element('button'), uninstallButton: element('button'),
+    action: 'test', extra: null, installGpu: false, pendingDevice: false, deviceError: ''};
 }
 
 const KOKORO_FILES = ['.venv/Scripts/python.exe', 'hf-cache/snapshot'];
@@ -276,7 +276,8 @@ test('model cards keep integration apart from their buttons, and every card has 
   assert.equal(kokoro.children[1].textContent, 'Integrated');
   const actions = kokoro.children.find(child => child.className === 'model-actions');
   assert.deepEqual(actions.children.map(child => [child.tag, child.textContent, child.hidden]),
-    [['button', 'Test', false], ['button', '', true]]);
+    [['button', 'Test', false], ['button', '', true], ['button', 'Uninstall…', true]]);
+  assert.equal(actions.children[2].attributes['aria-label'], 'Uninstall Kokoro 82M');
   const devices = kokoro.children.find(child => child.className === 'device-switch');
   assert.equal(devices.attributes.role, 'radiogroup');
   assert.equal(devices.hidden, true);    // until the status says whether the service has a graphics card
@@ -290,6 +291,69 @@ test('model cards keep integration apart from their buttons, and every card has 
 
 const plan = {engine: 'kokoro', nvidia: false, ok: true, paragraphs: ['Kokoro 82M on the CPU', '1. Python packages: 89 to install.'],
   problems: []};
+
+test('Uninstall… shows on an installed card only, and waits while the service is busy or installing', () => {
+  const {context: c} = harness();
+  c.modelCards = {kokoro: card('Kokoro'), turbo: card('Turbo'), orig: card('Original')};
+  const turbo = {id: 'turbo', state: 'checked', check: {ok: true}, installation: {installed: true, missing: []}};
+  const notIntegrated = {id: 'orig', state: 'not_integrated', check: null, installation: {installed: false, missing: []}};
+  c.renderEngineStatus({device: 'cpu', busy: false, speed: [], engines: [missingKokoro, turbo, notIntegrated]});
+  assert.deepEqual(['kokoro', 'turbo', 'orig'].map(key => c.modelCards[key].uninstallButton.hidden), [true, false, true]);
+  assert.equal(c.modelCards.turbo.uninstallButton.disabled, false);
+  c.renderEngineStatus({device: 'cpu', busy: true, speed: [], engines: [turbo]});
+  assert.equal(c.modelCards.turbo.uninstallButton.disabled, true);
+  c.renderEngineStatus({device: 'cpu', busy: false, speed: [], install: job(), engines: [missingKokoro, turbo]});
+  assert.equal(c.modelCards.turbo.uninstallButton.disabled, true, 'not while another model installs');
+});
+
+test('Uninstall shows what it would delete first, then deletes only when asked, and says what it freed', async () => {
+  const gone = {engine: 'turbo', ok: true, paragraphs: ['Uninstalling Turbo deletes 1.2 GB from the Lab\'s folder: .venv-x.',
+    'Your library is not touched.'], problems: []};
+  const status = {device: 'cpu', busy: false, speed: [], engines: []};
+  const {context: c, calls, fields} = harness({'/api/engines/turbo/uninstall': body => body.dry_run ? {plan: gone}
+    : {uninstall: {...gone, removed: ['.venv-x'], failed: [], freed: 1200000000, freed_text: '1.2 GB'}},
+  '/api/engines/status': status});
+  c.modelCards = {turbo: card('Turbo')};
+  await c.planUninstall('turbo');
+  assert.deepEqual(calls.map(call => [call.url, JSON.stringify(call.body)]), [['/api/engines/turbo/uninstall', '{"dry_run":true}']]);
+  assert.equal(fields.uninstallDialog.open, true);
+  assert.equal(fields.uninstallTitle.textContent, 'Uninstall Turbo');
+  assert.equal(fields.uninstallState.textContent, 'This is what it would delete. Nothing has changed yet.');
+  assert.deepEqual(fields.uninstallPlan.children.map(child => child.textContent), gone.paragraphs);
+  assert.equal(fields.uninstallGo.hidden, false);
+  await fields.uninstallGo.handlers.click();
+  assert.deepEqual(calls.slice(1).map(call => [call.url, JSON.stringify(call.body)]),
+    [['/api/engines/turbo/uninstall', '{}'], ['/api/engines/status', undefined]]);
+  assert.equal(fields.uninstallTitle.textContent, 'Turbo is uninstalled');
+  assert.equal(fields.uninstallState.textContent, 'Freed 1.2 GB. Install on its card puts it back.');
+  assert.equal(fields.uninstallGo.hidden, true);
+  assert.equal(fields.uninstallClose.textContent, 'Close');
+  fields.uninstallClose.handlers.click();
+  assert.equal(fields.uninstallDialog.open, false);
+});
+
+test('an uninstall that leaves files behind says which and what to do, and one with nothing to delete only offers to close', async () => {
+  const gone = {engine: 'turbo', ok: true, paragraphs: ['…'], problems: []};
+  const status = {device: 'cpu', busy: false, speed: [], engines: []};
+  const {context: c, fields} = harness({'/api/engines/turbo/uninstall': body => body.dry_run ? {plan: gone}
+    : {uninstall: {...gone, removed: [], failed: [{path: '.venv-x', reason: 'Access is denied'}], freed: 0, freed_text: '0 bytes'}},
+  '/api/engines/status': status});
+  c.modelCards = {turbo: card('Turbo')};
+  await c.planUninstall('turbo');
+  let escaped = {prevented: false, preventDefault() { this.prevented = true; }};
+  await Promise.all([c.startUninstall(), Promise.resolve().then(() => fields.uninstallDialog.handlers.cancel(escaped))]);
+  assert.equal(escaped.prevented, true, 'Escape does not close the window while the files are being deleted');
+  assert.equal(fields.uninstallTitle.textContent, 'Turbo was not fully uninstalled');
+  assert.equal(fields.uninstallState.textContent, 'These could not be deleted: .venv-x (Access is denied). Close any '
+    + 'program that has a file in the Lab’s folder open, then press Uninstall… on its card again.');
+  const shared = harness({'/api/engines/orig/uninstall': {plan: {engine: 'orig', ok: false, paragraphs: [],
+    problems: ['Original has no files of its own to delete: everything it has, another installed model uses too.']}}});
+  shared.context.modelCards = {orig: card('Original')};
+  await shared.context.planUninstall('orig');
+  assert.equal(shared.fields.uninstallState.textContent, 'There is nothing to uninstall.');
+  assert.equal(shared.fields.uninstallGo.hidden, true);
+  assert.equal(shared.fields.uninstallClose.textContent, 'Close');
+});
 
 test('Install opens the install window with the plan, and the card itself does not change size', async () => {
   const status = {device: 'cpu', busy: false, speed: [], engines: [missingKokoro]};

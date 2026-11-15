@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 
-from worker_process import (WorkerCancelled, WorkerError, WorkerProcess, WorkerRequestError,
+from worker_process import (ModelNotInstalled, WorkerCancelled, WorkerError, WorkerProcess, WorkerRequestError,
                             WorkerTimeout, WorkerUnavailable)
 from kokoro_support import resolve_kokoro_language
 import engine_adapters
@@ -66,6 +66,32 @@ def read_catalog():
         raise RuntimeError("The engine catalog contains missing or duplicate engine IDs.")
     return catalog
 
+
+# The pause between the parts of a long text that EnginePool.speak joins into one clip.
+PART_PAUSE_SECONDS = 0.25
+
+
+def designs_voice(adapter, req):
+    """Whether a speak request invents its voice from a description (design mode), which comes out differently each time.
+    Breeze, VoxCPM2 and Drama 3 design unless a request names another mode; Qwen VoiceDesign always does."""
+    if adapter is None:
+        return False
+    try:
+        return adapter.mode_for({"mode": "design", **req}) == "design"
+    except (KeyError, TypeError):
+        return False
+
+
+def joined_info(infos):
+    """What a clip made of several parts reports: the last part's facts, the time all of them took, when the first audio came,
+    and how many parts there were. Phoneme times are left out, since each part's start from zero."""
+    info = {key: value for key, value in infos[-1].items() if key != "timing"}
+    totals = [part.get("total_s") for part in infos]
+    if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in totals):
+        info["total_s"] = round(sum(totals), 3)
+    info["first_chunk_s"] = infos[0].get("first_chunk_s")
+    info["parts"] = len(infos)
+    return info
 
 class EnginePool:
     """Keep compatible model workers separate and allow one load/generation job at a time."""
@@ -254,7 +280,7 @@ class EnginePool:
     def _raise_with_install_pointer(self, entry, exc):
         """Re-raise a failure to bring an engine up. When the engine has a launcher and its files are missing, the same
         kind of error leads with a sentence saying where to install it, so the first thing someone who has not installed it
-        sees says what to do."""
+        sees says what to do, and is ModelNotInstalled, which the HTTP API answers with 503."""
         pointer = None
         if isinstance(exc, WorkerError):
             try:
@@ -262,7 +288,7 @@ class EnginePool:
             except Exception:
                 pass  # a probe that fails must not hide the error it would have explained
         if pointer:
-            raise type(exc)(f"{pointer} {exc}") from exc
+            raise ModelNotInstalled(f"{pointer} {exc}") from exc
         raise exc
 
     def _ensure_loaded_locked(self, key, load_params=None):
@@ -472,6 +498,8 @@ class EnginePool:
             self.last_used = time.time()
             worker = self._ensure_loaded_locked(key)
             return worker.call("phonemize", text=text, language=language)
+        except ModelNotInstalled:
+            raise  # nothing was running to discard, and its error says what to do
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -498,6 +526,8 @@ class EnginePool:
                 return worker.call("prepare_reference",
                                    **adapter.reference_call(reference, reference_text, xvec_only, exaggeration))
             return worker.call("prepare_reference", path=str(reference), exaggeration=exaggeration)
+        except ModelNotInstalled:
+            raise  # nothing was running to discard, and its error says what to do
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -507,6 +537,10 @@ class EnginePool:
             self._release_job()
 
     def speak(self, req):
+        """One clip of the request's text, as (samples, sample rate, info). Text longer than one part (1,200 characters) is
+        split where Scenes splits a long line, spoken part by part in this one turn of the model worker and joined with a
+        short pause, up to a scene line's 10,000 characters. Between parts the request stops when it was cancelled or its
+        caller has gone; a voice invented from a description is refused, since it would change from part to part."""
         if not isinstance(req, dict):
             raise ValueError("Request body must be a JSON object.")
         key = req.get("engine", engine_adapters.DEFAULT_ENGINE)
@@ -517,40 +551,62 @@ class EnginePool:
         text = req.get("text") or ""
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Type something to say.")
-        if len(text) > 1200:
-            raise ValueError("Keep it under 1200 characters (split long replies into sentences).")
+        from scene_store import MAX_LINE_TEXT, MAX_SEGMENT_TEXT, segment_text  # the service has it loaded already
+        if len(text) > MAX_LINE_TEXT:
+            raise ValueError(f"Keep it to {MAX_LINE_TEXT:,} characters; send longer text in pieces.")
+        parts = segment_text(text, MAX_SEGMENT_TEXT)
+        if len(parts) > 1 and designs_voice(adapter, req):
+            raise ValueError(f"Text over {MAX_SEGMENT_TEXT:,} characters is spoken in parts, and a voice invented from a "
+                             "description would change from one part to the next. Keep the text to "
+                             f"{MAX_SEGMENT_TEXT:,} characters, or save the voice (save_voice_as) and speak as that recording.")
         # What the engine's adapter checks before the worker is taken, and hands to speak_params() after.
         checked = adapter.check_speak(req, self) if adapter is not None else None
-        self._acquire_job(key, "Clip")
+        ticket = self._acquire_job(key, "Clip")
         output_file = None
         try:
             self.last_used = time.time()
             profile = str(req.get("profile", "eager") or "eager") if adapter is not None and adapter.profiles else None
             load_params = {"profile": profile} if profile is not None else None
             worker = self._ensure_loaded_locked(key, load_params)
-            params = {"text": text.strip()}
-            if adapter is not None:
-                params.update(adapter.speak_params(req, self, worker, checked))
-
+            own = adapter.speak_params(req, self, worker, checked) if adapter is not None else {}
             runtime_pid = self.workers[key].get("runtime_pid", worker.pid)
             worker_root = OUT / "workers" / f"{key}-{runtime_pid}"
             worker_root.mkdir(parents=True, exist_ok=True)
-            output_file = worker_root / f"{uuid.uuid4().hex}.npy"
-            result = worker.call("generate", output_file=str(output_file), **params)
-            reported_path = Path(result.get("audio_file", "")).resolve()
-            if reported_path != output_file.resolve() or not reported_path.is_file():
-                raise WorkerUnavailable("Worker returned an invalid temporary audio path.")
             import numpy as np
-            wav = np.load(reported_path, allow_pickle=False)
-            if wav.ndim != 1 or wav.size == 0 or not np.isfinite(wav).all():
-                raise WorkerRequestError("Worker returned invalid audio samples.")
-            self.last_used = time.time()
-            self.workers[key]["last_result"] = result
+            pieces, rate, infos = [], None, []
+            for number, part in enumerate(parts, 1):
+                if number > 1 and (ticket.cancelled or (ticket.alive is not None and not ticket.alive())):
+                    raise WorkerCancelled(f"Stopped after part {number - 1} of {len(parts)}.")
+                params = {"text": part}
+                params.update(own)
+                output_file = worker_root / f"{uuid.uuid4().hex}.npy"
+                result = worker.call("generate", output_file=str(output_file), **params)
+                reported_path = Path(result.get("audio_file", "")).resolve()
+                if reported_path != output_file.resolve() or not reported_path.is_file():
+                    raise WorkerUnavailable("Worker returned an invalid temporary audio path.")
+                wav = np.load(reported_path, allow_pickle=False)
+                if wav.ndim != 1 or wav.size == 0 or not np.isfinite(wav).all():
+                    raise WorkerRequestError("Worker returned invalid audio samples.")
+                output_file.unlink(missing_ok=True)
+                output_file = None
+                if rate is not None and int(result["sample_rate"]) != rate:
+                    raise WorkerRequestError("The parts of the text came back at different sample rates.")
+                rate = int(result["sample_rate"])
+                self.last_used = time.time()
+                self.workers[key]["last_result"] = result
+                infos.append(result.get("info") or {})
+                self._record_clip(key, infos[-1], wav.size, rate)
+                pieces.append(wav.astype(np.float32, copy=False))
             self._last_error = None
-            info = result.get("info") or {}
-            self._record_clip(key, info, wav.size, int(result["sample_rate"]))
+            info = infos[0]
+            if len(pieces) > 1:
+                pause = np.zeros(round(rate * PART_PAUSE_SECONDS), dtype=np.float32)
+                pieces = [piece for index, clip in enumerate(pieces) for piece in ((pause, clip) if index else (clip,))]
+                info = joined_info(infos)
             from evaluation_diagnostics import with_headroom  # a clip at full scale would be cut off when written
-            return with_headroom(wav.astype(np.float32, copy=False)), int(result["sample_rate"]), info
+            return with_headroom(np.concatenate(pieces)), rate, info
+        except ModelNotInstalled:
+            raise  # nothing was running to discard, and its error says what to do
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -646,6 +702,8 @@ class EnginePool:
                 self._discard_locked(key, record["worker"])
             self._last_error = {"engine": key, "message": "stream cancelled; next request will restart the worker"}
             raise exc
+        except ModelNotInstalled:
+            raise  # nothing was running to discard, and its error says what to do
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -687,6 +745,8 @@ class EnginePool:
             self._record_clip(key, info, wav.size, int(result["sample_rate"]))
             from evaluation_diagnostics import with_headroom  # a clip at full scale would be cut off when written
             return with_headroom(wav.astype(np.float32, copy=False)), int(result["sample_rate"]), info
+        except ModelNotInstalled:
+            raise  # nothing was running to discard, and its error says what to do
         except (WorkerUnavailable, WorkerTimeout):
             record = self.workers.get(key)
             if record:
@@ -729,6 +789,12 @@ class EnginePool:
         self._last_unload = unloaded
         if release_ownership and self._residency:
             self._residency.release()
+
+    def unload_held(self):
+        """Unload every model while hold() keeps the worker, as uninstalling one does before it deletes the model's files."""
+        if self._hold_ticket is None:
+            raise RuntimeError("unload_held() needs the hold.")
+        self._unload_locked()
 
     def unload(self):
         self._acquire_job(what="Unload", can_stop=False)

@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 
 from common import LAB
+from lab_errors import NotInstalled
 
 PHONON_ENGINE_ID = "phonon-31m-en"
 CATALOG = "catalog/engines.json"
@@ -97,7 +98,7 @@ def voice_names(root=None):
 
 def default_voice(names):
     if not names:
-        raise ValueError(NOT_INSTALLED)
+        raise NotInstalled(NOT_INSTALLED)
     return DEFAULT_VOICE if DEFAULT_VOICE in names else names[0]
 
 
@@ -108,7 +109,7 @@ def resolve_voice(value, names):
     if not isinstance(value, str):
         raise ValueError("A Phonon voice is chosen by its name.")
     if not names:
-        raise ValueError(NOT_INSTALLED)
+        raise NotInstalled(NOT_INSTALLED)
     found = {name.casefold(): name for name in names}.get(value.strip().casefold())
     if found is None:
         shown = ", ".join(names[:4])
@@ -151,7 +152,7 @@ def identity_options(capabilities, speaker, language, controls, root=None):
     voices and language it was chosen from. `controls` is performance_controls() for the engine."""
     voices = discover_phonon_voices(root)
     if not voices:
-        raise ValueError(NOT_INSTALLED)
+        raise NotInstalled(NOT_INSTALLED)
     if not isinstance(speaker, str) or not speaker.strip():
         raise ValueError("Choose a Phonon voice for this identity.")
     chosen = resolve_voice(speaker, [item["name"] for item in voices])

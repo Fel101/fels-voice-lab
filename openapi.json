@@ -315,6 +315,80 @@
         }
       }
     },
+    "/api/engines/{engine_id}/uninstall": {
+      "post": {
+        "operationId": "post_api_engines_engine_id_uninstall",
+        "summary": "Uninstall a model: read what it would delete, or delete its files from the Lab's folder.",
+        "tags": [
+          "Service"
+        ],
+        "description": "A model's files are its checkpoint in `hf-cache`, with its preset voices' repository; the files it keeps elsewhere (Breeze in `breeze/models`, Drama 3 in `out/drama3`); its worker's source folders (VoxCPM2 in `out/voxcpm2`); and its own Python environment (`.venv-kokoro`). What another installed model uses stays: the Chatterbox models share a checkpoint and `.venv-chatterbox`, the Qwen3-TTS models `.venv-fqwen`, which VoxCPM2 also borrows from. The service's own `.venv` and the library are never touched. Every model is unloaded first, and the model worker refuses other work until the files are gone. Install on the model's card puts it back.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "Only read the plan: what would be deleted and what stays. Nothing is changed. Default false, which deletes."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "engine_id",
+            "in": "path",
+            "required": true,
+            "description": "An engine id from `GET /api/catalog`.",
+            "example": "kokoro",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,80}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "With `dry_run`, `plan`: `engine`, `name`, `remove` (each folder's `path` in the Lab's folder, its `bytes`, and `link` when it is a link or junction, which is removed as a link and never followed), `keep` (each folder that stays, with `why`), `bytes`, `ok`, `paragraphs` and `problems`. Otherwise `uninstall`: the plan with `removed`, `failed` (each `path` with its `reason`, such as a file another program has open) and `freed` bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The engine is unknown, or has no files of its own to delete (another installed model uses them all), or `dry_run` is not true or false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An install is running, or the model worker is busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/engines/{engine_id}/device": {
       "post": {
         "operationId": "post_api_engines_engine_id_device",
@@ -438,7 +512,17 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
+            "description": "The model is installed but could not load or run; `error` says what it reported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -760,6 +844,31 @@
         }
       }
     },
+    "/api/voices": {
+      "get": {
+        "operationId": "get_api_voices",
+        "summary": "List every voice a program can speak with by name.",
+        "tags": [
+          "Speaking"
+        ],
+        "description": "A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.",
+        "responses": {
+          "200": {
+            "description": "`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/speak": {
       "post": {
         "operationId": "post_api_speak",
@@ -777,7 +886,7 @@
                 "properties": {
                   "text": {
                     "type": "string",
-                    "description": "What to say, 1 to 1200 characters."
+                    "description": "What to say, 1 to 10,000 characters. Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next."
                   },
                   "engine": {
                     "type": "string",
@@ -785,7 +894,7 @@
                   },
                   "voice": {
                     "type": "string",
-                    "description": "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."
+                    "description": "Without `engine`: a voice's `name` from `GET /api/voices`. A Cast voice speaks as that voice and nothing is kept (as `POST /api/performance` with `keep_take` false: `language`, `direction`, `settings` and `use_pronunciations` go with it); a preset voice speaks with its model. With `engine` `kokoro`, or no engine: a Kokoro voice id, or several joined with commas to blend them. Default `af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."
                   },
                   "speed": {
                     "type": "number",
@@ -793,7 +902,7 @@
                   },
                   "language": {
                     "type": "string",
-                    "description": "Kokoro and Qwen: the language. Default `English`. Phonon speaks English only."
+                    "description": "Kokoro and Qwen: the language. Default `English`, or for a Kokoro voice named without `engine`, the voice's own language. Phonon speaks English only."
                   },
                   "voice_description": {
                     "type": "string",
@@ -906,6 +1015,22 @@
                 "schema": {
                   "type": "string"
                 }
+              },
+              "X-Parts": {
+                "description": "How many parts a text over 1,200 characters was spoken in.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`voice` names no voice in `GET /api/voices` and is not a Kokoro voice id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           },
@@ -920,7 +1045,17 @@
             }
           },
           "500": {
-            "description": "The engine could not load or run. When it is not installed and has a guided installer, `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
+            "description": "The model is installed but could not load or run; `error` says what it reported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -940,7 +1075,7 @@
             }
           },
           "409": {
-            "description": "`save_voice_as` names a voice that already exists; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "`save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1074,7 +1209,7 @@
     "/api/performance": {
       "post": {
         "operationId": "post_api_performance",
-        "summary": "Speak a line as a Cast voice and save it as a take.",
+        "summary": "Speak a line as a Cast voice, and save it as a take unless asked not to.",
         "tags": [
           "Speaking"
         ],
@@ -1088,15 +1223,23 @@
                 "properties": {
                   "identity_id": {
                     "type": "string",
-                    "description": "The voice identity to speak with, from `GET /api/cast`."
+                    "description": "The voice identity to speak with, from `GET /api/cast`. Give this or `voice`."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "description": "A Cast voice's `name` from `GET /api/voices`, instead of `identity_id`."
                   },
                   "text": {
                     "type": "string",
-                    "description": "The line, 1 to 1200 characters."
+                    "description": "The line, 1 to 1200 characters; with `keep_take` false, up to 10,000. Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next."
+                  },
+                  "keep_take": {
+                    "type": "boolean",
+                    "description": "Default true: the clip is saved as a take. False saves nothing in the library, for a program that speaks all day; the clip is still labelled as AI-generated speech."
                   },
                   "line_id": {
                     "type": "string",
-                    "description": "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line."
+                    "description": "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line. Needed when the take is kept."
                   },
                   "reference_version_id": {
                     "type": "string",
@@ -1120,7 +1263,7 @@
                   },
                   "idempotency_key": {
                     "type": "string",
-                    "description": "1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again."
+                    "description": "1 to 200 characters. Repeating a call with the same key and the same inputs returns that take's audio without generating again. Only with a kept take."
                   },
                   "identity_snapshot": {
                     "type": "object",
@@ -1136,9 +1279,7 @@
                   }
                 },
                 "required": [
-                  "identity_id",
-                  "text",
-                  "line_id"
+                  "text"
                 ]
               }
             }
@@ -1146,7 +1287,7 @@
         },
         "responses": {
           "200": {
-            "description": "The take's 16-bit WAV file, in one response. The call blocks until the clip is finished and saved.",
+            "description": "The clip's 16-bit WAV file, in one response. The call blocks until the clip is finished, and saved when kept.",
             "content": {
               "audio/wav": {
                 "schema": {
@@ -1157,7 +1298,19 @@
             },
             "headers": {
               "X-Take-Id": {
-                "description": "The saved take's id.",
+                "description": "The saved take's id; absent when it was not kept.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Take-Kept": {
+                "description": "`false` when `keep_take` was false.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Parts": {
+                "description": "How many parts a text over 1,200 characters was spoken in.",
                 "schema": {
                   "type": "string"
                 }
@@ -1225,7 +1378,7 @@
             }
           },
           "400": {
-            "description": "The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, or `idempotency_key` was used before with different inputs or for an edit of a take.",
+            "description": "The identity is rejected or retired, has no usable recording, the text or direction is too long, the settings do not fit the engine, `voice` names a preset voice, or `idempotency_key` was used before with different inputs or for an edit of a take, or sent with `keep_take` false.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1235,7 +1388,17 @@
             }
           },
           "404": {
-            "description": "The identity or the recording does not exist.",
+            "description": "The identity, the recording or the voice named does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3625,7 +3788,7 @@
             }
           },
           "409": {
-            "description": "The manifest's checksum does not match.",
+            "description": "The manifest's checksum does not match (`code` `conflict`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5368,19 +5531,24 @@
       "Error": {
         "type": "object",
         "required": [
-          "error"
+          "error",
+          "code"
         ],
         "properties": {
           "error": {
             "type": "string",
             "description": "What went wrong."
+          },
+          "code": {
+            "type": "string",
+            "description": "A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` (409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), `failed` (500), `upstream_failed` (502), `model_not_installed` (503) or `timeout` (504)."
           }
         }
       }
     },
     "responses": {
       "Error": {
-        "description": "Any other failure: a JSON object with an `error` message.",
+        "description": "Any other failure: a JSON object with an `error` message and a `code`.",
         "content": {
           "application/json": {
             "schema": {

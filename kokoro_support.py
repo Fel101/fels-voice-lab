@@ -7,6 +7,7 @@ from importlib.machinery import (BYTECODE_SUFFIXES, EXTENSION_SUFFIXES, SOURCE_S
 from importlib.util import find_spec
 
 from common import LAB
+from lab_errors import NotInstalled
 
 
 KOKORO_REPO = "hexgrad/Kokoro-82M"
@@ -49,6 +50,12 @@ def kokoro_snapshot_dir() -> Path:
     return candidates[0] if candidates else snapshots / "missing-local-snapshot"
 
 
+def voice_language(voice):
+    """The language a Kokoro voice speaks, from the first letter of its id: af_heart speaks American English. None for an id
+    whose letter names no language."""
+    return KOKORO_LANGUAGES.get(str(voice)[:1], {}).get("name")
+
+
 def discover_kokoro_voices() -> list[str]:
     """Discover voice packs present in the selected local snapshot, not all upstream voices."""
     voices_dir = kokoro_snapshot_dir() / "voices"
@@ -73,7 +80,7 @@ def normalize_kokoro_voices(value, available=None) -> list[str]:
     if available is None:
         available = discover_kokoro_voices()
     if not available:
-        raise ValueError(KOKORO_NOT_INSTALLED)
+        raise NotInstalled(KOKORO_NOT_INSTALLED)
     missing = [voice for voice in voices if voice not in available]
     if missing:
         raise ValueError(("This Kokoro voice is" if len(missing) == 1 else "These Kokoro voices are") + " not installed: "

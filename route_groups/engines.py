@@ -1,6 +1,7 @@
 """Engines and speech: the models (their status, Test, Install and device), loading and unloading them, the line for the
-model worker, and speaking: a clip (/api/speak), a live clip (/api/stream), a take for a Cast voice (/api/performance)
-and Kokoro's pronunciation preview. Also the service's health, info, catalog and OpenAPI document."""
+model worker, and speaking: the voices a program can name (/api/voices), a clip (/api/speak), a live clip (/api/stream), a
+line as a Cast voice, kept as a take or not (/api/performance), and Kokoro's pronunciation preview. Also the service's health,
+info, catalog and OpenAPI document."""
 
 import json
 from pathlib import Path
@@ -13,12 +14,27 @@ from cast_store import DIRECTION_ENGINES, generation_identity_snapshot
 from common import free_ram_gb
 import engine_adapters
 import job_queue
+from lab_errors import NotInstalled
 from performance_settings import DEFAULTS, effective_settings
 from reference_catalog import save_designed_reference
+from scene_store import MAX_LINE_TEXT, MAX_SEGMENT_TEXT
 import synthetic_label
+import voice_names
 from worker_pool import WorkerError
 
 VOICE_ASSET_NAME_RE = re.compile(r"(?:(?:[A-Za-z0-9][A-Za-z0-9_-]{0,31})/){0,2}[A-Za-z0-9][A-Za-z0-9_-]{0,47}\Z")
+# The fields of a POST /api/speak that names a Cast voice which go on to the line it speaks; the rest are the models' own.
+CAST_FIELDS = ("text", "language", "direction", "settings", "use_pronunciations")
+
+
+def own_language(identity):
+    """The language of a Cast voice whose options name exactly one other than English (a Kokoro voice, ef_dora, reads
+    Spanish), for a line that names none. None keeps the default, English."""
+    adapter = engine_adapters.get(identity["engine_id"])
+    found = adapter.voice_languages(identity.get("engine_options") or {}) if adapter is not None else None
+    if not found or len(found) != 1 or found[0].endswith("English"):
+        return None
+    return found[0]
 
 
 def register(router, lab):
@@ -57,6 +73,23 @@ def register(router, lab):
     def catalog(self, parsed, req):
         self._json(200, engines.catalog)
 
+    @router.get("/api/voices")
+    def voices(self, parsed, req):
+        self._json(200, {"voices": voice_names.public(voice_names.list_voices(cast, engines))})
+
+    def voice_by_name(req):
+        """The voice a speak request names in `voice` without naming an engine (GET /api/voices). None when it names its
+        engine, or when its `voice` is written as Kokoro voice ids, which Kokoro speaks as it always did."""
+        name = req.get("voice")
+        if "engine" in req or not isinstance(name, str) or not name.strip():
+            return None
+        try:
+            return voice_names.find(name, voice_names.list_voices(cast, engines))
+        except KeyError:
+            if voice_names.looks_like_kokoro(name):
+                return None
+            raise
+
     @router.get("/api/openapi.json")
     def openapi(self, parsed, req):
         self._json(200, api_spec.build_openapi())
@@ -82,6 +115,17 @@ def register(router, lab):
         if dry_run:
             return self._json(200, {"plan": installer.plan(engine_id, nvidia=nvidia)})
         self._json(200, {"install": installer.start(engine_id, nvidia=nvidia)})
+
+    @router.post("/api/engines/{engine_id}/uninstall")
+    def engine_uninstall(self, parsed, req, engine_id):
+        dry_run = req.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("dry_run must be true or false.")
+        if dry_run:
+            return self._json(200, {"plan": installer.uninstall_plan(engine_id)})
+        result = installer.uninstall(engine_id)
+        lab.log.event(f"uninstalled {engine_id}: {len(result['removed'])} removed, {len(result['failed'])} failed")
+        self._json(200, {"uninstall": result})
 
     @router.post("/api/engines/{engine_id}/device")
     def engine_device(self, parsed, req, engine_id):
@@ -144,6 +188,15 @@ def register(router, lab):
     def speak(self, parsed, req):
         if self._no_query(parsed):  # docs/API.md: /api/speak?x=1 is a 404
             return self._json(404, {"error": "not found"})
+        named = voice_by_name(req)
+        if named is not None and named["kind"] == "cast":
+            line = {key: req[key] for key in CAST_FIELDS if req.get(key) is not None}
+            body, headers = cast_clip(self, {**line, "identity_id": named["identity_id"]}, keep=False)
+            return self._send(200, body, "audio/wav", headers)
+        if named is not None:
+            if not named["ready"]:
+                raise NotInstalled(named["why_not"])
+            req = voice_names.speak_request(named, req)
         save_name = req.get("save_voice_as")
         save_path = None
         if save_name not in (None, ""):
@@ -157,14 +210,12 @@ def register(router, lab):
             try:
                 save_path = voice_asset_path(save_name)
             except FileExistsError as exc:
-                return self._json(409, {"error": str(exc)})
+                return self._json(409, {"error": str(exc), "code": "already_exists"})
         self._note(engine=req.get("engine", engine_adapters.DEFAULT_ENGINE))
         try:
             wav, sr, info = engines.speak(req)
-        except (ValueError, MemoryError) as exc:
-            return self._json(400, {"error": str(exc)})
-        except WorkerError as exc:
-            return self._json(exc.status_code, {"error": str(exc)})
+        except (ValueError, MemoryError, WorkerError) as exc:
+            return self._json(serve.error_status(exc), {"error": str(exc)})
         except Exception as exc:
             return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
         audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", engine_adapters.DEFAULT_ENGINE))
@@ -177,8 +228,12 @@ def register(router, lab):
             try:
                 save_designed_reference(save_path, audio_body, req, info, engines.entries.get(req.get("engine"), {}))
             except FileExistsError:
-                return self._json(409, {"error": f"Voice asset {save_name!r} already exists; choose another name."})
+                return self._json(
+                    409, {"error": f"Voice asset {save_name!r} already exists; choose another name.", "code": "already_exists"}
+                )
             headers["X-Voice-Asset-Path"] = str(save_path.resolve())
+        if info.get("parts"):
+            headers["X-Parts"] = str(info["parts"])
         if info.get("mode"):
             headers["X-Generation-Mode"] = info["mode"]
         if info.get("profile"):
@@ -222,7 +277,7 @@ def register(router, lab):
             try:
                 save_path = voice_asset_path(save_name)
             except FileExistsError as exc:
-                return self._json(409, {"error": str(exc)})
+                return self._json(409, {"error": str(exc), "code": "already_exists"})
 
         state = {
             "headers_sent": False,
@@ -332,11 +387,11 @@ def register(router, lab):
             )
         except (ValueError, MemoryError) as exc:
             if not state["headers_sent"]:
-                return self._json(400, {"error": str(exc)})
+                return self._json(serve.error_status(exc), {"error": str(exc)})
             stream_error(str(exc))
         except WorkerError as exc:
             if not state["headers_sent"]:
-                return self._json(exc.status_code, {"error": str(exc)})
+                return self._json(serve.error_status(exc), {"error": str(exc)})
             stream_error(str(exc))
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
             pass  # a disconnected consumer has already cleared its own pending browser audio
@@ -348,23 +403,56 @@ def register(router, lab):
 
     @router.post("/api/performance")
     def performance(self, parsed, req):
-        identity = cast.get_generation_identity(req.get("identity_id"), req.get("reference_version_id"))
+        keep = req.get("keep_take", True)
+        if not isinstance(keep, bool):
+            raise ValueError("keep_take must be true or false.")
+        body, headers = cast_clip(self, req, keep=keep)
+        return self._send(200, body, "audio/wav", headers)
+
+    def cast_voice_id(name):
+        """The identity id of the Cast voice a name means (GET /api/voices)."""
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("voice must be a voice's name from GET /api/voices.")
+        voice = voice_names.find(name, voice_names.list_voices(cast, engines))
+        if voice["kind"] != "cast":
+            raise ValueError(
+                f"{voice['name']} is a preset voice of {voice['model_name']}, not a Cast voice. Speak it with POST /api/speak, "
+                "or give a character that voice in Cast."
+            )
+        return voice["identity_id"]
+
+    def cast_clip(handler, req, *, keep):
+        """A line spoken as a Cast voice, as (the WAV, its headers). With keep, it is saved as a take of up to 1,200
+        characters; without, nothing is saved and the text may run to 10,000 characters, spoken in parts. Either way the
+        clip carries the AI-generated label."""
+        identity_id = req.get("identity_id")
+        if identity_id is None and req.get("voice") is not None:
+            identity_id = cast_voice_id(req["voice"])
+        identity = cast.get_generation_identity(identity_id, req.get("reference_version_id"))
         engine_id = identity["engine_id"]
-        self._note(engine=engine_id)
+        handler._note(engine=engine_id)
         voice_identity = generation_identity_snapshot(identity)
         if req.get("identity_snapshot") is not None and req["identity_snapshot"] != voice_identity:
             raise ValueError(
                 "The scene voice identity changed after this batch was saved; reload and save the scene before rendering."
             )
-        language = req.get("language") or (identity.get("engine_options") or {}).get("language") or "English"
+        language = (
+            req.get("language") or (identity.get("engine_options") or {}).get("language") or own_language(identity) or "English"
+        )
+        limit = MAX_SEGMENT_TEXT if keep else MAX_LINE_TEXT
         original_text = req.get("text")
-        if not isinstance(original_text, str) or not original_text.strip() or len(original_text) > 1200:
-            raise ValueError("Performance text must contain 1–1200 characters.")
+        if not isinstance(original_text, str) or not original_text.strip() or len(original_text) > limit:
+            if keep:
+                raise ValueError(
+                    f"Performance text must contain 1–{limit} characters. A clip that is not kept (keep_take false) may "
+                    f"have up to {MAX_LINE_TEXT:,}, spoken in parts."
+                )
+            raise ValueError(f"Performance text must contain 1–{limit} characters.")
         spoken_text = original_text
         if req.get("use_pronunciations") is True:
             spoken_text = cast.apply_pronunciations(original_text, identity["character_id"])
-        if len(spoken_text) > 1200:
-            raise ValueError("Pronunciation replacements expanded the spoken line past 1200 characters.")
+        if len(spoken_text) > limit:
+            raise ValueError(f"Pronunciation replacements expanded the spoken line past {limit} characters.")
         direction = req.get("direction", (identity.get("engine_options") or {}).get("default_direction", ""))
         if not isinstance(direction, str) or len(direction) > 1000:
             raise ValueError("Acting direction must be text of 1000 characters or fewer.")
@@ -386,10 +474,14 @@ def register(router, lab):
         if adapter is not None:
             backend_request.update(adapter.performance_request(identity, settings, applied_settings, direction, language))
         line_id = req.get("line_id")
+        if line_id is None and not keep:
+            line_id = "api"
         if not isinstance(line_id, str) or not line_id.strip() or len(line_id) > 100:
             raise ValueError("Line ID must contain 1–100 characters.")
 
         request_key = req.get("idempotency_key")
+        if request_key is not None and not keep:
+            raise ValueError("idempotency_key returns a kept take, so it needs keep_take true.")
         if request_key is not None:
             if not isinstance(request_key, str) or not request_key or len(request_key) > 200:
                 raise ValueError("Performance idempotency_key must contain 1–200 characters.")
@@ -413,18 +505,13 @@ def register(router, lab):
                 ):
                     raise ValueError("Performance idempotency_key was already used with different inputs.")
                 audio_body = Path(cast.get_media_path("take", existing["id"])).read_bytes()
-                return self._send(
-                    200,
-                    audio_body,
-                    "audio/wav",
-                    {
-                        "X-Take-Id": existing["id"],
-                        "X-Cast-Character": existing["character_name"],
-                        "X-Cast-Identity": existing["identity_label"],
-                        "X-Cast-Line-Id": existing["line_id"],
-                        "X-Idempotent-Replay": "true",
-                    },
-                )
+                return audio_body, {
+                    "X-Take-Id": existing["id"],
+                    "X-Cast-Character": existing["character_name"],
+                    "X-Cast-Identity": existing["identity_label"],
+                    "X-Cast-Line-Id": existing["line_id"],
+                    "X-Idempotent-Replay": "true",
+                }
 
         wav, sample_rate, engine_info = engines.speak(backend_request)
         # Kokoro's phoneme times are stored in their own take column, not in the engine record saved below.
@@ -449,6 +536,21 @@ def register(router, lab):
         }
         if adapter is not None:
             model.update(adapter.take_record(voice_options))
+        if not keep:
+            headers = {
+                "X-Cast-Character": identity["character_name"],
+                "X-Cast-Identity": identity["label"],
+                "X-Gen-Seconds": str(engine_info.get("total_s", "")),
+                "X-Audio-Seconds": f"{len(wav) / sample_rate:.2f}",
+                "X-Voice-Backend": str(model.get("backend") or ""),
+                "X-Model-Checkpoint": str(model.get("checkpoint") or ""),
+                "X-Checkpoint-Revision": str(model.get("checkpoint_revision") or ""),
+                "X-Generation-Mode": generation_mode,
+                "X-Take-Kept": "false",
+            }
+            if engine_info.get("parts"):
+                headers["X-Parts"] = str(engine_info["parts"])
+            return synthetic_label.wav_bytes(wav, sample_rate, engine_id=engine_id), headers
         take = cast.create_take(
             identity,
             line_id=line_id.strip(),
@@ -477,7 +579,7 @@ def register(router, lab):
             "X-Checkpoint-Revision": str(model.get("checkpoint_revision") or ""),
             "X-Generation-Mode": generation_mode,
         }
-        return self._send(200, audio_body, "audio/wav", headers)
+        return audio_body, headers
 
     @router.post("/api/kokoro/phonemize")
     def kokoro_phonemize(self, parsed, req):

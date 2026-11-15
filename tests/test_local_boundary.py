@@ -86,10 +86,10 @@ class LocalBoundaryTests(unittest.TestCase):
         self.assertIn("Drama job not found", body.decode("utf-8"))
         with mock.patch.object(self.service.cast, "list_cast", side_effect=RuntimeError("database is locked")):
             status, _headers, body = self.service.request("GET", "/api/cast")
-        self.assertEqual((status, body), (500, b'{"error": "RuntimeError: database is locked"}'))
+        self.assertEqual((status, body), (500, b'{"error": "RuntimeError: database is locked", "code": "failed"}'))
         with mock.patch.object(export_panel, "run", side_effect=OSError("the disk is full")):
             status, _headers, body = self.service.request("POST", "/api/exports/preview", body={})
-        self.assertEqual((status, body), (500, b'{"error": "OSError: the disk is full"}'))
+        self.assertEqual((status, body), (500, b'{"error": "OSError: the disk is full", "code": "failed"}'))
 
 
 if __name__ == "__main__":

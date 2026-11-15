@@ -64,6 +64,13 @@ class Phonon(Adapter):
     def info(self):
         return {"phonon_voices": phonon_support.discover_phonon_voices()}
 
+    def named_voices(self, loaded):
+        return [
+            {"voice_id": item["name"], "label": item.get("description") or item["name"], "languages": ["English"],
+             "request": {"voice": item["name"]}}
+            for item in phonon_support.discover_phonon_voices()
+        ]  # fmt: skip
+
     sizes_install = True
 
     def install_size(self, root, nvidia, card, files_bytes):

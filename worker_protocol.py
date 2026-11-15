@@ -3,7 +3,9 @@
 import json
 
 PROTOCOL_VERSION = 1
-MAX_MESSAGE_BYTES = 64 * 1024
+# One message, one line. A clip's answer carries Kokoro's phoneme and word times, which for a 1,200-character part run past
+# 64 KiB (0.3.0's limit, which failed such a part); its audio goes through a file, so 1 MiB leaves plenty of room.
+MAX_MESSAGE_BYTES = 1024 * 1024
 METHODS = frozenset({"health", "load", "prepare_reference", "phonemize", "generate", "generate_stream", "unload", "shutdown"})
 
 

@@ -44,7 +44,7 @@ from housekeeping import run_startup_sweep
 from request_log import NullRequestLog, RequestLog, new_request_id
 from runtime_folders import migrate_program_folders
 
-from worker_pool import EnginePool, WorkerError
+from worker_pool import EnginePool
 from engine_checks import EngineCheckStore
 from engine_devices import EngineDeviceStore
 from engine_install import EngineInstaller
@@ -319,6 +319,28 @@ def answer_unexpected_errors(method):
     return answer
 
 
+# The short code beside an error's sentence (docs/API.md, Errors), so a program can act on an answer without reading it. The
+# status chooses it; a route whose status means something else here names its own code, such as already_exists for a 409.
+ERROR_CODES = {400: "invalid_request", 403: "not_local", 404: "not_found", 409: "busy", 413: "too_large",
+               499: "cancelled", 500: "failed", 502: "upstream_failed", 503: "model_not_installed", 504: "timeout"}
+
+
+def error_status(exc):
+    """The status of an error a route did not answer itself: 413 for a body that is too big, 404 for a thing that does not
+    exist, an error's own status_code (a worker's, or 503 for a model that is not installed), 400 for a request the Lab
+    cannot take. None for anything else, which is the service's own failure."""
+    if isinstance(exc, OverflowError):
+        return 413
+    if isinstance(exc, KeyError):
+        return 404
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and not isinstance(status, bool):
+        return status
+    if isinstance(exc, (ValueError, MemoryError)):
+        return 400
+    return None
+
+
 # What the queue (GET /api/queue) calls the work a route asks of the model worker.
 QUEUE_LABELS = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
                 "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
@@ -531,6 +553,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, code, obj):
         if code >= 400 and isinstance(obj, dict):
+            if "error" in obj and "code" not in obj:
+                obj = {**obj, "code": ERROR_CODES.get(code, "failed")}
             self._note(error=obj.get("error"))
         if code >= 500 and sys.exc_info()[0] is not None:
             self._note(traceback=traceback.format_exc())
@@ -654,9 +678,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             if self._status:
                 raise  # the answer has begun; answer_unexpected_errors and the request log take it from here
-            status = (413 if isinstance(exc, OverflowError) else 404 if isinstance(exc, KeyError)
-                      else 400 if isinstance(exc, (ValueError, MemoryError))
-                      else exc.status_code if isinstance(exc, WorkerError) else None)
+            status = error_status(exc)
             if status is None:
                 raise
             return self._json(status, {"error": str(exc)})

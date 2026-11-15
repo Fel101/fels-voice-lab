@@ -417,7 +417,7 @@ function renderModelOverview(result){
     var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),integrated=cardNode('p','eyebrow'),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('p','meta'),ram=cardNode('p','meta');
     var more=cardNode('details','model-more'),moreText=cardNode('p','meta');
     more.appendChild(cardNode('summary','','Details'));more.appendChild(moreText);more.hidden=true;
-    var devices=cardNode('div','device-switch'),choices=cardNode('span','device-choices'),note=cardNode('p','meta device-note'),actions=cardNode('div','model-actions'),button=cardNode('button','','Test'),extra=cardNode('button');
+    var devices=cardNode('div','device-switch'),choices=cardNode('span','device-choices'),note=cardNode('p','meta device-note'),actions=cardNode('div','model-actions'),button=cardNode('button','','Test'),extra=cardNode('button'),uninstall=cardNode('button','','Uninstall…');
     var integration=entry.integration||{},caps=entry.capabilities||{},radios={};
     integrated.textContent=integration.service_api?(integration.task_only?'Integrated · conversion':'Integrated'):'Not integrated';
     features.textContent=['voice_design','voice_cloning','voice_direction','voice_selection'].filter(function(key){return caps[key]&&['supported','worker_verified'].indexOf(caps[key].status)>=0;}).map(function(key){return key.replace(/_/g,' ');}).join(' · ')||(integration.task_only?'Audio-to-audio voice conversion':'See model-specific controls');
@@ -432,12 +432,14 @@ function renderModelOverview(result){
     });
     note.hidden=true;
     button.type='button';extra.type='button';extra.hidden=true;
+    uninstall.type='button';uninstall.hidden=true;uninstall.setAttribute('aria-label','Uninstall '+entry.name);
+    uninstall.addEventListener('click',function(){return planUninstall(entry.id);});
     button.addEventListener('click',function(){var view=modelCards[entry.id];return view.action==='install'?planInstall(entry.id,view.installGpu):view.action==='progress'?showProgress(entry.id):checkEngine(entry.id);});
     extra.addEventListener('click',function(){return modelCards[entry.id].extra==='gpu'?planInstall(entry.id,true):showProgress(entry.id);});
-    actions.appendChild(button);actions.appendChild(extra);
+    actions.appendChild(button);actions.appendChild(extra);actions.appendChild(uninstall);
     [title,integrated,state,details,more,features,ram,devices,note,actions].forEach(function(node){card.appendChild(node);});
     container.appendChild(card);
-    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
+    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,uninstallButton:uninstall,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
   });
 }
 var installRunning=false,installTimer=null;
@@ -492,6 +494,8 @@ function renderEngineStatus(status){
     view.extraButton.textContent=view.extra==='gpu'?'Install GPU build':'Show output';
     view.extraButton.hidden=!view.extra;
     view.extraButton.disabled=view.extra==='gpu'&&!!status.busy;
+    view.uninstallButton.hidden=missing||running||row.state==='not_integrated';
+    view.uninstallButton.disabled=!!status.busy||installRunning;
   });
   $('modelsRam').textContent=status.ram?'This computer has '+status.ram.total_gb+' GB of RAM, '+status.ram.free_gb+' GB free right now.':'';
   $('modelsDevice').textContent=status.device==='cuda'?'Each card\'s switch says whether that model runs on the graphics card (GPU) or the processor (CPU); a change applies from the model\'s next load.':'Every model runs on the CPU here: the service found no graphics card it can use. docs/TROUBLESHOOTING.md (Graphics cards) says more.';
@@ -525,6 +529,10 @@ function wireInstallDialog(){
   parts.go.addEventListener('click',function(){startInstall();});
   parts.close.addEventListener('click',function(){closeInstallDialog();});
   parts.box.addEventListener('close',function(){installDialog={engine:null,nvidia:false,mode:null};});
+  var gone=uninstallParts();
+  gone.go.addEventListener('click',function(){return startUninstall();});
+  gone.close.addEventListener('click',function(){closeUninstall();});
+  gone.box.addEventListener('cancel',function(event){if(uninstallState.busy){event.preventDefault();}});
 }
 function openInstallDialog(engineId,nvidia,mode,title){
   var parts=dialogParts();
@@ -565,6 +573,50 @@ function showProgress(engineId){
   var view=modelCards[engineId];if(!view){return;}
   openInstallDialog(engineId,false,'progress','Installing '+view.name).state.textContent='Reading its progress…';
   return refreshEngineStatus();
+}
+// Uninstall: what it would delete first, then the deleting, in a window of its own.
+var uninstallState={engine:null,busy:false};
+function uninstallParts(){return {box:$('uninstallDialog'),title:$('uninstallTitle'),state:$('uninstallState'),plan:$('uninstallPlan'),go:$('uninstallGo'),close:$('uninstallClose')};}
+function planUninstall(engineId){
+  var view=modelCards[engineId];if(!view){return;}
+  var parts=uninstallParts();
+  uninstallState={engine:engineId,busy:false};
+  parts.title.textContent='Uninstall '+view.name;parts.state.textContent='Reading what it would delete…';parts.plan.textContent='';
+  parts.go.hidden=true;parts.go.disabled=false;parts.close.disabled=false;parts.close.textContent='Cancel';
+  if(!parts.box.open&&parts.box.showModal){parts.box.showModal();}
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/uninstall',{dry_run:true}).then(function(result){
+    if(uninstallState.engine!==engineId){return;}
+    var plan=result.plan||{};
+    parts.state.textContent=plan.ok?'This is what it would delete. Nothing has changed yet.':'There is nothing to uninstall.';
+    (plan.paragraphs||[]).forEach(function(text){addNote(parts.plan,text,'meta');});
+    (plan.problems||[]).forEach(function(text){addNote(parts.plan,text,'meta warn');});
+    parts.go.hidden=!plan.ok;parts.close.textContent=plan.ok?'Cancel':'Close';
+  }).catch(function(e){if(uninstallState.engine===engineId){parts.state.textContent='Could not read what it would delete: '+e.message;parts.close.textContent='Close';}});
+}
+function startUninstall(){
+  var engineId=uninstallState.engine,parts=uninstallParts(),view=modelCards[engineId],name=view?view.name:engineId;
+  if(!engineId||uninstallState.busy){return;}
+  uninstallState.busy=true;parts.go.disabled=true;parts.close.disabled=true;
+  parts.state.textContent='Uninstalling '+name+'… Deleting its files can take a minute, and it cannot be stopped once it has started.';
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/uninstall',{}).then(function(result){
+    var done=result.uninstall||{},failed=done.failed||[],removed=done.removed||[],freed=done.freed?'Freed '+done.freed_text+'. ':removed.length?'Removed '+removed.join(', ')+'. ':'';
+    parts.plan.textContent='';parts.go.hidden=true;
+    if(failed.length){
+      parts.title.textContent=name+' was not fully uninstalled';
+      parts.state.textContent=freed+'These could not be deleted: '+failed.map(function(item){return item.path+' ('+item.reason+')';}).join('; ')+'. Close any program that has a file in the Lab’s folder open, then press Uninstall… on its card again.';
+    }else{
+      parts.title.textContent=name+' is uninstalled';
+      parts.state.textContent=freed+'Install on its card puts it back.';
+    }
+  }).catch(function(e){parts.state.textContent=name+' was not uninstalled: '+e.message;}).then(function(){
+    uninstallState.busy=false;parts.go.disabled=false;parts.close.disabled=false;parts.close.textContent='Close';
+    return refreshEngineStatus();
+  });
+}
+function closeUninstall(){
+  var box=$('uninstallDialog');if(uninstallState.busy){return;}
+  uninstallState={engine:null,busy:false};
+  if(box.open&&box.close){box.close();}
 }
 function renderInstallDialog(job){
   if(installDialog.mode!=='progress'||!job||job.engine!==installDialog.engine){return;}

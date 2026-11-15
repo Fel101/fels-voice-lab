@@ -1,7 +1,9 @@
 """Talk to a running Voice Lab service from a terminal or a script.
 
     python tools\\lab_cli.py health
-    python tools\\lab_cli.py speak --text "Hello from the Lab." --out hello.wav
+    python tools\\lab_cli.py speak --text "Hello from the Lab." --out hello.wav --play
+    python tools\\lab_cli.py voices
+    python tools\\lab_cli.py speak --voice Nell --text "Speaking as a Cast voice, keeping nothing." --out nell.wav
     python tools\\lab_cli.py cast
     python tools\\lab_cli.py perform --character Nell --text "We made it home." --line-id scene1-001 --out nell.wav
 
@@ -17,7 +19,9 @@ import argparse
 import http.client
 import json
 import os
+import shutil
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -128,6 +132,24 @@ def save_wav(path, data):
     save(path, data)
 
 
+# Players for --play away from Windows, each with what it needs before the file's path.
+PLAYERS = (("afplay",), ("paplay",), ("aplay", "-q"))
+
+
+def play(path):
+    """Play a WAV file on this computer's speakers and wait until it ends."""
+    if sys.platform == "win32":
+        import winsound
+
+        winsound.PlaySound(str(path), winsound.SND_FILENAME)
+        return
+    for player in PLAYERS:
+        if shutil.which(player[0]):
+            subprocess.run([*player, str(path)], check=False)
+            return
+    raise Failed(f"{path} was written, but this computer has no player the tool knows (afplay, paplay or aplay)")
+
+
 # ------------------------------------------------------------------------------------------------------- what to send
 
 def parse_pairs(items):
@@ -223,6 +245,9 @@ def finish(args, path, data, headers):
         print(json.dumps(result))
     else:
         say_wrote(result)
+    if getattr(args, "play", False):
+        sys.stdout.flush()
+        play(path)
     return 0
 
 
@@ -270,6 +295,8 @@ def perform(args, base):
     for key in ("reference_version_id", "direction", "language", "idempotency_key"):
         if getattr(args, key) is not None:
             body[key] = getattr(args, key)
+    if args.no_keep:
+        body["keep_take"] = False
     if args.setting:
         body["settings"] = parse_pairs(args.setting)
     if args.pronunciations:
@@ -277,6 +304,20 @@ def perform(args, base):
     headers, data = call(base, "POST", "/api/performance", body=body, timeout=args.timeout)
     save_wav(args.out, data)
     return finish(args, args.out, data, headers)
+
+
+def voices(args, base):
+    data = get_json(base, "/api/voices", args.timeout)
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    if not data.get("voices"):
+        print("No voice can speak yet: install a model on the Models & features page, or add a voice in Cast.")
+    for voice in data.get("voices", []):
+        kind = f"Cast: {voice['character']}, {voice['label']}" if voice["kind"] == "cast" else voice["label"]
+        where = f"{voice['model_name']}, {', '.join(voice['languages'])}"
+        print(f"{voice['name']}  ({kind}; {where})" + ("" if voice["ready"] else f"  not ready: {voice['why_not']}"))
+    return 0
 
 
 def cast(args, base):
@@ -302,11 +343,11 @@ def build_parser():
                         help=f"where the service listens (default: $VOICE_LAB_URL, else the address file a running Lab "
                              f"writes, else {DEFAULT_URL})")
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, metavar="SECONDS",
-                        help=f"how long to wait for an answer (default: {QUICK_SECONDS} for health and cast, "
+                        help=f"how long to wait for an answer (default: {QUICK_SECONDS} for health, voices and cast, "
                              f"{GENERATE_SECONDS} for speak and perform)")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                                      parents=[common])
-    commands = parser.add_subparsers(dest="command", required=True, metavar="{health,speak,perform,cast}")
+    commands = parser.add_subparsers(dest="command", required=True, metavar="{health,speak,perform,voices,cast}")
 
     def add(name, handler, summary):
         sub = commands.add_parser(name, help=summary, description=summary, parents=[common])
@@ -317,15 +358,17 @@ def build_parser():
     sub = add("health", health, "Ask whether the service is up.")
     sub.add_argument("--wait", type=float, default=0, metavar="SECONDS", help="keep trying this long until it answers")
 
-    def text_arguments(sub):
-        sub.add_argument("--text", help="what to say, 1 to 1200 characters")
+    def text_arguments(sub, most):
+        sub.add_argument("--text", help=f"what to say, 1 to {most} characters; over 1,200 it is spoken in parts")
         sub.add_argument("--text-file", metavar="FILE", help="read the text from a file (- for standard input)")
         sub.add_argument("--out", required=True, metavar="FILE", help="where to write the WAV file")
+        sub.add_argument("--play", action="store_true", help="also play it on this computer's speakers")
 
     sub = add("speak", speak, "Speak text with one engine and write the WAV file (POST /api/speak).")
-    text_arguments(sub)
+    text_arguments(sub, "10,000")
     sub.add_argument("--engine", help="an engine id from the catalog (the service's default is kokoro)")
-    sub.add_argument("--voice", help="Kokoro: a voice name, or several joined with commas")
+    sub.add_argument("--voice", help="a name from the voices command (a Cast voice keeps no take); with --engine kokoro, a "
+                                     "Kokoro voice, or several joined with commas")
     sub.add_argument("--speed", type=float, help="Kokoro: speaking rate")
     sub.add_argument("--language", help="the language, where the engine takes one")
     sub.add_argument("--set", action="append", metavar="KEY=VALUE",
@@ -333,7 +376,7 @@ def build_parser():
     sub.add_argument("--request-file", metavar="FILE", help="a JSON file holding the whole request body")
 
     sub = add("perform", perform, "Speak a line as a Cast voice, save the take and write the WAV file (POST /api/performance).")
-    text_arguments(sub)
+    text_arguments(sub, "1,200 (10,000 with --no-keep)")
     sub.add_argument("--character", metavar="NAME", help="the character, by name")
     sub.add_argument("--voice", metavar="LABEL", help="the voice's label, when the character has more than one")
     sub.add_argument("--identity-id", metavar="ID", help="the voice by id instead (see the cast command)")
@@ -344,6 +387,9 @@ def build_parser():
     sub.add_argument("--setting", action="append", metavar="KEY=VALUE", help="an engine setting; repeatable")
     sub.add_argument("--pronunciations", action="store_true", help="apply the character's pronunciation dictionary")
     sub.add_argument("--idempotency-key", metavar="KEY", help="a repeat with the same key returns the same take")
+    sub.add_argument("--no-keep", action="store_true", help="keep no take in the library; only the WAV file is written")
+
+    add("voices", voices, "List the voices a program can speak with, by name (GET /api/voices).")
 
     add("cast", cast, "List the characters and voices with their ids.")
     return parser
@@ -360,7 +406,7 @@ def timeout_for(args):
     given = getattr(args, "timeout", None)
     if given is not None:
         return given
-    return QUICK_SECONDS if args.command in ("health", "cast") else GENERATE_SECONDS
+    return QUICK_SECONDS if args.command in ("health", "cast", "voices") else GENERATE_SECONDS
 
 
 def main(argv=None):

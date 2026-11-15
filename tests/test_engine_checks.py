@@ -31,7 +31,7 @@ from engine_checks import (EngineCheckStore, audible, check_record, engine_finge
                            smoke_request, status_payload)
 from phonon_fixtures import Lab, record as voice_record
 from worker_pool import EnginePool, WorkerBusy, read_catalog
-from worker_process import WorkerRequestError, WorkerTimeout, WorkerUnavailable
+from worker_process import ModelNotInstalled, WorkerRequestError, WorkerTimeout, WorkerUnavailable
 
 CATALOG = {entry["id"]: entry for entry in read_catalog()["engines"]}
 POINTER = ("Kokoro 82M is not installed. Open Models & features and press Install on its card, or run setup-kokoro.bat in the "
@@ -712,7 +712,7 @@ class FailedLoadTests(TempTree):
             with self.subTest(action=name):
                 error = WorkerRequestError(self.WORKER_ERROR)
                 pool = self.failing_pool(error)
-                with self.assertRaises(WorkerRequestError) as raised:
+                with self.assertRaises(ModelNotInstalled) as raised:
                     action(pool)
                 self.assertEqual(str(raised.exception), f"{POINTER} {self.WORKER_ERROR}")
                 self.assertIs(raised.exception.__cause__, error)
@@ -720,15 +720,16 @@ class FailedLoadTests(TempTree):
                 self.assertEqual(pool.health()["last_worker_error"]["message"], "worker failed to start/load")
                 self.assertEqual(pool.loaded, [])
 
-    def test_the_kind_and_status_of_the_worker_error_are_kept(self):
-        for error, status in ((WorkerRequestError(self.WORKER_ERROR), 500),
-                              (WorkerUnavailable("Worker exited during load (code 1). Log: kokoro.log"), 500),
-                              (WorkerTimeout("Worker timed out during load after 600s. Log: kokoro.log"), 504)):
+    def test_a_model_that_is_not_installed_fails_with_its_own_status_and_keeps_the_worker_error(self):
+        for error in (WorkerRequestError(self.WORKER_ERROR),
+                      WorkerUnavailable("Worker exited during load (code 1). Log: kokoro.log"),
+                      WorkerTimeout("Worker timed out during load after 600s. Log: kokoro.log")):
             with self.subTest(error=type(error).__name__):
-                with self.assertRaises(type(error)) as raised:
+                with self.assertRaises(ModelNotInstalled) as raised:
                     self.failing_pool(error).load("kokoro")
-                self.assertEqual(raised.exception.status_code, status)
-                self.assertTrue(str(raised.exception).startswith(POINTER))
+                self.assertEqual(raised.exception.status_code, 503)
+                self.assertEqual(str(raised.exception), f"{POINTER} {error}")
+                self.assertIs(raised.exception.__cause__, error)
 
     def test_a_kokoro_that_is_installed_keeps_its_error_as_it_was(self):
         error = WorkerRequestError(self.WORKER_ERROR)
@@ -744,7 +745,7 @@ class FailedLoadTests(TempTree):
         patcher = mock.patch.dict(engine_checks.GUIDED_INSTALLERS, without, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
-        with self.assertRaises(WorkerRequestError) as raised:
+        with self.assertRaises(ModelNotInstalled) as raised:
             self.failing_pool(error).load("orig")
         self.assertEqual(str(raised.exception), f"{engine_checks.install_pointer(CATALOG['orig'], missing_probe)} {error}")
         self.assertTrue(str(raised.exception).startswith(f"{CATALOG['orig']['name']} is not installed, and the Lab cannot"))
@@ -760,7 +761,7 @@ class FailedLoadTests(TempTree):
 
         pool = EnginePool("cpu", 0, worker_factory=no_environment, idle_poll_seconds=0.1, install_probe=missing_probe)
         self.addCleanup(pool.close)
-        with self.assertRaises(WorkerUnavailable) as raised:
+        with self.assertRaises(ModelNotInstalled) as raised:
             pool.load("kokoro")
         self.assertEqual(str(raised.exception), f"{POINTER} {error}")
 
@@ -800,7 +801,7 @@ class FailedLoadTests(TempTree):
     def test_the_next_try_after_the_install_starts_a_fresh_worker(self):
         worker = FakeWorker(load_error=WorkerRequestError(self.WORKER_ERROR))
         pool = self.pool(worker, probe=missing_probe)
-        with self.assertRaises(WorkerRequestError):
+        with self.assertRaises(ModelNotInstalled):
             pool.load("kokoro")
         worker.load_error = None  # the launcher has run
         self.assertTrue(pool.load("kokoro")["loaded"])
@@ -871,7 +872,7 @@ class EngineStatusHttpTests(TempTree):
         for path, body in (("/api/speak", {"engine": "kokoro", "text": "Hello there."}), ("/api/load", {"engine": "kokoro"})):
             with self.subTest(path=path):
                 status, answer = self.call("POST", path, body)
-                self.assertEqual(status, 500)
+                self.assertEqual((status, answer["code"]), (503, "model_not_installed"))
                 self.assertEqual(answer["error"], f"{POINTER} {FailedLoadTests.WORKER_ERROR}")
 
     def test_a_failed_load_of_an_installed_kokoro_keeps_its_own_error(self):

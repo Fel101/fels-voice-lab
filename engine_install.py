@@ -38,6 +38,7 @@ from pathlib import Path
 
 import hardware
 import engine_adapters
+import engine_uninstall
 import worker_pool
 
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
@@ -367,6 +368,24 @@ class EngineInstaller:
                     "started_at": _stamp(job["started"]),
                     "ended_at": _stamp(ended) if ended else None, "seconds": round((ended or time.time()) - job["started"], 1),
                     "exit_code": job["exit_code"], "lines": lines[-TAIL_LINES:], "log": job["log"]}
+
+    def uninstall_plan(self, key):
+        """What uninstalling a model deletes and what stays (engine_uninstall.plan), for the confirmation."""
+        return engine_uninstall.plan(self.pool.entries, key, self.root, self.pool.install_probe)
+
+    def uninstall(self, key):
+        """Uninstall a model (engine_uninstall.run). The model worker is held, and every model unloaded, while its files are
+        deleted, so no request can start one of them halfway. Raises WorkerBusy while an install or a request runs."""
+        name = self.pool.entries.get(key, {}).get("name", key)
+        with self._lock:
+            if self._running():
+                raise worker_pool.WorkerBusy(f"{self._running_name()} is being installed. Uninstall {name} when it has finished.")
+        self.pool.hold(f"{name} is being uninstalled")
+        try:
+            self.pool.unload_held()
+            return engine_uninstall.run(self.pool.entries, key, self.root, self.pool.install_probe)
+        finally:
+            self.pool.release_hold()
 
     @staticmethod
     def _stop(process):

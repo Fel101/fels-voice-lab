@@ -438,6 +438,12 @@ then press **Test**. The figure is the Lab's own rule for loading. For Kokoro, P
 measured peak with room to spare; for the others it is not a measurement of what the model uses. `runtime.local.json` can change it for one
 computer ([hardware and state settings](SETUP.md#hardware-and-state-settings)).
 
+**Uninstall…** on an installed model's card deletes that model's files from the Lab's folder, to free the space. It first
+shows what it would delete and how much, and what stays because another installed model uses it too (the Chatterbox models
+share their environment, and so do the Qwen3-TTS models); nothing changes until you press **Uninstall**. Your library is not
+touched: characters, voices, takes and scenes stay, and a voice on that model speaks again once **Install** has put the model
+back.
+
 A model that is not installed says *Not installed yet* and how much **Install** downloads and how much disk it uses. The files
 it is missing, the installer that adds them, and where the output of an install that stopped was kept are under **Details**
 on its card, so the card itself shows no paths. **Install** opens a window with what the installer will do and whether this

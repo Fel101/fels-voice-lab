@@ -239,7 +239,10 @@ class TableTests(unittest.TestCase):
         self.assertEqual([field.name for field in speak.body if field.required], ["text"])
         perform = next(row for row in api_spec.documented() if api_spec.key(row) == "POST /api/performance")
         self.assertEqual(perform.reply_kind, "wav")
-        self.assertEqual([field.name for field in perform.body if field.required], ["identity_id", "text", "line_id"])
+        # 0.4.0 made identity_id and line_id optional (a voice may be named, and a clip need not be kept): a call written
+        # for 0.3.0, with all three, is still a whole request.
+        self.assertEqual([field.name for field in perform.body if field.required], ["text"])
+        self.assertLessEqual({"identity_id", "voice", "line_id", "keep_take"}, {field.name for field in perform.body})
         self.assertIn("X-Take-Id", [field.name for field in perform.headers])
 
 
@@ -258,9 +261,13 @@ class OpenApiTests(unittest.TestCase):
         self.assertEqual(self.spec["info"]["version"], api_spec.VERSION)
         self.assertEqual(self.spec["servers"][0]["url"], "http://127.0.0.1:8765")
         self.assertEqual(self.spec["info"]["license"]["identifier"], "MIT")
-        self.assertEqual(self.spec["components"]["schemas"]["Error"],
-                         {"type": "object", "required": ["error"],
-                          "properties": {"error": {"type": "string", "description": "What went wrong."}}})
+        error = self.spec["components"]["schemas"]["Error"]
+        self.assertEqual((error["type"], error["required"]), ("object", ["error", "code"]))
+        self.assertEqual(error["properties"]["error"], {"type": "string", "description": "What went wrong."})
+        import serve  # the codes the service answers with
+
+        for code in serve.ERROR_CODES.values():
+            self.assertIn(f"`{code}`", error["properties"]["code"]["description"])
 
     def test_documented_routes_are_paths_and_internal_ones_are_only_listed(self):
         described = {(method.upper(), path) for path, method, _ in self.operations()}

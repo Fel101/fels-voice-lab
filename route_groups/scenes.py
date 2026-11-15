@@ -167,7 +167,7 @@ def register(router, lab):
         try:
             valid, info = scenes.verify_job_manifest(job_id)
             if not valid:
-                self._json(409, {"error": "Batch manifest checksum mismatch.", "details": info})
+                self._json(409, {"error": "Batch manifest checksum mismatch.", "code": "conflict", "details": info})
             else:
                 self._send(200, Path(info["path"]).read_bytes(), "application/json; charset=utf-8")
         except (ValueError, KeyError) as exc:

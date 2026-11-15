@@ -784,7 +784,7 @@ class InstallRoutesTests(InstallerCase):
         self.stub(DRY_RUN + "wait_for('go')\n")
         for body in ({}, {"dry_run": True}):
             status, answer = self.call("POST", "/api/engines/kokoro/install", body, headers={"Origin": "http://evil.example"})
-            self.assertEqual((status, answer), (403, {"error": "local requests only"}))
+            self.assertEqual((status, answer), (403, {"error": "local requests only", "code": "not_local"}))
         self.assertFalse((self.root / "argv.txt").exists())
         self.assertIsNone(self.installer.snapshot())
         self.assertFalse(self.pool.busy)

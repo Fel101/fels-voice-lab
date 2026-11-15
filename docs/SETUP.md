@@ -188,7 +188,8 @@ Licences: the Kokoro weights are Apache-2.0. Most of the packages are MIT, BSD o
 library inside espeakng-loader are GPL-3.0, num2words is LGPL, and certifi and tqdm are MPL-2.0. They are installed on your
 computer at your request and are not part of this repository.
 
-To remove Kokoro, delete `.venv-kokoro`, `hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
+To remove Kokoro, press **Uninstall…** on its card in **Models & features**; or by hand, delete `.venv-kokoro`,
+`hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
 
 If an earlier version of the Lab installed Kokoro into `.venv`, the Lab now looks for it in `.venv-kokoro`, and Models & features
 says it is not installed until you run `setup-kokoro.bat` again: it keeps the model files already in `hf-cache` and fetches only
@@ -921,5 +922,5 @@ Three things are outside the folder:
   its own folder.
 
 The desktop window runs in private mode and deletes its temporary browser data when it closes, so it leaves nothing behind. To
-remove one model and keep the Lab, see the end of [Kokoro on the CPU](#kokoro-on-the-cpu), [Phonon on the CPU](#phonon-on-the-cpu) or
-[Chatterbox Turbo on the CPU](#chatterbox-turbo-on-the-cpu).
+remove one model and keep the Lab, press **Uninstall…** on its card in **Models & features**: it shows what it would delete first,
+and leaves what another installed model uses. Each model's section above also lists its folders, for removing it by hand.

@@ -71,6 +71,22 @@ class Kokoro(Adapter):
         # Its installed voices are GET /api/info's "voices", which serve.py reads.
         return {"kokoro_languages": kokoro_support.kokoro_languages()}
 
+    def named_voices(self, loaded):
+        # Each voice speaks the language its id begins with (af_heart: American English), so it is spoken in that language
+        # unless a request names another.
+        voices = []
+        for voice in kokoro_support.discover_kokoro_voices():
+            language = kokoro_support.voice_language(voice) or "English"
+            label = f"{voice.split('_', 1)[-1].replace('_', ' ').title()} · {language}"
+            voices.append(
+                {"voice_id": voice, "label": label, "languages": [language], "request": {"voice": voice, "language": language}}
+            )
+        return voices
+
+    def voice_languages(self, engine_options):
+        found = {kokoro_support.voice_language(voice.strip()) for voice in str(engine_options.get("voice", "")).split(",")}
+        return sorted(found - {None}) or None
+
     def install_size(self, root, nvidia, card, files_bytes):
         from tools import install_kokoro as ik
 

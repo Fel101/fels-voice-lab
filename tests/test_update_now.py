@@ -366,7 +366,7 @@ class RouteTests(unittest.TestCase):
         self.install = {"name": "Kokoro 82M", "state": "running"}
         status, answer = self.ask("/api/update/plan", {})
         self.assertEqual(answer["blocked"], "Kokoro 82M is installing. Update now works once it has finished.")
-        self.assertEqual(self.ask("/api/update/start", {}), (409, {"error": answer["blocked"]}))
+        self.assertEqual(self.ask("/api/update/start", {}), (409, {"error": answer["blocked"], "code": "busy"}))
         self.install = None
         with mock.patch.object(self.scenes, "rendering_jobs", return_value=1):
             status, answer = self.ask("/api/update/start", {})

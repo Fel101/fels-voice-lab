@@ -169,7 +169,7 @@ class IdentityTests(ServiceCase):
         with mock.patch.object(phonon_support, "LAB", empty):
             status, result, _ = self.call(f"/api/characters/{character['id']}/identities",
                                           {"engine_id": PHONON, "label": "Candidate", "speaker": "Zoey"})
-        self.assertEqual(status, 400)
+        self.assertEqual((status, result["code"]), (503, "model_not_installed"))
         self.assertRegex(result["error"], r"not installed.*Install on its card.*setup-phonon\.bat")
 
 
@@ -273,7 +273,9 @@ class PoolChecksTests(unittest.TestCase):
         self.assertEqual(self.pool.loaded, [])
 
     def test_text_is_checked_like_every_other_engine(self):
-        for text, message in (("", "Type something to say"), ("x" * 1201, "under 1200 characters")):
+        # Text over 1,200 characters is spoken in parts (0.4.0); one word too long to split is still refused.
+        for text, message in (("", "Type something to say"), ("x" * 1201, "exceeds the 1200-character segment limit"),
+                              ("x " * 5001, "Keep it to 10,000 characters")):
             with self.assertRaisesRegex(ValueError, message):
                 self.pool.speak({"engine": PHONON, "text": text})
 

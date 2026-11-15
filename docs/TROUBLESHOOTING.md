@@ -66,7 +66,8 @@ is deleted rather than kept, so a damaged download cannot slip through.
 
 **"already has other versions of packages".** Each model has an environment of its own (`.venv-kokoro`, `.venv-phonon`,
 `.venv-chatterbox`), and an installer never replaces a package it finds there at another version. If you did not put them there
-on purpose, delete that model's folder and run its installer again.
+on purpose, press **Uninstall…** on that model's card in **Models & features** (or delete its folder), then install it
+again.
 
 **A message about a missing DLL** (`WinError 126`, for example `fbgemm.dll` or `c10.dll`). Install the
 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (x64), then run the installer again.

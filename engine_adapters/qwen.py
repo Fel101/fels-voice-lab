@@ -273,6 +273,15 @@ class QwenCustomVoice(Qwen):
     performance_defaults = SAMPLING
     control_ui = SAMPLING_UI
 
+    def named_voices(self, loaded):
+        # Only the loaded checkpoint says which speakers and languages it has.
+        languages = list((loaded or {}).get("supported_languages") or [])
+        return [
+            {"voice_id": speaker, "label": speaker, "languages": languages,
+             "request": {"speaker": speaker, "mode": "custom_voice"}}
+            for speaker in (loaded or {}).get("supported_speakers") or []
+        ]  # fmt: skip
+
     def check_mode_request(self, req):
         if not str(req.get("speaker", "")).strip():
             raise ValueError("Qwen CustomVoice requires a speaker returned by the loaded checkpoint.")

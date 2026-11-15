@@ -29,6 +29,12 @@ class WorkerUnavailable(WorkerError):
     pass
 
 
+class ModelNotInstalled(WorkerUnavailable):
+    """The model could not start because its files are not in place; the message says where to install it."""
+
+    status_code = 503
+
+
 class WorkerTimeout(WorkerError):
     status_code = 504
 
