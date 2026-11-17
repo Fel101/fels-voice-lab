@@ -314,6 +314,29 @@ honours it plays exactly the take's length; one that does not adds a few tens of
 the start, and captions follow the take, not that silence.
 Verifying a package checks each file's codec as well as its hash.
 
+### Timed scenes from subtitle files
+
+In **Scenes & batch**, choose **Import a script or subtitles** and pick a UTF-8 `.srt` or `.vtt` file. You can also paste
+subtitles and choose the format. Review the cues, timestamps, and overlaps. Fix any reported cue errors before importing.
+Each cue can name one speaker with a `NAME: words` prefix or a WebVTT voice tag. Pick a Cast voice for each speaker and for
+any cues with no label, or choose to leave those cues out.
+
+Open an imported line to edit its cue start or end using a time such as `00:03.500` or `3.5` seconds, change its words, or assign a different voice. The original
+cue remains visible. Save, render the takes, choose one per line, and build the scene. Speech starts at the cue time. The mix
+keeps the full speech, reports overruns, and plays overlapping takes together with peak protection. It keeps the subtitle
+clock through the last original cue. Timed previews and exports use a 24 kHz mono mix. Long subtitle files become scenes of up to 30 minutes and 500 cues.
+Each section starts at zero in the Lab and shows its start in the original video. Place its exported audio at that time. The raw
+export includes SRT and VTT for the actual speech spans, and the package records the original cue times and take selections.
+
+To split a cue, place the text cursor between the words to separate, enter the time in **Split at**, and press **Split at text
+cursor**. **Merge with next cue** joins adjacent cues using the same voice, language, and delivery settings. The replacement
+cues need new takes. Other cues keep their selections, and Undo can restore the previous edit. The package also includes
+`scene-source.srt` and `scene-source.vtt` on the original subtitle clock, including source cues left out of the dub.
+
+Inspired by [VoiceStudio’s dubbing workspace](https://github.com/debpalash/VoiceStudio/blob/main/docs/electron-dubbing.md)
+by Palash Debnath (`debpalash`) and the VoiceStudio contributors. The Lab implements subtitle import and timed mixing in
+its own scene and export code.
+
 ## One thing at a time
 
 The model worker does one thing at a time: one load, clip, take, test or install. What you ask for while it is busy waits

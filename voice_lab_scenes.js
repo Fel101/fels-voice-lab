@@ -4,8 +4,36 @@ var activeSceneId = null,
   scenePollTimer = null,
   sceneListCount = null,
   sampleState = null;
+var sceneTimelineMaxMs = 30 * 60 * 1000;
+function sceneCueTime(milliseconds) {
+  var hours = Math.floor(milliseconds / 3600000);
+  return (hours ? String(hours).padStart(2, '0') + ':' : '') +
+    String(Math.floor(milliseconds % 3600000 / 60000)).padStart(2, '0') + ':' +
+    (milliseconds % 60000 / 1000).toFixed(3).padStart(6, '0');
+}
+function sceneCueRange(cue, offset = 0) {
+  return sceneCueTime(cue.start_ms + offset) + ' – ' + sceneCueTime(cue.end_ms + offset);
+}
+function parseSceneCueTime(value) {
+  var text = String(value).trim(), seconds;
+  var clock = /^(\d+):([0-5]\d(?:\.\d{1,3})?)$/.exec(text);
+  if (clock) seconds = Number(clock[1]) * 60 + Number(clock[2]);
+  else if (/^\d+(?:\.\d{1,3})?$/.test(text)) seconds = Number(text);
+  if (seconds === undefined || seconds > sceneTimelineMaxMs / 1000)
+    throw new Error('Enter a time such as 00:03.500 or 3.5 seconds, up to 30 minutes.');
+  return Math.round(seconds * 1000);
+}
 function showSceneError(error) {
-  $('sceneError').textContent = error.message || String(error);
+  var message = error.message || String(error);
+  try {
+    var scene = sceneBody();
+    if (scene.timeline) scene.lines.forEach(function (line, index) {
+      if (line.cue) message = message.replaceAll(line.line_id, 'line ' + (index + 1) + ' (' + sceneCueTime(line.cue.start_ms) + ')');
+    });
+  } catch (_) {
+    // The editor can contain unfinished JSON.
+  }
+  $('sceneError').textContent = message;
 }
 function sceneBody() {
   var value;
@@ -97,6 +125,14 @@ function editSceneField(scene, index, key, value) {
     return scene;
   }
   if (!scene.lines[index]) throw new Error('Scene line no longer exists.');
+  if (key === 'cue.start_ms' || key === 'cue.end_ms') {
+    var line = scene.lines[index];
+    if (!line.cue) throw new Error('Open a timed line before changing its cue time.');
+    var milliseconds = parseSceneCueTime(value);
+    line.cue[key === 'cue.start_ms' ? 'start_ms' : 'end_ms'] = milliseconds;
+    line.target_duration_ms = line.cue.end_ms - line.cue.start_ms;
+    return scene;
+  }
   if (
     [
       'text',
@@ -284,7 +320,9 @@ function mutateSceneLine(index, action) {
   if (!line) throw new Error('Scene line no longer exists.');
   if (action === 'duplicate') {
     var copy = JSON.parse(JSON.stringify(line));
-    copy.line_id = stableSceneLineId(scene.lines);
+    copy.line_id = line.cue ? 'cue-' + crypto.randomUUID() : stableSceneLineId(scene.lines);
+    if (copy.cue && !copy.cue.source_line_ids)
+      copy.cue.source_line_ids = line.cue.source_text ? [line.line_id] : [];
     copy.selected_take_id = null;
     copy.selected_takes = {};
     scene.lines.splice(index + 1, 0, copy);
@@ -301,6 +339,50 @@ function mutateSceneLine(index, action) {
   renderSceneForm();
   return scene;
 }
+function replaceTimedCue(scene, index, splitMs, offset) {
+  var first = scene.lines[index],
+    next = scene.lines[index + 1],
+    merge = splitMs === null;
+  if (!first || !first.cue) throw new Error('Open a timed cue to edit it.');
+  if (merge) {
+    if (!next || !next.cue || next.cue.start_ms < first.cue.start_ms)
+      throw new Error('Choose a cue followed by another cue in time order.');
+    var controls = ['identity_id', 'reference_version_id', 'language', 'direction', 'use_pronunciations', 'line_type', 'settings'];
+    if (controls.some(function (key) { return JSON.stringify(first[key]) !== JSON.stringify(next[key]); }))
+      throw new Error('Match the next cue’s voice, language and delivery settings before merging.');
+  } else if (!Number.isInteger(splitMs) || splitMs <= first.cue.start_ms || splitMs >= first.cue.end_ms) {
+    throw new Error('Choose a split time between the cue start and end.');
+  } else if (scene.lines.length >= 500) {
+    throw new Error('A scene can contain up to 500 cues.');
+  }
+  var originals = merge ? [first, next] : [first],
+    replacements = new Set(),
+    sources = new Set();
+  originals.forEach(function (line) {
+    (line.cue.source_line_ids || (line.cue.source_text ? [line.line_id] : [])).forEach(function (id) { sources.add(id); });
+    [line.line_id].concat(line.cue.replaces || []).forEach(function (id) { replacements.add(id); });
+  });
+  function lineFor(text, start, end) {
+    text = text.trim();
+    if (!text || text.length > 10000) throw new Error('Each new cue needs 1–10,000 characters of speech.');
+    var line = Object.assign({}, first, {
+      line_id: 'cue-' + crypto.randomUUID(),
+      text: text,
+      cue: { start_ms: start, end_ms: end, source_line_ids: Array.from(sources), replaces: Array.from(replacements) },
+      target_duration_ms: end - start,
+      selected_take_id: null,
+      selected_takes: {},
+    });
+    delete line.segments;
+    return line;
+  }
+  var newLines = merge
+    ? [lineFor(first.text + '\n' + next.text, first.cue.start_ms, Math.max(first.cue.end_ms, next.cue.end_ms))]
+    : [lineFor(first.text.slice(0, offset), first.cue.start_ms, splitMs),
+       lineFor(first.text.slice(offset), splitMs, first.cue.end_ms)];
+  scene.lines.splice(index, merge ? 2 : 1, ...newLines);
+  return newLines;
+}
 function addSceneLine() {
   var scene = sceneBody(),
     character = performanceCharacter(),
@@ -313,7 +395,16 @@ function addSceneLine() {
   }
   if (!character || !identity) throw new Error('Create a character voice in Cast before adding dialogue.');
   var lineId = stableSceneLineId(scene.lines);
-  scene.lines.push(sceneDefaultLine(character, identity, lineId));
+  var line = sceneDefaultLine(character, identity, lineId);
+  if (scene.timeline) {
+    line.line_id = lineId = 'cue-' + crypto.randomUUID();
+    var start = scene.lines.reduce(function (latest, other) { return Math.max(latest, other.cue.end_ms); }, 0);
+    if (start >= sceneTimelineMaxMs) throw new Error('Edit the last cue to leave room for another one.');
+    line.cue = { start_ms: start, end_ms: Math.min(start + 2000, sceneTimelineMaxMs) };
+    line.pause_after_ms = 0;
+    line.target_duration_ms = line.cue.end_ms - line.cue.start_ms;
+  }
+  scene.lines.push(line);
   sceneOpenLines.add(lineId); // A new line opens, ready to write.
   updateSceneEditor(scene);
   renderSceneForm();
@@ -341,7 +432,7 @@ function renderSceneLineEditor(line, index, article) {
   text.required = true;
   text.value = line.text || '';
   text.setAttribute('data-scene-field', 'text');
-  text.setAttribute('aria-label', 'Dialogue — ' + line.line_id);
+  text.setAttribute('aria-label', 'Dialogue — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
   text.addEventListener('input', function () {
     try {
       changeSceneField(index, 'text', this.value);
@@ -444,7 +535,69 @@ function renderSceneLineEditor(line, index, article) {
   lineType.addEventListener('change', function () {
     changeSceneField(index, 'line_type', this.value);
   });
-  ['pause_before_ms', 'pause_after_ms', 'take_count', 'target_duration_ms'].forEach(function (key) {
+  var numericFields = line.cue ? ['take_count'] : ['pause_before_ms', 'pause_after_ms', 'take_count', 'target_duration_ms'];
+  if (line.cue) {
+    ['start_ms', 'end_ms'].forEach(function (key) {
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.required = true;
+      input.value = sceneCueTime(line.cue[key]);
+      input.placeholder = '00:03.500';
+      var label = key === 'start_ms' ? 'Cue start' : 'Cue end';
+      input.setAttribute('aria-label', label + ' for line ' + (index + 1));
+      sceneLabel(label, input, controls, true);
+      input.addEventListener('input', function () {
+        try {
+          changeSceneField(index, 'cue.' + key, this.value);
+          this.setCustomValidity('');
+          $('sceneError').textContent = '';
+        } catch (error) {
+          this.setCustomValidity(error.message);
+          showSceneError(error);
+        }
+      });
+    });
+    var sourceRows = line.cue.source_text
+      ? [{ start_ms: line.cue.source_start_ms, end_ms: line.cue.source_end_ms, text: line.cue.source_text }]
+      : ((sceneBody().timeline || {}).source_cues || []).filter(function (source) {
+          return (line.cue.source_line_ids || []).includes(source.line_id);
+        });
+    sourceRows.forEach(function (source) {
+      var note = document.createElement('p');
+      note.className = 'meta';
+      var videoStart = sceneBody().timeline.source_offset_ms || 0;
+      note.textContent = 'Original subtitle ' + sceneCueRange(source, videoStart) + ' · ' + source.text;
+      article.appendChild(note);
+    });
+    var cueTools = document.createElement('div');
+    cueTools.className = 'row';
+    var splitTime = document.createElement('input');
+    splitTime.type = 'text';
+    splitTime.value = sceneCueTime(Math.floor((line.cue.start_ms + line.cue.end_ms) / 2));
+    sceneLabel('Split at', splitTime, cueTools, true);
+    function applyCueEdit(splitMs, offset) {
+      try {
+        var scene = sceneBody();
+        replaceTimedCue(scene, index, splitMs, offset).forEach(function (cue) { sceneOpenLines.add(cue.line_id); });
+        updateSceneEditor(scene);
+        renderSceneForm();
+      } catch (error) {
+        showSceneError(error);
+      }
+    }
+    cueTools.appendChild(sceneButton('Split at text cursor', 'Split cue at text cursor', function () {
+      try {
+        applyCueEdit(parseSceneCueTime(splitTime.value), text.selectionStart);
+      } catch (error) {
+        showSceneError(error);
+      }
+    }));
+    var merge = sceneButton('Merge with next cue', 'Merge with next cue', function () { applyCueEdit(null, 0); });
+    merge.disabled = index + 1 >= sceneBody().lines.length;
+    cueTools.appendChild(merge);
+    article.appendChild(cueTools);
+  }
+  numericFields.forEach(function (key) {
     var input = document.createElement('input');
     input.type = 'number';
     input.step = '1';
@@ -486,7 +639,7 @@ function renderSceneLineEditor(line, index, article) {
     var direction = document.createElement('textarea');
     direction.maxLength = 1000;
     direction.value = line.direction || '';
-    direction.setAttribute('aria-label', 'Acting direction — ' + line.line_id);
+    direction.setAttribute('aria-label', 'Acting direction — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
     sceneLabel('Acting direction' + (directionStatus === 'experimental' ? ' (experimental)' : ''), direction, article, false);
     direction.addEventListener('input', function () {
       try {
@@ -521,7 +674,7 @@ function renderSceneLineEditor(line, index, article) {
       input.value = line.settings[control.id] === undefined ? control.default : line.settings[control.id];
     }
     var labelText = control.label + (control.status === 'experimental' ? ' (experimental)' : '');
-    input.setAttribute('aria-label', labelText + ' — ' + line.line_id);
+    input.setAttribute('aria-label', labelText + ' — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
     sceneLabel(labelText, input, settings, true);
     input.addEventListener('input', function () {
       try {
@@ -549,7 +702,7 @@ function renderSceneLineEditor(line, index, article) {
     var button = document.createElement('button');
     button.type = 'button';
     button.textContent = item[1];
-    button.setAttribute('aria-label', item[1] + ' ' + line.line_id);
+    button.setAttribute('aria-label', item[1] + ' ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
     button.disabled =
       (item[0] === 'up' && index === 0) ||
       (item[0] === 'down' && index === sceneBody().lines.length - 1) ||
@@ -566,7 +719,9 @@ function renderSceneLineEditor(line, index, article) {
   article.appendChild(actions);
   var lineId = document.createElement('p');
   lineId.className = 'meta';
-  lineId.textContent = 'Line name: ' + line.line_id + '. Exports and the API name the line by it.';
+  lineId.textContent = line.cue
+    ? 'Line ' + (index + 1) + ' · ' + sceneCueRange(line.cue)
+    : 'Line name: ' + line.line_id + '. Exports and the API name the line by it.';
   article.appendChild(lineId);
 }
 // The scenes table: one row per line, its status from GET /api/scenes/{id}/lines (one answer for the whole scene). A row's
@@ -787,7 +942,7 @@ function paintSceneRow(line) {
   row.line = line;
   row.state = state.status;
   row.body.setAttribute('data-status', state.status);
-  row.words.textContent = sceneShortText(line.text);
+  row.words.textContent = (line.cue ? sceneCueRange(line.cue) + ' · ' : '') + sceneShortText(line.text);
   row.words.title = line.text || '';
   row.status.textContent = '';
   var word = document.createElement('span');
@@ -803,6 +958,20 @@ function paintSceneRow(line) {
     why.className = 'meta scene-reason';
     why.textContent = state.reason;
     row.status.appendChild(why);
+  }
+  if (line.cue && state.status === 'done') {
+    var chosenSeconds = segments.reduce(function (total, segment) {
+      var take = (segment.takes || []).find(function (entry) { return entry.id === segment.chosen_take_id; });
+      return total + (take ? Number(take.duration_seconds) : 0);
+    }, 0);
+    var overrun = chosenSeconds - (line.cue.end_ms - line.cue.start_ms) / 1000;
+    if (overrun >= 0.001) {
+      var warning = document.createElement('span');
+      warning.className = 'meta scene-reason';
+      var excess = overrun >= 0.05 ? overrun.toFixed(1) + ' s' : 'less than 0.1 s';
+      warning.textContent = 'Too long by ' + excess + '. Render again, raise the speed if your model supports it, or adjust this cue and the following times.';
+      row.status.appendChild(warning);
+    }
   }
   row.play.disabled = !segments.some(function (segment) {
     return segment.chosen_take_id;
@@ -1073,6 +1242,10 @@ function renderScene(scene) {
     scene.name + ' / revision ' + scene.revision + ' / ' + scene.lines.length + ' ordered lines / SHA-256 ' + scene.checksum;
   $('sceneExportJson').href = '/api/scenes/' + scene.scene_id + '/export.json';
   $('sceneExportCsv').href = '/api/scenes/' + scene.scene_id + '/export.csv';
+  var videoStart = scene.timeline && scene.timeline.source_offset_ms;
+  $('sceneTimelineNote').hidden = videoStart === undefined;
+  $('sceneTimelineNote').textContent = videoStart === undefined ? '' :
+    'This section starts at ' + sceneCueTime(videoStart) + ' in the original video.';
   $('sceneExportJson').hidden = false;
   $('sceneExportCsv').hidden = false;
   var jobs = fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
@@ -1125,6 +1298,7 @@ function refreshSceneList(preferred) {
     $('sceneJobRows').textContent = '';
     $('sceneExportJson').hidden = true;
     $('sceneExportCsv').hidden = true;
+    $('sceneTimelineNote').hidden = true;
     return Promise.resolve();
   }).then(function () {
     return refreshSample();
@@ -1288,6 +1462,8 @@ function sceneCount(count, one, many) {
 function sceneScriptFormatOf(name) {
   var lower = String(name).toLowerCase();
   if (/\.(fountain|spmd)$/.test(lower)) return 'fountain';
+  if (/\.srt$/.test(lower)) return 'srt';
+  if (/\.vtt$/.test(lower)) return 'vtt';
   return /\.txt$/.test(lower) ? 'text' : null;
 }
 function sceneScriptVoices() {
@@ -1314,7 +1490,7 @@ function sceneScriptGuess(name) {
   });
   return (approved || match.voices[0]).id;
 }
-function sceneScriptPicker(name, narration) {
+function sceneScriptPicker(name, narration, timed) {
   var select = document.createElement('select');
   select.dataset.speaker = narration ? '' : name;
   select.setAttribute('aria-label', narration ? 'Voice for the lines with no speaker' : 'Voice for ' + name);
@@ -1332,7 +1508,7 @@ function sceneScriptPicker(name, narration) {
     });
     select.appendChild(choices);
   });
-  select.value = narration ? '-' : sceneScriptGuess(name);
+  select.value = narration ? (timed ? '' : '-') : sceneScriptGuess(name);
   select.addEventListener('change', sceneScriptReady);
   return select;
 }
@@ -1355,12 +1531,14 @@ function sceneScriptReady() {
     .forEach(function (select) {
       if (!select.value) waiting.push(select.dataset.speaker || 'the lines with no speaker');
     });
-  $('sceneScriptCreate').disabled = !sceneScript || waiting.length > 0;
-  $('sceneScriptWaiting').textContent = waiting.length
+  var invalidTimed = sceneScript && sceneScript.duration_ms !== undefined && sceneScript.unread.length > 0;
+  $('sceneScriptCreate').disabled = !sceneScript || !sceneScript.lines.length || !!invalidTimed || waiting.length > 0;
+  $('sceneScriptWaiting').textContent = invalidTimed ? 'Fix the subtitle errors and read the file again.' : waiting.length
     ? 'Choose a voice for ' + waiting.join(', ') + ', or leave their lines out.'
     : '';
 }
 function clearSceneScript() {
+  sceneScriptReadVersion++;
   sceneScript = null;
   $('sceneScriptMatch').hidden = true;
   $('sceneScriptSpeakers').textContent = '';
@@ -1369,7 +1547,9 @@ function clearSceneScript() {
 function renderSceneScript() {
   var script = sceneScript,
     fountain = script.format === 'fountain',
-    parts = [sceneCount(script.lines.length, 'line', 'lines'), sceneCount(script.speakers.length, 'speaker', 'speakers')];
+    timed = script.duration_ms !== undefined,
+    parts = [sceneCount(script.lines.length, timed ? 'cue' : 'line', timed ? 'cues' : 'lines'),
+      sceneCount(script.speakers.length, 'speaker', 'speakers')];
   if (script.narration)
     parts.push(
       sceneCount(
@@ -1378,6 +1558,8 @@ function renderSceneScript() {
         fountain ? 'lines of action' : 'lines with no name',
       ),
     );
+  if (timed && script.sections && script.sections.length > 1)
+    parts.push(sceneCount(script.sections.length, 'scene section', 'scene sections'));
   parts.push(sceneCount(script.unread.length, 'line not understood', 'lines not understood'));
   $('sceneScriptSummary').textContent = parts.join(', ') + '.';
   var unread = $('sceneScriptUnread');
@@ -1388,6 +1570,22 @@ function renderSceneScript() {
     unread.appendChild(entry);
   });
   $('sceneScriptUnreadBox').hidden = !script.unread.length;
+  $('sceneScriptCueBox').hidden = !timed;
+  var cues = $('sceneScriptCues');
+  cues.textContent = '';
+  if (timed) {
+    $('sceneScriptCueBox').open = true;
+    (script.warnings || []).forEach(function (warning) {
+      var item = document.createElement('li');
+      item.textContent = warning.message;
+      cues.appendChild(item);
+    });
+    script.lines.forEach(function (line) {
+      var item = document.createElement('li');
+      item.textContent = sceneCueRange(line.cue) + ' · ' + (line.speaker || 'No speaker') + ' · ' + line.text;
+      cues.appendChild(item);
+    });
+  }
   var body = $('sceneScriptSpeakers');
   body.textContent = '';
   script.speakers.forEach(function (speaker) {
@@ -1396,22 +1594,26 @@ function renderSceneScript() {
   if (script.narration)
     body.appendChild(
       sceneScriptRow(
-        fountain ? 'Action, read by a narrator' : 'Lines with no name, read by a narrator',
+        timed ? 'Cues with no speaker label' : fountain ? 'Action, read by a narrator' : 'Lines with no name, read by a narrator',
         script.narration,
-        sceneScriptPicker('', true),
+        sceneScriptPicker('', true, timed),
       ),
     );
   if (!$('sceneScriptName').value.trim()) $('sceneScriptName').value = script.title || sceneScriptFile;
   $('sceneScriptMatch').hidden = false;
   sceneScriptReady();
 }
+var sceneScriptReadVersion = 0;
 function readSceneScript() {
   var content = $('sceneScriptText').value;
   $('sceneError').textContent = '';
   $('sceneScriptReport').textContent = '';
+  clearSceneScript();
+  var version = sceneScriptReadVersion;
   if (!content.trim()) return Promise.reject(new Error('Paste a script, or choose a file.'));
   return fetchJson('/api/scenes/import/preview', { format: $('sceneScriptFormat').value, content: content }).then(
     function (result) {
+      if (version !== sceneScriptReadVersion) return;
       sceneScript = result.script;
       renderSceneScript();
     },
@@ -1428,7 +1630,9 @@ function loadSceneScriptFile(file) {
   });
 }
 function sceneScriptReportText(scene, report) {
-  var rows = ['Created “' + scene.name + '” with ' + sceneCount(report.lines, 'line', 'lines') + '.'];
+  var rows = [scene.length > 1
+    ? 'Created ' + scene.length + ' scene sections. Choose any section from Saved scene.'
+    : 'Created “' + scene[0].name + '” with ' + sceneCount(report.lines, 'line', 'lines') + '.'];
   function note(title, items, describe) {
     if (!items.length) return;
     rows.push(title + ':');
@@ -1451,7 +1655,7 @@ function sceneScriptReportText(scene, report) {
 function createSceneFromScript() {
   if (!sceneScript) return Promise.resolve(null);
   if (sceneDirty && !window.confirm('Discard unsaved scene edits and import this script?')) return Promise.resolve(null);
-  var speakers = {},
+  var speakers = Object.create(null),
     narrator = null;
   $('sceneScriptSpeakers')
     .querySelectorAll('select')
@@ -1467,7 +1671,7 @@ function createSceneFromScript() {
   return fetchJson('/api/scenes/import', body)
     .then(function (result) {
       clearSceneScript(); // A second press would make the scene twice.
-      $('sceneScriptReport').textContent = sceneScriptReportText(result.scene, result.report);
+      $('sceneScriptReport').textContent = sceneScriptReportText(result.scenes || [result.scene], result.report);
       return refreshSceneList(result.scene.scene_id);
     })
     .finally(sceneScriptReady);
@@ -1520,8 +1724,11 @@ function refreshSceneJob() {
     job.rows.forEach(function (row) {
       var article = document.createElement('article'),
         title = document.createElement('strong');
-      title.textContent =
-        'Render ' +
+      var cue = job.scene_snapshot?.lines[row.scene_order]?.cue;
+      title.textContent = cue
+        ? 'Line ' + (row.scene_order + 1) + ' (' + sceneCueTime(cue.start_ms) + ') / part ' + (row.segment_index + 1)
+          + ' / take ' + row.take_index + ' / ' + row.status
+        : 'Render ' +
         (row.ordinal + 1) +
         ' / scene ' +
         (row.scene_order + 1) +
@@ -1696,7 +1903,7 @@ function previewScene() {
       $('sceneMasteredPlayer').src = result.preview.mastered_audio_url;
       var mastering = result.preview.mastering || {};
       $('scenePreviewMeta').textContent =
-        'Separate sequential calls with explicit silence / ' +
+        (result.preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence') + ' / ' +
         result.preview.duration_seconds.toFixed(2) +
         ' s / ' +
         result.preview.sample_rate +
@@ -1705,6 +1912,10 @@ function previewScene() {
         ' LUFS target, ' +
         Number(mastering.peak_ceiling_dbfs).toFixed(0) +
         ' dBFS sample-peak ceiling / no compression or crossfades.';
+      if (result.preview.timing && result.preview.timing.warnings.length)
+        $('scenePreviewMeta').textContent += ' ' + result.preview.timing.warnings.map(function (warning) {
+          return warning.message;
+        }).join(' ');
     });
 }
 $('sceneRefresh').addEventListener('click', function () {
@@ -1827,9 +2038,10 @@ $('sceneSegments').addEventListener('click', function () {
     fetchJson('/api/scenes/' + activeSceneId + '/segments')
       .then(function (result) {
         $('sceneSegmentPreview').textContent = (result.segments || [])
-          .map(function (line) {
+          .map(function (line, index) {
+            var cue = sceneBody().lines[index]?.cue;
             return (
-              line.line_id +
+              (cue ? 'Line ' + (index + 1) + ' (' + sceneCueTime(cue.start_ms) + ')' : line.line_id) +
               ': ' +
               line.segments.length +
               ' part(s) — ' +

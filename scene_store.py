@@ -24,6 +24,8 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 import synthetic_label
+import subtitle_import
+import timed_scene
 from cast_store import ID_RE, CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
 import engine_adapters
 from db_snapshots import snapshot_before_migration
@@ -31,6 +33,7 @@ from local_ownership import LocalOwnership
 from performance_settings import effective_settings
 from scene_selection import take_problem, validate_selected_take
 from script_import import parse_script
+from subtitle_import import FORMATS as SUBTITLE_FORMATS
 
 
 SCHEMA_VERSION = 1
@@ -51,6 +54,7 @@ CSV_FIELDS = [
     "take_count", "selected_take_id", "selected_takes_json", "target_duration_ms", "settings_json",
     "use_pronunciations",
 ]
+TIMED_CSV_FIELDS = [*CSV_FIELDS, "timeline_json", "cue_json"]
 # What changed after a take was made, in the words the scenes table shows (scene_selection.take_problem names the part).
 STALE_REASONS = {
     "segments": "The text changed after this take was made.",
@@ -399,6 +403,14 @@ class SceneStore:
         source_lines = payload.get("lines")
         if not isinstance(source_lines, list) or not source_lines or len(source_lines) > MAX_SCENE_LINES:
             raise ValueError(f"A scene must contain 1–{MAX_SCENE_LINES} ordered lines.")
+        timeline = timed_scene.validate_timeline(payload["timeline"]) if "timeline" in payload else None
+        if timeline and previous and previous.get("timeline"):
+            original = previous["timeline"]
+            if any(original.get(key) != timeline.get(key)
+                   for key in ("format", "duration_ms", "source_sha256", "source_offset_ms")):
+                raise ValueError("A saved scene's source timeline cannot be replaced. Import the new subtitles as a new scene.")
+            timeline["source_cues"] = timed_scene.source_track(previous)
+        source_ids = {row["line_id"] for row in timeline.get("source_cues", [])} if timeline else set()
         normalized, seen = [], set()
         # A scene's lines share a few voices and characters: read each once per save, not once per line.
         identities, pronunciation_lists = {}, {}
@@ -410,14 +422,24 @@ class SceneStore:
             if not isinstance(line_id, str) or not LINE_ID_RE.fullmatch(line_id):
                 raise ValueError(f"Scene line {index + 1} needs a stable ID using letters, digits, dot, underscore, colon, or hyphen (1–64 characters).")
             if line_id in seen:
+                if timeline:
+                    raise ValueError(f"Line {index + 1} duplicates an existing line. Use Duplicate line to make an editable copy.")
                 raise ValueError(f"Duplicate scene line ID {line_id!r}.")
             seen.add(line_id)
+            if timeline is None and "cue" in source:
+                raise ValueError(f"Cue {line_id} needs a timed scene.")
+            label = f"Line {index + 1}" if timeline else f"Line {line_id}"
+            cue = timed_scene.validate_cue(source.get("cue"), label) if timeline else None
+            if cue:
+                label += f" ({subtitle_import.clock_time(cue['start_ms'])})"
+            if cue and set(cue.get("source_line_ids", [])) - source_ids:
+                raise ValueError(f"{label} has lost its original subtitle. Open the saved scene and make the edit again.")
             kind = source.get("line_type", source.get("kind", "dialogue"))
             if kind not in ("dialogue", "narration"):
-                raise ValueError(f"Line {line_id}: line_type must be dialogue or narration.")
+                raise ValueError(f"{label}: line_type must be dialogue or narration.")
             text = source.get("text")
             if not isinstance(text, str) or not text.strip() or len(text.strip()) > MAX_LINE_TEXT:
-                raise ValueError(f"Line {line_id}: text must contain 1–{MAX_LINE_TEXT} characters.")
+                raise ValueError(f"{label}: text must contain 1–{MAX_LINE_TEXT} characters.")
             text = text.strip()
             identity_id = source.get("identity_id")
             try:
@@ -428,14 +450,14 @@ class SceneStore:
             except (ValueError, KeyError) as exc:
                 message = str(exc)
                 if "not found" in message.lower():
-                    raise ValueError(f"Line {line_id}: missing character or voice identity: {message}") from exc
-                raise ValueError(f"Line {line_id}: {message}") from exc
+                    raise ValueError(f"{label}: missing character or voice identity: {message}") from exc
+                raise ValueError(f"{label}: {message}") from exc
             character_id = source.get("character_id") or identity["character_id"]
             if character_id != identity["character_id"]:
-                raise ValueError(f"Line {line_id}: selected voice identity belongs to a different character.")
+                raise ValueError(f"{label}: selected voice identity belongs to a different character.")
             engine_id = identity["engine_id"]
             if source.get("engine_id") not in (None, "", engine_id):
-                raise ValueError(f"Line {line_id}: engine_id does not match the selected voice identity.")
+                raise ValueError(f"{label}: engine_id does not match the selected voice identity.")
             identity_options = identity.get("engine_options") or {}
             default_language = identity_options.get("language", "English") if identity["kind"] == "preset_voice" else "English"
             language = source.get("language", default_language)
@@ -443,11 +465,11 @@ class SceneStore:
                        if identity["kind"] == "preset_voice" else SUPPORTED_LANGUAGES.get(engine_id, {"English"}))
             language_match = next((value for value in allowed if isinstance(language, str) and value.casefold() == language.casefold()), None)
             if language_match is None:
-                raise ValueError(f"Line {line_id}: {engine_id} does not support language {language!r}; supported values: {', '.join(sorted(allowed))}.")
+                raise ValueError(f"{label}: {engine_id} does not support language {language!r}; supported values: {', '.join(sorted(allowed))}.")
             language = language_match
             use_pronunciations = source.get("use_pronunciations", False)
             if not isinstance(use_pronunciations, bool):
-                raise ValueError(f"Line {line_id}: use_pronunciations must be a boolean.")
+                raise ValueError(f"{label}: use_pronunciations must be a boolean.")
             if use_pronunciations and character_id not in pronunciation_lists:
                 pronunciation_lists[character_id] = self.cast.list_pronunciations(character_id)
             pronunciations = pronunciation_lists[character_id] if use_pronunciations else []
@@ -464,22 +486,25 @@ class SceneStore:
                 minimum = max([len(item) for item in pronunciation_sources] + [1])
                 next_limit = max(minimum, segment_limit - max(overflow, 1))
                 if next_limit == segment_limit:
-                    raise ValueError(f"Line {line_id}: a pronunciation replacement expands beyond the 1200-character segment limit.")
+                    raise ValueError(f"{label}: a pronunciation replacement expands beyond the 1200-character segment limit.")
                 segment_limit = next_limit
             direction = source.get("direction", "")
             if not isinstance(direction, str) or len(direction) > 1000:
-                raise ValueError(f"Line {line_id}: direction must be text of 1000 characters or fewer.")
+                raise ValueError(f"{label}: direction must be text of 1000 characters or fewer.")
             if direction.strip() and engine_id not in DIRECTION_ENGINES:
-                raise ValueError(f"Line {line_id}: {engine_id} has no verified text-direction control.")
-            pause_before = _integer(source.get("pause_before_ms", 0), f"Line {line_id} pause_before_ms", 0, MAX_PAUSE_MS)
-            pause_after = _integer(source.get("pause_after_ms", 0), f"Line {line_id} pause_after_ms", 0, MAX_PAUSE_MS)
-            take_count = _integer(source.get("take_count", 1), f"Line {line_id} take_count", 1, 10)
+                raise ValueError(f"{label}: {engine_id} has no verified text-direction control.")
+            pause_before = _integer(source.get("pause_before_ms", 0), f"{label} pause_before_ms", 0, MAX_PAUSE_MS)
+            pause_after = _integer(source.get("pause_after_ms", 0), f"{label} pause_after_ms", 0, MAX_PAUSE_MS)
+            take_count = _integer(source.get("take_count", 1), f"{label} take_count", 1, 10)
             target_duration = source.get("target_duration_ms")
-            if target_duration is not None:
-                target_duration = _integer(target_duration, f"Line {line_id} target_duration_ms", 1, MAX_TARGET_MS)
+            if cue:
+                pause_before = pause_after = 0
+                target_duration = cue["end_ms"] - cue["start_ms"]
+            elif target_duration is not None:
+                target_duration = _integer(target_duration, f"{label} target_duration_ms", 1, MAX_TARGET_MS)
             settings = source.get("settings", {})
             if not isinstance(settings, dict) or len(canonical_json(settings)) > 4096:
-                raise ValueError(f"Line {line_id}: settings must be an object of at most 4096 serialized characters.")
+                raise ValueError(f"{label}: settings must be an object of at most 4096 serialized characters.")
             effective_settings(engine_id, settings)
             segments_value = [{"id": f"seg-{part + 1:03d}", "text": piece} for part, piece in enumerate(segments)]
             voice_identity = generation_identity_snapshot(identity)
@@ -497,20 +522,20 @@ class SceneStore:
                 if len(segments_value) == 1:
                     selected_takes.setdefault(segments_value[0]["id"], selected_take_id)
             if not isinstance(selected_takes, dict):
-                raise ValueError(f"Line {line_id}: selected_takes must map segment IDs to take IDs.")
+                raise ValueError(f"{label}: selected_takes must map segment IDs to take IDs.")
             checked_selected = {}
             for segment_id, take_id in selected_takes.items():
                 if segment_id not in {part["id"] for part in segments_value}:
                     if old_selected.get(segment_id) == take_id:
                         continue
-                    raise ValueError(f"Line {line_id}: selected take refers to unknown segment {segment_id!r}.")
+                    raise ValueError(f"{label}: selected take refers to unknown segment {segment_id!r}.")
                 _validate_id(take_id, "selected take id")
                 try:
                     selected_take = known_takes.get(take_id) or self.cast.get_take(take_id)
                 except KeyError as exc:
-                    raise ValueError(f"Line {line_id}: selected take {take_id} does not exist.") from exc
+                    raise ValueError(f"{label}: selected take {take_id} does not exist.") from exc
                 if selected_take["retired"] and old_selected.get(segment_id) != take_id:
-                    raise ValueError(f"Line {line_id}: selected take {take_id} is retired; choose another take.")
+                    raise ValueError(f"{label}: selected take {take_id} is retired; choose another take.")
                 segment = next(item for item in segments_value if item["id"] == segment_id)
                 spoken = (self.cast.apply_pronunciations(segment["text"], character_id, pronunciations)
                           if use_pronunciations else segment["text"])
@@ -526,6 +551,7 @@ class SceneStore:
             else:
                 selected_take_id = None
             normalized.append({**source,
+                **({"cue": cue} if cue else {}),
                 "line_id": line_id, "line_type": kind, "character_id": character_id,
                 "identity_id": identity_id, "engine_id": engine_id,
                 "reference_version_id": identity["reference"]["id"] if identity["reference"] else None,
@@ -539,6 +565,8 @@ class SceneStore:
             })
         base = {**payload, "schema_version": SCHEMA_VERSION, "scene_id": scene_id, "name": name,
                 "revision": revision, "lines": normalized}
+        if timeline:
+            base["timeline"] = timeline
         # Incoming updates carry the last saved checksum. It is metadata for the
         # old revision and must not become part of the newly calculated digest.
         base.pop("checksum", None)
@@ -638,7 +666,8 @@ class SceneStore:
     def export_csv(self, scene_id):
         scene = self.get_scene(scene_id)
         output = io.StringIO(newline="")
-        writer = csv.DictWriter(output, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        fields = TIMED_CSV_FIELDS if "timeline" in scene else CSV_FIELDS
+        writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for line in scene["lines"]:
             writer.writerow({
@@ -649,6 +678,8 @@ class SceneStore:
                 "selected_takes_json": canonical_json(line.get("selected_takes", {})),
                 "settings_json": canonical_json(line.get("settings", {})),
                 "use_pronunciations": str(bool(line.get("use_pronunciations", False))).lower(),
+                "timeline_json": canonical_json(scene["timeline"]) if "timeline" in scene else "",
+                "cue_json": canonical_json(line["cue"]) if "cue" in line else "",
             })
         return output.getvalue().encode("utf-8-sig")
 
@@ -667,12 +698,17 @@ class SceneStore:
             if version and version != str(SCHEMA_VERSION):
                 raise ValueError(f"Scene CSV row {index + 2} uses unsupported schema version {version!r}.")
         lines = []
+        timeline_json = rows[0].get("timeline_json") or ""
         for index, row in enumerate(rows):
+            if (row.get("timeline_json") or "") != timeline_json:
+                raise ValueError("Scene CSV rows must agree on timeline_json.")
             try:
                 settings = json.loads(row.get("settings_json") or "{}")
                 selected_takes = json.loads(row.get("selected_takes_json") or "{}")
+                cue_json = row.get("cue_json") or ""
+                cue = {"cue": json.loads(cue_json)} if cue_json else {}
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Scene CSV row {index + 2} has invalid JSON in a settings/selected_takes column.") from exc
+                raise ValueError(f"Scene CSV row {index + 2} has invalid JSON in a settings, selected takes or cue column.") from exc
             def optional_int(name):
                 value = (row.get(name) or "").strip()
                 return int(value) if value else None
@@ -680,6 +716,7 @@ class SceneStore:
             if pronunciation_flag not in {"true", "false", ""}:
                 raise ValueError(f"Scene CSV row {index + 2} has invalid use_pronunciations value {pronunciation_flag!r}.")
             lines.append({
+                **cue,
                 "line_id": row.get("line_id"), "line_type": row.get("line_type") or "dialogue",
                 "character_id": row.get("character_id") or None, "identity_id": row.get("identity_id"),
                 "engine_id": row.get("engine_id") or None,
@@ -691,10 +728,20 @@ class SceneStore:
                 "target_duration_ms": optional_int("target_duration_ms"), "settings": settings,
                 "use_pronunciations": pronunciation_flag == "true",
             })
-        return {"schema_version": SCHEMA_VERSION, "name": rows[0].get("scene_name") or "Imported scene", "lines": lines}
+        try:
+            timeline = {"timeline": json.loads(timeline_json)} if timeline_json else {}
+        except json.JSONDecodeError as exc:
+            raise ValueError("Scene CSV has invalid JSON in timeline_json.") from exc
+        return {"schema_version": SCHEMA_VERSION, "name": rows[0].get("scene_name") or "Imported scene", "lines": lines, **timeline}
 
     def script_manifest(self, content, fmt, speakers, narrator=None, name=None):
-        """A scene manifest from a plain-text or Fountain script (script_import.parse_script), and a report of what it left out.
+        manifests, report = self.script_manifests(content, fmt, speakers, narrator, name)
+        if len(manifests) != 1:
+            raise ValueError("Use Import a script or subtitles in Scenes & batch to create the sections together.")
+        return manifests[0], report
+
+    def script_manifests(self, content, fmt, speakers, narrator=None, name=None):
+        """Scene manifests from a script or subtitles, and a report of what they left out.
 
         speakers maps every speaker the script names to {"identity_id": ...}, or to None to leave that speaker's lines out; a
         speaker missing from the map is refused, so no line goes to a voice nobody chose. narrator is the voice for the lines
@@ -702,6 +749,10 @@ class SceneStore:
         defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after
         it, one take, and the model's own settings. A direction for a model that takes none is left out and reported."""
         script = parse_script(content, fmt)
+        is_timed = fmt in SUBTITLE_FORMATS
+        if is_timed and script["unread"]:
+            issue = script["unread"][0]
+            raise ValueError(f"Fix the subtitle at line {issue['number']} before importing. {issue['reason']}")
         if not script["lines"]:
             unread = len(script["unread"])
             raise ValueError("The script has no lines to import." + (f" {unread} line(s) could not be read." if unread else ""))
@@ -732,7 +783,7 @@ class SceneStore:
 
         width = max(3, len(str(len(script["lines"]))))
         lines, left_out, directions = [], [], []
-        for line in script["lines"]:
+        for index, line in enumerate(script["lines"], start=1):
             speaker = line["speaker"]
             identity = voice(chosen[speaker.casefold()] if speaker else narrator, speaker or "narration")
             where = {"number": line["number"], "speaker": speaker, "text": line["text"][:200]}
@@ -747,18 +798,65 @@ class SceneStore:
                 if line["direction"]:
                     directions.append({**where, "direction": line["direction"]})
                 direction = ""
-            lines.append({"line_id": f"line-{len(lines) + 1:0{width}d}", "line_type": line["kind"],
+            line_id = f"cue-{index:0{width}d}" if is_timed else f"line-{len(lines) + 1:0{width}d}"
+            lines.append({"line_id": line_id, "line_type": line["kind"],
                           "character_id": identity["character_id"], "identity_id": identity["id"], "text": line["text"],
-                          "direction": direction, "pause_before_ms": 0, "pause_after_ms": 250, "take_count": 1,
+                          "direction": direction, "pause_before_ms": 0, "pause_after_ms": 0 if is_timed else 250, "take_count": 1,
                           "settings": {}, "use_pronunciations": False})
+            if is_timed:
+                lines[-1]["cue"] = {**line["cue"], "source_line_ids": [line_id]}
         if not lines:
             raise ValueError("Every line of the script is left out; choose a voice for at least one speaker.")
-        if len(lines) > MAX_SCENE_LINES:
+        if not is_timed and len(lines) > MAX_SCENE_LINES:
             raise ValueError(f"The script has {len(lines)} lines to import, and a scene holds at most {MAX_SCENE_LINES}. "
                              "Split the script, or leave some speakers out.")
-        title = " ".join(str(name or script["title"] or "Imported script").split())[:120]
+        title = " ".join(str(name or script["title"] or ("Imported subtitles" if is_timed else "Imported script")).split())[:120]
         report = {"lines": len(lines), "left_out": left_out, "unread": script["unread"], "directions_left_out": directions}
-        return {"schema_version": SCHEMA_VERSION, "name": title, "lines": lines}, report
+        manifest = {"schema_version": SCHEMA_VERSION, "name": title, "lines": lines}
+        if not is_timed:
+            return [manifest], report
+        sections = subtitle_import.scene_sections(script["lines"])
+        fingerprint = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        by_id = {line["line_id"]: line for line in lines}
+        manifests = []
+        for number, (offset, indices) in enumerate(sections, 1):
+            local, source = [], []
+            for index in indices:
+                original = script["lines"][index]
+                line_id = f"cue-{index + 1:0{width}d}"
+                cue = original["cue"]
+                start, end = cue["start_ms"] - offset, cue["end_ms"] - offset
+                source.append({"line_id": line_id, "start_ms": start, "end_ms": end, "text": original["text"],
+                               "speaker": original["speaker"] or ""})
+                if line_id in by_id:
+                    line = by_id[line_id]
+                    local.append({**line, "cue": {**line["cue"], "start_ms": start, "end_ms": end,
+                                                   "source_start_ms": start, "source_end_ms": end}})
+            if not local:
+                continue
+            timeline = {"format": fmt, "duration_ms": max(row["end_ms"] for row in source),
+                        "source_sha256": fingerprint, "source_cues": source}
+            name = title
+            if len(sections) > 1 or offset:
+                timeline["source_offset_ms"] = offset
+                suffix = f" ({number} of {len(sections)})" if len(sections) > 1 else ""
+                name = title[:120 - len(suffix)].rstrip() + suffix
+            manifests.append({**manifest, "name": name, "lines": local, "timeline": timeline})
+        return manifests, report
+
+    def import_script(self, content, fmt, speakers, narrator=None, name=None):
+        manifests, report = self.script_manifests(content, fmt, speakers, narrator, name)
+        if len(manifests) == 1:
+            return [self.create_scene(manifests[0])], report
+        scenes = [self._normalize_scene(manifest, new_id(), 1) for manifest in manifests]
+        stamp = utc_now()
+        with self._connect() as db:
+            db.executemany("INSERT INTO scenes VALUES(?,?,?,?,?,?,?)",
+                           [(scene["scene_id"], scene["name"], 1, canonical_json(scene), scene["checksum"], stamp, stamp)
+                            for scene in scenes])
+        for scene in scenes:
+            self._write_scene_file(scene)
+        return scenes, report
 
     def segment_preview(self, scene_id, line_id=None):
         scene = self.get_scene(scene_id)
@@ -1232,55 +1330,64 @@ class SceneStore:
         recent_jobs = self.list_jobs(scene_id)
         if recent_jobs and recent_jobs[0]["status"] == "failed" and recent_jobs[0]["failed"]:
             raise ValueError(f"Scene export is blocked because the latest batch has {recent_jobs[0]['failed']} failed row(s); retry them first.")
-        audio_parts = []
-        output_rate = None
-        missing = []
+        timeline = scene.get("timeline")
+        output_rate = timed_scene.SAMPLE_RATE if timeline else None
         manifest_lines = []
-        for line in scene["lines"]:
-            line_takes = []
-            for segment in line["segments"]:
-                take_id = line.get("selected_takes", {}).get(segment["id"])
-                if not take_id:
-                    missing.append(f"{line['line_id']}/{segment['id']}")
-                    continue
-                try:
-                    take = self.cast.get_take(take_id)
-                except KeyError as exc:
-                    raise ValueError(f"Selected take {take_id} no longer exists; choose another take.") from exc
-                if take["retired"]:
-                    raise ValueError(f"Selected take {take_id} is retired; choose another take before assembling.")
-                spoken = self.cast.apply_pronunciations(segment["text"], line["character_id"]) if line["use_pronunciations"] else segment["text"]
-                validate_selected_take(scene_id, line, segment, take, spoken)
-                media_path = self.cast.get_media_path("take", take_id)
-                raw_audio = media_path.read_bytes()
-                if hashlib.sha256(raw_audio).hexdigest() != take["audio_sha256"]:
-                    raise ValueError(f"Selected take {take_id} failed its saved audio checksum.")
-                audio = sf.read(io.BytesIO(raw_audio), dtype="float32")[0]
-                if audio.ndim > 1:
-                    audio = audio.mean(axis=1)
-                rate = take["sample_rate"]
-                if output_rate is None:
-                    output_rate = rate
-                if rate != output_rate:
-                    divisor = np.gcd(rate, output_rate)
-                    audio = resample_poly(audio, output_rate // divisor, rate // divisor).astype(np.float32)
-                line_takes.append((segment, take, audio))
-            if len(line_takes) != len(line["segments"]):
-                continue
-            if line["pause_before_ms"]:
-                audio_parts.append(np.zeros(round(output_rate * line["pause_before_ms"] / 1000), dtype=np.float32))
-            for segment, take, audio in line_takes:
-                audio_parts.append(audio)
-                manifest_lines.append({"line_id": line["line_id"], "segment_id": segment["id"],
-                                       "take_id": take["id"],
-                                       "audio_sha256": take["audio_sha256"], "duration_seconds": take["duration_seconds"]})
-            if line["pause_after_ms"]:
-                audio_parts.append(np.zeros(round(output_rate * line["pause_after_ms"] / 1000), dtype=np.float32))
+        missing = [
+            f"{line['line_id']}/{segment['id']}"
+            for line in scene["lines"] for segment in line["segments"]
+            if not line.get("selected_takes", {}).get(segment["id"])
+        ]
         if missing:
             raise ValueError("Scene preview requires a selected successful take for every line segment: " + ", ".join(missing))
-        if not audio_parts or output_rate is None:
-            raise ValueError("Scene preview has no selected audio.")
-        audio = np.concatenate(audio_parts)
+
+        def selected_lines():
+            nonlocal output_rate
+            for line in scene["lines"]:
+                parts = []
+                for segment in line["segments"]:
+                    take_id = line["selected_takes"][segment["id"]]
+                    try:
+                        take = self.cast.get_take(take_id)
+                    except KeyError as exc:
+                        raise ValueError(f"Selected take {take_id} no longer exists; choose another take.") from exc
+                    if take["retired"]:
+                        raise ValueError(f"Selected take {take_id} is retired; choose another take before assembling.")
+                    spoken = self.cast.apply_pronunciations(segment["text"], line["character_id"]) if line["use_pronunciations"] else segment["text"]
+                    validate_selected_take(scene_id, line, segment, take, spoken)
+                    raw_audio = self.cast.get_media_path("take", take_id).read_bytes()
+                    if hashlib.sha256(raw_audio).hexdigest() != take["audio_sha256"]:
+                        raise ValueError(f"Selected take {take_id} failed its saved audio checksum.")
+                    audio, rate = sf.read(io.BytesIO(raw_audio), dtype="float32")
+                    if audio.ndim > 1:
+                        audio = audio.mean(axis=1)
+                    if output_rate is None:
+                        output_rate = rate
+                    if timeline:
+                        if not audio.size or not np.isfinite(audio).all():
+                            raise ValueError(f"Selected take {take_id} has no valid audio.")
+                        audio = timed_scene.resample_take(audio, rate)
+                    elif rate != output_rate:
+                        divisor = np.gcd(rate, output_rate)
+                        audio = resample_poly(audio, output_rate // divisor, rate // divisor).astype(np.float32)
+                    parts.append(audio)
+                    manifest_lines.append({"line_id": line["line_id"], "segment_id": segment["id"], "take_id": take_id,
+                                           "audio_sha256": take["audio_sha256"], "duration_seconds": take["duration_seconds"]})
+                yield line, parts
+
+        if timeline:
+            audio, timing = timed_scene.mix(timeline, selected_lines())
+        else:
+            audio_parts = []
+            for line, parts in selected_lines():
+                if line["pause_before_ms"]:
+                    audio_parts.append(np.zeros(round(output_rate * line["pause_before_ms"] / 1000), dtype=np.float32))
+                audio_parts.extend(parts)
+                if line["pause_after_ms"]:
+                    audio_parts.append(np.zeros(round(output_rate * line["pause_after_ms"] / 1000), dtype=np.float32))
+            if not audio_parts:
+                raise ValueError("Scene preview has no selected audio.")
+            audio, timing = np.concatenate(audio_parts), None
         scene_out = self.output_root / scene_id
         scene_out.mkdir(parents=True, exist_ok=True)
         wav_path = scene_out / f"scene-r{scene['revision']}-{uuid.uuid4().hex[:8]}.wav"
@@ -1318,12 +1425,15 @@ class SceneStore:
             "sample_peak_dbfs": 20.0 * np.log10(mastered_peak) if mastered_peak > 0 else None,
             "compression_or_crossfade": False,
         }
+        assembly = timed_scene.ASSEMBLY if timeline else "separate sequential speech calls with explicit silence; no crossfades"
         manifest = {"schema_version": 1, "scene_id": scene_id, "scene_revision": scene["revision"],
-                    "scene_checksum": scene["checksum"], "assembly": "separate sequential speech calls with explicit silence; no crossfades",
+                    "scene_checksum": scene["checksum"], "assembly": assembly,
                     "sample_rate": output_rate, "duration_seconds": len(audio) / output_rate,
                     "audio_path": str(wav_path), "audio_sha256": file_hash,
                     "mastered_audio_path": str(mastered_path), "mastered_audio_sha256": mastered_hash,
                     "mastering": mastering, "lines": manifest_lines}
+        if timing:
+            manifest["timing"] = timing
         manifest["checksum"] = digest_json(manifest)
         manifest_path = wav_path.with_suffix(".json")
         self._atomic_json(manifest_path, manifest)

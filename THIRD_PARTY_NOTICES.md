@@ -133,3 +133,9 @@ The complete upstream license governs; this table is a practical inventory.
 Reference consent, copyright, privacy and publicity rights still need review for
 each voice and intended use. Converting a restricted voice through another model
 does not establish new rights. See [Responsible use](docs/RESPONSIBLE_USE.md).
+
+### VoiceStudio
+
+Subtitle import and timed scene editing draw on the public VoiceStudio dubbing workflow by Palash Debnath
+(`debpalash`) and the VoiceStudio contributors. Voice Lab uses its own scene and export implementation.
+[VoiceStudio](https://github.com/debpalash/voicestudio)

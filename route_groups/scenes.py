@@ -11,7 +11,7 @@ import sample_project
 import voice_names
 from route_groups.cast import add_voice
 from scene_store import csv_template, json_template
-from script_import import parse_script
+from script_import import FORMATS, parse_script
 
 
 def register(router, lab):
@@ -53,9 +53,9 @@ def register(router, lab):
     def import_scene(self, parsed, req):
         fmt = req.get("format")
         content = _import_content(req)
-        if fmt in ("text", "fountain"):
-            manifest, report = scenes.script_manifest(content, fmt, req.get("speakers"), req.get("narrator"), req.get("name"))
-            self._json(201, {"scene": scenes.create_scene(manifest), "report": report})
+        if fmt in FORMATS:
+            imported, report = scenes.import_script(content, fmt, req.get("speakers"), req.get("narrator"), req.get("name"))
+            self._json(201, {"scene": imported[0], "report": report, **({"scenes": imported} if len(imported) > 1 else {})})
             return
         if fmt == "json":
             try:
@@ -65,7 +65,7 @@ def register(router, lab):
         elif fmt == "csv":
             manifest = scenes.import_csv(content.encode("utf-8"))
         else:
-            raise ValueError("Scene import format must be json, csv, text or fountain.")
+            raise ValueError("Choose a JSON, CSV, plain text, Fountain, SRT or WebVTT file to import.")
         self._json(201, {"scene": scenes.create_scene(manifest)})
 
     def kokoro_installed():

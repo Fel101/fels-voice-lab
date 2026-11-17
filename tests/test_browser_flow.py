@@ -907,7 +907,7 @@ class ScriptImportPageTests(unittest.TestCase):
             try:
                 page = DevToolsPage(BROWSER)
                 page.open(server.base + "/#scenes")
-                page.wait_until("document.querySelectorAll('#sceneScriptFormat option').length === 2 && castCharacters.length === 2")
+                page.wait_until("document.querySelector('#sceneScriptFormat option[value=fountain]') && castCharacters.length === 2")
                 page.set_files("#sceneImportFile", scripts / "harbour.fountain")
                 page.wait_until("!document.getElementById('sceneScriptMatch').hidden")
                 self.assertEqual(page.evaluate("document.getElementById('sceneScriptSummary').textContent"),
@@ -1046,6 +1046,65 @@ class ModelHelpPageTests(unittest.TestCase):
                 page.wait_until("document.getElementById('modelFilterMatch').hidden")
                 self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card').length"), len(server.engines.catalog["engines"]))
                 self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card[hidden]').length"), 0)
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+    def test_a_subtitle_file_uses_the_scene_import_and_cue_editor(self):
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            page = None
+            try:
+                for name in ("Mira", "Tobin"):
+                    character = server.cast.create_character(name, "")
+                    identity = server.cast.create_identity(character["id"], "qwen3-tts-1.7b-base", name)
+                    reference = server.cast.add_reference(identity["id"], f"{name}.wav", wav_bytes(),
+                                                          transcript="A reference.", origin="test", allowed_use="tests")
+                    server.cast.update_identity(identity["id"], {"status": "approved", "reference_version_id": reference["id"]})
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#scenes")
+                page.wait_until("castCharacters.length === 2")
+                page.set_files("#sceneImportFile", ROOT / "tests" / "fixtures" / "scripts" / "timed-harbour.srt")
+                page.wait_until("!document.getElementById('sceneScriptCreate').disabled")
+                self.assertEqual(page.evaluate("document.getElementById('sceneScriptFormat').value"), "srt")
+                self.assertIn("overlaps", page.evaluate("document.getElementById('sceneScriptCues').textContent"))
+                page.click("#sceneScriptCreate")
+                page.wait_until("document.querySelectorAll('.scene-row').length === 4")
+                page.click(".scene-row .scene-open")
+                page.set_value('input[aria-label="Cue start for line 1"]', "1.05")
+                page.set_value('input[aria-label="Cue end for line 1"]', "00:01.000")
+                page.click("#sceneSave")
+                page.wait_until("document.getElementById('sceneError').textContent.includes('Line 1 (00:01.050)')")
+                self.assertNotIn("cue-001", page.evaluate("document.getElementById('sceneError').textContent"))
+                page.set_value('input[aria-label="Cue end for line 1"]', "00:01.400")
+                page.click("#sceneSave")
+                page.wait_until("!sceneDirty")
+                saved = server.scenes.get_scene(server.scenes.list_scenes()[0]["scene_id"])
+                self.assertEqual(saved["lines"][0]["cue"]["start_ms"], 1050)
+                self.assertEqual(saved["lines"][0]["cue"]["source_start_ms"], 1000)
+                if page.evaluate("document.querySelector('.scene-open').getAttribute('aria-expanded') === 'false'"):
+                    page.click(".scene-row .scene-open")
+                page.evaluate("document.querySelector('textarea[aria-label=\"Dialogue — line 1\"]').setSelectionRange(6, 6)")
+                page.click('button[aria-label="Split cue at text cursor"]')
+                page.wait_until("document.querySelectorAll('.scene-row').length === 5")
+                page.click('button[aria-label="Merge with next cue"]')
+                page.wait_until("document.querySelectorAll('.scene-row').length === 4")
+                page.click("#sceneSave")
+                page.wait_until("!sceneDirty")
+                reopened = server.scenes.get_scene(saved["scene_id"])
+                first = reopened["lines"][0]
+                self.assertNotEqual(first["line_id"], "cue-001")
+                self.assertEqual(first["cue"]["source_line_ids"], ["cue-001"])
+                self.assertIn("cue-001", first["cue"]["replaces"])
+                self.assertEqual((first["cue"]["start_ms"], first["cue"]["end_ms"]), (1050, 1400))
+                self.assertEqual(reopened["timeline"]["source_cues"], saved["timeline"]["source_cues"])
+                page.click("#sceneStart")
+                page.wait_until("document.querySelectorAll('.scene-line[data-status=\"choose_take\"]').length === 4")
+                page.click("#sceneChooseNewest")
+                page.wait_until("document.querySelectorAll('.scene-line[data-status=\"done\"]').length === 4")
+                self.assertIn("Too long by 0.2 s", page.evaluate("document.querySelector('.scene-status').textContent"))
                 self.assertEqual(page.problems, [])
             finally:
                 if page is not None:

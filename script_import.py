@@ -18,7 +18,9 @@ kept as narration, like a plain-text line with no name.
 
 import re
 
-FORMATS = ("text", "fountain")
+import subtitle_import
+
+FORMATS = ("text", "fountain", *subtitle_import.FORMATS)
 MAX_NAME = 60
 MAX_DIRECTION = 1000
 
@@ -250,5 +252,28 @@ def parse_script(text, fmt):
         raise ValueError(f"A script's format must be one of: {', '.join(FORMATS)}.")
     if not isinstance(text, str):
         raise ValueError("A script must be text.")
-    text = text.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n").replace("\t", "    ")
+    text = text.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n")
+    if fmt in subtitle_import.FORMATS:
+        reader = _Reader()
+        rows, reader.unread = subtitle_import.parse_subtitles(text, fmt)
+        for row in rows:
+            cue = row["cue"]
+            reader.speech(row["number"], cue["speaker"] or None, row["text"])
+            reader.lines[-1]["cue"] = cue
+        return {
+            **reader.result(fmt),
+            "duration_ms": max((row["cue"]["end_ms"] for row in rows), default=0),
+            "sections": [
+                {"start_ms": offset, "cues": len(indices)} for offset, indices in subtitle_import.scene_sections(rows)
+            ],
+            "warnings": subtitle_import.cue_overlaps(
+                (
+                    row["cue"]["start_ms"],
+                    row["cue"]["end_ms"],
+                    f"Line {index} ({subtitle_import.clock_time(row['cue']['start_ms'])})",
+                )
+                for index, row in enumerate(rows, 1)
+            ),
+        }
+    text = text.replace("\t", "    ")
     return _plain(text) if fmt == "text" else _fountain(text)

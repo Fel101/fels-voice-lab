@@ -56,6 +56,24 @@ Get `/api/scenes/template.json` for a template. Replace the placeholders with ID
 
 Line text is segmented at sentence boundaries where possible to a maximum of 1,200 characters per synthesis call. The splitter protects common abbreviations, balanced event/markup spans, and pronunciation dictionary phrases. Segments are assigned `seg-001`, `seg-002`, etc. Review `GET /segments` output before rendering long lines. Segmentation does not promise continuous prosody across calls.
 
+## Timed scenes
+
+A subtitle section may carry an optional `timeline.source_offset_ms`. Add it to the scene time to find its place
+in the original video. The source caption files use the video clock. Rendered caption files match the local audio
+in the package. The export timing gives the source offset and the time to place the exported audio.
+
+Subtitle imports add `timeline` with `format` (`srt` or `vtt`), source `duration_ms`, and `source_sha256` over the UTF-8 import
+text. Every line carries a `cue` with integer `start_ms` and `end_ms`, with `0 <= start_ms < end_ms <= 1800000`. An imported
+cue also keeps `source_start_ms`, `source_end_ms`, `source_text`, `source_id`, and `speaker`. The line's editable `text` is
+what its take speaks. The server derives `target_duration_ms` from the cue and zeros the sequential pause fields. Adjusting
+a cue alone preserves its selected take. Preview and export mix tracks at their cue starts and report the actual sample
+spans and timing warnings. JSON and CSV retain the timing metadata.
+
+New timed scenes retain an independent `timeline.source_cues` list with the original `line_id`, times, display text and
+speaker. The list also contains any cues excluded during casting. Edited cues can point to these entries with
+`cue.source_line_ids`. Split or merged cues use new line IDs and retain the line IDs they supersede in `cue.replaces`.
+The scene package verifies source subtitles against the saved source track and rendered subtitles against the actual mix.
+
 ## CSV
 
 `GET /api/scenes/template.csv` returns the exact header and one sample row. Fields are:
@@ -64,7 +82,9 @@ Line text is segmented at sentence boundaries where possible to a maximum of 1,2
 schema_version,scene_name,line_id,line_type,character_id,identity_id,engine_id,reference_version_id,text,language,direction,pause_before_ms,pause_after_ms,take_count,selected_take_id,selected_takes_json,target_duration_ms,settings_json,use_pronunciations
 ```
 
-`selected_takes_json` and `settings_json` are JSON objects encoded in their CSV cells. Blank integer cells use the defaults. IDs must already exist in the local cast. CSV rows preserve input order. JSON and CSV imports are limited to 2 MiB per HTTP request.
+`selected_takes_json` and `settings_json` are JSON objects encoded in their CSV cells. Timed scenes repeat the same
+`timeline_json` in every row and give each row its own `cue_json`. Older sequential scenes can omit both columns.
+Blank integer cells use the defaults. IDs must already exist in the local cast. CSV rows preserve input order. JSON and CSV imports are limited to 2 MiB per HTTP request.
 
 ## API workflow
 

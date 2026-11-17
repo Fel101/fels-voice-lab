@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import html
 import json
 import math
 import re
@@ -31,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import ffmpeg_tools  # noqa: E402  finding FFmpeg and what this build can encode
 import synthetic_label  # noqa: E402  the AI-generated speech label every delivered file carries
+import timed_scene  # noqa: E402  the same mixer used for timed previews
 import word_timing  # noqa: E402  pure helpers only: phrase grouping and offsets; the exporter never writes Cast data
 from fit import fit_status  # noqa: E402  slot status only; the stretch itself is not applied by the exporter
 from lipsync import check_track, prime_for_takes, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
@@ -442,7 +444,7 @@ def subtitle_text(captions):
             caption["line_id"],
             f"{format_timestamp(caption['start_seconds'], '.')}"
             f" --> {format_timestamp(caption['end_seconds'], '.')}",
-            text, "",
+            html.escape(text, quote=False) if "cue" in caption else text, "",
         ])
     return "\n".join(srt_lines), "\n".join(vtt_lines)
 
@@ -453,6 +455,24 @@ def write_subtitles(path_srt, path_vtt, captions):
     path_vtt.write_text(vtt, encoding="utf-8")
 
 
+def source_caption_text(scene):
+    if not scene.get("timeline"):
+        return None
+    source = sorted(timed_scene.source_track(scene), key=lambda cue: cue["start_ms"])
+    if not source:
+        return None
+    offset = scene["timeline"].get("source_offset_ms", 0)
+    return subtitle_text([
+        {"line_id": row["line_id"], "text": row["text"], "character_name": row["speaker"],
+         "start_seconds": (row["start_ms"] + offset) / 1000, "end_seconds": (row["end_ms"] + offset) / 1000,
+         "show_speaker": bool(row["speaker"]), "cue": True}
+        for row in source
+    ])
+
+
+SOURCE_CAPTION_PATHS = ("scene/scene-source.srt", "scene/scene-source.vtt")
+
+
 def caption_cues_for_scene(timed_captions, selected):
     """Caption cues on the scene clock. A line whose takes all have word times is cut into phrases from those times;
     any other line keeps its one line-level caption. The phrases follow the scene mix's pauses and take order."""
@@ -461,7 +481,7 @@ def caption_cues_for_scene(timed_captions, selected):
     for caption in timed_captions:
         takes = takes_by_line[caption["line_id"]]
         timings = [take.get("word_timings") for take in takes]
-        if not takes or not all(timing and timing.get("words") for timing in timings):
+        if "cue" in caption or not takes or not all(timing and timing.get("words") for timing in timings):
             cues.append({**caption, "show_speaker": True})
             continue
         joiner = word_timing.joiner_for(word_timing.whisper_code(takes[0].get("language")))
@@ -525,29 +545,43 @@ def line_fit(duration_seconds, target_ms):
     return fit_status(duration_seconds, target_ms / 1000.0)
 
 
-def make_scene_mix(root, selected, output_path):
-    output_rate = selected[0]["takes"][0]["probe"]["sample_rate"]
+def make_scene_mix(root, selected, output_path, timeline=None):
+    output_rate = timed_scene.SAMPLE_RATE if timeline else selected[0]["takes"][0]["probe"]["sample_rate"]
+    timing = None
+    if timeline:
+        tracks = (
+            (item["line"], [
+                timed_scene.resample_take(*read_audio_mono(take["media_path"])) for take in item["takes"]
+            ]) for item in selected
+        )
+        try:
+            mix, timing = timed_scene.mix(timeline, tracks)
+        except ValueError as exc:
+            raise ExportError(str(exc)) from exc
     parts = []
     line_results = []
     current_sample = 0
-    for item in selected:
+    for index, item in enumerate(selected):
         line = item["line"]
         rate = output_rate
         before = int(line.get("pause_before_ms") or 0)
         after = int(line.get("pause_after_ms") or 0)
-        if before:
-            silence = round(rate * before / 1000)
-            parts.append(np.zeros(silence, dtype=np.float32))
-            current_sample += silence
-        line_start_sample = current_sample
-        line_audio = []
-        for take in item["takes"]:
-            audio, source_rate = read_audio_mono(take["media_path"])
-            audio = resample_audio(audio, source_rate, rate)
-            parts.append(audio)
-            line_audio.append(audio)
-            current_sample += len(audio)
-        line_samples = sum(len(part) for part in line_audio)
+        if timing:
+            placement = timing["placements"][index]
+            line_start_sample = placement["start_sample"]
+            line_samples = placement["end_sample"] - line_start_sample
+        else:
+            if before:
+                silence = round(rate * before / 1000)
+                parts.append(np.zeros(silence, dtype=np.float32))
+                current_sample += silence
+            line_start_sample = current_sample
+            for take in item["takes"]:
+                audio, source_rate = read_audio_mono(take["media_path"])
+                audio = resample_audio(audio, source_rate, rate)
+                parts.append(audio)
+                current_sample += len(audio)
+            line_samples = current_sample - line_start_sample
         character_name = item["takes"][0]["character_name"]
         line_results.append({
             "line_id": line["line_id"],
@@ -564,12 +598,14 @@ def make_scene_mix(root, selected, output_path):
             "pause_after_ms": after,
             "target_duration_ms": line.get("target_duration_ms"),
             "fit": line_fit(line_samples / rate, line.get("target_duration_ms")),
+            **({"cue": line["cue"]} if timing else {}),
         })
-        if after:
+        if after and not timing:
             silence = round(rate * after / 1000)
             parts.append(np.zeros(silence, dtype=np.float32))
             current_sample += silence
-    mix = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
+    if not timing:
+        mix = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
     if not mix.size:
         raise ExportError("Scene has no selected audio.")
     write_pcm16(output_path, mix, output_rate)
@@ -578,8 +614,12 @@ def make_scene_mix(root, selected, output_path):
         "channels": 1,
         "duration_seconds": len(mix) / output_rate,
         "lines": line_results,
-        "assembly": "selected take segments in scene order with explicit configured silence; no crossfades or mastering",
-        "processing_steps": ["resampled segments to first selected take sample rate where needed", "concatenated segments", "inserted scene pauses", "wrote PCM 16-bit WAV"],
+        "assembly": timed_scene.ASSEMBLY if timing else "selected take segments in scene order with explicit configured silence; no crossfades or mastering",
+        "processing_steps": timed_scene.PROCESSING_STEPS if timing else [
+            "resampled segments to first selected take sample rate where needed", "concatenated segments",
+            "inserted scene pauses", "wrote PCM 16-bit WAV",
+        ],
+        **({"timing": timing} if timing else {}),
     }
 
 
@@ -872,11 +912,12 @@ def export_package(args):
                 "character_name": char_name,
                 "text": line["text"],
             })
-            transcripts.append(f"{char_name}\t{line['line_id']}\t{line['text']}")
+            transcript_line = " ".join(line["text"].split()) if scene.get("timeline") else line["text"]
+            transcripts.append(f"{char_name}\t{line['line_id']}\t{transcript_line}")
 
         scene_dir = destination / "scene"
         scene_mix_path = scene_dir / "scene-mix-raw.wav"
-        scene_timing = make_scene_mix(root, selected, scene_mix_path)
+        scene_timing = make_scene_mix(root, selected, scene_mix_path, scene.get("timeline"))
         scene_probe = probe_media(scene_mix_path, args.ffprobe)
         scene_license_profiles = {}
         for item in selected:
@@ -923,8 +964,19 @@ def export_package(args):
             caption = caption_map[measured["line_id"]]
             timed_captions.append({**caption, **measured})
         cue_captions = caption_cues_for_scene(timed_captions, selected)
+        if scene.get("timeline"):
+            starting_at = scene_timing["timing"].get("video_start")
+            if starting_at:
+                print(f"This section starts at {starting_at} in the original video.")
+            cue_captions.sort(key=lambda cue: cue["start_seconds"])
+            for warning in scene_timing["timing"]["warnings"]:
+                print(f"Timing warning: {warning['message']}")
         scene_timing["caption_cues"] = cue_captions
         write_subtitles(scene_dir / "scene.srt", scene_dir / "scene.vtt", cue_captions)
+        source_captions = source_caption_text(scene)
+        if source_captions:
+            for path, text in zip(SOURCE_CAPTION_PATHS, source_captions, strict=True):
+                (destination / path).write_text(text, encoding="utf-8")
         caption_sets = [{"audio_path": scene_mix_path.relative_to(destination).as_posix(),
                          "srt_path": "scene/scene.srt", "vtt_path": "scene/scene.vtt",
                          "trim_start_seconds": 0.0, "trim_end_seconds": 0.0}]
@@ -999,6 +1051,7 @@ def export_package(args):
             "selection": selected_map,
             "formats": formats,
             "caption_sets": caption_sets,
+            **({"source_captions": list(SOURCE_CAPTION_PATHS)} if source_captions else {}),
             "filename_template": args.filename_template,
             "transforms": {
                 "sample_rate_hz": args.output_rate,
@@ -1013,8 +1066,10 @@ def export_package(args):
             # Every delivered file and the scene mix carry this comment (synthetic_label.py); verify checks it is there.
             "synthetic_label": synthetic_label.comment(),
             "timing": {
-                "source": "sample-count durations from decoded selected segments, validated with ffprobe, plus scene pauses",
-                "caption_granularity": "word phrases where every take of a line has stored word times; one caption per line otherwise",
+                "source": ("subtitle cue starts and sample-count speech durations" if scene.get("timeline") else
+                           "sample-count durations from decoded selected segments, validated with ffprobe, plus scene pauses"),
+                "caption_granularity": ("one caption per timed cue" if scene.get("timeline") else
+                                        "word phrases where every take of a line has stored word times; one caption per line otherwise"),
                 "word_timing": "stored forced-alignment records from align_takes.py; their checks are in each take's word_timings",
                 "lip_sync": "per-line mouth-shape tracks: Kokoro takes use their stored phoneme times; other English takes use aligned words shared over estimated phoneme times",
             },
@@ -1157,6 +1212,14 @@ def verify_export(args):
     if len(srt_blocks) != len(line_ids) or len(vtt_ids) != len(line_ids) or vtt_ids != line_ids:
         raise ExportError("SRT/VTT cue count or stable line-ID mapping does not match the scene.")
     verify_caption_sets(export_root, manifest)
+    if "source_captions" in manifest or (scene.get("timeline", {}).get("source_cues")):
+        expected = source_caption_text(scene)
+        if manifest.get("source_captions") != list(SOURCE_CAPTION_PATHS) or not expected:
+            raise ExportError("Missing or invalid source caption manifest.")
+        for path, text in zip(SOURCE_CAPTION_PATHS, expected, strict=True):
+            source_path = under_root(export_root, path)
+            if not source_path.is_file() or source_path.read_text(encoding="utf-8") != text:
+                raise ExportError(f"Source caption timing or text mismatch: {path}")
     transcript_path = export_root / "transcript.txt"
     if not transcript_path.is_file() or len(transcript_path.read_text(encoding="utf-8").splitlines()) != len(line_ids):
         raise ExportError("Transcript line count does not match the scene.")

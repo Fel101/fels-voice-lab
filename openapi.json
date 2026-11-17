@@ -3447,7 +3447,7 @@
                 "properties": {
                   "format": {
                     "type": "string",
-                    "description": "`text` (one `NAME: words` line per speech) or `fountain`."
+                    "description": "`text` (one `NAME: words` line per speech), `fountain`, `srt`, `vtt` or `transcript`."
                   },
                   "content": {
                     "type": "string",
@@ -3464,7 +3464,7 @@
         },
         "responses": {
           "200": {
-            "description": "`script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`).",
+            "description": "`script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`). Subtitle previews also include `duration_ms`, planned `sections`, overlap `warnings`, and the original cue times.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3474,7 +3474,7 @@
             }
           },
           "400": {
-            "description": "The format is not `text` or `fountain`.",
+            "description": "The format or subtitle header is invalid.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3502,11 +3502,11 @@
     "/api/scenes/import": {
       "post": {
         "operationId": "post_api_scenes_import",
-        "summary": "Create a scene from JSON, CSV, a plain-text script or a Fountain script.",
+        "summary": "Create a scene from JSON, CSV, a script or timed subtitles.",
         "tags": [
           "Scenes"
         ],
-        "description": "A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`.",
+        "description": "A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`. Subtitle scenes preserve their cue clock and split long files into scenes of up to 30 minutes and 500 cues, with video offsets. `transcript` accepts the Slate `fels-voice-transcript-v1` JSON and preserves its source media identity and original annotations.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3516,7 +3516,7 @@
                 "properties": {
                   "format": {
                     "type": "string",
-                    "description": "`json`, `csv`, `text` or `fountain`."
+                    "description": "`json`, `csv`, `text`, `fountain`, `srt`, `vtt` or `transcript`."
                   },
                   "content": {
                     "type": "string",
@@ -3524,15 +3524,15 @@
                   },
                   "speakers": {
                     "type": "object",
-                    "description": "For `text` and `fountain`: every speaker the script names, mapped to `{\"identity_id\": ...}` or to null to leave their lines out. A speaker missing from the map is refused."
+                    "description": "For scripts and subtitles, every named speaker mapped to `{\"identity_id\": ...}` or to null to leave their lines out. A speaker missing from the map is refused."
                   },
                   "narrator": {
                     "type": "object",
-                    "description": "For `text` and `fountain`: `{\"identity_id\": ...}` for the lines with no speaker. Without it they are left out."
+                    "description": "For scripts and subtitles, `{\"identity_id\": ...}` for the lines with no speaker. Without it they are left out."
                   },
                   "name": {
                     "type": "string",
-                    "description": "For `text` and `fountain`: the scene's name. Without it, the title page's Title, or \"Imported script\"."
+                    "description": "The scene's name for scripts and subtitles. Defaults to the Fountain title or a name for the format."
                   }
                 },
                 "required": [
@@ -3545,7 +3545,7 @@
         },
         "responses": {
           "201": {
-            "description": "`scene`; for a script also `report`: `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.",
+            "description": "`scene`; `scenes` also lists the saved scenes for a multi-section subtitle file. For scripts, `report` includes `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3555,7 +3555,7 @@
             }
           },
           "400": {
-            "description": "A speaker has no voice and is not left out, a voice cannot be used, or every line is left out.",
+            "description": "A subtitle cue is malformed, a voice cannot be used or is unassigned, or every line is left out.",
             "content": {
               "application/json": {
                 "schema": {

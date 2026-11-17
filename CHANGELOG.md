@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Import SRT and WebVTT subtitles, assign Cast voices and build a scene on the subtitle clock. Edit, split or merge cues,
+  review takes that run long and export the original and rendered captions. Inspired by
+  [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
+
 ## 0.3.0 — 2026-11-13
 
 Every NVIDIA build has now run on an NVIDIA card. The Lab is simpler to set up: a Setup.exe, no Python to install, FFmpeg

@@ -1,0 +1,15 @@
+1
+00:00:01,000 --> 00:00:01,400
+Mira: I kept the light on.
+
+2
+00:00:01,250 --> 00:00:01,900
+Tobin: I saw it from the boat.
+
+3
+00:00:03,000 --> 00:00:03,900
+Mira: Come inside.
+
+4
+00:00:04,500 --> 00:00:05,200
+Tobin: The storm is almost here.

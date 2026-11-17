@@ -1252,7 +1252,7 @@ Ordered scripts rendered line by line through the same performance call. The man
 | GET | [`/api/scenes/template.json`](#get-api-scenes-template-json) | Download a scene manifest template. |
 | GET | [`/api/scenes/template.csv`](#get-api-scenes-template-csv) | Download the scene CSV header and one sample row. |
 | POST | [`/api/scenes/import/preview`](#post-api-scenes-import-preview) | Read a script without creating anything. |
-| POST | [`/api/scenes/import`](#post-api-scenes-import) | Create a scene from JSON, CSV, a plain-text script or a Fountain script. |
+| POST | [`/api/scenes/import`](#post-api-scenes-import) | Create a scene from JSON, CSV, a script or timed subtitles. |
 | GET | [`/api/sample`](#get-api-sample) | Say whether the sample scene exists, and whether it can be made here. |
 | POST | [`/api/sample`](#post-api-sample) | Make the sample scene: two characters with Kokoro preset voices and a nine-line scene written for the Lab, ready to render. |
 | GET | [`/api/sample/remove/preview`](#get-api-sample-remove-preview) | Show what removing the sample scene would delete. |
@@ -1328,14 +1328,14 @@ Read a script without creating anything.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `format` (required) | string | `text` (one `NAME: words` line per speech) or `fountain`. |
+| `format` (required) | string | `text` (one `NAME: words` line per speech), `fountain`, `srt`, `vtt` or `transcript`. |
 | `content` (required) | string | The script, up to 2 MiB. |
 
-**Answer:** `200`, JSON. `script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`).
+**Answer:** `200`, JSON. `script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many `lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`). Subtitle previews also include `duration_ms`, planned `sections`, overlap `warnings`, and the original cue times.
 
 | Also answers | When |
 |---|---|
-| `400` | The format is not `text` or `fountain`. |
+| `400` | The format or subtitle header is invalid. |
 | `413` | The request is over 2 MiB. |
 
 The import below reads the script the same way. Plain text: a direction in brackets or parentheses at the start of the words, or after the name, is the line's acting direction, and a line with no name is narration. Fountain: a parenthetical is the direction of the words after it; extensions such as (V.O.) and (CONT'D) are taken off names; scene headings, transitions, notes and boneyard are left out; action is narration.
@@ -1344,24 +1344,24 @@ The import below reads the script the same way. Plain text: a direction in brack
 
 #### `POST /api/scenes/import`
 
-Create a scene from JSON, CSV, a plain-text script or a Fountain script.
+Create a scene from JSON, CSV, a script or timed subtitles.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `format` (required) | string | `json`, `csv`, `text` or `fountain`. |
+| `format` (required) | string | `json`, `csv`, `text`, `fountain`, `srt`, `vtt` or `transcript`. |
 | `content` (required) | string | The text, up to 2 MiB. |
-| `speakers` | object | For `text` and `fountain`: every speaker the script names, mapped to `{"identity_id": ...}` or to null to leave their lines out. A speaker missing from the map is refused. |
-| `narrator` | object | For `text` and `fountain`: `{"identity_id": ...}` for the lines with no speaker. Without it they are left out. |
-| `name` | string | For `text` and `fountain`: the scene's name. Without it, the title page's Title, or "Imported script". |
+| `speakers` | object | For scripts and subtitles, every named speaker mapped to `{"identity_id": ...}` or to null to leave their lines out. A speaker missing from the map is refused. |
+| `narrator` | object | For scripts and subtitles, `{"identity_id": ...}` for the lines with no speaker. Without it they are left out. |
+| `name` | string | The scene's name for scripts and subtitles. Defaults to the Fountain title or a name for the format. |
 
-**Answer:** `201`, JSON. `scene`; for a script also `report`: `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.
+**Answer:** `201`, JSON. `scene`; `scenes` also lists the saved scenes for a multi-section subtitle file. For scripts, `report` includes `lines` (how many were imported), `left_out` and `directions_left_out` (each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.
 
 | Also answers | When |
 |---|---|
-| `400` | A speaker has no voice and is not left out, a voice cannot be used, or every line is left out. |
+| `400` | A subtitle cue is malformed, a voice cannot be used or is unassigned, or every line is left out. |
 | `413` | The request is over 2 MiB. |
 
-A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`.
+A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model that takes none is left out and listed in `directions_left_out`. Subtitle scenes preserve their cue clock and split long files into scenes of up to 30 minutes and 500 cues, with video offsets. `transcript` accepts the Slate `fels-voice-transcript-v1` JSON and preserves its source media identity and original annotations.
 
 <a id="get-api-sample"></a>
 
