@@ -29,6 +29,7 @@
     "voice_lab_cast.js",
     "voice_lab_take_edit.js",
     "voice_lab_scenes.js",
+    "voice_lab_books.js",
     "voice_lab_cast_bindings.js",
     "voice_lab_generate.js",
     "voice_lab_system.js",

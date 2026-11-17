@@ -61,6 +61,7 @@ LOCAL_HOSTS = ("127.0.0.1", "localhost")
 PAGE_PATHS = ("/", "/index.html", "/compare", "/compare.html")
 MAX_REQUEST_BYTES = 64 * 1024
 MAX_SCENE_REQUEST_BYTES = 2 * 1024 * 1024
+MAX_BOOK_REQUEST_BYTES = 8 * 1024 * 1024
 # A body that is refused for its size is still read through, up to this size and this long, before the refusal goes out
 # (Handler._discard_body).
 MAX_DISCARD_BYTES = 512 * 1024 * 1024
@@ -74,6 +75,7 @@ def _page(name):
 PAGE = _page("serve.html")
 # Scripts that serve.html loads from this folder. Only these names are served, never arbitrary paths.
 PAGE_SCRIPTS = frozenset({"voice_lab_queue.js", "voice_lab_studio.js", "voice_lab_cast.js", "voice_lab_take_edit.js", "voice_lab_scenes.js",
+                          "voice_lab_books.js",
                           "voice_lab_cast_bindings.js", "voice_lab_generate.js", "voice_lab_system.js", "voice_lab_app.js",
                           "voice_lab_drama.js"})
 # The folder that holds desktop.local.json, which tells the desktop app which library to open. The tests point it elsewhere.
@@ -572,6 +574,33 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         self._sent_bytes += len(body)
 
+    def _send_path(self, target, content_type):
+        """Send a bounded range of a saved preview or delivery without loading the whole file."""
+        with target.open("rb") as stream:
+            size = os.fstat(stream.fileno()).st_size
+            selected = None if self.headers.get("If-Range") else byte_range(self.headers.get("Range"), size)
+            if selected is False:
+                return self._send(416, b"", "text/plain", {"Content-Range": f"bytes */{size}"})
+            first, last = selected or (0, size - 1)
+            remaining = last - first + 1
+            self.send_response(206 if selected else 200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(remaining))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if selected:
+                self.send_header("Content-Range", f"bytes {first}-{last}/{size}")
+            self.end_headers()
+            stream.seek(first)
+            while remaining:
+                part = stream.read(min(remaining, 256 * 1024))
+                if not part:
+                    break
+                self.wfile.write(part)
+                self._sent_bytes += len(part)
+                remaining -= len(part)
+
     def _json(self, code, obj):
         if code >= 400 and isinstance(obj, dict):
             if "error" in obj and "code" not in obj:
@@ -691,9 +720,11 @@ class Handler(BaseHTTPRequestHandler):
         route, handler, params = found
         try:
             req = None
-            if method == "POST" and route.body_kind != "audio":
+            if method == "POST" and route.body_kind not in ("audio", "archive"):
                 scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
-                req = self._read_json(MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES)
+                book_call = path == "/api/books" or path.startswith("/api/books/")
+                limit = MAX_BOOK_REQUEST_BYTES if book_call else MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES
+                req = self._read_json(limit)
             with self._place_in_line(route, req):
                 return handler(self, parsed, req, **params)
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):

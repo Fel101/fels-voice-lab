@@ -7,7 +7,7 @@ that hold the user's work or to open one of its databases:
 
     data/                                  Cast, Scenes, Comparisons, saved voices, appearance, engine checks
     out/scenes, out/comparisons, out/m5,   what the library backup treats as library content
-    out/exports, out/drama3
+    out/exports, out/drama3, out/books
     desktop.local.json                     which library the desktop app opens (and the temporary file that replaces it)
 
 Reading is allowed. Folders outside that list, such as out/workers, are scratch space and are not guarded. A child process
@@ -21,7 +21,7 @@ from urllib.parse import unquote, urlparse
 
 LAB = Path(__file__).resolve().parents[1]
 # out/m5 is the old name of out/comparisons, still guarded for a library that has not been opened since the rename.
-FOLDERS = tuple(LAB / name for name in ("data", "out/scenes", "out/comparisons", "out/m5", "out/exports", "out/drama3"))
+FOLDERS = tuple(LAB / name for name in ("data", "out/scenes", "out/comparisons", "out/m5", "out/exports", "out/drama3", "out/books"))
 CONFIG = LAB / "desktop.local.json"
 
 _folders = tuple(os.path.normcase(str(path)) for path in FOLDERS)

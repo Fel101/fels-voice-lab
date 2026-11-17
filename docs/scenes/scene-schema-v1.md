@@ -112,3 +112,15 @@ Scene preview requires a selected valid take for every segment and rejects an in
 ## Storage and recovery
 
 Stop `serve.py` before taking a coordinated backup of `data/cast/`, `data/scenes/`, and `out/scenes/`. These must come from the same snapshot: scenes/jobs point at cast identities and take media. Restore all three together, retain virtual environments, cached model files, reference recordings, and historical outputs, then start `.venv\Scripts\python.exe serve.py`. If the job-manifest endpoint returns 409, keep the files intact and restore a matching backup rather than editing the signed-by-checksum data by hand. Cast schema v3 includes native preset identities and the earlier unique take request keys; the service performs its normal migration when opening an older supported database. Script schema v1 is separate from the Cast database version.
+
+### Chapter scenes
+
+A book stores its ordered chapter IDs and metadata in the scene database. A chapter is a sequential scene with a
+`book_id` and optional `book_pronunciations`, made of source and replacement phrases. Lines may carry
+`manuscript_text` and `manuscript_spoken`. The first is the authored wording. The second records the pronunciation
+substitution used for `text`. Settings, voice IDs, scene revisions, selected takes and queue jobs use the normal
+scene schema. A library backup carries the chapter relationships. A scene JSON carries an editable chapter.
+
+The audiobook export manifest records the selected take hashes, each chapter's sample range and the speech end
+before its trailing gap, file hashes, container metadata and output levels. Sample positions are on the 24 kHz
+assembly clock, and container chapter timestamps are verified at millisecond precision.

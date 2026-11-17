@@ -39,7 +39,7 @@ class WhatIsGuardedTests(unittest.TestCase):
     def test_everything_under_data_and_the_library_outputs_is_guarded(self):
         for name in ("data", "data/cast/cast.sqlite3", "data/voices/a.wav", "out/scenes/x/y.wav",
                      "out/comparisons/run.json", "out/m5/run.json", "out/exports/package-1/manifest.json",
-                     "out/drama3/studio/job/audio.wav", "desktop.local.json", "desktop.local.json.tmp"):
+                     "out/drama3/studio/job/audio.wav", "out/books/volume/cover.jpg", "desktop.local.json", "desktop.local.json.tmp"):
             with self.subTest(name):
                 self.assertIsNotNone(protected(LAB / name))
 

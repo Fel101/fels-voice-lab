@@ -95,6 +95,7 @@ details > .meta { margin-bottom:0; }
 pre { white-space:pre-wrap; }
 [role=alert] { color:var(--err); }
 [role=alert]:empty { display:none; }
+#bookChapters td:last-child button { margin:2px; }
 .scene-table-wrap { overflow-x:auto; margin:12px 0; container-type:inline-size; }
 .script-speakers { border-collapse:collapse; font-size:.9rem; }
 .script-speakers th { text-align:left; font-size:.82rem; font-weight:600; color:var(--muted); padding:4px 8px; border-bottom:1px solid var(--line); }
@@ -180,7 +181,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -628,6 +629,71 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <div id="err" role="alert"></div>
   <audio id="player" controls></audio>
 </section>
+<section class="card" id="books">
+  <h2>Stories &amp; audiobooks</h2>
+  <details open>
+    <summary>Narrate a document</summary>
+    <div class="row">
+      <label class="field compact">Manuscript file<input id="bookFile" type="file" accept=".txt,.md,.markdown"></label>
+      <label class="field compact">Split into<select id="bookSplit"><option value="paragraph">Paragraphs</option><option value="sentence">Sentences</option><option value="chapter">Chapters</option></select></label>
+      <button id="bookPreviewFile" type="button">Preview file</button>
+    </div>
+    <label class="field">Or paste a manuscript<textarea id="bookPaste" rows="4" placeholder="# Chapter One&#10;Text or [voice:Mira] dialogue"></textarea></label>
+    <button id="bookPreviewPaste" type="button">Preview pasted text</button>
+    <div id="bookReview" hidden>
+      <p class="meta" id="bookImportSummary"></p>
+      <ul id="bookImportWarnings" class="meta"></ul>
+      <label class="field compact">Chapter to review<select id="bookReviewChapter"></select></label>
+      <label class="field">Extracted speech<textarea id="bookReviewText" rows="5" readonly></textarea></label>
+      <div class="row" id="bookVoiceMap"></div>
+      <div class="row">
+        <label class="field compact">Book title<input id="bookImportTitle" maxlength="120"></label>
+        <label class="field compact">Paragraph pause (ms)<input id="bookParagraphPause" type="number" value="275" min="0" max="10000"></label>
+        <label class="field compact">Pause between chapters (ms)<input id="bookImportGap" type="number" value="750" min="0" max="10000"></label>
+        <button id="bookCreate" type="button" disabled>Create book</button>
+      </div>
+    </div>
+  </details>
+  <div class="row"><label class="field compact">Saved book<select id="bookSelect"></select></label></div>
+  <p class="meta" id="bookStatus" role="status" aria-live="polite"></p>
+  <div id="bookProject" hidden>
+    <details>
+      <summary>Book details, cover and pronunciations</summary>
+      <div class="row">
+        <label class="field compact">Title<input id="bookTitle" maxlength="120"></label>
+        <label class="field compact">Author<input id="bookAuthor" maxlength="160"></label>
+        <label class="field compact">Narrator credit<input id="bookNarrator" maxlength="160"></label>
+        <label class="field compact">Genre<input id="bookGenre" maxlength="80"></label>
+        <label class="field compact">Year<input id="bookYear" inputmode="numeric" maxlength="4"></label>
+      </div>
+      <label class="field">Description<textarea id="bookDescription" rows="2" maxlength="2000"></textarea></label>
+      <label class="field">Project pronunciations<textarea id="bookPronounce" rows="3" placeholder="harbor = har-bor"></textarea></label>
+      <div class="row">
+        <label class="field compact">Chapter gap (ms)<input id="bookGap" type="number" min="0" max="10000"></label>
+        <label class="field compact">Cover (JPEG or PNG)<input id="bookCover" type="file" accept=".jpg,.jpeg,.png"></label>
+        <button id="bookUploadCover" type="button">Save cover</button>
+        <img id="bookCoverPreview" width="80" height="80" style="object-fit:contain" alt="Saved book cover" hidden>
+        <button id="bookSave" type="button">Save book details</button>
+      </div>
+    </details>
+    <div class="row"><button id="bookQueue" type="button">Render missing chapters</button><span id="bookEstimate" class="meta"></span></div>
+    <table class="scene-table"><thead><tr><th scope="col">Chapter</th><th scope="col">Takes and status</th><th scope="col">Actions</th></tr></thead><tbody id="bookChapters"></tbody></table>
+    <audio id="bookAudition" controls preload="metadata" hidden></audio>
+    <div class="row">
+      <label><input type="checkbox" id="bookWav" checked> WAV</label>
+      <label><input type="checkbox" id="bookFlac" checked> FLAC</label>
+      <label><input type="checkbox" id="bookMp3" checked> MP3</label>
+      <label><input type="checkbox" id="bookM4b" checked> M4B</label>
+      <button id="bookExport" type="button">Export audiobook</button>
+      <button id="bookPlayM4b" type="button" disabled>Play M4B</button>
+      <button id="bookVerify" type="button" disabled>Verify export</button>
+    </div>
+    <p class="meta">For audiobook files and covers, <a href="#system">install FFmpeg in System &amp; backups</a> if you need it.</p>
+    <p id="bookExportTiming" class="meta" aria-live="polite"></p>
+    <p id="bookDeliverySummary" class="meta"></p>
+    <div class="row" id="bookDownloads"></div>
+  </div>
+</section>
 <section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
 <section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Each card is a voice model. Press Install on a model the app can install itself, and Test to check that an installed model speaks on this computer: the test loads it and speaks one short sentence. Models the app cannot install yet are listed under More models, with what each one needs.</p>
 <details><summary>What these words mean</summary><p class="meta">Each card's facts come from the Lab's records: its catalog, its adapters, the installers and the language screen (docs/LANGUAGE_MATRIX.md); where they say nothing, the card says "not stated". A card's Details say whether it is integrated and what the language screen heard. Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device. An integrated model does not mean every upstream feature has been exposed or tested. The RAM on a card is the free memory the Lab wants before it loads that model.</p></details>
@@ -719,6 +785,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <script src="/voice_lab_cast.js"></script>
 <script src="/voice_lab_take_edit.js"></script>
 <script src="/voice_lab_scenes.js"></script>
+<script src="/voice_lab_books.js"></script>
 <script src="/voice_lab_cast_bindings.js"></script>
 <script src="/voice_lab_generate.js"></script>
 <script src="/voice_lab_system.js"></script>

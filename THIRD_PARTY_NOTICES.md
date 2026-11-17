@@ -136,6 +136,6 @@ does not establish new rights. See [Responsible use](docs/RESPONSIBLE_USE.md).
 
 ### VoiceStudio
 
-Subtitle import and timed scene editing draw on the public VoiceStudio dubbing workflow by Palash Debnath
+Subtitle import, timed scene editing and the audiobook workspace draw on the public VoiceStudio workflows by Palash Debnath
 (`debpalash`) and the VoiceStudio contributors. Voice Lab uses its own scene and export implementation.
 [VoiceStudio](https://github.com/debpalash/voicestudio)

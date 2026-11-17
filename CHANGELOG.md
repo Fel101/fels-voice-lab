@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Narrate a text or Markdown document with Cast voices. Edit and render chapters in Scenes, then export chapter files
+  and a whole audiobook with chapter marks. Inspired by VoiceStudio’s long-form workflow.
+
 - Import SRT and WebVTT subtitles, assign Cast voices and build a scene on the subtitle clock. Edit, split or merge cues,
   review takes that run long and export the original and rendered captions. Inspired by
   [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.

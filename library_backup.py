@@ -53,7 +53,7 @@ MAX_LISTED = 25
 STALE_SECONDS = 86400
 MARGIN_BYTES = 64 * 1024 * 1024
 STORED_SUFFIXES = {".flac", ".mp3", ".ogg", ".m4a", ".zip", ".png", ".jpg", ".gguf"}  # already compressed: stored as they are
-SKIP_FOLDERS = {"migration-backups", "__pycache__"}
+SKIP_FOLDERS = {"migration-backups", "__pycache__", "book-staging"}
 SKIP_SUFFIXES = (".lock", ".tmp", ".part", ".sqlite3-wal", ".sqlite3-shm", ".sqlite3-journal")
 RESERVED_NAME = re.compile(r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?\Z")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
@@ -76,7 +76,7 @@ SECTIONS = (
             ("data/evaluations", f"out/{COMPARISONS_DIR}", f"out/{LEGACY_COMPARISONS_DIR}")),
     Section("settings", "Appearance setting", ("data/ui",)),
     Section("voices", "Saved voices", ("data/voices",), True),
-    Section("exports", "Export packages", ("out/exports",), True),
+    Section("exports", "Export packages and audiobooks", ("out/exports", "out/books"), True),
     Section("drama", "Drama studio jobs", ("out/drama3/studio",), True),
 )
 OPTIONAL = tuple(section.key for section in SECTIONS if section.optional)

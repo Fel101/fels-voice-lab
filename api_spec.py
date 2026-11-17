@@ -46,7 +46,7 @@ class Route:
     internal: bool = False
     query: tuple = ()          # Field: query-string parameters
     body: tuple = ()           # Field: members of the JSON request body
-    body_kind: str = "json"    # json, audio (a recording's bytes plus X-Reference-Metadata) or none
+    body_kind: str = "json"    # json, audio (with X-Reference-Metadata), archive (raw bytes), or none
     reply: str = ""            # what the answer holds, in Markdown
     reply_kind: str = "json"   # json, wav, ndjson, csv, audio, html, javascript or file
     status: int = 200          # the success status
@@ -73,6 +73,10 @@ PATH_PARAMS = {
     "identity_id": ("A voice identity's id, from `GET /api/cast`.", ID, EXAMPLE_ID),
     "reference_id": ("A reference recording version's id, from `GET /api/cast`.", ID, EXAMPLE_ID),
     "take_id": ("A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.", ID, EXAMPLE_ID),
+    "book_id": ("A book project ID returned from `GET /api/books`.", ID, EXAMPLE_ID),
+    "book_file": ("A verified chapter or audiobook file name.",
+                  "[a-z0-9][a-z0-9.-]*[.](?:wav|flac|m4b|mp3|jpg|json|cue|csv|srt|vtt)", "book.m4b"),
+    "delivery_id": ("A saved delivery or audition ID.", ID, EXAMPLE_ID),
     "scene_id": ("A scene's id, from `GET /api/scenes`.", ID, EXAMPLE_ID),
     "job_id": ("A job's id, from the call that started it.", ID, EXAMPLE_ID),
     "session_id": ("A blind listening session's id, from `GET /api/evaluations/blind-sessions`.", ID, EXAMPLE_ID),
@@ -101,6 +105,7 @@ GROUPS = (
               "that names its original."),
     ("Scenes", "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in "
                "[scene-schema-v1.md](scenes/scene-schema-v1.md)."),
+    ("Books", "Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages."),
     ("Exports", "Delivery packages: a scene's selected takes, converted, checked and written to `out/exports`."),
     ("Comparisons", "Listening comparisons and blind A/B sessions. See "
                     "[evaluation-schema-v1.md](evaluation/evaluation-schema-v1.md)."),
@@ -605,7 +610,8 @@ ROUTES = [
 
     # ---------------------------------------------------------------- Scenes
     R("GET", "/api/scenes", "Scenes", "List scenes.",
-      reply="`schema_version` and `scenes`: every scene in full, the most recently changed first."),
+      reply="`schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, "
+            "`chapter_books` maps its scene ID to the book ID and title."),
     R("POST", "/api/scenes", "Scenes", "Create a scene from a manifest.", status=201,
       body=(F("name", "string", "1 to 120 characters. Default `Untitled scene`."),
             F("lines", "object[]", "1 to 500 lines, in order; see the scene schema.", True),
@@ -740,6 +746,52 @@ ROUTES = [
       reply="The WAV named by a preview answer's `audio_url` or `mastered_audio_url`."),
 
     # ---------------------------------------------------------------- Exports
+    R("GET", "/api/books", "Books", "List saved books.", reply="Book IDs, titles and chapter counts."),
+    R("POST", "/api/books/import/preview", "Books", "Preview an uploaded manuscript without creating a book.",
+      body_kind="archive", query=(F("name", "string", "TXT or Markdown file name.", True),
+                                  F("split", "string", "sentence, paragraph or chapter.")),
+      reply="Extracted chapters, passages, speakers, warnings, source SHA-256 and locally measured model speed.",
+      errors=((413, "The manuscript exceeds 24 MiB."),)),
+    R("POST", "/api/books", "Books", "Create a book and its editable chapter scenes.", status=201,
+      body=(F("metadata", "object", "Title and optional author, narrator, genre, description and year.", True),
+            F("chapters", "object[]", "Reviewed chapter and passage records from manuscript preview.", True),
+            F("voices", "object", "Named speakers and optional empty narrator label mapped to approved Cast IDs.", True),
+            F("source", "object", "Optional manuscript file name and SHA-256."),
+            F("paragraph_pause_ms", "integer", "Default pause after a paragraph."),
+            F("gap_ms", "integer", "Silence between chapters."),
+            F("pronunciations", "object", "Project phrases mapped to spoken replacements.")),
+      reply="Saved book, chapter scene IDs and cast warnings."),
+    R("GET", "/api/books/{book_id}", "Books", "Open a saved book and its latest published delivery.",
+      reply="Book details, chapter statuses, estimated duration and latest delivery."),
+    R("POST", "/api/books/{book_id}", "Books", "Save book metadata, chapter order or pronunciation rules.",
+      body=(F("expected_revision", "integer", "Current book revision.", True),
+            F("metadata", "object", "Book metadata."), F("gap_ms", "integer", "Silence between chapters."),
+            F("chapters", "string[]", "Existing chapter IDs in their new order."),
+            F("pronunciations", "object", "Project phrases mapped to spoken replacements.")),
+      reply="Revised book and chapter statuses."),
+    R("POST", "/api/books/{book_id}/cover", "Books", "Attach a local JPEG or PNG cover.", status=201, body_kind="archive",
+      query=(F("revision", "integer", "Current book revision.", True),),
+      errors=((413, "The image exceeds 5 MiB."),), reply="Book with its normalized JPEG cover identity."),
+    R("GET", "/api/books/{book_id}/cover.jpg", "Books", "Read the saved book cover.",
+      reply_kind="file", reply="The normalized and verified JPEG cover."),
+    R("POST", "/api/books/{book_id}/queue", "Books", "Queue missing or explicitly selected chapter renders.", status=202,
+      body=(F("chapters", "string[]", "Chapter scene IDs. Omit to queue the book."),
+            F("rerender", "boolean", "Generate new takes for every segment instead of missing segments only.")),
+      reply="Persistent scene job IDs and updated chapter status. Resume and cancel use the scene job endpoints."),
+    R("POST", "/api/books/{book_id}/chapters/{scene_id}/choose", "Books", "Select current finished chapter takes.",
+      body_kind="none", reply="Chapter scene and chosen takes."),
+    R("POST", "/api/books/{book_id}/chapters/{scene_id}/audition", "Books", "Assemble a chapter audition from selected takes.",
+      status=201, body_kind="none", reply="Checked chapter mix and its local audio URL."),
+    R("POST", "/api/books/{book_id}/exports", "Books", "Create a verified audiobook package.", status=201,
+      body=(F("expected_revision", "integer", "Current book revision.", True),
+            F("formats", "string[]", "WAV, FLAC, MP3 and M4B, in lowercase. Omit for all formats.")),
+      reply="Delivery ID, chapter offsets, audio levels, files and selected-take provenance."),
+    R("POST", "/api/books/{book_id}/exports/{delivery_id}/verify", "Books", "Verify an audiobook package.",
+      body_kind="none", reply="Verification result and number of checked files and chapters."),
+    R("GET", "/api/books/{book_id}/exports/{delivery_id}/{book_file}", "Books", "Stream a saved audiobook delivery file.",
+      reply_kind="file", reply="A declared file from the delivery.", errors=((416, "The requested range is outside the file."),)),
+    R("GET", "/api/books/{book_id}/auditions/{delivery_id}/{book_file}", "Books", "Stream a saved chapter audition.",
+      reply_kind="file", reply="The chapter WAV or its manifest.", errors=((416, "The requested range is outside the file."),)),
     R("GET", "/api/exports", "Exports", "List export packages and say which formats FFmpeg can write.",
       query=(F("recheck", "string", "`1` asks FFmpeg again, after an install."),),
       reply="`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and "
@@ -891,6 +943,7 @@ ROUTES = [
           ("/drama3-studio.js", "The Drama studio script.", "javascript"),
           ("/voice_lab_studio.js", "A page script.", "javascript"), ("/voice_lab_cast.js", "A page script.", "javascript"),
           ("/voice_lab_scenes.js", "A page script.", "javascript"),
+          ("/voice_lab_books.js", "A page script.", "javascript"),
           ("/voice_lab_cast_bindings.js", "A page script.", "javascript"),
           ("/voice_lab_take_edit.js", "A page script.", "javascript"),
           ("/voice_lab_generate.js", "A page script.", "javascript"), ("/voice_lab_system.js", "A page script.", "javascript"),
@@ -1079,6 +1132,7 @@ def _operation(route):
         parameters.append({"name": "X-Reference-Metadata", "in": "header", "required": True,
                            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and "
                                           "optional `edits`.", "schema": {"type": "string"}})
+    if route.body_kind in ("audio", "archive"):
         operation["requestBody"] = {"required": True, "content": {
             "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}
     elif route.body_kind == "json" and route.body:
@@ -1170,6 +1224,8 @@ def _section(route):
                          for item in route.query]) + [""]
     if route.body_kind == "audio":
         lines += ["**Request:** the recording's bytes, and an `X-Reference-Metadata` header.", ""]
+    elif route.body_kind == "archive":
+        lines += ["**Request:** file bytes (`application/octet-stream`).", ""]
     elif route.body and route.body_kind == "json":
         lines += _table(["Request field", "Type", "Meaning"],
                         [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)

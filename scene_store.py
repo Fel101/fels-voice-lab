@@ -28,6 +28,7 @@ import subtitle_import
 import timed_scene
 from cast_store import ID_RE, CastStore, DIRECTION_ENGINES, _validate_id, generation_identity_snapshot
 import engine_adapters
+from book_language import original_line, spoken_line
 from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
 from performance_settings import effective_settings
@@ -404,6 +405,12 @@ class SceneStore:
         if not isinstance(source_lines, list) or not source_lines or len(source_lines) > MAX_SCENE_LINES:
             raise ValueError(f"A scene must contain 1–{MAX_SCENE_LINES} ordered lines.")
         timeline = timed_scene.validate_timeline(payload["timeline"]) if "timeline" in payload else None
+        book_rules = payload.get("book_pronunciations") if payload.get("book_id") else None
+        if book_rules is not None and (not isinstance(book_rules, list) or len(book_rules) > 100 or any(
+                not isinstance(rule, dict) or not isinstance(rule.get("source"), str) or not rule["source"].strip()
+                or len(rule["source"]) > 120 or not isinstance(rule.get("replacement"), str)
+                or not rule["replacement"].strip() or len(rule["replacement"]) > 200 for rule in book_rules)):
+            raise ValueError("Invalid chapter project pronunciations.")
         if timeline and previous and previous.get("timeline"):
             original = previous["timeline"]
             if any(original.get(key) != timeline.get(key)
@@ -438,6 +445,12 @@ class SceneStore:
             if kind not in ("dialogue", "narration"):
                 raise ValueError(f"{label}: line_type must be dialogue or narration.")
             text = source.get("text")
+            if book_rules is not None and isinstance(text, str):
+                authored = original_line(source)
+                if not isinstance(authored, str) or len(authored) > MAX_LINE_TEXT:
+                    raise ValueError("A manuscript passage must be readable text up to 10,000 characters.")
+                text = spoken_line(authored.strip(), book_rules)
+                source = {**source, "manuscript_text": authored.strip(), "manuscript_spoken": text}
             if not isinstance(text, str) or not text.strip() or len(text.strip()) > MAX_LINE_TEXT:
                 raise ValueError(f"{label}: text must contain 1–{MAX_LINE_TEXT} characters.")
             text = text.strip()
@@ -577,8 +590,7 @@ class SceneStore:
         scene_id, stamp = new_id(), utc_now()
         scene = self._normalize_scene(payload, scene_id, 1)
         with self._connect() as db:
-            db.execute("INSERT INTO scenes VALUES(?,?,?,?,?,?,?)", (scene_id, scene["name"], 1,
-                       canonical_json(scene), scene["checksum"], stamp, stamp))
+            self._insert_scene(db, scene, stamp)
         self._write_scene_file(scene)
         return scene
 
@@ -590,13 +602,23 @@ class SceneStore:
         scene = self._normalize_scene(payload, scene_id, current["revision"] + 1, previous=current)
         stamp = utc_now()
         with self._connect() as db:
-            changed = db.execute("UPDATE scenes SET name=?,revision=?,manifest_json=?,checksum=?,updated_at=? WHERE id=? AND revision=?",
-                                 (scene["name"], scene["revision"], canonical_json(scene), scene["checksum"], stamp,
-                                  scene_id, current["revision"])).rowcount
-            if changed != 1:
-                raise ValueError("Scene changed while it was being edited; reload the latest revision.")
+            self._update_scene(db, scene, stamp, current['revision'])
         self._write_scene_file(scene)
         return scene
+
+    @staticmethod
+    def _insert_scene(db, scene, stamp):
+        db.execute("INSERT INTO scenes VALUES(?,?,?,?,?,?,?)",
+                   (scene["scene_id"], scene["name"], scene["revision"], canonical_json(scene),
+                    scene["checksum"], stamp, stamp))
+
+    @staticmethod
+    def _update_scene(db, scene, stamp, previous_revision):
+        changed = db.execute("UPDATE scenes SET name=?,revision=?,manifest_json=?,checksum=?,updated_at=? WHERE id=? AND revision=?",
+                             (scene["name"], scene["revision"], canonical_json(scene), scene["checksum"], stamp,
+                              scene["scene_id"], previous_revision)).rowcount
+        if changed != 1:
+            raise ValueError("Scene changed while it was being edited; reload the latest revision.")
 
     @staticmethod
     def _validate_scene_id(scene_id):
@@ -891,12 +913,18 @@ class SceneStore:
             if unknown_segments:
                 raise ValueError("Unknown scene segment selectors: " + ", ".join(f"{line}/{segment}" for line, segment in sorted(unknown_segments)) + ".")
         job_id, stamp = new_id(), utc_now()
+        checked_voices = set()
         for line in lines:
+            voice = (line["identity_id"], line["reference_version_id"])
+            if voice in checked_voices:
+                continue
             try:
-                self.cast.assert_identity_usable(line["identity_id"], line["reference_version_id"])
+                self.cast.assert_identity_usable(*voice)
             except ValueError as exc:
                 raise ValueError(f"Line {line['line_id']}: {exc}") from exc
+            checked_voices.add(voice)
         operations = []
+        engine_ids = {}
         scene_order_by_id = {line["line_id"]: index for index, line in enumerate(scene["lines"])}
         for line in lines:
             scene_order = scene_order_by_id[line["line_id"]]
@@ -907,9 +935,11 @@ class SceneStore:
                 if len(line["segments"]) > 1:
                     cast_line_id += f":{segment_index + 1:03d}"
                 segment_id = segment["id"]
+                identity_id = line["identity_id"]
+                if identity_id not in engine_ids:
+                    engine_ids[identity_id] = self.cast.get_identity(identity_id)["engine_id"]
                 for take_index in range(1, line["take_count"] + 1):
-                    identity = self.cast.get_identity(line["identity_id"])
-                    operations.append((identity["engine_id"], line["reference_version_id"] or "", scene_order,
+                    operations.append((engine_ids[identity_id], line["reference_version_id"] or "", scene_order,
                                        segment_index, take_index, new_id(), line, segment, cast_line_id,
                                        job_id + ":" + line["line_id"] + ":" + segment_id + ":" + str(take_index)))
         operations.sort(key=lambda item: item[:5])
@@ -1325,7 +1355,7 @@ class SceneStore:
         self.cast.mark_takes_selected(picked)
         return scene, len(picked), len(lines)
 
-    def assemble_preview(self, scene_id):
+    def assemble_preview(self, scene_id, *, output_dir=None):
         scene = self.get_scene(scene_id)
         recent_jobs = self.list_jobs(scene_id)
         if recent_jobs and recent_jobs[0]["status"] == "failed" and recent_jobs[0]["failed"]:
@@ -1388,7 +1418,7 @@ class SceneStore:
             if not audio_parts:
                 raise ValueError("Scene preview has no selected audio.")
             audio, timing = np.concatenate(audio_parts), None
-        scene_out = self.output_root / scene_id
+        scene_out = output_dir or self.output_root / scene_id
         scene_out.mkdir(parents=True, exist_ok=True)
         wav_path = scene_out / f"scene-r{scene['revision']}-{uuid.uuid4().hex[:8]}.wav"
         synthetic_label.write_wav(wav_path, audio, output_rate)

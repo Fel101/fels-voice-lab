@@ -430,7 +430,7 @@ function renderSceneLineEditor(line, index, article) {
   var text = document.createElement('textarea');
   text.maxLength = 10000;
   text.required = true;
-  text.value = line.text || '';
+  text.value = line.manuscript_spoken === line.text && line.manuscript_text !== undefined ? line.manuscript_text : line.text || '';
   text.setAttribute('data-scene-field', 'text');
   text.setAttribute('aria-label', 'Dialogue — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
   text.addEventListener('input', function () {
@@ -1275,7 +1275,9 @@ function refreshSceneList(preferred) {
     sceneListCount = (result.scenes || []).length;
     select.textContent = '';
     (result.scenes || []).forEach(function (scene) {
-      option(select, scene.scene_id, scene.name + ' / r' + scene.revision);
+      var book = result.chapter_books && result.chapter_books[scene.scene_id];
+      var name = book ? book.title + ' · ' + scene.name : scene.name;
+      option(select, scene.scene_id, name + ' / r' + scene.revision);
     });
     if (
       keep &&

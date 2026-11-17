@@ -1282,7 +1282,7 @@ Ordered scripts rendered line by line through the same performance call. The man
 
 List scenes.
 
-**Answer:** `200`, JSON. `schema_version` and `scenes`: every scene in full, the most recently changed first.
+**Answer:** `200`, JSON. `schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, `chapter_books` maps its scene ID to the book ID and title.
 
 <a id="post-api-scenes"></a>
 
@@ -1673,6 +1673,247 @@ Download a preview's WAV.
 | `preview_file` | The file name in a preview answer's `audio_url`, without its `.wav`. |
 
 **Answer:** `200`, `audio/wav`. The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.
+
+### Books
+
+Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | [`/api/books`](#get-api-books) | List saved books. |
+| POST | [`/api/books/import/preview`](#post-api-books-import-preview) | Preview an uploaded manuscript without creating a book. |
+| POST | [`/api/books`](#post-api-books) | Create a book and its editable chapter scenes. |
+| GET | [`/api/books/{book_id}`](#get-api-books-book_id) | Open a saved book and its latest published delivery. |
+| POST | [`/api/books/{book_id}`](#post-api-books-book_id) | Save book metadata, chapter order or pronunciation rules. |
+| POST | [`/api/books/{book_id}/cover`](#post-api-books-book_id-cover) | Attach a local JPEG or PNG cover. |
+| GET | [`/api/books/{book_id}/cover.jpg`](#get-api-books-book_id-cover-jpg) | Read the saved book cover. |
+| POST | [`/api/books/{book_id}/queue`](#post-api-books-book_id-queue) | Queue missing or explicitly selected chapter renders. |
+| POST | [`/api/books/{book_id}/chapters/{scene_id}/choose`](#post-api-books-book_id-chapters-scene_id-choose) | Select current finished chapter takes. |
+| POST | [`/api/books/{book_id}/chapters/{scene_id}/audition`](#post-api-books-book_id-chapters-scene_id-audition) | Assemble a chapter audition from selected takes. |
+| POST | [`/api/books/{book_id}/exports`](#post-api-books-book_id-exports) | Create a verified audiobook package. |
+| POST | [`/api/books/{book_id}/exports/{delivery_id}/verify`](#post-api-books-book_id-exports-delivery_id-verify) | Verify an audiobook package. |
+| GET | [`/api/books/{book_id}/exports/{delivery_id}/{book_file}`](#get-api-books-book_id-exports-delivery_id-book_file) | Stream a saved audiobook delivery file. |
+| GET | [`/api/books/{book_id}/auditions/{delivery_id}/{book_file}`](#get-api-books-book_id-auditions-delivery_id-book_file) | Stream a saved chapter audition. |
+
+<a id="get-api-books"></a>
+
+#### `GET /api/books`
+
+List saved books.
+
+**Answer:** `200`, JSON. Book IDs, titles and chapter counts.
+
+<a id="post-api-books-import-preview"></a>
+
+#### `POST /api/books/import/preview`
+
+Preview an uploaded manuscript without creating a book.
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `name` (required) | string | TXT or Markdown file name. |
+| `split` | string | sentence, paragraph or chapter. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `200`, JSON. Extracted chapters, passages, speakers, warnings, source SHA-256 and locally measured model speed.
+
+| Also answers | When |
+|---|---|
+| `413` | The manuscript exceeds 24 MiB. |
+
+<a id="post-api-books"></a>
+
+#### `POST /api/books`
+
+Create a book and its editable chapter scenes.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `metadata` (required) | object | Title and optional author, narrator, genre, description and year. |
+| `chapters` (required) | object[] | Reviewed chapter and passage records from manuscript preview. |
+| `voices` (required) | object | Named speakers and optional empty narrator label mapped to approved Cast IDs. |
+| `source` | object | Optional manuscript file name and SHA-256. |
+| `paragraph_pause_ms` | integer | Default pause after a paragraph. |
+| `gap_ms` | integer | Silence between chapters. |
+| `pronunciations` | object | Project phrases mapped to spoken replacements. |
+
+**Answer:** `201`, JSON. Saved book, chapter scene IDs and cast warnings.
+
+<a id="get-api-books-book_id"></a>
+
+#### `GET /api/books/{book_id}`
+
+Open a saved book and its latest published delivery.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+**Answer:** `200`, JSON. Book details, chapter statuses, estimated duration and latest delivery.
+
+<a id="post-api-books-book_id"></a>
+
+#### `POST /api/books/{book_id}`
+
+Save book metadata, chapter order or pronunciation rules.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `expected_revision` (required) | integer | Current book revision. |
+| `metadata` | object | Book metadata. |
+| `gap_ms` | integer | Silence between chapters. |
+| `chapters` | string[] | Existing chapter IDs in their new order. |
+| `pronunciations` | object | Project phrases mapped to spoken replacements. |
+
+**Answer:** `200`, JSON. Revised book and chapter statuses.
+
+<a id="post-api-books-book_id-cover"></a>
+
+#### `POST /api/books/{book_id}/cover`
+
+Attach a local JPEG or PNG cover.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `revision` (required) | integer | Current book revision. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. Book with its normalized JPEG cover identity.
+
+| Also answers | When |
+|---|---|
+| `413` | The image exceeds 5 MiB. |
+
+<a id="get-api-books-book_id-cover-jpg"></a>
+
+#### `GET /api/books/{book_id}/cover.jpg`
+
+Read the saved book cover.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+**Answer:** `200`, a file. The normalized and verified JPEG cover.
+
+<a id="post-api-books-book_id-queue"></a>
+
+#### `POST /api/books/{book_id}/queue`
+
+Queue missing or explicitly selected chapter renders.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `chapters` | string[] | Chapter scene IDs. Omit to queue the book. |
+| `rerender` | boolean | Generate new takes for every segment instead of missing segments only. |
+
+**Answer:** `202`, JSON. Persistent scene job IDs and updated chapter status. Resume and cancel use the scene job endpoints.
+
+<a id="post-api-books-book_id-chapters-scene_id-choose"></a>
+
+#### `POST /api/books/{book_id}/chapters/{scene_id}/choose`
+
+Select current finished chapter takes.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+**Answer:** `200`, JSON. Chapter scene and chosen takes.
+
+<a id="post-api-books-book_id-chapters-scene_id-audition"></a>
+
+#### `POST /api/books/{book_id}/chapters/{scene_id}/audition`
+
+Assemble a chapter audition from selected takes.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+**Answer:** `201`, JSON. Checked chapter mix and its local audio URL.
+
+<a id="post-api-books-book_id-exports"></a>
+
+#### `POST /api/books/{book_id}/exports`
+
+Create a verified audiobook package.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `expected_revision` (required) | integer | Current book revision. |
+| `formats` | string[] | WAV, FLAC, MP3 and M4B, in lowercase. Omit for all formats. |
+
+**Answer:** `201`, JSON. Delivery ID, chapter offsets, audio levels, files and selected-take provenance.
+
+<a id="post-api-books-book_id-exports-delivery_id-verify"></a>
+
+#### `POST /api/books/{book_id}/exports/{delivery_id}/verify`
+
+Verify an audiobook package.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+| `delivery_id` | A saved delivery or audition ID. |
+
+**Answer:** `200`, JSON. Verification result and number of checked files and chapters.
+
+<a id="get-api-books-book_id-exports-delivery_id-book_file"></a>
+
+#### `GET /api/books/{book_id}/exports/{delivery_id}/{book_file}`
+
+Stream a saved audiobook delivery file.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+| `delivery_id` | A saved delivery or audition ID. |
+| `book_file` | A verified chapter or audiobook file name. |
+
+**Answer:** `200`, a file. A declared file from the delivery.
+
+| Also answers | When |
+|---|---|
+| `416` | The requested range is outside the file. |
+
+<a id="get-api-books-book_id-auditions-delivery_id-book_file"></a>
+
+#### `GET /api/books/{book_id}/auditions/{delivery_id}/{book_file}`
+
+Stream a saved chapter audition.
+
+| Path parameter | Meaning |
+|---|---|
+| `book_id` | A book project ID returned from `GET /api/books`. |
+| `delivery_id` | A saved delivery or audition ID. |
+| `book_file` | A verified chapter or audiobook file name. |
+
+**Answer:** `200`, a file. The chapter WAV or its manifest.
+
+| Also answers | When |
+|---|---|
+| `416` | The requested range is outside the file. |
 
 ### Exports
 
@@ -2139,6 +2380,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_studio.js` | A page script. |
 | GET | `/voice_lab_cast.js` | A page script. |
 | GET | `/voice_lab_scenes.js` | A page script. |
+| GET | `/voice_lab_books.js` | A page script. |
 | GET | `/voice_lab_cast_bindings.js` | A page script. |
 | GET | `/voice_lab_take_edit.js` | A page script. |
 | GET | `/voice_lab_generate.js` | A page script. |

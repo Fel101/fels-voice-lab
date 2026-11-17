@@ -89,7 +89,7 @@ test('take waveform checks are plain text beside each Perform and Scenes take', 
 });
 
 test('cloning is a full workspace; navigation shows exactly one panel', () => {
-  const ids = ['studio','cloning','cast','perform','scenes','conversion','library','models','system'];
+  const ids = ['studio','cloning','cast','perform','scenes','conversion','books','library','models','system'];
   const opened = [];
   const fields = Object.fromEntries(ids.map(id=>[id,{hidden:false,classList:{add(){}},
     querySelector:()=>({textContent:id})}]));
@@ -97,17 +97,18 @@ test('cloning is a full workspace; navigation shows exactly one panel', () => {
     setAttribute(){this.current=true;},removeAttribute(){this.current=false;}}));
   const c = vm.createContext({$:id=>fields[id],location:{hash:'#cloning'},
     loadReferences(){},refreshConversionAssets(){},refreshEngineStatus(){},refreshSystemPage(){opened.push('system');},
+    refreshBooks(){opened.push('books');return Promise.resolve();},bookError(error){throw error;},
     document:{documentElement:{classList:{add(){}}},querySelectorAll:()=>links},
     window:{scrollTo(){}}});
   vm.runInContext(sourceBetween('function showWorkspace()', "window.addEventListener('hashchange',showWorkspace)"),c);
-  for(const active of ['cloning','cast','perform','studio','models','system','unknown']){
+  for(const active of ['cloning','cast','perform','studio','models','books','system','unknown']){
     c.location.hash='#'+active;c.showWorkspace();
     const expected=active==='unknown'?'studio':active;
     assert.deepEqual(ids.filter(id=>!fields[id].hidden),[expected]);
     assert.deepEqual(ids.filter((id,index)=>links[index].current),[expected]);
     assert.equal(c.document.title,"Fel's Voice Lab · "+expected);
   }
-  assert.deepEqual(opened,['system'],'only the System workspace reads the system report, and only when it is opened');
+  assert.deepEqual(opened,['books','system'],'Books and System refresh when opened');
 });
 
 test('Chatterbox cloning sends the selected recording rather than a hardcoded preset',()=>{

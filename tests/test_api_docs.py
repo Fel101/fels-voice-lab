@@ -208,7 +208,7 @@ class TableTests(unittest.TestCase):
                 self.assertIn(row.group, groups)
                 self.assertTrue(row.summary.endswith("."), "a summary is a sentence")
                 self.assertIn(row.reply_kind, ("json", "wav", "ndjson", "csv", "audio", "html", "javascript", "file"))
-                self.assertIn(row.body_kind, ("json", "audio", "none"))
+                self.assertIn(row.body_kind, ("json", "audio", "archive", "none"))
                 self.assertTrue(200 <= row.status < 300)
                 self.assertFalse({status for status, _ in row.errors} & {row.status})
                 if row.method == "GET":
@@ -338,6 +338,11 @@ class OpenApiTests(unittest.TestCase):
                 elif row.body_kind == "audio":
                     self.assertEqual(list(body["content"]), ["application/octet-stream"])
                     self.assertIn("X-Reference-Metadata", [item["name"] for item in parameters if item["in"] == "header"])
+                elif row.body_kind == "archive":
+                    self.assertEqual(body["content"], {
+                        "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+                    })
+                    self.assertNotIn("X-Reference-Metadata", [item["name"] for item in parameters])
                 else:
                     self.assertNotIn("requestBody", operation)
                 responses = operation["responses"]

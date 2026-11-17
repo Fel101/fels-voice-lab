@@ -337,6 +337,40 @@ Inspired by [VoiceStudio’s dubbing workspace](https://github.com/debpalash/Voi
 by Palash Debnath (`debpalash`) and the VoiceStudio contributors. The Lab implements subtitle import and timed mixing in
 its own scene and export code.
 
+### Stories and audiobooks
+
+1. Open **Stories & audiobooks** and choose **Narrate a document**. Preview a TXT or Markdown file, or paste the text.
+   Choose sentence, paragraph or chapter splitting. Check the chapter order and pick approved Cast voices. The preview
+   shows the estimated listening time and, after a model has been tested here, its estimated render time.
+2. Leave a blank line before and after a numbered heading such as `Chapter One` or `Part II — The Harbor`. Markdown also supports
+   headings such as `# The Crossing`. Use `[voice:Mira]` to switch speakers and `[voice:]` to return to the narrator.
+   A voice choice carries through the chapter until another tag. `[pause 0.5s]` inserts silence.
+   `[emotion:Quietly]` adds acting direction when the model supports it. The create step reports which passages need a model that accepts acting direction.
+3. Click **Create book**. Each chapter opens in **Scenes & batch** with the normal manuscript text, Cast, pause,
+   speed and delivery controls for the engine. Reopen the book to see chapter status and an estimated listening time.
+   **Book details, cover and pronunciations** sets credits, JPEG/PNG cover, between-chapter gaps and pronunciations for
+   this project. Enter one pronunciation per line, for example `harbor = har-bor`. The edit box
+   and captions retain the authored wording.
+4. Choose **Render missing chapters** to queue the whole book, or **Render missing** on one chapter. Jobs and takes
+   survive an interruption. Resume a paused chapter or retry failed passages in the existing Scene queue. When a
+   batch ends, choose **Use newest takes** or review and select takes in Scenes. **Audition** plays the chapter assembled
+   from its selected production takes. Edits that affect a passage make its old take unavailable for the new text.
+   Unchanged chapters reuse their verified audition audio.
+5. Choose output formats and check the estimated time. **Export audiobook** runs through completion once started. WAV includes one file per chapter and the whole book. FLAC exports
+   each chapter. MP3 delivers the whole book with a cue sheet. M4B embeds chapter titles, offsets, credits and the
+   saved cover. Caption files, an exact chapter cue sheet and a checksum manifest accompany the export.
+   Play the M4B in Lab or a player that supports AAC and M4B chapter navigation.
+
+The export panel shows measured loudness and peaks. For ACX checks, open a chapter WAV in Voice Slate and use its
+audiobook measurement tool. The Lab measurements describe this export's signal level. Each book can contain up to
+160 chapter scenes and 6,000 passages. A chapter longer than 500 passages opens in numbered sections. Each section gets a chapter mark and its own chapter audio file. Split a chapter
+longer than 90 minutes or an export longer than 12 hours into shorter parts. The optional exports section in library
+backups includes covers and audiobook packages.
+
+Inspired by VoiceStudio by **Palash Debnath (`debpalash`) and the VoiceStudio contributors**.
+[Stories and Audiobooks workflow](https://github.com/debpalash/VoiceStudio/blob/main/docs/electron-longform.md)
+
+
 ## One thing at a time
 
 The model worker does one thing at a time: one load, clip, take, test or install. What you ask for while it is busy waits

@@ -277,3 +277,51 @@ def parse_script(text, fmt):
         }
     text = text.replace("\t", "    ")
     return _plain(text) if fmt == "text" else _fountain(text)
+
+
+_ONE_TO_NINE = r"one|two|three|four|five|six|seven|eight|nine"
+_TEENS = r"ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
+_TENS = r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+_NUMBER_WORD = rf"(?:(?:{_TENS})(?:[ -](?:{_ONE_TO_NINE}))?|{_TEENS}|{_ONE_TO_NINE})"
+_ROMAN_NUMBER = r"(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
+TEXT_HEADING = re.compile(rf"(?:chapter|part|book)[ \t]+(?:[0-9]+|{_NUMBER_WORD}|{_ROMAN_NUMBER})(?:\s*[:.–—-]\s*.*)?", re.I)
+MARKDOWN_HEADING = re.compile(r"^#{1,6}\s+(\S.*?)\s*#*\s*$")
+
+
+PROSE_ROLE = re.compile(r"^(?P<speaker>[A-Z][A-Z0-9 '&.-]{1,39}):\s+(?P<text>.+)$")
+
+
+def prose_blocks(content, markdown=False):
+    paragraphs = []
+    buffer = []
+    fence = None
+
+    def flush():
+        if buffer:
+            paragraphs.append((False, " ".join(" ".join(buffer).split())))
+            buffer.clear()
+
+    lines = [line.strip() for line in content.splitlines()]
+    for index, line in enumerate(lines):
+        if markdown and line.startswith(("```", "~~~")):
+            flush()
+            marker = line[:3]
+            if not fence or marker == fence:
+                fence = None if fence else marker
+            continue
+        if fence:
+            continue
+        match = MARKDOWN_HEADING.fullmatch(line) if markdown else None
+        standalone = (index == 0 or not lines[index - 1]) and (index + 1 == len(lines) or not lines[index + 1])
+        if match or (standalone and len(line) <= 120 and TEXT_HEADING.fullmatch(line)):
+            flush()
+            paragraphs.append((True, match[1].strip() if match else line))
+        elif not line or (markdown and re.fullmatch(r"[-*_]{3,}", line)):
+            flush()
+        elif PROSE_ROLE.fullmatch(line) or re.match(r"\[(?:voice\s*:|emotion\s*:|pause\s)", line, re.I):
+            flush()
+            buffer.append(line)
+        else:
+            buffer.append(line)
+    flush()
+    return paragraphs

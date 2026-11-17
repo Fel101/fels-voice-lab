@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from urllib.parse import parse_qs
 
+from book_store import Books
 import export_panel
 import sample_project
 import voice_names
@@ -20,7 +21,9 @@ def register(router, lab):
 
     @router.get("/api/scenes")
     def scene_list(self, parsed, req):
-        self._json(200, {"schema_version": 1, "scenes": scenes.list_scenes()})
+        saved = scenes.list_scenes()
+        books = Books(scenes).chapter_books() if any(scene.get("book_id") for scene in saved) else {}
+        self._json(200, {"schema_version": 1, "scenes": saved, **({"chapter_books": books} if books else {})})
 
     @router.post("/api/scenes")
     def create_scene(self, parsed, req):

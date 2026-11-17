@@ -42,6 +42,10 @@
       "description": "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in [scene-schema-v1.md](scenes/scene-schema-v1.md)."
     },
     {
+      "name": "Books",
+      "description": "Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages."
+    },
+    {
       "name": "Exports",
       "description": "Delivery packages: a scene's selected takes, converted, checked and written to `out/exports`."
     },
@@ -3303,7 +3307,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`schema_version` and `scenes`: every scene in full, the most recently changed first.",
+            "description": "`schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, `chapter_books` maps its scene ID to the book ID and title.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4571,6 +4575,787 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books": {
+      "get": {
+        "operationId": "get_api_books",
+        "summary": "List saved books.",
+        "tags": [
+          "Books"
+        ],
+        "responses": {
+          "200": {
+            "description": "Book IDs, titles and chapter counts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_books",
+        "summary": "Create a book and its editable chapter scenes.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "description": "Title and optional author, narrator, genre, description and year."
+                  },
+                  "chapters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Reviewed chapter and passage records from manuscript preview."
+                  },
+                  "voices": {
+                    "type": "object",
+                    "description": "Named speakers and optional empty narrator label mapped to approved Cast IDs."
+                  },
+                  "source": {
+                    "type": "object",
+                    "description": "Optional manuscript file name and SHA-256."
+                  },
+                  "paragraph_pause_ms": {
+                    "type": "integer",
+                    "description": "Default pause after a paragraph."
+                  },
+                  "gap_ms": {
+                    "type": "integer",
+                    "description": "Silence between chapters."
+                  },
+                  "pronunciations": {
+                    "type": "object",
+                    "description": "Project phrases mapped to spoken replacements."
+                  }
+                },
+                "required": [
+                  "metadata",
+                  "chapters",
+                  "voices"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Saved book, chapter scene IDs and cast warnings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/import/preview": {
+      "post": {
+        "operationId": "post_api_books_import_preview",
+        "summary": "Preview an uploaded manuscript without creating a book.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "TXT or Markdown file name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "description": "sentence, paragraph or chapter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Extracted chapters, passages, speakers, warnings, source SHA-256 and locally measured model speed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The manuscript exceeds 24 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}": {
+      "get": {
+        "operationId": "get_api_books_book_id",
+        "summary": "Open a saved book and its latest published delivery.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Book details, chapter statuses, estimated duration and latest delivery.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_books_book_id",
+        "summary": "Save book metadata, chapter order or pronunciation rules.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "description": "Current book revision."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "description": "Book metadata."
+                  },
+                  "gap_ms": {
+                    "type": "integer",
+                    "description": "Silence between chapters."
+                  },
+                  "chapters": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Existing chapter IDs in their new order."
+                  },
+                  "pronunciations": {
+                    "type": "object",
+                    "description": "Project phrases mapped to spoken replacements."
+                  }
+                },
+                "required": [
+                  "expected_revision"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revised book and chapter statuses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/cover": {
+      "post": {
+        "operationId": "post_api_books_book_id_cover",
+        "summary": "Attach a local JPEG or PNG cover.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "description": "Current book revision.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Book with its normalized JPEG cover identity.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image exceeds 5 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/cover.jpg": {
+      "get": {
+        "operationId": "get_api_books_book_id_cover_jpg",
+        "summary": "Read the saved book cover.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The normalized and verified JPEG cover.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/queue": {
+      "post": {
+        "operationId": "post_api_books_book_id_queue",
+        "summary": "Queue missing or explicitly selected chapter renders.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chapters": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Chapter scene IDs. Omit to queue the book."
+                  },
+                  "rerender": {
+                    "type": "boolean",
+                    "description": "Generate new takes for every segment instead of missing segments only."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Persistent scene job IDs and updated chapter status. Resume and cancel use the scene job endpoints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/chapters/{scene_id}/choose": {
+      "post": {
+        "operationId": "post_api_books_book_id_chapters_scene_id_choose",
+        "summary": "Select current finished chapter takes.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chapter scene and chosen takes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/chapters/{scene_id}/audition": {
+      "post": {
+        "operationId": "post_api_books_book_id_chapters_scene_id_audition",
+        "summary": "Assemble a chapter audition from selected takes.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Checked chapter mix and its local audio URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/exports": {
+      "post": {
+        "operationId": "post_api_books_book_id_exports",
+        "summary": "Create a verified audiobook package.",
+        "tags": [
+          "Books"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "description": "Current book revision."
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "WAV, FLAC, MP3 and M4B, in lowercase. Omit for all formats."
+                  }
+                },
+                "required": [
+                  "expected_revision"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Delivery ID, chapter offsets, audio levels, files and selected-take provenance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/exports/{delivery_id}/verify": {
+      "post": {
+        "operationId": "post_api_books_book_id_exports_delivery_id_verify",
+        "summary": "Verify an audiobook package.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result and number of checked files and chapters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/exports/{delivery_id}/{book_file}": {
+      "get": {
+        "operationId": "get_api_books_book_id_exports_delivery_id_book_file",
+        "summary": "Stream a saved audiobook delivery file.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "book_file",
+            "in": "path",
+            "required": true,
+            "description": "A verified chapter or audiobook file name.",
+            "example": "book.m4b",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]*[.](?:wav|flac|m4b|mp3|jpg|json|cue|csv|srt|vtt)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A declared file from the delivery.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested range is outside the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/books/{book_id}/auditions/{delivery_id}/{book_file}": {
+      "get": {
+        "operationId": "get_api_books_book_id_auditions_delivery_id_book_file",
+        "summary": "Stream a saved chapter audition.",
+        "tags": [
+          "Books"
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "description": "A book project ID returned from `GET /api/books`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "book_file",
+            "in": "path",
+            "required": true,
+            "description": "A verified chapter or audiobook file name.",
+            "example": "book.m4b",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]*[.](?:wav|flac|m4b|mp3|jpg|json|cue|csv|srt|vtt)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The chapter WAV or its manifest.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested range is outside the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -5990,6 +6775,7 @@
     "GET /out/*",
     "GET /theme.js",
     "GET /voice_lab_app.js",
+    "GET /voice_lab_books.js",
     "GET /voice_lab_cast.js",
     "GET /voice_lab_cast_bindings.js",
     "GET /voice_lab_drama.js",
