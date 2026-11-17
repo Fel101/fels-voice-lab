@@ -1,13 +1,12 @@
 """A one-file backup of the library, and a restore that builds a checked copy in a new folder.
 
-The library is what the user guide says to keep together: the Cast, Scenes and Evaluations databases with their media
-(data/cast, data/scenes, data/evaluations, out/scenes, out/comparisons) and the appearance setting. Saved voices, export
-packages and Drama studio jobs can be added. Model caches, environments, logs, voice conversions and the safety copies in
-migration-backups are not part of it.
+The library holds Cast, Scenes and Evaluations with their media, the appearance setting, and recipes and their runs.
+Saved voices, export packages, dub media and deliveries, audio tool files, and Drama studio jobs can be added. Model
+caches, environments, logs, voice conversions and the safety copies in migration-backups are left out.
 
 A backup is one ZIP. BACKUP_MANIFEST.json lists every other member with its size and SHA-256, the schema number of each
 database and what was left out. The databases go in as SQLite online-backup copies, so they are consistent while the
-service runs. Scenes and Evaluations are copied before Cast because they point at Cast's takes, and a Cast copy made last
+service runs. Scenes and Evaluations are copied before Cast because they point at Cast's takes, and a later Cast copy
 can only know more than they do.
 
 Restoring never touches the library in use. It unpacks into a new folder beside the final one, checks every file against
@@ -52,9 +51,9 @@ MAX_NOTES = 200
 MAX_LISTED = 25
 STALE_SECONDS = 86400
 MARGIN_BYTES = 64 * 1024 * 1024
-STORED_SUFFIXES = {".flac", ".mp3", ".ogg", ".m4a", ".zip", ".png", ".jpg", ".gguf"}  # already compressed: stored as they are
-SKIP_FOLDERS = {"migration-backups", "__pycache__", "book-staging"}
-SKIP_SUFFIXES = (".lock", ".tmp", ".part", ".sqlite3-wal", ".sqlite3-shm", ".sqlite3-journal")
+STORED_SUFFIXES = {".flac", ".mp3", ".ogg", ".m4a", ".zip", ".png", ".jpg", ".gguf", ".mp4", ".mov", ".webm", ".mkv"}  # already compressed: stored as they are
+SKIP_FOLDERS = {"migration-backups", "__pycache__", "book-staging", "dubbing-staging"}
+SKIP_SUFFIXES = (".lock", ".tmp", ".part", ".partial", ".sqlite3-wal", ".sqlite3-shm", ".sqlite3-journal")
 RESERVED_NAME = re.compile(r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?\Z")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 
@@ -75,16 +74,19 @@ SECTIONS = (
     Section("evaluations", "Comparisons and ratings",
             ("data/evaluations", f"out/{COMPARISONS_DIR}", f"out/{LEGACY_COMPARISONS_DIR}")),
     Section("settings", "Appearance setting", ("data/ui",)),
+    Section("automation", "Recipes, runs and their audio", ("data/automation",)),
     Section("voices", "Saved voices", ("data/voices",), True),
     Section("exports", "Export packages and audiobooks", ("out/exports", "out/books"), True),
     Section("drama", "Drama studio jobs", ("out/drama3/studio",), True),
+    Section("dubs", "Attached dub media and deliveries", ("out/dubs",), True),
+    Section("audio-tools", "Audio tool files", ("out/audio-tools",), True),
 )
 OPTIONAL = tuple(section.key for section in SECTIONS if section.optional)
 ALLOWED_PREFIXES = tuple(folder + "/" for section in SECTIONS for folder in section.folders)
 # The order the databases are copied in: see the module note.
 DATABASES = {"evaluations": "data/evaluations/evaluations.sqlite3", "scenes": "data/scenes/scenes.sqlite3",
-             "cast": "data/cast/cast.sqlite3"}
-DATABASE_LABEL = {"cast": "Cast", "scenes": "Scenes", "evaluations": "Evaluations"}
+             "cast": "data/cast/cast.sqlite3", "automation": "data/automation/jobs.sqlite3"}
+DATABASE_LABEL = {"cast": "Cast", "scenes": "Scenes", "evaluations": "Evaluations", "automation": "Automation"}
 
 
 class BackupError(ValueError):
@@ -129,7 +131,7 @@ def _walk(root, folder, skip_files, skipped):
         here = Path(directory)
         keep = []
         for name in sorted(folders):
-            if name in SKIP_FOLDERS:
+            if name in SKIP_FOLDERS or (folder == "out/audio-tools" and here == top and name.startswith(".audio-")):
                 continue
             if is_link(here / name):
                 skipped.append({"path": (here / name).relative_to(root).as_posix(),
@@ -649,6 +651,7 @@ def library_counts(root):
 def _open_stores(root):
     """Open the unpacked library the way the service does, which moves a database from an older schema forward and fails
     plainly when it cannot."""
+    from automation import Store as AutomationStore
     from cast_store import CastStore
     from evaluation_store import EvaluationStore
     from scene_store import SceneStore
@@ -657,6 +660,8 @@ def _open_stores(root):
         cast.list_cast()
         SceneStore(cast, {}, root=root)
         EvaluationStore(root / DATABASES["evaluations"], lab_root=root)
+        if (root / DATABASES["automation"]).is_file():
+            AutomationStore(root).recipes()
     except Exception as exc:
         raise BackupError(f"This build cannot open the restored library: {type(exc).__name__}: {exc}") from exc
 
@@ -665,7 +670,7 @@ def _refuse_newer_schema(manifest):
     from cast_store import CAST_SCHEMA_VERSION
     from evaluation_store import SCHEMA_VERSION as EVALUATION_SCHEMA
     from scene_store import SCHEMA_VERSION as SCENE_SCHEMA
-    supported = {"cast": CAST_SCHEMA_VERSION, "scenes": SCENE_SCHEMA, "evaluations": EVALUATION_SCHEMA}
+    supported = {"cast": CAST_SCHEMA_VERSION, "scenes": SCENE_SCHEMA, "evaluations": EVALUATION_SCHEMA, "automation": 0}
     for key, record in manifest["databases"].items():
         if record["schema_version"] > supported[key]:
             raise BackupError(f"This backup holds a {DATABASE_LABEL[key]} database at schema {record['schema_version']}, "

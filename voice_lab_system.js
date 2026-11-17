@@ -116,7 +116,7 @@ function showBackupEstimate(){
   if(!backupPlan)return;
   var chosen=chosenBackupSections(),total=0;
   backupPlan.sections.forEach(function(row){if(!row.optional||chosen.indexOf(row.key)>=0)total+=row.bytes;});
-  $('backupSize').textContent='What is ticked holds about '+formatBytes(total)+' before compression. The Cast, Scenes and Comparisons folders and the appearance setting are always included.';
+  $('backupSize').textContent='What is ticked holds about '+formatBytes(total)+' before compression. The backup always includes Cast, Scenes, Comparisons, recipes and runs, and the appearance setting.';
 }
 function backupRow(backup,busy){
   var article=document.createElement('article'),title=document.createElement('strong'),detail=document.createElement('p'),row=document.createElement('div');

@@ -6,11 +6,17 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from contextlib import closing
 
 import numpy as np
 import soundfile as sf
 
+import audio_tools
 import dubbing
+import library_backup
+from automation import Store
+from cast_store import CastStore
+from scene_store import SceneStore
 from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
 
 SRT = """1
@@ -164,6 +170,56 @@ class DubbingTests(ExportPanelBase):
         self.assertEqual(self.checked_json(url, 200)["delivery"]["id"], burned["id"])
         wav.write_bytes(b"corrupt")
         self.assertIn("SHA-256", self.checked_json(delivery_url + "/verify", 400, {})["error"])
+
+    @unittest.skipUnless(HAS_FFMPEG, "Requires FFmpeg and ffprobe")
+    def test_library_backup_restores_recipes_and_attached_video(self):
+        scene_id = self.scene()["scene_id"]
+        source = self.root / "fixture.mp4"
+        dubbing._ffmpeg(
+            "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=25:duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", source
+        )
+        with source.open("rb") as stream:
+            asset = dubbing.attach(self.scenes, scene_id, stream, source.stat().st_size, source.name)
+        store = Store(self.root)
+        audio = tone_wav()
+        effect = audio_tools.sound_effect(self.root, {"description": "rain", "seconds": 1})
+        rendered = self.root / "out" / "audio-tools" / effect["id"] / "audio.wav"
+        with closing(store.connect()) as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+            saved = store.save(
+                {
+                    "schema_version": 1,
+                    "name": "Restore this recipe",
+                    "input_kind": "text",
+                    "steps": [{"operation": "speak", "settings": {"voice": "Mira"}}],
+                }
+            )
+            run = store.submit({"recipe_id": saved["id"], "inputs": ["One line."]})
+            clip = store.put(audio, ".wav")
+            backups = [
+                (options, library_backup.create(self.root, self.root / "backups", include=options))
+                for options in ([], ["dubs", "audio-tools"])
+            ]
+
+        for options, backup in backups:
+            with self.subTest(options=options):
+                restored = self.root / ("with-media" if options else "without-media")
+                library_backup.restore(backup["path"], restored)
+                copied = Store(restored)
+                self.assertEqual(copied.recipes(), [saved])
+                self.assertEqual(copied.get(run["id"]), run)
+                self.assertEqual(copied.asset(clip).read_bytes(), audio)
+                scenes = SceneStore(CastStore(restored), self.engines.entries)
+                self.assertEqual(scenes.get_scene(scene_id)["scene_id"], scene_id)
+                self.assertEqual(dubbing.status(scenes, scene_id)["source"], asset if options else None)
+                restored_effect = restored / rendered.relative_to(self.root)
+                if options:
+                    preview = dubbing.path_for(scenes, scene_id, asset["preview"])
+                    self.assertEqual((preview.parent / asset["original_file"]).read_bytes(), source.read_bytes())
+                    self.assertEqual(dubbing.sha256(preview), asset["preview_sha256"])
+                    self.assertEqual(restored_effect.read_bytes(), rendered.read_bytes())
+                else:
+                    self.assertFalse(restored_effect.exists())
 
     @unittest.skipUnless(HAS_FFMPEG, "Requires FFmpeg and ffprobe")
     def test_transcript_source_hash_and_subtitle_only_audio(self):

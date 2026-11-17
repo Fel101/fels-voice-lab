@@ -1156,7 +1156,7 @@ test('optional parts are ticked by default, the size follows the ticks, and only
   panel.context.renderBackups(backupsAnswer());
   const {nodes} = panel;
   assert.deepEqual(panel.inputs().map(input => [input.value, input.checked]), [['voices', true], ['exports', true]]);
-  assert.match(nodes.backupSize.textContent, /^What is ticked holds about 3\.4 KB before compression\. The Cast, Scenes and Comparisons folders/);
+  assert.match(nodes.backupSize.textContent, /^What is ticked holds about 3\.4 KB before compression\. The backup always includes Cast, Scenes, Comparisons, recipes and runs/);
   panel.inputs()[1].checked = false;
   panel.inputs()[1].changeHandler();
   assert.match(nodes.backupSize.textContent, /holds about 1\.5 KB/);

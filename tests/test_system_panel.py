@@ -185,7 +185,7 @@ class BackupJobTests(SystemPanelBase):
         self.assertEqual(answer["folder"], str(self.backups))
         self.assertEqual(answer["task"], {"status": "idle"})
         self.assertEqual([row["key"] for row in answer["plan"]["sections"]],
-                         ["cast", "scenes", "evaluations", "settings", "voices", "exports", "drama"])
+                         ["cast", "scenes", "evaluations", "settings", "automation", "voices", "exports", "drama", "dubs", "audio-tools"])
         self.assertRegex(answer["suggested_folder"], r"^lab-restored-\d{8}$")
 
     def test_a_backup_runs_in_the_background_and_then_shows_in_the_list(self):

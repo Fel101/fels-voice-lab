@@ -157,7 +157,7 @@ class CreateTests(LibraryBase):
         members = self.members(result["path"])
         self.assertIn("data/voices/narrator/20260928-210223/voice.wav", members)
         self.assertFalse(any(name.startswith(("out/exports/", "out/drama3/")) for name in members))
-        self.assertEqual(set(self.manifest(result["path"])["included"]), {"cast", "scenes", "evaluations", "settings", "voices"})
+        self.assertEqual(set(self.manifest(result["path"])["included"]), {"cast", "scenes", "evaluations", "settings", "automation", "voices"})
         with self.assertRaisesRegex(BackupError, "Unknown backup section: nonsense"):
             self.make(include=["nonsense"])
 
@@ -323,7 +323,7 @@ class CreateTests(LibraryBase):
     def test_the_plan_adds_up_what_a_backup_will_hold(self):
         plan = library_backup.plan(self.root)
         rows = {row["key"]: row for row in plan["sections"]}
-        self.assertTrue(all(rows[key]["included"] for key in ("cast", "scenes", "evaluations", "settings", "voices", "exports", "drama")))
+        self.assertTrue(all(rows[key]["included"] for key in ("cast", "scenes", "evaluations", "settings", "automation", "voices", "exports", "drama", "dubs", "audio-tools")))
         self.assertEqual(plan["files"], sum(row["files"] for row in plan["sections"]))
         self.assertEqual(self.make()["files"], plan["files"])
         smaller = library_backup.plan(self.root, include=[])
@@ -513,7 +513,7 @@ class VerifyTests(LibraryBase):
 
     def test_a_listing_shows_the_sections_in_their_usual_order(self):
         row = library_backup.list_backups(self.dest)[0]
-        self.assertEqual(list(row["sections"]), ["cast", "scenes", "evaluations", "settings", "voices", "exports", "drama"])
+        self.assertEqual(list(row["sections"]), ["cast", "scenes", "evaluations", "settings", "automation", "voices", "exports", "drama", "dubs", "audio-tools"])
         self.assertEqual(row["included"], list(row["sections"]))
         self.assertEqual(row["sections"]["cast"]["label"], "Cast voices, voice recordings and takes")
         self.assertEqual(sum(part["files"] for part in row["sections"].values()), row["files"])
@@ -681,7 +681,8 @@ class SmallLibraryTests(unittest.TestCase):
             cast.create_character("Only voice", "")
             plan = library_backup.plan(base / "lab")
             self.assertEqual({row["key"]: row["files"] for row in plan["sections"]},
-                             {"cast": 1, "scenes": 0, "evaluations": 0, "settings": 0, "voices": 0, "exports": 0, "drama": 0})
+                             {"cast": 1, "scenes": 0, "evaluations": 0, "settings": 0, "automation": 0,
+                              "voices": 0, "exports": 0, "drama": 0, "dubs": 0, "audio-tools": 0})
             result = library_backup.create(base / "lab", base / "backups", app="Fixture", version="1")
             self.assertEqual((result["files"], result["warnings"]), (1, []))
             self.assertEqual(list(library_backup.verify(result["path"])["databases"]), ["cast"])

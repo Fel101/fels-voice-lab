@@ -14,7 +14,8 @@ System page.
 Open **Provider profiles** in **Automation**. Enter its name, its OpenAI-compatible base address ending in `/v1`, the
 model and the operations to use. For an address outside this computer, enter an HTTPS address and a key. The Lab saves
 the profile on this computer and keeps the key in memory until it closes. Re-enter the key when starting another session.
-Saving the profile makes no requests to the provider.
+Saving the profile makes no requests to the provider. Profiles live beside the program in `out/provider-profiles.json`.
+They stay there when you choose a different library with `--state-root`, and library backups leave them out.
 
 Pick a provider in a recipe step when you want it to translate text or speak. The confirmation lists each destination
 and the fields to be sent. For scripts, use the recipe preview's provider revisions when approving a run. The Lab checks

@@ -1087,7 +1087,7 @@ ROUTES = [
     R("GET", "/api/system/backups", "System", "List backups, what a new one would include, and the running job.",
       reply="`folder`, `backups`, `plan`, `task` and `suggested_folder`."),
     R("POST", "/api/system/backups", "System", "Back up the library to one ZIP, in the background.", status=202,
-      body=(F("include", "string[]", "The optional sections to add: `voices`, `exports`, `drama`. Default: all of them."),),
+      body=(F("include", "string[]", "The optional sections to add: `voices`, `exports`, `drama`, `dubs` and `audio-tools`. Default: all of them."),),
       reply="`task`: poll `GET /api/system/task`.", errors=((409, "A backup, check or restore is already running."),)),
     R("POST", "/api/system/backups/verify", "System", "Read a backup back in full and check every file, in the background.",
       status=202, body=(F("name", "string", "The backup's file name, from the list.", True),),

@@ -305,8 +305,8 @@ class StorageTests(TempBase):
         os.utime(stale, (old, old))
         report = system_report.storage(self.root, self.out)
         self.assertEqual([row["key"] for row in report["library"]],
-                         ["cast", "scenes", "evaluations", "settings", "voices", "exports", "drama"])
-        self.assertEqual([row["optional"] for row in report["library"]], [False] * 4 + [True] * 3)
+                         ["cast", "scenes", "evaluations", "settings", "automation", "voices", "exports", "drama", "dubs", "audio-tools"])
+        self.assertEqual([row["optional"] for row in report["library"]], [False] * 5 + [True] * 5)
         cast = report["library"][0]
         self.assertGreater(cast["bytes"], 0)
         self.assertGreater(cast["files"], 2)

@@ -683,12 +683,14 @@ nothing else.
 
 **System & backups, Back up now** writes one ZIP into `backups/` inside the library folder, named
 `voice-lab-library-<date>-<time>.zip`. It holds the Cast, Scenes and Comparisons databases with their audio, and the
-appearance setting. Tick **Saved voices**, **Export packages** and **Drama studio jobs** to add those. It leaves out model
-files and environments, logs, voice conversions (`out/conversions`), the `migration-backups` copies, lock and temporary files, and
-anything that is a link.
+appearance setting, recipes, runs and their audio. Tick **Saved voices**, **Export packages and audiobooks**, **Drama
+studio jobs**, **Attached dub media and deliveries**, or **Audio tool files** to include those files. Keep the dub media
+option selected to restore the source video or audio, backgrounds and deliveries with your dub scenes. The backup leaves
+out model files and environments, logs, voice conversions (`out/conversions`), the `migration-backups` copies, lock and
+temporary files, and links.
 
-The databases are copied with SQLite's own online backup, so each copy is consistent while the service runs. A take that
-is half way through saving is the one thing that is not covered, so let a render finish first, or stop the service. The
+SQLite copies each database while the service runs. Let renders, deliveries and recipe runs finish before backing up
+so the backup can include their completed files. The
 ZIP is written under a temporary name, read back, every file compared with the checksum in the backup's manifest and each
 database put through SQLite's integrity check, and only then given its name. A backup that does not check out is
 discarded, and the page says why. There must be room for the library plus 64 MB. A backup cut short by the service

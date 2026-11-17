@@ -3106,7 +3106,7 @@ Back up the library to one ZIP, in the background.
 
 | Request field | Type | Meaning |
 |---|---|---|
-| `include` | string[] | The optional sections to add: `voices`, `exports`, `drama`. Default: all of them. |
+| `include` | string[] | The optional sections to add: `voices`, `exports`, `drama`, `dubs` and `audio-tools`. Default: all of them. |
 
 **Answer:** `202`, JSON. `task`: poll `GET /api/system/task`.
 

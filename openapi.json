@@ -9001,7 +9001,7 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "The optional sections to add: `voices`, `exports`, `drama`. Default: all of them."
+                    "description": "The optional sections to add: `voices`, `exports`, `drama`, `dubs` and `audio-tools`. Default: all of them."
                   }
                 }
               }
