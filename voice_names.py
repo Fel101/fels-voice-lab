@@ -112,18 +112,23 @@ def preset_voices(entries, installed, loaded_info=None):
     return voices
 
 
+def model_installed(engines, model, probe=None):
+    """Whether a model this service runs has its files installed, as its card in Models & features says."""
+    probe = probe or getattr(engines, "install_probe", None) or engine_checks.installation
+    try:
+        return bool(probe(engines.api_entries[model])["installed"])
+    except Exception:
+        return False
+
+
 def list_voices(cast, engines, probe=None):
     """Every voice a program can name, Cast voices first, each with the one name to send back."""
     entries = engines.api_entries
-    probe = probe or getattr(engines, "install_probe", None) or engine_checks.installation
     known = {}
 
     def installed(model):
         if model not in known:
-            try:
-                known[model] = bool(probe(entries[model])["installed"])
-            except Exception:
-                known[model] = False
+            known[model] = model_installed(engines, model, probe)
         return known[model]
 
     cast_list = cast_voices(cast.list_cast(), entries, installed)

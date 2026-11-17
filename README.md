@@ -20,6 +20,9 @@ On Windows 10 or 11, with nothing installed first (not even Python):
    to **CPU** in **Models & features** first for the smaller one.
 4. When it finishes, the studio is ready to speak, with a sentence in the box. Press **Generate**. The first sentence took 11
    seconds here, most of it loading the model (26 seconds with the GPU build); after that a sentence takes about a second.
+5. To hear a whole scene without writing one, press **Open the sample scene** in the same note: two characters with Kokoro's
+   voices and nine lines, ready to render in **Scenes & batch** ([the sample scene](docs/USER_GUIDE.md#the-sample-scene)).
+   **Remove the sample…** takes all of it back.
 
 From starting Setup.exe to the first sentence took about 6½ minutes with the CPU build and 9 with the GPU build, measured on
 12 November 2026 on the development PC (an AMD mini PC with a Radeon AI PRO R9700, Windows 11), with nothing in pip's cache.

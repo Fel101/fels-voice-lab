@@ -1456,14 +1456,15 @@ class CastStore:
                         return found, True
         return found, False
 
-    def purge_preview(self, kind, item_id):
-        """What a purge would remove, and which copies outside Cast storage would still hold the audio."""
+    def purge_preview(self, kind, item_id, *, require_retired=True):
+        """What a purge would remove, and which copies outside Cast storage would still hold the audio. With
+        require_retired=False it answers for an item that is not retired yet, for an action that retires it first."""
         kind, item_id = _retirement_target(kind, item_id)
         with self._connect() as db:
             if not self._exists(db, kind, item_id):
                 raise KeyError(f"{kind.capitalize()} not found.")
             state = RetirementReader(db).state(kind, item_id)
-            if state is None:
+            if state is None and require_retired:
                 raise ValueError("Retire this voice, recording, or take before purging it.")
             closure = _dependents(db, kind, item_id)
             _refs, _takes, files = self._media_plan(db, closure)
@@ -1534,6 +1535,20 @@ class CastStore:
                                 json.dumps(digests.get((target_kind, target_id), []))))
         return {"batch_id": batch_id, "root": {"kind": kind, "id": item_id}, "purged": counts,
                 "media_files": len(files), "external_copies": external, "external_copies_truncated": truncated}
+
+    def forget_purge(self, batch_id):
+        """Drop the record of a purge and the retirement that allowed it, for something the Lab made by itself and takes
+        back (sample_project.py): the library is then as it was before. Only for a purge whose items are all gone."""
+        batch_id = _validate_id(batch_id, "purge batch id")
+        with self._connect() as db:
+            batch = db.execute("SELECT root_kind,root_id FROM purge_batches WHERE id=?", (batch_id,)).fetchone()
+            if batch is None:
+                raise KeyError("Purge not found.")
+            if self._exists(db, batch[0], batch[1]):
+                raise ValueError("The purged item exists again; its record stays.")
+            db.execute("DELETE FROM purged_items WHERE batch_id=?", (batch_id,))
+            db.execute("DELETE FROM purge_batches WHERE id=?", (batch_id,))
+            db.execute("DELETE FROM retirements WHERE target_kind=? AND target_id=?", (batch[0], batch[1]))
 
     def assert_media_usable(self, path):
         """Refuse new use of a stored recording whose voice, source recording, or take is retired."""

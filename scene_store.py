@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import sqlite3
 import threading
 import time
@@ -596,6 +597,39 @@ class SceneStore:
         with self._connect() as db:
             ids = [row[0] for row in db.execute("SELECT id FROM scenes ORDER BY updated_at DESC,id")]
         return [self.get_scene(scene_id) for scene_id in ids]
+
+    def delete_scene(self, scene_id):
+        """Delete a scene, its batch jobs, its manifest and its folder under out/scenes (built previews, batch records).
+
+        The takes are Cast's and stay. Refused while one of its batches is queued or rendering, so the batch runner never
+        loses a job it is about to start: cancel the batch first. Files go first; if one cannot be removed, the scene stays
+        and the call can be repeated."""
+        scene_id = self._validate_scene_id(scene_id)
+        busy = "SELECT COUNT(*) FROM jobs WHERE scene_id=? AND status IN ('queued','running')"
+        with self._lock:
+            with self._connect() as db:
+                if db.execute("SELECT 1 FROM scenes WHERE id=?", (scene_id,)).fetchone() is None:
+                    raise KeyError("Scene not found.")
+                if db.execute(busy, (scene_id,)).fetchone()[0]:
+                    raise ValueError("A batch of this scene is still queued or rendering. Cancel it, and wait for the line "
+                                     "in progress to finish.")
+            folder = self.output_root / scene_id
+            try:
+                if folder.is_dir():
+                    shutil.rmtree(folder)
+                self._manifest_path(scene_id).unlink(missing_ok=True)
+            except OSError as exc:
+                raise ValueError(f"Could not remove the scene's files ({exc}). Close any program using them and try "
+                                 "again; the scene was kept.") from exc
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if db.execute(busy, (scene_id,)).fetchone()[0]:
+                    raise ValueError("A batch of this scene was started meanwhile. Cancel it and try again.")
+                jobs = db.execute("SELECT COUNT(*) FROM jobs WHERE scene_id=?", (scene_id,)).fetchone()[0]
+                db.execute("DELETE FROM job_rows WHERE job_id IN (SELECT id FROM jobs WHERE scene_id=?)", (scene_id,))
+                db.execute("DELETE FROM jobs WHERE scene_id=?", (scene_id,))
+                db.execute("DELETE FROM scenes WHERE id=?", (scene_id,))
+        return {"scene_id": scene_id, "jobs": jobs}
 
     def export_json(self, scene_id):
         scene = self.get_scene(scene_id)
@@ -1356,60 +1390,67 @@ class SceneBatchRunner:
                 self._wake.clear()
                 continue
             job_id = job_ids[0]
-            self.store.start_queued_job(job_id)
-            job_snapshot = self.store.get_job(job_id)["scene_snapshot"]
-            snapshot_lines = {line["line_id"]: line for line in job_snapshot.get("lines", [])}
-            while not self._stop.is_set():
-                row_id = self.store.claim_next_row(job_id)
-                if row_id is None:
-                    break
-                row = self.store.get_job_row(row_id)
-                try:
-                    request = {
-                        "identity_id": row["identity_id"], "reference_version_id": row["reference_version_id"],
-                        "line_id": row["cast_line_id"], "text": row["text"], "language": row["language"],
-                        "direction": row["direction"], "settings": row["settings"],
-                        "use_pronunciations": row["use_pronunciations"], "idempotency_key": row["request_key"],
-                        "wait_seconds": self.ROW_WAIT_SECONDS, "wait_priority": "low",
-                    }
-                    scene_line = snapshot_lines.get(row["line_id"])
-                    if scene_line and scene_line.get("voice_identity"):
-                        request["identity_snapshot"] = scene_line["voice_identity"]
-                    body = json.dumps(request, ensure_ascii=False).encode("utf-8")
-                    request_id = f"scene-row-{row_id}"
-                    api_request = urllib.request.Request(self.service_url + "/api/performance", data=body,
-                        headers={"Content-Type": "application/json", "X-Request-Id": request_id})
-                    self._current = (job_id, request_id)
-                    with urllib.request.urlopen(api_request, timeout=self.ROW_WAIT_SECONDS + 1800) as response:
-                        wav = response.read()
-                        take_id = response.headers.get("X-Take-Id")
-                        if not wav.startswith(b"RIFF") or not take_id:
-                            raise RuntimeError("Performance API returned no WAV take ID.")
-                    self.store.mark_row_completed(row_id, take_id)
-                except urllib.error.HTTPError as exc:
-                    details = exc.read().decode("utf-8", "replace")[:1500]
-                    if exc.code == 409:
-                        # Another service owns the model, or the line was full or too slow: try the row again shortly.
-                        self.store._update_job_row(row_id, "queued", error="Waiting for model ownership: " + details)
-                        self._stop.wait(0.5)
-                        continue
-                    if exc.code == 499 and self.store.get_job(job_id)["cancel_requested"]:
-                        self.store._update_job_row(row_id, "cancelled", error="Stopped when the batch was cancelled.")
-                        continue
-                    if exc.code == 499:
-                        self.store.mark_row_failed(row_id, "Stopped before it finished. Try the failed lines again to render it.")
-                        continue
-                    self.store.mark_row_failed(row_id, f"HTTP {exc.code}: {details}")
-                except Exception as exc:
-                    self.store.mark_row_failed(row_id, f"{type(exc).__name__}: {exc}")
-                finally:
-                    self._current = None
-            if self._stop.is_set():
-                return
-            job = self.store.get_job(job_id)
-            if job["status"] == "running":
-                # All work was either completed or failed; the claim operation finalizes it.
-                self.store.claim_next_row(job_id)
+            try:
+                self._run_job(job_id)
+            except KeyError:
+                # Cancelled and deleted with its scene (SceneStore.delete_scene) after it was listed: nothing left to run.
+                continue
+
+    def _run_job(self, job_id):
+        self.store.start_queued_job(job_id)
+        job_snapshot = self.store.get_job(job_id)["scene_snapshot"]
+        snapshot_lines = {line["line_id"]: line for line in job_snapshot.get("lines", [])}
+        while not self._stop.is_set():
+            row_id = self.store.claim_next_row(job_id)
+            if row_id is None:
+                break
+            row = self.store.get_job_row(row_id)
+            try:
+                request = {
+                    "identity_id": row["identity_id"], "reference_version_id": row["reference_version_id"],
+                    "line_id": row["cast_line_id"], "text": row["text"], "language": row["language"],
+                    "direction": row["direction"], "settings": row["settings"],
+                    "use_pronunciations": row["use_pronunciations"], "idempotency_key": row["request_key"],
+                    "wait_seconds": self.ROW_WAIT_SECONDS, "wait_priority": "low",
+                }
+                scene_line = snapshot_lines.get(row["line_id"])
+                if scene_line and scene_line.get("voice_identity"):
+                    request["identity_snapshot"] = scene_line["voice_identity"]
+                body = json.dumps(request, ensure_ascii=False).encode("utf-8")
+                request_id = f"scene-row-{row_id}"
+                api_request = urllib.request.Request(self.service_url + "/api/performance", data=body,
+                    headers={"Content-Type": "application/json", "X-Request-Id": request_id})
+                self._current = (job_id, request_id)
+                with urllib.request.urlopen(api_request, timeout=self.ROW_WAIT_SECONDS + 1800) as response:
+                    wav = response.read()
+                    take_id = response.headers.get("X-Take-Id")
+                    if not wav.startswith(b"RIFF") or not take_id:
+                        raise RuntimeError("Performance API returned no WAV take ID.")
+                self.store.mark_row_completed(row_id, take_id)
+            except urllib.error.HTTPError as exc:
+                details = exc.read().decode("utf-8", "replace")[:1500]
+                if exc.code == 409:
+                    # Another service owns the model, or the line was full or too slow: try the row again shortly.
+                    self.store._update_job_row(row_id, "queued", error="Waiting for model ownership: " + details)
+                    self._stop.wait(0.5)
+                    continue
+                if exc.code == 499 and self.store.get_job(job_id)["cancel_requested"]:
+                    self.store._update_job_row(row_id, "cancelled", error="Stopped when the batch was cancelled.")
+                    continue
+                if exc.code == 499:
+                    self.store.mark_row_failed(row_id, "Stopped before it finished. Try the failed lines again to render it.")
+                    continue
+                self.store.mark_row_failed(row_id, f"HTTP {exc.code}: {details}")
+            except Exception as exc:
+                self.store.mark_row_failed(row_id, f"{type(exc).__name__}: {exc}")
+            finally:
+                self._current = None
+        if self._stop.is_set():
+            return
+        job = self.store.get_job(job_id)
+        if job["status"] == "running":
+            # All work was either completed or failed; the claim operation finalizes it.
+            self.store.claim_next_row(job_id)
 
 
 def json_template():

@@ -13,6 +13,32 @@ from reference_catalog import list_references, list_voice_library, resolve_refer
 import transcript_suggest
 
 
+def add_voice(engines, cast, character_id, req):
+    """Add a voice to a character, as POST /api/characters/{character_id}/identities asks: an engine that clones from a
+    recording, or one with fixed or preset voices, whose adapter turns the request into the voice's options. The sample
+    scene (sample_project.py) makes its voices here too."""
+    engine_id = req.get("engine_id")
+    entry = engines.api_entries.get(engine_id)
+    if entry is None:
+        raise ValueError("Choose an engine exposed by the local service.")
+    capabilities = entry.get("capabilities", {})
+    clone_status = capabilities.get("voice_cloning", {}).get("status")
+    fixed_voice = capabilities.get("voice_selection", {}).get("status") == "supported"
+    preset_voice = engine_id in PRESET_VOICE_ENGINES and capabilities.get("voice_selection", {}).get("status") in {
+        "supported",
+        "worker_verified",
+    }
+    adapter = engine_adapters.get(engine_id)
+    fixed_voices = adapter is not None and adapter.fixed_voices and fixed_voice
+    if clone_status not in {"supported", "worker_verified"} and not fixed_voices and not preset_voice:
+        raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
+    if adapter is not None and (adapter.fixed_voices or adapter.preset_voices):
+        options = adapter.identity_options(capabilities, req, performance_controls(engine_id, capabilities), engines)
+    else:
+        options = {}
+    return cast.create_identity(character_id, engine_id, req.get("label"), options, req.get("notes", ""))
+
+
 def register(router, lab):
     """The Cast rows of api_spec.ROUTES, and the lists of references and saved voices the page reads."""
     serve, engines, cast = lab.serve, lab.engines, lab.cast
@@ -49,28 +75,7 @@ def register(router, lab):
 
     @router.post("/api/characters/{character_id}/identities")
     def create_identity(self, parsed, req, character_id):
-        engine_id = req.get("engine_id")
-        entry = engines.api_entries.get(engine_id)
-        if entry is None:
-            raise ValueError("Choose an engine exposed by the local service.")
-        capabilities = entry.get("capabilities", {})
-        clone_status = capabilities.get("voice_cloning", {}).get("status")
-        fixed_voice = capabilities.get("voice_selection", {}).get("status") == "supported"
-        preset_voice = engine_id in PRESET_VOICE_ENGINES and capabilities.get("voice_selection", {}).get("status") in {
-            "supported",
-            "worker_verified",
-        }
-        adapter = engine_adapters.get(engine_id)
-        fixed_voices = adapter is not None and adapter.fixed_voices and fixed_voice
-        if clone_status not in {"supported", "worker_verified"} and not fixed_voices and not preset_voice:
-            raise ValueError("This model does not provide a reusable clone reference or a fixed voice selector.")
-        if adapter is not None and (adapter.fixed_voices or adapter.preset_voices):
-            options = adapter.identity_options(capabilities, req, performance_controls(engine_id, capabilities), engines)
-        else:
-            options = {}
-        self._json(
-            201, {"identity": cast.create_identity(character_id, engine_id, req.get("label"), options, req.get("notes", ""))}
-        )
+        self._json(201, {"identity": add_voice(engines, cast, character_id, req)})
 
     @router.post("/api/identities/{identity_id}/update")
     def update_identity(self, parsed, req, identity_id):

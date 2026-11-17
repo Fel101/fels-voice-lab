@@ -1,7 +1,9 @@
 // Voice Lab scenes: script editor, batch renders, assembly previews and the export panel.
 var activeSceneId = null,
   activeSceneJobId = null,
-  scenePollTimer = null;
+  scenePollTimer = null,
+  sceneListCount = null,
+  sampleState = null;
 function showSceneError(error) {
   $('sceneError').textContent = error.message || String(error);
 }
@@ -1060,6 +1062,7 @@ function renderScene(scene) {
     sceneLineStates = {};
   }
   activeSceneId = scene.scene_id;
+  renderSampleNotes();
   sceneJobSignature = null;
   sceneDirty = false;
   $('sceneEditor').value = JSON.stringify(scene, null, 2);
@@ -1096,6 +1099,7 @@ function refreshSceneList(preferred) {
   return fetchJson('/api/scenes').then(function (result) {
     var select = $('sceneSelect'),
       keep = preferred || activeSceneId;
+    sceneListCount = (result.scenes || []).length;
     select.textContent = '';
     (result.scenes || []).forEach(function (scene) {
       option(select, scene.scene_id, scene.name + ' / r' + scene.revision);
@@ -1122,7 +1126,105 @@ function refreshSceneList(preferred) {
     $('sceneExportJson').hidden = true;
     $('sceneExportCsv').hidden = true;
     return Promise.resolve();
+  }).then(function () {
+    return refreshSample();
   });
+}
+// The sample scene (sample_project.py): offered on an empty Scenes, an empty Cast and the first-run note once Kokoro is
+// installed, never made until asked; on the sample itself, the steps to hear it and one button that removes it all.
+function refreshSample() {
+  return fetchJson('/api/sample')
+    .then(function (state) {
+      sampleState = state;
+    })
+    .catch(function () {
+      sampleState = null;
+    })
+    .then(renderSampleNotes);
+}
+function sampleOffered() {
+  return !!(sampleState && !sampleState.sample && sampleState.can_make);
+}
+function renderSampleNotes() {
+  var sample = sampleState && sampleState.sample,
+    onSample = !!(sample && activeSceneId && sample.scene_id === activeSceneId),
+    offer = sceneListCount === 0 && sampleOffered();
+  $('sampleNote').hidden = !(onSample || offer);
+  $('sampleOpen').hidden = onSample;
+  $('sampleRemove').hidden = !onSample;
+  $('sampleText').textContent = onSample
+    ? 'This is the sample scene, made by the Lab with two of Kokoro’s preset voices. To hear it: press Render all, and when ' +
+      'the batch has finished, Use the newest take where none is chosen, then Build the scene from the chosen takes.'
+    : 'No scene yet. Open the sample scene: two characters with Kokoro’s preset voices and nine lines, ready to render. ' +
+      'One button removes it again.';
+  $('castSampleNote').hidden = !(castLoaded && castCharacters.length === 0 && sampleOffered());
+  $('firstRunSample').hidden = !(firstRun.ready && !$('firstRun').hidden && sampleOffered());
+}
+function sampleButtons(disabled) {
+  ['sampleOpen', 'sampleRemove', 'castSampleOpen', 'firstRunSample'].forEach(function (id) {
+    $(id).disabled = disabled;
+  });
+}
+function openSample() {
+  if (sceneDirty && !window.confirm('Discard unsaved scene edits and open the sample scene?')) return Promise.resolve(null);
+  sampleButtons(true);
+  $('sampleStatus').textContent = 'Opening the sample scene…';
+  return fetchJson('/api/sample', {})
+    .then(function (result) {
+      sampleState = { sample: result.sample, can_make: true, why_not: null };
+      location.hash = '#scenes';
+      $('sampleStatus').textContent = result.made
+        ? 'Made the sample scene and its two characters, Edie and Tomas.'
+        : 'Opened the sample scene.';
+      return refreshCast().then(function () {
+        return refreshSceneList(result.sample.scene_id);
+      });
+    })
+    .catch(function (error) {
+      $('sampleStatus').textContent = error.message;
+      if (location.hash !== '#scenes') $('referenceStatus').textContent = error.message;
+    })
+    .then(function () {
+      sampleButtons(false);
+    });
+}
+function removeSample() {
+  sampleButtons(true);
+  return fetchJson('/api/sample/remove/preview')
+    .then(function (preview) {
+      if (preview.used_elsewhere.length) {
+        $('sampleStatus').textContent =
+          'A sample character speaks in another scene: ' + preview.used_elsewhere.join(', ') + '. Give those lines another voice first.';
+        return null;
+      }
+      var gone = preview.would_remove,
+        parts = [gone.character + ' characters and their voices', gone.take + (gone.take === 1 ? ' take' : ' takes')];
+      if (gone.reference) parts.push(gone.reference + (gone.reference === 1 ? ' recording' : ' recordings'));
+      if (
+        !window.confirm(
+          'Remove the sample? This deletes the scene “' + (preview.scene ? preview.scene.name : 'Sample') + '” with its batches and ' +
+            'built previews, ' + parts.join(', ') + '. Your own characters and scenes are not touched. It cannot be undone.'
+        )
+      )
+        return null;
+      return fetchJson('/api/sample/remove', { confirm: true });
+    })
+    .then(function (report) {
+      if (!report) return null;
+      var copies = report.external_copies.length;
+      sceneDirty = false;
+      return Promise.all([refreshCast(), refreshSceneList()]).then(function () {
+        $('sampleStatus').textContent =
+          'Removed the sample scene, its characters and ' + report.removed.take + (report.removed.take === 1 ? ' take.' : ' takes.') +
+          (copies ? ' Copies in export packages stay where they are (' + copies + (copies === 1 ? ' file).' : ' files).') : '');
+      });
+    })
+    .catch(function (error) {
+      $('sampleStatus').textContent = error.message;
+    })
+    .then(function () {
+      sampleButtons(false);
+    });
 }
 function startSceneFromPerformer() {
   var character = performanceCharacter(),
@@ -1760,6 +1862,14 @@ $('sceneRenderTicked').addEventListener('click', function () {
 });
 $('sceneRenderMissing').addEventListener('click', function () {
   startSceneBatch(missingSceneLines).catch(showSceneError);
+});
+['sampleOpen', 'castSampleOpen', 'firstRunSample'].forEach(function (id) {
+  $(id).addEventListener('click', function () {
+    openSample();
+  });
+});
+$('sampleRemove').addEventListener('click', function () {
+  removeSample();
 });
 $('sceneChooseNewest').addEventListener('click', function () {
   chooseNewestSceneTakes().catch(showSceneError);

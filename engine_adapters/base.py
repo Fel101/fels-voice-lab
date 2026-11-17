@@ -37,6 +37,7 @@ class Adapter:
     saves_designs = False  # a take that designs a voice may be kept as a voice recording (save_voice_as)
     streams = False  # it streams its audio as it speaks (POST /api/stream)
     fixed_voices = False  # a voice of it is one or more of the model's fixed voice packs (identity_options)
+    sample_voices = None  # the two preset voices of the sample scene's characters, for the one model that has it
     takes_voice_recordings = True  # it reads voice recordings from the library, not only the bundled one
     phonemizes = False  # its worker shows the phonemes it would speak (worker_phonemize)
     voice_per_language = False  # each of its voices speaks one language (the language matrix picks one per column)

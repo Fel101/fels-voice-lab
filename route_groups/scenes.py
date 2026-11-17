@@ -7,6 +7,9 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 import export_panel
+import sample_project
+import voice_names
+from route_groups.cast import add_voice
 from scene_store import csv_template, json_template
 from script_import import parse_script
 
@@ -64,6 +67,33 @@ def register(router, lab):
         else:
             raise ValueError("Scene import format must be json, csv, text or fountain.")
         self._json(201, {"scene": scenes.create_scene(manifest)})
+
+    def kokoro_installed():
+        return voice_names.model_installed(engines, sample_project.engine()[0])
+
+    @router.get("/api/sample")
+    def sample_status(self, parsed, req):
+        self._json(200, sample_project.status(scenes, lab.cast, kokoro_installed()))
+
+    @router.post("/api/sample")
+    def sample_open(self, parsed, req):
+        made, sample = sample_project.open_sample(
+            scenes,
+            lab.cast,
+            kokoro_installed(),
+            lambda character_id, request: add_voice(engines, lab.cast, character_id, request),
+        )
+        self._json(201 if made else 200, {"made": made, "sample": sample})
+
+    @router.get("/api/sample/remove/preview")
+    def sample_removal_preview(self, parsed, req):
+        self._json(200, sample_project.removal_preview(scenes, lab.cast))
+
+    @router.post("/api/sample/remove")
+    def sample_remove(self, parsed, req):
+        if (req or {}).get("confirm") is not True:
+            raise ValueError("Removing the sample deletes its scene, its characters and their takes. Confirm it to continue.")
+        self._json(200, sample_project.remove(scenes, lab.cast))
 
     @router.get("/api/scenes/{scene_id}")
     def scene(self, parsed, req, scene_id):

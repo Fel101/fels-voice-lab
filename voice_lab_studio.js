@@ -362,6 +362,7 @@ function studioReady(job){
   // An install the note started has finished: close its window, which would keep the focus, and set the studio up to speak.
   firstRun.engine=null;firstRun.ready=job.name;
   if(installDialog.engine===job.engine){closeInstallDialog();}
+  if(typeof refreshSample==='function'){refreshSample();}
   var engine=$('engine'),text=$('text');
   if(engine.value!==job.engine){engine.value=job.engine;if(typeof refresh==='function'){refresh();}}
   if(!String(text.value||'').trim()){text.value=text.defaultValue||'';}
@@ -373,11 +374,12 @@ function renderFirstRun(status){
   var running=!!job&&job.state==='running';
   var offer=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;})[0];
   if(installed&&firstRun.engine&&job&&job.engine===firstRun.engine&&job.state==='finished'){studioReady(job);}
-  firstRun.action=null;
+  firstRun.action=null;$('firstRunSample').hidden=true;
   if(firstRun.ready&&installed){
     box.hidden=false;button.hidden=true;$('firstRunModels').hidden=true;
     $('firstRunTitle').textContent=firstRun.ready+' is installed';
     $('firstRunText').textContent='Press Generate to hear it say the sentence below. The first time, the model takes a little while to load.';
+    if(typeof renderSampleNotes==='function'){renderSampleNotes();}
     return;
   }
   firstRun.ready=null;

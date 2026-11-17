@@ -8,6 +8,7 @@ at the foot of every page and in `/api/health`; `python serve.py --version` prin
 ## What do you want to do?
 
 - [Install a first model](#the-first-time)
+- [Hear a whole scene without writing one: the sample scene](#the-sample-scene)
 - [Clone your own voice](#clone-your-own-voice)
 - [Hear a line in a model's voice, or design a voice from a description](#hear-a-line-in-model-studio)
 - [Keep a voice for a character](#keep-voices-in-the-cast-library)
@@ -32,6 +33,20 @@ much it downloads and how much disk it takes. Its **Install** button starts the 
 & features**: it shows what it will do first, and nothing changes until you press **Install now**. While it runs, **Show
 progress** opens its window again. When it finishes, the studio is ready to speak: the model is chosen, a sentence is in the
 box and **Generate** has the focus.
+
+### The sample scene
+
+Once Kokoro 82M is installed, the first-run note, an empty **Cast library** and an empty **Scenes & batch** offer **Open the
+sample scene**. It is made only when you press it: two characters, Edie and Tomas, each with one of Kokoro's preset voices
+(no person's recording), and "Sample: The parcel at the lighthouse", nine lines written for the Lab. To hear it, press
+**Render all**, then, when the batch has finished, **Use the newest take where none is chosen**, then **Build the scene from
+the chosen takes**. The characters' names say "(sample)", and you can render, edit and export the scene like any other.
+
+On the sample scene, **Remove the sample…** says what it will delete and asks first: the scene with its batches and built
+previews, the two characters with their voices, and every take made with those voices, in Perform too. Your own characters
+and scenes are not touched, nothing of it is kept, and the library is as it was before. A batch of the sample that is still
+rendering is cancelled; press the button again once the line in progress has finished. If one of your own scenes has a line
+in a sample voice, give that line another voice first. Copies in export packages stay where they are.
 
 ## Appearance and navigation
 

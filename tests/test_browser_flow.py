@@ -952,3 +952,61 @@ class ScriptImportPageTests(unittest.TestCase):
                 if page is not None:
                     page.close()
                 server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class SamplePageTests(unittest.TestCase):
+    """The sample scene from an empty Cast: opened, rendered, built and heard without typing a word, then removed, which leaves
+    the library as it was."""
+
+    def test_the_sample_is_heard_without_typing_and_removing_it_leaves_the_library_as_it_was(self):
+        import kokoro_support
+        from tests.test_sample_project import library_state
+
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp, \
+                mock.patch.object(kokoro_support, "discover_kokoro_voices", lambda: ["af_heart", "am_michael"]):
+            root = Path(temp)
+            server = FlowServer(root)
+            server.engines.install_probe = lambda entry: {"installed": entry["id"] == "kokoro"}
+            page = None
+            rows = "document.querySelectorAll('#sceneLineEditor .scene-line[data-status=\"{}\"]').length === 9"
+            try:
+                self.assertEqual(server.cast.list_cast(), [])  # which also makes the Cast's database
+                before = library_state(root)
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#cast")
+                page.wait_until("!document.getElementById('castSampleNote').hidden")
+                self.assertTrue(page.evaluate("document.getElementById('sampleNote').hidden === false"
+                                              " && document.getElementById('sampleRemove').hidden"))
+                self.assertEqual(server.cast.list_cast(), [])  # offered, never made unasked
+                page.click("#castSampleOpen")
+                page.wait_until("location.hash === '#scenes' && document.getElementById('sceneName').value === "
+                                "'Sample: The parcel at the lighthouse' && document.querySelectorAll('#sceneLineEditor .scene-line')"
+                                ".length === 9")
+                page.wait_until("!document.getElementById('sampleRemove').hidden && document.getElementById('sampleOpen').hidden")
+                self.assertTrue(page.evaluate("document.getElementById('sampleText').textContent")
+                                .startswith("This is the sample scene"))
+                self.assertTrue(page.evaluate("document.getElementById('castSampleNote').hidden"))
+                page.click("#sceneStart")
+                page.wait_until(rows.format("choose_take"))
+                page.click("#sceneChooseNewest")
+                page.wait_until(rows.format("done"))
+                page.click("#scenePreview")
+                page.wait_until("document.getElementById('scenePreviewPlayer').getAttribute('src')")
+                self.assertEqual(page.evaluate("fetch(document.getElementById('scenePreviewPlayer').getAttribute('src'))"
+                                               ".then((r) => r.status)"), 200)
+                self.assertEqual([request["voice"] for request in server.engines.requests[:2]], ["af_heart", "am_michael"])
+
+                page.evaluate("window.confirm = (text) => { window.lastConfirm = text; return true; }")
+                page.click("#sampleRemove")
+                page.wait_until("document.getElementById('sampleStatus').textContent.startsWith('Removed the sample scene')")
+                confirmed = page.evaluate("window.lastConfirm")
+                self.assertIn("Sample: The parcel at the lighthouse", confirmed)
+                self.assertIn("2 characters and their voices, 9 takes", confirmed)
+                page.wait_until("!document.getElementById('sampleOpen').hidden && !document.getElementById('castSampleNote').hidden")
+                self.assertEqual(library_state(root), before)
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()

@@ -640,6 +640,32 @@ ROUTES = [
       notes="A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the "
             "script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model "
             "that takes none is left out and listed in `directions_left_out`."),
+    R("GET", "/api/sample", "Scenes", "Say whether the sample scene exists, and whether it can be made here.",
+      reply="`sample`: null, or its `scene_id`, `scene_name`, `characters` (each `id` and `name`) and `created_at`; "
+            "`can_make` (Kokoro 82M is installed) and `why_not`."),
+    R("POST", "/api/sample", "Scenes", "Make the sample scene: two characters with Kokoro preset voices and a nine-line scene "
+                                       "written for the Lab, ready to render.", status=201, body_kind="none",
+      reply="`made` and `sample`, as `GET /api/sample` gives it. When the sample exists already, it is answered with 200 "
+            "and nothing is made.",
+      errors=((503, "Kokoro 82M is not installed (`model_not_installed`)."),),
+      notes="The characters are named as samples and tagged `sample`, and their voices are approved. The scene comes "
+            "through the same script import as `POST /api/scenes/import`. What it made is recorded in "
+            "`data/scenes/sample.json`, so a library backup carries it."),
+    R("GET", "/api/sample/remove/preview", "Scenes", "Show what removing the sample scene would delete.",
+      reply="`scene` (null, or its `scene_id`, `name` and how many batch `jobs`), `would_remove` (counts of `character`, "
+            "`identity`, `reference` and `take`), `used_elsewhere` (the names of other scenes with a line in a sample "
+            "character's voice, which stop the removal) and `external_copies` (copies of the takes under `out/`, such as "
+            "export packages, which are listed and never deleted). With no sample, `scene` is null and nothing is counted."),
+    R("POST", "/api/sample/remove", "Scenes", "Delete everything the sample scene made, which leaves the library as it was.",
+      body=(F("confirm", "boolean", "Must be `true`; anything else is refused.", True),),
+      reply="`removed` (counts of `scene`, `jobs`, `character`, `identity`, `reference` and `take`) and `external_copies`.",
+      errors=((400, "`confirm` is not `true`, or another scene uses a sample character."),
+              (404, "There is no sample scene."),
+              (409, "A batch of the sample is making a line: it was cancelled; remove the sample again in a moment "
+                    "(`busy`).")),
+      notes="The scene goes with its batches and built previews; each character goes with its voices, any recording "
+            "added to it and every take made with them, and no record of the removal is kept. A take made with a sample "
+            "voice outside the sample scene, in Perform for example, goes too."),
     R("GET", "/api/scenes/{scene_id}", "Scenes", "Read a scene.", reply="`scene`."),
     R("POST", "/api/scenes/{scene_id}", "Scenes", "Replace a scene's name and lines.",
       body=(F("name", "string", "1 to 120 characters."), F("lines", "object[]", "The full list of lines.", True),

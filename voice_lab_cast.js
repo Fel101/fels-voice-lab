@@ -1,5 +1,6 @@
 // Voice Lab cast: reference versions, voice identities, performance controls and saved takes.
 var castCharacters = [];
+var castLoaded = false;
 var referenceSourceFile = null, referenceSourceBlob = null, referenceBuffer = null, referenceObjectUrl = null, micStream = null, micContext = null, micProcessor = null, micChunks = [];
 var referenceLoadRevision = 0, referencePreviewRevision = 0, referenceDecodePending = false, castMicTimer = null;
 function setReferencePlayer(blob) {
@@ -164,13 +165,14 @@ function loadCustomVoiceIdentityOptions() {
 function refreshCast(preferredCharacter, preferredIdentity) {
   var charBefore=preferredCharacter||$('characterSelect').value, idBefore=preferredIdentity||$('identitySelect').value;
   return fetchJson('/api/cast').then(function(result){
-    castCharacters=result.characters||[];
+    castCharacters=result.characters||[];castLoaded=true;
     [$('characterSelect'),$('performCharacter')].forEach(function(select){
       var before=select.id==='performCharacter'?select.value:charBefore; select.textContent='';
       castCharacters.forEach(function(c){option(select,c.id,c.name);});
       if(castCharacters.some(function(c){return c.id===before;})){select.value=before;} else if(castCharacters.length){select.value=castCharacters[0].id;}
     });
     renderActiveCharacter(idBefore); renderPerformanceCharacter();
+    if(typeof renderSampleNotes==='function'){renderSampleNotes();}
     if(window.VoiceLabLibrary) return window.VoiceLabLibrary.refresh();
   }).catch(function(error){$('referenceStatus').textContent='Cast library unavailable: '+error.message;});
 }

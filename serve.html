@@ -220,6 +220,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   </div>
   <label class="meta"><input id="showRetiredVoices" type="checkbox"> Show retired voices</label>
   <p id="voiceLibraryStatus" class="meta" role="status" aria-live="polite"></p>
+  <div class="workflow-note" id="castSampleNote" hidden><p>No characters yet. Open the sample scene for two characters with Kokoro’s preset voices and a short scene to render, or create your own below.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
   <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
   <details id="castEditor"><summary>Create or edit a character, its voices and its recordings</summary>
   <p class="meta">Build your cast and approve a voice recording for each character. Your recordings and every saved version stay on this PC.</p>
@@ -345,6 +346,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <button type="button" id="sceneRefresh">Refresh scenes</button>
     <label class="field compact">Import a script (text, Fountain, JSON or CSV)<input id="sceneImportFile" type="file" accept=".txt,.fountain,.json,.csv,text/plain,application/json,text/csv"></label>
     <button type="button" id="sceneStarter">Start from the Perform line</button></div>
+  <div class="workflow-note" id="sampleNote" hidden><p id="sampleText"></p><div class="cast-actions"><button class="go" type="button" id="sampleOpen" hidden>Open the sample scene</button><button type="button" id="sampleRemove" hidden>Remove the sample…</button></div><p class="meta" id="sampleStatus" role="status"></p></div>
   <details id="sceneScriptImport"><summary>Import a script from text or Fountain</summary>
     <p class="meta">Plain text has one speech per line, written <code>NAME: words</code>. A direction in brackets or parentheses at the start of the words becomes the line's acting direction. Fountain is the screenplay format, with each name in capitals above its lines. Choose a file above, or paste the script here, then read it and choose a voice for each speaker.</p>
     <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option></select></label>
@@ -413,7 +415,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="studio">
   <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or try a voice recording. Save the voice you like, then build its character in the Cast library.</p>
-  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
+  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><button type="button" id="firstRunSample" hidden>Open the sample scene</button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
   <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including blends of preset voices that need no voice recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
   <label class="field">Text to speak
     <textarea id="text">Hey, you're back. I was hoping you'd stop by tonight. How was your day?</textarea>
