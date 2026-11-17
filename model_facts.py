@@ -62,7 +62,7 @@ def runs(adapter):
         )
         return {"cpu": False, "gpu": True, "gpu_memory_gb": memory, "text": text}
     gpu = bool(adapter and adapter.uses_torch and adapter.gpu_build)
-    text = "Runs without a graphics card, and can use one." if gpu else "Runs without a graphics card."
+    text = "Runs with or without a graphics card." if gpu else "Runs without a graphics card."
     return {"cpu": True, "gpu": gpu, "gpu_memory_gb": None, "text": text}
 
 

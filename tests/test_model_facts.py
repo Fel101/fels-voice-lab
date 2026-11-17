@@ -85,6 +85,7 @@ class CardFactsTests(unittest.TestCase):
         )
         with mock.patch.object(model_facts.importlib, "import_module", side_effect=ImportError("gone")):
             self.assertIsNone(model_facts.gpu_memory_gb(engine_adapters.get("breeze-tts-2")))
+        self.assertEqual(facts["turbo"]["runs"]["text"], "Runs with or without a graphics card.")
 
     def test_what_the_audio_may_be_used_for_says_not_stated_where_nothing_states_it(self):
         facts = all_facts()
