@@ -119,7 +119,21 @@ class ConversationTests(LabCase):
         self.send(process, {"jsonrpc": "2.0", "method": "notifications/initialized"})
 
         tools = self.ask(process, lines, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
-        self.assertEqual([tool["name"] for tool in tools], ["lab_status", "list_voices", "speak", "stop_speaking"])
+        self.assertEqual(
+            [tool["name"] for tool in tools],
+            [
+                "lab_status",
+                "list_voices",
+                "speak",
+                "stop_speaking",
+                "set_voice",
+                "describe_voice",
+                "transcribe",
+                "preview_voice_candidate",
+                "import_voice_candidate",
+                "design_voice",
+            ],
+        )
         for tool in tools:
             self.assertEqual(tool["inputSchema"]["type"], "object")
             self.assertGreater(len(tool["description"]), 60, "a description written for the model that calls it")
@@ -193,7 +207,7 @@ class ConversationTests(LabCase):
         result = self.ask(process, lines, {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": wrong})["result"]
         self.assertEqual(
             (result["isError"], result["content"][0]["text"]),
-            (True, "speak takes no argument called 'loud'. It takes: text, voice, direction, language, play, file."),
+            (True, "speak takes no argument called 'loud'. It takes: text, voice, direction, language, play, file, format."),
         )
         kept = self.clips / "kept" / "hello.wav"
         to_file = {"name": "speak", "arguments": {"text": "Hello.", "play": False, "file": str(kept)}}
@@ -434,7 +448,21 @@ class ModernProtocolTests(InProcessCase):
     def test_tools_are_listed_and_called_with_the_fields_the_revision_asks_for(self):
         listed = self.request(1, "tools/list")["result"]
         self.assertEqual(listed["resultType"], "complete")
-        self.assertEqual([tool["name"] for tool in listed["tools"]], ["lab_status", "list_voices", "speak", "stop_speaking"])
+        self.assertEqual(
+            [tool["name"] for tool in listed["tools"]],
+            [
+                "lab_status",
+                "list_voices",
+                "speak",
+                "stop_speaking",
+                "set_voice",
+                "describe_voice",
+                "transcribe",
+                "preview_voice_candidate",
+                "import_voice_candidate",
+                "design_voice",
+            ],
+        )
         self.assertEqual((listed["ttlMs"], listed["cacheScope"]), (3_600_000, "public"))
         spoken = self.request(2, "tools/call", {"name": "speak", "arguments": {"text": "Hello.", "play": False}})["result"]
         self.assertEqual(spoken["resultType"], "complete")

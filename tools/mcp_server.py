@@ -38,6 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import lab_address  # noqa: E402 - beside this folder, standard library only
+import speech_input  # noqa: E402
 from app_version import APP_NAME, VERSION  # noqa: E402
 
 SERVER_NAME = lab_address.MCP_NAME
@@ -54,6 +55,7 @@ META_CLIENT = "io.modelcontextprotocol/clientInfo"
 META_SERVER = "io.modelcontextprotocol/serverInfo"
 SERVER_INFO = {"name": SERVER_NAME, "title": APP_NAME, "version": VERSION}
 LIST_TTL_MS = 3_600_000  # the tool list never changes while the server runs
+MAX_BUNDLE_BYTES = 33 * 1024 * 1024 + 4096  # the Slate handoff upload limit
 QUICK_SECONDS = 10  # health, voices, the queue and a cancel answer at once
 START_SECONDS = 120  # a starting service imports its packages and opens the library
 WAIT_SECONDS = 3600  # how long a clip waits in the Lab's line: the most the service allows
@@ -190,8 +192,11 @@ class Lab:
             raise ToolError(f"Fel's Voice Lab has not been found yet. {NOT_RUNNING_HINT}")
         address = urllib.parse.urlsplit(self.url)
         connection = http.client.HTTPConnection(address.hostname, address.port or 80, timeout=timeout)
-        data = json.dumps(body).encode("utf-8") if body is not None else None
-        sent = {"Content-Type": "application/json"} if data is not None else {}
+        if isinstance(body, bytes):
+            data, sent = body, {"Content-Type": "application/octet-stream"}
+        else:
+            data = json.dumps(body).encode("utf-8") if body is not None else None
+            sent = {"Content-Type": "application/json"} if data is not None else {}
         sent.update(headers or {})
         try:
             connection.request(method, path, body=data, headers=sent)
@@ -355,6 +360,82 @@ TOOLS = [
         "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
 ]
+
+
+def local_tool(name, description, fields, required=()):
+    return {
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object",
+            "properties": {key: {"type": kind, "description": note} for key, kind, note in fields},
+            "required": list(required),
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": True, "openWorldHint": False},
+    }
+
+
+TOOLS.extend(
+    [
+        local_tool(
+            "set_voice",
+            "Choose the default local voice for this client connection. Other clients keep their own settings.",
+            [("voice", "string", "A ready voice name. An empty value clears it.")],
+            ("voice",),
+        ),
+        local_tool(
+            "describe_voice",
+            "Describe a local model voice with its languages, direction controls and current readiness.",
+            [("voice", "string", "A voice name from list_voices.")],
+            ("voice",),
+        ),
+        local_tool(
+            "transcribe",
+            "Transcribe audio already selected in this client's workspace with local faster-whisper.",
+            [
+                ("file", "string", "A file within the configured workspace."),
+                ("language", "string", "Optional language code."),
+                ("translate", "boolean", "Return English words instead of the original language."),
+            ],
+            ("file",),
+        ),
+        local_tool(
+            "preview_voice_candidate",
+            "Preview a Voice Slate recording handoff and inspect its origin, permission and supported model choices.",
+            [("file", "string", "Local Voice Slate handoff ZIP.")],
+            ("file",),
+        ),
+        local_tool(
+            "import_voice_candidate",
+            "Import an explicitly reviewed Voice Slate handoff into Cast as a candidate pending approval.",
+            [
+                ("file", "string", "The same Voice Slate handoff ZIP."),
+                ("character", "string", "An existing Cast character name or ID."),
+                ("engine_id", "string", "An eligible engine from the preview."),
+                ("sidecar_sha256", "string", "SHA-256 of the reviewed sidecar."),
+                ("permission", "boolean", "True when the user has confirmed the allowed use."),
+            ],
+            ("file", "character", "engine_id", "sidecar_sha256", "permission"),
+        ),
+        local_tool(
+            "design_voice",
+            "Build a repeatable set of local Qwen VoiceDesign instructions from a template and optional notes.",
+            [
+                ("template", "string", "narrator, character or announcer."),
+                ("notes", "string", "Optional voice traits and delivery direction."),
+                ("text", "string", "Audition script."),
+            ],
+            ("template",),
+        ),
+    ]
+)
+next(tool for tool in TOOLS if tool["name"] == "import_voice_candidate")["annotations"]["readOnlyHint"] = False
+TOOLS[2]["inputSchema"]["properties"]["format"] = {
+    "type": "string",
+    "description": "wav, mp3, flac, opus or aac. Encoded files require play=false and a named voice.",
+}
+
 TOOL_NAMES = {tool["name"] for tool in TOOLS}
 
 
@@ -403,10 +484,15 @@ class Call:
 
 
 class Tools:
-    def __init__(self, lab, player, clips=None):
+    def __init__(self, lab, player, clips=None, *, workspace=None, scope=None):
         self.lab = lab
         self.player = player
         self.clips_root = Path(clips) if clips else ROOT / "out" / "spoken"
+        self.workspace = Path(workspace).resolve(strict=True) if workspace is not None else None
+        if self.workspace is not None and not self.workspace.is_dir():
+            raise ValueError("The MCP workspace must be an existing directory.")
+        self.voice_default = ""
+        self.scope = scope or ""
         self.folder = None
         self.count = 0
         self.speaking = threading.Lock()  # one clip at a time, in the order the calls came
@@ -499,23 +585,119 @@ class Tools:
                 fact["why_not"] = voice["why_not"]
         return "\n".join(lines), {"voices": facts}
 
+    def set_voice(self, call, arguments):
+        value = arguments["voice"].strip()
+        voice = self.named(call, value) if value else None
+        if value and (voice is None or not voice.get("ready")):
+            raise ToolError("Choose a ready voice from list_voices.")
+        self.voice_default = voice["name"] if voice else ""
+        return "Default voice set for this client.", {"voice": self.voice_default or None}
+
+    def describe_voice(self, call, arguments):
+        voice = self.named(call, arguments["voice"])
+        if voice is None:
+            raise ToolError("Choose a voice from list_voices.")
+        keys = ("name", "model", "model_name", "languages", "takes_direction", "ready", "why_not", "kind")
+        details = {key: voice[key] for key in keys if key in voice}
+        return f"{voice['name']} uses {voice['model_name']}.", details
+
+    def workspace_path(self, given):
+        if self.workspace is None:
+            raise ToolError("Start MCP with --workspace to select files for this client.")
+        if not given or ":" in given[2:] or given.startswith(("//", chr(92) * 2)):
+            raise ToolError("Choose a local file in the selected workspace.")
+        candidate = Path(given)
+        candidate = candidate if candidate.is_absolute() else self.workspace / candidate
+        try:
+            path = candidate.resolve()
+        except (OSError, ValueError) as exc:
+            raise ToolError("Choose a valid local file in the workspace.") from exc
+        if path == self.workspace or self.workspace not in path.parents:
+            raise ToolError("The file is outside the selected workspace.")
+        return path
+
+    def transcribe(self, call, arguments):
+        path = self.workspace_path(arguments["file"])
+        if not path.is_file() or path.stat().st_size > speech_input.LIMIT:
+            raise ToolError("Choose an audio file in the selected workspace of at most 25 MiB.")
+        call.state = "recognizing"
+        try:
+            suffix = speech_input.audio_suffix(path.name)
+            options = speech_input.settings(arguments, translate=arguments.get("translate", False))
+            with path.open("rb") as audio:
+                raw = audio.read(speech_input.LIMIT + 1)
+            result = speech_input.run(self.run_folder(), raw, suffix, options, cancelled=call.cancelled)
+        except speech_input.InputCancelled as exc:
+            raise Stopped() from exc
+        except (ValueError, OSError) as exc:
+            raise ToolError(str(exc)) from exc
+        return result["text"], {
+            "text": result["text"],
+            "language": result["language"],
+            "duration": result["duration"],
+            "model": result["model"],
+        }
+
+    def _slate_file(self, given):
+        path = self.workspace_path(given)
+        if not path.is_file() or path.suffix.casefold() != ".zip":
+            raise ToolError("Choose a Voice Slate ZIP in the selected workspace.")
+        with path.open("rb") as file:
+            raw = file.read(MAX_BUNDLE_BYTES + 1)
+        if not 0 < len(raw) <= MAX_BUNDLE_BYTES:
+            raise ToolError("The Voice Slate ZIP is empty or too large.")
+        return raw
+
+    def preview_voice_candidate(self, call, arguments):
+        raw = self._slate_file(arguments["file"])
+        self.lab.ensure(call)
+        _, _, result = self.lab.call("POST", "/api/cast/slate-clip/preview", raw, timeout=45)
+        facts = json.loads(result)
+        return "Review the reference origin and allowed use before creating a Cast candidate.", facts
+
+    def import_voice_candidate(self, call, arguments):
+        check = arguments["sidecar_sha256"]
+        if arguments["permission"] is not True or not re.fullmatch("[a-f0-9]{64}", check):
+            raise ToolError("Preview this handoff and confirm its permitted use before import.")
+        raw = self._slate_file(arguments["file"])
+        self.lab.ensure(call)
+        query = urllib.parse.urlencode({name: arguments[name] for name in ("character", "engine_id", "sidecar_sha256")})
+        _, _, result = self.lab.call("POST", "/api/cast/slate-clip/import?" + query, raw, timeout=45)
+        facts = json.loads(result)
+        return "Reference imported as a Cast candidate.", facts
+
+    def design_voice(self, call, arguments):
+        self.lab.ensure(call)
+        _, _, raw = self.lab.call("POST", "/api/voice-recipes", arguments)
+        details = json.loads(raw)["recipe"]
+        return details["description"], details
+
     # ----------------------------------------------------------------------------------------------------- speak
 
     def clip_path(self, arguments):
         given = arguments.get("file")
+        suffix = "." + arguments.get("format", "wav")
         if given:
-            path = Path(given).expanduser()
+            path = self.workspace_path(given) if self.workspace is not None else Path(given).expanduser()
             if not path.is_absolute():
                 path = Path(self.lab.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()) / path
-            if path.suffix.lower() != ".wav":
-                raise ToolError(f"file must end in .wav: {path}")
+            if path.suffix.lower() != suffix:
+                raise ToolError(f"file must end in {suffix}: {path}")
             if path.exists():
                 raise ToolError(f"{path} already exists, and speak never replaces a file. Name another file.")
             return path, True
         self.count += 1
-        return self.run_folder() / f"{self.count:03d}-{slug(arguments['text'])}.wav", False
+        return self.run_folder() / f"{self.scope}{self.count:03d}-{slug(arguments['text'])}{suffix}", False
 
     def speak(self, call, arguments):
+        arguments = {**arguments}
+        if "voice" not in arguments and self.voice_default:
+            arguments["voice"] = self.voice_default
+        fmt = arguments.get("format", "wav")
+        if fmt not in ("wav", "mp3", "flac", "opus", "aac"):
+            raise ToolError("Choose WAV, MP3, FLAC, Opus or AAC.")
+        if fmt != "wav" and (arguments.get("play", True) or not arguments.get("voice")):
+            raise ToolError("Encoded output needs a named voice and play=false.")
         text = arguments["text"]
         if not text.strip():
             raise ToolError("text is empty: give the words to say.")
@@ -552,9 +734,21 @@ class Tools:
                 notes.append(f"{who} takes no acting direction, so it was spoken without one.")
         call.lab_request = f"mcp-{uuid.uuid4().hex}"
         call.state = "making"
+        fmt = arguments.get("format", "wav")
+        path_api = "/api/speak"
+        if fmt != "wav":
+            path_api = "/v1/audio/speech"
+            body = {
+                "input": arguments["text"],
+                "voice": voice_name,
+                "model": "tts-1",
+                "instructions": direction,
+                "response_format": fmt,
+                "wait_seconds": WAIT_SECONDS,
+            }
         try:
             _status, headers, data = self.lab.call(
-                "POST", "/api/speak", body, headers={"X-Request-Id": call.lab_request}, timeout=SPEAK_SECONDS
+                "POST", path_api, body, headers={"X-Request-Id": call.lab_request}, timeout=SPEAK_SECONDS
             )
         except LabRefused as exc:
             if exc.code == "cancelled" or call.cancelled.is_set():
@@ -564,6 +758,18 @@ class Tools:
             call.lab_request = None
         if call.cancelled.is_set():
             raise Stopped()
+        if fmt != "wav":
+            if not data or not headers.get("content-type", "").startswith("audio/"):
+                raise ToolError("Voice Lab did not return audio in the selected format.")
+            save(path, data)
+            return f"Saved {fmt.upper()} audio.", {
+                "file": str(path),
+                "format": fmt,
+                "voice": voice_name,
+                "seconds": float(headers.get("x-audio-seconds", "0")),
+                "kept": kept,
+                "played": False,
+            }
         if not (data[:4] == b"RIFF" and data[8:12] == b"WAVE"):
             raise ToolError("The Lab's answer was not a WAV file, so nothing was saved.")
         save(path, data)
@@ -859,12 +1065,21 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="An MCP server that gives apps a voice from Fel's Voice Lab.")
     parser.add_argument("--url", help="the Lab's address; then this server never starts the Lab itself")
     parser.add_argument("--no-start", action="store_true", help="do not start the Lab's service when it is not running")
+    parser.add_argument("--workspace", type=Path, help="the directory allowed for selected file tools")
+    parser.add_argument("--http", type=int, metavar="PORT", help="serve authenticated MCP on a loopback port")
+    parser.add_argument("--token-file", type=Path, help="a local file for the HTTP connection token")
     parser.add_argument("--clips", type=Path, help="where clips go (default: out/spoken in the Lab's folder)")
     args = parser.parse_args(argv)
     output = sys.stdout.buffer
     sys.stdout = sys.stderr  # a stray print goes to the log, never into the protocol
     lab = Lab(url=args.url.rstrip("/") if args.url else None, can_start=not args.no_start)
-    server = Server(Tools(lab, Player(), clips=args.clips), output)
+    if args.http is not None:
+        if args.workspace is None:
+            parser.error("--http requires an explicit --workspace directory")
+        from mcp_http import run
+
+        return run(args, lab, parser)
+    server = Server(Tools(lab, Player(), clips=args.clips, workspace=args.workspace), output)
     try:
         server.serve(sys.stdin.buffer)
     except KeyboardInterrupt:

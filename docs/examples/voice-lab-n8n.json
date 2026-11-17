@@ -1,0 +1,166 @@
+{
+  "name": "Voice Lab local speech loop",
+  "active": false,
+  "nodes": [
+    {
+      "id": "start",
+      "name": "Start",
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "read-chosen-recording",
+      "name": "Read chosen recording",
+      "parameters": {
+        "fileSelector": "C:/Audio/chosen.wav",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "transcribe-in-voice-lab",
+      "name": "Transcribe in Voice Lab",
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8765/v1/audio/transcriptions",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "speak-transcript-in-voice-lab",
+      "name": "Speak transcript in Voice Lab",
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8765/v1/audio/speech",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "tts-1"
+            },
+            {
+              "name": "voice",
+              "value": "af_heart"
+            },
+            {
+              "name": "input",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "response_format",
+              "value": "wav"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "id": "save-speech-wav",
+      "name": "Save speech WAV",
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:/Audio/voice-lab-reply.wav",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "settings": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Read chosen recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read chosen recording": {
+      "main": [
+        [
+          {
+            "node": "Transcribe in Voice Lab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe in Voice Lab": {
+      "main": [
+        [
+          {
+            "node": "Speak transcript in Voice Lab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speak transcript in Voice Lab": {
+      "main": [
+        [
+          {
+            "node": "Save speech WAV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

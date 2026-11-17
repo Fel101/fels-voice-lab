@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Connect through local MCP with a voice per connection, more output formats, transcription and voice design.
+  The n8n example uses the Lab from the same computer.
+
 - Save recipes to repeat speech, transcription and dubbing tasks. Preview outside providers and approve
   the destination and fields before running a recipe that uses one.
 

@@ -161,3 +161,27 @@ Audio is processed on this computer.
 For partial and final words, start a session with `POST /api/live` and send ordered mono 16 kHz PCM chunks. The session
 supports retries of identical chunks, event replay and cancellation. Use the session's speech route for replies.
 See [the service API](API.md) for request fields, limits and response events.
+
+## Give an MCP connection a voice
+
+Use `set_voice` to select a voice for this connection and `describe_voice` to see it. Saved clips can use WAV, MP3,
+FLAC, Opus or AAC. The compressed formats use the Lab's FFmpeg installer. Use `transcribe` with a selected local file
+and `design_voice` with an installed model that supports voice design. Set `--workspace` to the folder this connection
+may read from. Voice Slate imports retain the approved source description and still need Cast review.
+
+For a client that uses Streamable HTTP, start Voice Lab, then run this from its folder with your workspace and the
+Lab address from **System & backups**.
+
+```powershell
+.venv\Scripts\python.exe tools\mcp_server.py --http 8769 --workspace "C:/Audio/AgentWorkspace" --url http://127.0.0.1:8765
+```
+
+The adapter creates a private token file and prints its location. Add its contents to the client's `Authorization:
+Bearer …` header and use `http://127.0.0.1:8769/mcp`. The adapter listens only on this computer, and each session
+has its own voice settings. To use your own private file, pass `--token-file`.
+
+## Use the n8n example on this computer
+
+Import [the example workflow](examples/voice-lab-n8n.json) into a local n8n instance. Set both HTTP Request nodes' base
+address from the Lab's **System & backups** page, then supply an audio input and a voice. The example drafts a
+transcript and saves generated speech through the OpenAI-style routes. Use **Install speech recognition** first.
