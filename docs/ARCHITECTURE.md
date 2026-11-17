@@ -67,7 +67,9 @@ a model worker           engine_worker.py in that model's own environment: .venv
 `serve.html` loads eleven classic scripts in order (`voice_lab_queue.js` first, `voice_lab_app.js` last) that share one global
 scope, plus the Drama studio as a module. The first line of each script says what it owns. The Node tests run a script in a
 `vm` context with a stand-in page, and `tests/page_source.cjs` gives them the whole page as one text. `theme.js` sets the
-appearance before the page paints.
+appearance before the page paints. `ui_preferences.py` saves the page language, and
+`ui_localization.py` renders static page words from `locales/` before the first paint.
+`voice_lab_i18n.js` formats words and plurals written by the scripts.
 
 ## Deciding things
 

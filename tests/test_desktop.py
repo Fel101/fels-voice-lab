@@ -41,13 +41,13 @@ class DesktopTests(unittest.TestCase):
                 with urllib.request.urlopen(url + "/api/cast", timeout=10) as response:
                     self.assertEqual(json.load(response)["characters"], [])
                 with urllib.request.urlopen(url + "/api/preferences", timeout=10) as response:
-                    self.assertEqual(json.load(response), {"theme": "system", "check_updates": False})
+                    self.assertEqual(json.load(response), {"theme": "system", "check_updates": False, "language": "en"})
                 request = urllib.request.Request(url + "/api/preferences", data=b'{"theme":"dark"}',
                     headers={"Content-Type": "application/json"}, method="POST")
                 with urllib.request.urlopen(request, timeout=10) as response:
-                    self.assertEqual(json.load(response), {"theme": "dark", "check_updates": False})
+                    self.assertEqual(json.load(response), {"theme": "dark", "check_updates": False, "language": "en"})
                 self.assertEqual(json.loads(Path(temp, "data/ui/preferences.json").read_text()),
-                                 {"theme": "dark", "check_updates": False})
+                                 {"theme": "dark", "check_updates": False, "language": "en"})
                 for page in ("/", "/compare"):
                     with urllib.request.urlopen(url + page, timeout=10) as response:
                         html = response.read().decode()

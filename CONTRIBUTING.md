@@ -9,7 +9,7 @@ py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements/core.txt -r requirements/lint.txt
 .venv\Scripts\ruff.exe check .
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
-node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs tests/queue_ui.test.cjs
+node --test tests/ui_workspace.test.cjs tests/ui_localization.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs tests/queue_ui.test.cjs
 .venv\Scripts\python.exe tools/check_repo.py
 npm ci
 npm run check
@@ -79,6 +79,24 @@ worker ownership and export correctness. Never add personal audio as a fixture.
 
 Contributions should be yours to license under the project's MIT terms; preserve
 third-party licenses for borrowed code and document its source and modifications.
+
+## Translate the Lab
+
+Use `locales/en.json` as the source. Copy it to `locales/<language-tag>.json`
+and give the language its name as speakers write it. Keep `"draft": true` until
+a speaker has checked the translation in the running Lab. A missing message uses
+English.
+
+Keep message keys and named values such as `{count}` and `{title}`. Move the values
+where the sentence needs them. For a plural message, supply `other` and any forms
+the language needs (`one`, `two`, `few`, `many` or `zero`). Preview changes by choosing
+the language beside **Theme** on the main or Compare page. Check the labels,
+empty pages, confirmations and messages with a library containing work.
+
+Mark static page words with `{{ui:key}}`. Scripts use `LabText.t(key, values)`
+or `LabText.plural(key, count, values)`. Pass each value by name. User text and
+proper names are values. Run the Python and Node tests after adding keys or
+translations.
 
 ## Making a release
 

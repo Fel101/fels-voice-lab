@@ -9308,6 +9308,7 @@
     "GET /voice_lab_cast_bindings.js",
     "GET /voice_lab_drama.js",
     "GET /voice_lab_generate.js",
+    "GET /voice_lab_i18n.js",
     "GET /voice_lab_projects.js",
     "GET /voice_lab_queue.js",
     "GET /voice_lab_scenes.js",

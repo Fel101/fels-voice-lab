@@ -1,0 +1,13 @@
+{
+  "name": "English",
+  "draft": false,
+  "messages": {
+    "language.label": "Language",
+    "language.draft": "draft, not yet checked by a speaker",
+    "language.save_failed": "Could not save the language. Choose it again to retry.",
+    "error.model_not_installed": "This model is missing. Open Models & features to install it, then try again.",
+    "error.ffmpeg_not_installed": "FFmpeg is missing. Install it from System & backups, then try again.",
+    "error.cancelled": "The request was stopped. Start it again when you’re ready.",
+    "language.discard_scene": "Changing the language reloads the page. Discard unsaved scene edits?"
+  }
+}

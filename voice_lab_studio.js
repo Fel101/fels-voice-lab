@@ -100,7 +100,7 @@ function updateValues() {
 }
 function fetchJson(url, body) {
   return fetch(url, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {})
-    .then(function (r) { return r.json().then(function (j) { if (!r.ok) { throw new Error(j.error || r.status); } return j; }); });
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) { throw new Error(LabText.error(j, r.status)); } return j; }); });
 }
 function loadReferences(choosePath) {
   return fetchJson('/api/references').then(function (result) {

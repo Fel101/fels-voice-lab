@@ -3176,6 +3176,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/compare` | The Compare page. |
 | GET | `/compare.html` | The Compare page. |
 | GET | `/theme.js` | The appearance script. |
+| GET | `/voice_lab_i18n.js` | The page's language helper. |
 | GET | `/voice_lab_queue.js` | A page script. |
 | GET | `/voice_workflows.js` | A page script. |
 | GET | `/voice_library.js` | A page script. |
@@ -3194,8 +3195,8 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_app.js` | A page script. |
 | GET | `/voice_lab_drama.js` | A page script. |
 | GET | `/out/*` | A file from the program's `out` folder, such as a finished voice conversion and its manifest. |
-| GET | `/api/preferences` | Read the saved page preferences: the theme, and whether the page checks for updates when it opens. |
-| POST | `/api/preferences` | Save one page preference or both; the other keeps its saved value. |
+| GET | `/api/preferences` | Read the saved theme, page language and update preference. |
+| POST | `/api/preferences` | Save each preference supplied, keeping the saved values of the others. |
 | GET | `/api/reference-audio` | Play a recording from the reference screen by path. |
 | GET | `/api/references` | List the recordings the reference screen offers. |
 | GET | `/api/voice-library` | List the saved voices the voice picker offers. |

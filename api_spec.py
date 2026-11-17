@@ -1114,6 +1114,7 @@ ROUTES = [
           ("/", "The Lab's main page.", "html"), ("/index.html", "The Lab's main page.", "html"),
           ("/compare", "The Compare page.", "html"), ("/compare.html", "The Compare page.", "html"),
           ("/theme.js", "The appearance script.", "javascript"),
+          ("/voice_lab_i18n.js", "The page's language helper.", "javascript"),
           ("/voice_lab_queue.js", "A page script.", "javascript"),
           ("/voice_workflows.js", "A page script.", "javascript"), ("/voice_library.js", "A page script.", "javascript"),
           ("/drama3-studio.js", "The Drama studio script.", "javascript"),
@@ -1130,13 +1131,13 @@ ROUTES = [
           ("/out/*", "A file from the program's `out` folder, such as a finished voice conversion and its manifest.", "file"))],
 
     # ---------------------------------------------------------------- Page helpers (internal)
-    R("GET", "/api/preferences", "Page helpers", "Read the saved page preferences: the theme, and whether the page checks for "
-                                                 "updates when it opens.", internal=True,
-      reply="`theme` and `check_updates`."),
-    R("POST", "/api/preferences", "Page helpers", "Save one page preference or both; the other keeps its saved value.",
+    R("GET", "/api/preferences", "Page helpers", "Read the saved theme, page language and update preference.", internal=True,
+      reply="`theme`, `language`, and `check_updates`."),
+    R("POST", "/api/preferences", "Page helpers", "Save each preference supplied, keeping the saved values of the others.",
       internal=True,
       body=(F("theme", "string", "`system`, `light`, `dark` or `forest`."),
-            F("check_updates", "boolean", "Ask GitHub for a newer release once a day when the page opens."))),
+            F("check_updates", "boolean", "Ask GitHub for a newer release once a day when the page opens."),
+            F("language", "string", "A page language offered beside Theme. The default is English (`en`)."))),
     R("GET", "/api/reference-audio", "Page helpers", "Play a recording from the reference screen by path.", internal=True,
       reply_kind="audio"),
     R("GET", "/api/references", "Page helpers", "List the recordings the reference screen offers.", internal=True),

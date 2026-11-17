@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The Language picker and English message catalog prepare the Lab for translations. This draws on
+  [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
+
 - System & backups links to feedback and includes workspace counts and setup status in the report you can review and
   copy. The diagnostics idea draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath
   (`debpalash`) and its contributors.

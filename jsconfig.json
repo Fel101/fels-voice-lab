@@ -21,6 +21,7 @@
   },
   "files": [
     "types/page.d.ts",
+    "voice_lab_i18n.js",
     "theme.js",
     "voice_lab_queue.js",
     "voice_workflows.js",
