@@ -1,15 +1,18 @@
 name: Release
-# Pushing a tag v<VERSION> publishes that release, but only after the checks every push gets have passed on the tagged commit.
-# When they fail nothing is published: fix the problem and release the next patch number (CONTRIBUTING.md, "Making a release").
-# The release carries Setup.exe, built from the tag, and SHA256SUMS, with a GitHub attestation of where both came from.
+# Pushing a tag v<VERSION> releases that version, but only after the checks every push gets have passed on the tagged commit.
+# The release is made as a draft first. Its files are then downloaded from the draft, their hashes and attestations checked,
+# and the downloaded Setup.exe installed over the release before it. Only then is the draft published. When anything fails,
+# nothing is published: delete the draft, fix the problem and release the next patch number (CONTRIBUTING.md, "Making a
+# release"). The release carries Setup.exe, built from the tag, and SHA256SUMS, with a GitHub attestation of where both came
+# from.
 on:
   push:
     tags: ['v*.*.*']
-  # To publish an existing tag again after a failure that was not the code's, such as GitHub being down.
+  # To release an existing tag again after a failure that was not the code's, such as GitHub being down.
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to release, such as v0.3.0
+        description: The tag to release, such as v0.4.0
         type: string
         required: true
 permissions:
@@ -22,7 +25,7 @@ jobs:
     uses: ./.github/workflows/verify.yml
     with:
       ref: refs/tags/${{ inputs.tag || github.ref_name }}
-  publish:
+  draft:
     needs: verify
     runs-on: windows-latest
     permissions:
@@ -46,7 +49,7 @@ jobs:
       # update.bat refuses a release whose tag is not v plus the version in app_version.py, so this refuses it first.
       - name: Check the tag and write the notes from the changelog
         run: python tools/release_notes.py --tag "$env:TAG" --output "$env:RUNNER_TEMP\notes.md"
-      # Inno Setup is on the runner. Setup.exe is built before anything is published, so a failed build publishes nothing.
+      # Inno Setup is on the runner. Setup.exe is built before anything is made on GitHub, so a failed build makes nothing.
       - name: Build Setup.exe from the tag
         run: python tools/build_installer.py --ref HEAD --output "$env:RUNNER_TEMP\installer"
       - name: Attest where Setup.exe and SHA256SUMS came from
@@ -55,10 +58,65 @@ jobs:
           subject-path: |
             ${{ runner.temp }}/installer/FelsVoiceLab-Setup-*.exe
             ${{ runner.temp }}/installer/SHA256SUMS
-      - name: Publish the release
+      - name: Make the release as a draft
         run: |
+          # A draft left by an earlier run for this tag is replaced. A published release is never changed.
+          $state = gh release view "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>$null
+          if ($state -eq 'false') { throw "$env:TAG is already published. Release the next patch number instead." }
+          if ($state -eq 'true') {
+            gh release delete "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --yes
+            if ($LASTEXITCODE) { throw "The earlier draft for $env:TAG could not be deleted" }
+          }
           $title = python -c "import app_version; print(app_version.APP_NAME, app_version.VERSION)"
           if ($LASTEXITCODE -ne 0 -or -not $title) { exit 1 }
           $version = python -c "import app_version; print(app_version.VERSION)"
           $files = "$env:RUNNER_TEMP\installer\FelsVoiceLab-Setup-$version.exe", "$env:RUNNER_TEMP\installer\SHA256SUMS"
-          gh release create "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "$title" --notes-file "$env:RUNNER_TEMP\notes.md" @files
+          gh release create "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --draft --verify-tag --title "$title" --notes-file "$env:RUNNER_TEMP\notes.md" @files
+  check:
+    # What people will download, checked as they will get it: the draft's own files, on a runner that did not build them.
+    needs: draft
+    runs-on: windows-latest
+    permissions:
+      # A draft release can be read only with write access.
+      contents: write
+      attestations: read
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          # The update check finds the release before this one, and the files it dropped, from the tags.
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Download Setup.exe and SHA256SUMS from the draft
+        run: |
+          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --dir "$env:RUNNER_TEMP\draft"
+          if ($LASTEXITCODE) { throw "The draft's files could not be downloaded" }
+      - name: Check their hashes and attestations
+        run: python tools/check_release_files.py --dir "$env:RUNNER_TEMP\draft" --tag "$env:TAG" --repo "$env:GITHUB_REPOSITORY"
+      - name: Install the downloaded Setup.exe over the release before it
+        run: ./tools/check_setup_update.ps1 -Setup (Get-Item "$env:RUNNER_TEMP\draft\FelsVoiceLab-Setup-*.exe").FullName
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      # Check for updates asks GitHub for the latest release, so the newest version is marked latest. A patch to an older
+      # version, released after a newer one, is not.
+      - name: Publish the checked draft
+        run: |
+          newest=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          if [ "$newest" = "$TAG" ]; then latest=true; else latest=false; fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest="$latest"

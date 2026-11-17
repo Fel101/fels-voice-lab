@@ -43,7 +43,8 @@ jobs:
           npm ci
           npm run check
       - name: Frontend contracts
-        run: node --test tests/ui_workspace.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs tests/queue_ui.test.cjs
+        # Node expands the pattern itself, so every test file runs, new ones included.
+        run: node --test "tests/*.test.cjs"
       - name: Check the repository for secrets, private files and dead links
         run: .venv/Scripts/python.exe tools/check_repo.py
   setup-without-python:
@@ -120,65 +121,8 @@ jobs:
           "Setup.exe installed version $($health.version), the Lab answered, and uninstalling kept the library."
       - name: Install the release before it, then this Setup over it
         # Setup over an installed Lab is an update (installer\FelsVoiceLab.iss): the newest release older than this version,
-        # from GitHub, with a character in its library, then this build over it. Checked: the version, the files this
-        # version no longer has, the record, the core packages against requirements\core.txt, and the library.
+        # from GitHub, with a character in its library, then this build over it. tools/check_setup_update.ps1 says what it
+        # checks. release.yml runs it again on the Setup.exe downloaded from the draft release, before publishing it.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = (Select-String -Path app_version.py -Pattern '^VERSION = "(.+)"$').Matches[0].Groups[1].Value
-          $previous = git tag --list 'v*' | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' -and [version]$_.Substring(1) -lt [version]$version } |
-            Sort-Object { [version]$_.Substring(1) } | Select-Object -Last 1
-          if (-not $previous) { "There is no release before $version to update from."; exit 0 }
-          gh release download $previous --repo $env:GITHUB_REPOSITORY --pattern 'FelsVoiceLab-Setup-*.exe' --dir "$env:RUNNER_TEMP\previous"
-          if ($LASTEXITCODE) { throw "The Setup.exe of $previous could not be downloaded" }
-          $lab = Join-Path $env:RUNNER_TEMP 'UpdatedLab'
-          $silent = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$lab`""
-          function Start-Lab {
-            $service = Start-Process "$lab\.venv\Scripts\python.exe" -ArgumentList 'serve.py', '--port', '8791' -WorkingDirectory $lab -PassThru -NoNewWindow
-            foreach ($try in 1..60) {
-              try { $null = Invoke-RestMethod http://127.0.0.1:8791/api/health -TimeoutSec 2; return $service } catch { Start-Sleep 1 }
-            }
-            Stop-Process -Id $service.Id -Force
-            throw "The Lab in $lab did not answer /api/health"
-          }
-          $old = Start-Process (Get-Item "$env:RUNNER_TEMP\previous\FelsVoiceLab-Setup-*.exe").FullName -ArgumentList ($silent + "/LOG=`"$env:RUNNER_TEMP\previous-setup.log`"") -Wait -PassThru
-          if ($old.ExitCode) { throw "The Setup.exe of $previous ended with exit code $($old.ExitCode)" }
-          $service = Start-Lab
-          Invoke-RestMethod -Method Post http://127.0.0.1:8791/api/characters -ContentType 'application/json' -Body '{"name": "Kept through the update"}' | Out-Null
-          Stop-Process -Id $service.Id -Force
-          Start-Sleep 2
-          $setup = Get-ChildItem "$env:RUNNER_TEMP\installer\FelsVoiceLab-Setup-*.exe" | Select-Object -First 1
-          $new = Start-Process $setup.FullName -ArgumentList ($silent + "/LOG=`"$env:RUNNER_TEMP\update-setup.log`"") -Wait -PassThru
-          if ($new.ExitCode) {
-            Get-Content "$lab\out\install\setup-exe.log" -Tail 80 -ErrorAction SilentlyContinue
-            throw "This Setup.exe over $previous ended with exit code $($new.ExitCode)"
-          }
-          $service = Start-Lab
-          $health = Invoke-RestMethod http://127.0.0.1:8791/api/health
-          $cast = Invoke-RestMethod http://127.0.0.1:8791/api/cast
-          Stop-Process -Id $service.Id -Force
-          if ($health.version -ne $version) { throw "The Lab says version $($health.version) after the update, not $version" }
-          if ($cast.characters.name -notcontains 'Kept through the update') { throw "The update lost the library's character" }
-          $dropped = @(git diff --diff-filter=D --name-only $previous HEAD)
-          foreach ($file in $dropped) { if (Test-Path (Join-Path $lab $file)) { throw "Setup left $file, which $version no longer has" } }
-          $record = Get-Content "$lab\out\update\last.json" -Raw | ConvertFrom-Json
-          if ($record.method -ne 'setup' -or $record.from -ne $previous.Substring(1) -or $record.to -ne $version) {
-            throw "The update was not recorded as Setup's update from $previous to $version"
-          }
-          & "$lab\.venv\Scripts\python.exe" -m pip check
-          if ($LASTEXITCODE) { throw "pip check found a problem in the updated .venv" }
-          $pins = @'
-          import importlib.metadata, pathlib, sys
-          wrong = []
-          for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
-              pin = line.split("#", 1)[0].split(";", 1)[0].strip()
-              if "==" in pin:
-                  name, version = (part.strip() for part in pin.split("=="))
-                  if importlib.metadata.version(name) != version:
-                      wrong.append(f"{name} {importlib.metadata.version(name)}, pinned {version}")
-          print("Not as requirements/core.txt pins them: " + "; ".join(wrong) if wrong else "Every core package is as pinned.")
-          sys.exit(1 if wrong else 0)
-          '@
-          $pins | & "$lab\.venv\Scripts\python.exe" - "$lab\requirements\core.txt"
-          if ($LASTEXITCODE) { throw "The update left .venv's packages unlike requirements\core.txt" }
-          "Setup.exe updated $previous to $version: the character kept, $($dropped.Count) dropped file(s) gone, the packages as pinned."
+        run: ./tools/check_setup_update.ps1 -Setup (Get-Item "$env:RUNNER_TEMP\installer\FelsVoiceLab-Setup-*.exe").FullName

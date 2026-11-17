@@ -56,6 +56,10 @@ The two hashes must be the same. With the [GitHub CLI](https://cli.github.com/),
 that this repository's release workflow built the file. Setup.exe is not signed yet, so Windows SmartScreen warns before it
 runs; until it is, the hash and the attestation are how to check it.
 
+From 0.4.0 the release workflow makes the same checks before anyone can download the files. It makes each release as a
+draft, downloads Setup.exe and `SHA256SUMS` from the draft on a computer that did not build them, checks the hash and the
+attestation, and installs that Setup.exe over the release before it. Only then is the release published.
+
 ## Reporting a security problem
 
 Report it privately, not in a public issue: use
