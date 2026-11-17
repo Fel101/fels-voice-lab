@@ -418,16 +418,6 @@ TOOLS.extend(
             ],
             ("file", "character", "engine_id", "sidecar_sha256", "permission"),
         ),
-        local_tool(
-            "design_voice",
-            "Build a repeatable set of local Qwen VoiceDesign instructions from a template and optional notes.",
-            [
-                ("template", "string", "narrator, character or announcer."),
-                ("notes", "string", "Optional voice traits and delivery direction."),
-                ("text", "string", "Audition script."),
-            ],
-            ("template",),
-        ),
     ]
 )
 next(tool for tool in TOOLS if tool["name"] == "import_voice_candidate")["annotations"]["readOnlyHint"] = False
@@ -665,12 +655,6 @@ class Tools:
         _, _, result = self.lab.call("POST", "/api/cast/slate-clip/import?" + query, raw, timeout=45)
         facts = json.loads(result)
         return "Reference imported as a Cast candidate.", facts
-
-    def design_voice(self, call, arguments):
-        self.lab.ensure(call)
-        _, _, raw = self.lab.call("POST", "/api/voice-recipes", arguments)
-        details = json.loads(raw)["recipe"]
-        return details["description"], details
 
     # ----------------------------------------------------------------------------------------------------- speak
 

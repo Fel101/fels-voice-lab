@@ -44,8 +44,15 @@ or automatically proves acting/identity quality. Dataset preparation is not trai
 Word times: `align_takes.py` records forced-alignment word times for Cast takes, and captions use them where
 recorded. The aligner is faster-whisper's cross-attention method with the local tiny model; see
 [docs/ALIGNMENT.md](docs/ALIGNMENT.md) for the licence check and the limits, which include unmeasured boundary
-accuracy. `fit.py` gives a bounded time-stretch status (`within_slot`, `stretched`, `needs_rerender`). The
-export records the status and does not stretch the audio.
+accuracy. `fit.py` gives a bounded time-stretch status (`within_slot`, `stretched`, `needs_rerender`). A scene
+export records the status and does not stretch the audio. A dub is the exception: a line set to **Speed up to fit**
+is played up to 1.35× faster in the dub's mix, and a line still too long at that speed is marked.
+
+Speech recognition: **Install speech recognition** on **System & backups** puts faster-whisper in its own
+`.venv-asr` with two of Systran's Whisper models at pinned revisions. Tiny writes transcripts and the word times
+above; Small turns speech into English words. Both run on the CPU. They serve dubbing, the MCP server's `transcribe`
+and the OpenAI-style `/v1/audio/transcriptions` and `/v1/audio/translations` routes ([docs/CONNECT.md](docs/CONNECT.md)).
+A transcript is a draft to check, not a record of what was said.
 
 Lip-sync tracks: the export writes one mouth-shape track per line that has phoneme times. Kokoro takes store the
 model's own predicted phoneme times with the take, in any language Kokoro speaks. Other English takes share their

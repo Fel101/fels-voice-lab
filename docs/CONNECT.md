@@ -63,16 +63,23 @@ Python's standard library, so any Python 3.8 or later runs it.
 | `list_voices` | Lists the voices that can speak now: your Cast's voices and the preset voices of the installed models. Each has the name to use, its model, its languages, and whether it takes an acting direction. It can keep to one language, and list the voices that are not ready yet with the reason. |
 | `speak` | Says text aloud on this computer's speakers and saves it as a WAV file, then answers with the file's path and length. Up to 10,000 characters; longer text is made in parts and joined. It takes a voice's name (else the Lab's default voice, Kokoro's `af_heart`), an acting direction for voices that take one, a language, `play: false` to save without playing, and a file to keep it in. |
 | `stop_speaking` | Stops the clip that is playing, and cancels the clips being made or waiting. |
+| `set_voice` | Chooses the voice `speak` uses for this connection when it names none. Other apps keep their own. |
+| `describe_voice` | Says which model a voice uses, its languages, whether it takes an acting direction, and whether it can speak now. |
+| `transcribe` | Writes down the words in an audio file from the connection's workspace, on this computer, with the Lab's speech recognition. It can give the words in English instead. |
+| `preview_voice_candidate` | Shows where a Voice Slate recording in the workspace came from, what it may be used for, and which models can use it. |
+| `import_voice_candidate` | Adds that recording to a character in Cast as a candidate voice, once the person has seen the preview and confirmed its allowed use. |
 
 Clips are spoken one after another, never over each other. The first clip after the Lab starts also loads the voice's
 model, which takes from ten seconds to more than a minute; the call waits rather than failing, and an app that asks for
 progress hears where the clip stands.
 
-None of the tools deletes, restores, installs or changes anything in your library. A clip is spoken without keeping a take,
-so an assistant that talks all day does not fill your Cast; it still carries the label that marks it as AI-generated. Clips
-go to `out\spoken\` in the Lab's folder, one folder for each time the app ran, and the Lab's cleanup (**System & backups**,
-**Clean up old scratch folders and logs**, and each start of the Lab) removes a folder a day after the app that made it
-stopped. A clip saved to a file the app named is kept, and `speak` never replaces a file that is already there.
+`import_voice_candidate` is the one tool that adds to your library, and it adds a candidate, which you approve in Cast
+as you would one added on the page. None of the tools deletes, restores or installs anything. A clip is spoken without
+keeping a take, so an assistant that talks all day does not fill your Cast; it still carries the label that marks it as
+AI-generated. Clips go to `out\spoken\` in the Lab's folder, one folder for each time the app ran, and the Lab's cleanup
+(**System & backups**, **Clean up old scratch folders and logs**, and each start of the Lab) removes a folder a day
+after the app that made it stopped. A clip saved to a file the app named is kept, and `speak` never replaces a file that
+is already there.
 
 ## When the Lab is closed
 
@@ -164,10 +171,14 @@ See [the service API](API.md) for request fields, limits and response events.
 
 ## Give an MCP connection a voice
 
-Use `set_voice` to select a voice for this connection and `describe_voice` to see it. Saved clips can use WAV, MP3,
-FLAC, Opus or AAC. The compressed formats use the Lab's FFmpeg installer. Use `transcribe` with a selected local file
-and `design_voice` with an installed model that supports voice design. Set `--workspace` to the folder this connection
-may read from. Voice Slate imports retain the approved source description and still need Cast review.
+Use `set_voice` to choose a voice for this connection and `describe_voice` to see what it can do. `speak` can save a
+clip as WAV, MP3, FLAC, Opus or AAC; the last four need FFmpeg (**Install FFmpeg** on **System & backups**), a named
+voice and `play: false`.
+
+`transcribe` and the two Voice Slate tools read files only from the connection's workspace: add `--workspace` and a
+folder to the server's line, and put the files there. Without it they say so and read nothing. With it, a file that
+`speak` saves to must be in that folder too. A recording imported from Voice Slate keeps the description of its origin
+that was approved in Slate, and arrives in Cast as a candidate.
 
 For a client that uses Streamable HTTP, start Voice Lab, then run this from its folder with your workspace and the
 Lab address from **System & backups**.

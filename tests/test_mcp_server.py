@@ -6,6 +6,7 @@ import io
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import api_service  # noqa: E402
+import api_spec  # noqa: E402
 import housekeeping  # noqa: E402
 import kokoro_support  # noqa: E402
 import lab_address  # noqa: E402
@@ -131,7 +133,6 @@ class ConversationTests(LabCase):
                 "transcribe",
                 "preview_voice_candidate",
                 "import_voice_candidate",
-                "design_voice",
             ],
         )
         for tool in tools:
@@ -460,7 +461,6 @@ class ModernProtocolTests(InProcessCase):
                 "transcribe",
                 "preview_voice_candidate",
                 "import_voice_candidate",
-                "design_voice",
             ],
         )
         self.assertEqual((listed["ttlMs"], listed["cacheScope"]), (3_600_000, "public"))
@@ -627,6 +627,18 @@ class SettingsTests(unittest.TestCase):
         server.answer(1, {"content": [{"type": "text", "text": "two\nlines"}]})
         self.assertEqual(output.getvalue().count(b"\n"), 1)
         self.assertEqual(json.loads(output.getvalue())["result"]["content"][0]["text"], "two\nlines")
+
+
+class RouteTests(unittest.TestCase):
+    def test_every_lab_path_the_server_calls_is_one_of_the_labs_routes(self):
+        """design_voice once called a route that had moved to a later branch, and every call to it failed."""
+        routes = {route.path for route in api_spec.ROUTES}
+        source = (ROOT / "tools" / "mcp_server.py").read_text(encoding="utf-8")
+        named = set(re.findall(r'"(/(?:api|v1)/[A-Za-z0-9/_-]*)', source))
+        self.assertGreater(len(named), 5)
+        for path in sorted(named):
+            with self.subTest(path=path):
+                self.assertTrue(any(route.startswith(path) for route in routes), f"no route starts {path}")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,31 @@ call the service on whatever port it had, and the service still listens on `127.
 by other websites' pages. The port is the Lab's alone while it runs (Windows' exclusive use), so another program cannot bind
 it alongside the Lab.
 
+**Other programs on this computer** can use the Lab's voices ([connecting them](docs/CONNECT.md)). They reach the same
+service on `127.0.0.1` and get the same refusals as any other request.
+
+- **The MCP server** (`tools/mcp_server.py`) talks to the app that started it over standard input and output, and to the Lab
+  over `127.0.0.1`. It opens no port of its own unless it is started with `--http`. Then it listens on `127.0.0.1` only. It
+  answers a request only when the request carries the connection token and names this computer in `Host`, and in
+  `Origin` when it sends one. The token is kept in your local application data (`FelsVoiceLabService\mcp-http.token`).
+- **The tools that read a file** read only inside the folder given with `--workspace`, and refuse without one.
+  `import_voice_candidate` is the one tool that adds to your library. It adds a Voice Slate recording to Cast as a
+  candidate, after the app has shown its origin and allowed use and the person has confirmed them.
+- **The OpenAI-style routes** (`/v1/...`) answer this computer only and ignore any key sent with them.
+
+**Going online.** The Lab has no telemetry and sends nothing about you or your library. Its own code goes online in three
+places:
+
+- **An Install button** fetches what it installs: model files from Hugging Face at pinned revisions, Python packages from
+  the Python Package Index at pinned versions, and FFmpeg from its GitHub release.
+- **Check for updates and Update now** go to GitHub, as described above.
+- **A provider profile** sends text or audio to the address you entered, when a recipe step or a dub draft uses it
+  ([automation](docs/AUTOMATION.md)). There is none until you make one. An address outside this computer must be HTTPS
+  and needs a key. The Lab keeps that key in memory until it closes, or reads it from an environment variable you name;
+  it never writes the key to disk. The Lab doesn't follow redirects from a provider. Before a recipe runs, its preview
+  lists each provider, where the text or audio would go and which fields would be sent; the run starts only when each
+  one is approved.
+
 `tools/check_repo.py` is a heuristic check of the files Git would publish, not a
 guarantee that every possible secret, dependency vulnerability or rights issue is
 absent. It finds private keys and provider tokens, personal Windows home paths,
