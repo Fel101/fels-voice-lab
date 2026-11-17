@@ -5,7 +5,23 @@ original in `masters\`) can become a cloning reference in Cast with its transcri
 checked against its master. Nothing is imported unless you run the command, one clip at a time. The clip format is in Voice Slate's
 `docs\clip-format.md`.
 
-## Use it
+## Import a handoff from the Voice Slate window
+
+Open a kept clip in Voice Slate and choose **Save for Voice Lab** from the clip actions. This creates one `.voiceslate` file
+with the exact kept WAV and exact sidecar. In Voice Lab, open **Cast library → Import from Voice Slate** and pick the file.
+Check the transcript, origin and allowed use, pick a character name and a cloning model, and press **Import as candidate**.
+If the transcript is an unchecked ASR draft, the form requires explicit acceptance. Review and approve the recording in Cast.
+The speaker master and any release document stay with Slate. The bundle retains the release pointer from the sidecar and
+does not run the optional comparison against the master. Import the original Slate folder through the CLI for that check.
+
+The handoff is an uncompressed ZIP with two fixed member names, `clip.wav` and `clip.json`. The reader validates the sidecar,
+bound WAV hash, consent statement, and the selected model’s reference requirements before Cast registration.
+
+Inspired by [VoiceStudio's portable voices](https://github.com/debpalash/VoiceStudio/blob/main/docs/persona-format.md) by
+Palash Debnath (`debpalash`) and the VoiceStudio contributors. This file preserves Voice Slate’s existing records and uses
+Voice Lab’s own recorder bridge.
+
+## Use it from the command line
 
 Run from this folder. Voice Slate's output folder is `voice-clips` beside the program unless Settings changed it.
 

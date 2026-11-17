@@ -503,3 +503,80 @@ function stopPerformanceSet(){
   if(performRun&&!performRun.stopRequested){performRun.stopRequested=true;$('performStatus').textContent=performStatusText(performRun);}
 }
 function loadPronunciations(characterId){fetchJson('/api/pronunciations?character_id='+encodeURIComponent(characterId)).then(function(result){$('pronunciationList').textContent=(result.pronunciations||[]).map(function(item){return item.source+' → '+item.replacement;}).join(' · ')||'No pronunciation entries yet.';});}
+
+// The selected file is posted only to this Lab. Preview makes no Cast entry.
+var slateBundleFile = null, slateReviewedSidecar = null;
+function postSlateBundle(path, file) {
+  return fetch('/api/cast/slate-clip/' + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
+  }).then(async function (response) {
+    var result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not read the Voice Slate clip.');
+    return result;
+  });
+}
+$('slateBundle').addEventListener('change', function () {
+  var file = this.files && this.files[0];
+  slateBundleFile = file || null;
+  slateReviewedSidecar = null;
+  $('slateImportForm').hidden = true;
+  $('slateImportStatus').textContent = file ? 'Checking the clip and its sidecar…' : '';
+  $('slateAcceptDraft').checked = false;
+  $('slateImportGo').disabled = false;
+  if (!file) return;
+  postSlateBundle('preview', file).then(function (result) {
+    if (slateBundleFile !== file) return;
+    var clip = result.clip,
+      picker = $('slateEngine'),
+      draft = clip.transcript_status === 'asr_draft';
+    slateReviewedSidecar = clip.sidecar_sha256;
+    $('slateClipDetails').textContent = [
+      clip.file + ' · ' + Number(clip.seconds).toFixed(2) + ' s',
+      clip.transcript,
+      'Origin: ' + clip.origin,
+      'Allowed use: ' + clip.allowed_use,
+    ].concat(clip.warnings).join('\n');
+    $('slateCharacter').value = clip.speaker || '';
+    picker.textContent = '';
+    result.engines.forEach(function (engine) {
+      option(picker, engine, sceneModelName(engine));
+    });
+    $('slateDraftLabel').hidden = !draft;
+    $('slateAcceptDraft').required = draft;
+    $('slateImportForm').hidden = false;
+    $('slateImportStatus').textContent = 'The kept WAV hash and permission sidecar were checked.';
+  }).catch(function (error) {
+    if (slateBundleFile === file) $('slateImportStatus').textContent = error.message;
+  });
+});
+$('slateImportForm').addEventListener('submit', function (event) {
+  event.preventDefault();
+  var file = slateBundleFile;
+  if (!file || !slateReviewedSidecar) return;
+  var query = new URLSearchParams({
+    character: $('slateCharacter').value.trim(),
+    engine_id: $('slateEngine').value,
+    create_character: '1',
+    sidecar_sha256: slateReviewedSidecar,
+    accept_draft: $('slateAcceptDraft').checked ? '1' : '0',
+  });
+  $('slateImportGo').disabled = true;
+  $('slateImportStatus').textContent = 'Importing the kept clip…';
+  postSlateBundle('import?' + query, file).then(function (result) {
+    if (slateBundleFile !== file) return;
+    slateBundleFile = null;
+    slateReviewedSidecar = null;
+    $('slateBundle').value = '';
+    $('slateImportForm').hidden = true;
+    $('slateImportStatus').textContent =
+      (result.status === 'already_registered' ? 'This clip is already in Cast.' : 'The clip is in Cast.') +
+      ' Review the recording and approve it before use.';
+    $('castEditor').open = true;
+    return refreshCast(result.character_id, result.identity_id);
+  }).catch(function (error) {
+    if (slateBundleFile === file) {
+      $('slateImportStatus').textContent = error.message;
+      $('slateImportGo').disabled = false;
+    }
+  });
+});

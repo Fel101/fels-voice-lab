@@ -42,6 +42,10 @@
       "description": "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in [scene-schema-v1.md](scenes/scene-schema-v1.md)."
     },
     {
+      "name": "Live speech",
+      "description": "Short-lived sessions with ordered local audio input and speech replies."
+    },
+    {
       "name": "Production",
       "description": "Search saved projects and share local project or voice files."
     },
@@ -1659,6 +1663,159 @@
         }
       }
     },
+    "/v1/audio/transcriptions": {
+      "post": {
+        "operationId": "post_v1_audio_transcriptions",
+        "summary": "Transcribe a local audio file.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A local audio upload, up to 25 MiB."
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Optional ISO language code."
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Optional spelling prompt."
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "Decoding temperature from 0 to 1."
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "description": "json, verbose_json, text, srt or vtt."
+                  },
+                  "timestamp_granularities[]": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional word and segment timestamp granularity."
+                  }
+                },
+                "required": [
+                  "file",
+                  "model"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcript text, optionally with timestamps or formatted as captions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
+    "/v1/audio/translations": {
+      "post": {
+        "operationId": "post_v1_audio_translations",
+        "summary": "Translate local speech to English.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A local audio upload, up to 25 MiB."
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model."
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Optional English spelling prompt."
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "Decoding temperature from 0 to 1."
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "description": "json, verbose_json, text, srt or vtt."
+                  }
+                },
+                "required": [
+                  "file",
+                  "model"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "English transcript text, optionally with timestamps or as captions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
     "/v1/models": {
       "get": {
         "operationId": "get_v1_models",
@@ -1728,6 +1885,164 @@
           },
           "default": {
             "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
+    "/api/cast/slate-clip/preview": {
+      "post": {
+        "operationId": "post_api_cast_slate_clip_preview",
+        "summary": "Check a Voice Slate handoff file without saving it.",
+        "tags": [
+          "Cast"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The bundle or source file is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The bundle exceeds the upload limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/cast/slate-clip/import": {
+      "post": {
+        "operationId": "post_api_cast_slate_clip_import",
+        "summary": "Import a kept Voice Slate clip as a candidate.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies them. A master recording stays in Slate and an imported reference still needs Cast approval.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "character",
+            "in": "query",
+            "required": true,
+            "description": "The Cast character name or ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "engine_id",
+            "in": "query",
+            "required": true,
+            "description": "A reference-cloning engine from the preview.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "create_character",
+            "in": "query",
+            "required": false,
+            "description": "Send 1 to create the character when the name is new.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accept_draft",
+            "in": "query",
+            "required": false,
+            "description": "Send 1 only after explicitly accepting an unchecked transcript draft.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sidecar_sha256",
+            "in": "query",
+            "required": false,
+            "description": "Optional preview hash. Refuse a clip whose sidecar differs from the one reviewed.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`status`, Cast character, identity and reference IDs, and `warnings`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The clip or requested assignment is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The bundle exceeds the upload limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -5787,6 +6102,363 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live": {
+      "get": {
+        "operationId": "get_api_live",
+        "summary": "Discover local live speech capabilities.",
+        "tags": [
+          "Live speech"
+        ],
+        "responses": {
+          "200": {
+            "description": "ASR readiness, input format and speech engines with native streaming.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_live",
+        "summary": "Start a short-lived audio session.",
+        "tags": [
+          "Live speech"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "language": {
+                    "type": "string",
+                    "description": "Optional input language code."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session ID, input format and cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}": {
+      "get": {
+        "operationId": "get_api_live_session_id",
+        "summary": "Replay a live session's events.",
+        "tags": [
+          "Live speech"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Return events after this cursor.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Text events, state and next sample offset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}/audio": {
+      "post": {
+        "operationId": "post_api_live_session_id_audio",
+        "summary": "Append ordered 16 kHz signed PCM samples.",
+        "tags": [
+          "Live speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": true,
+            "description": "Sample offset for this chunk.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The next sample offset. Repeated identical chunks are accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}/partial": {
+      "post": {
+        "operationId": "post_api_live_session_id_partial",
+        "summary": "Recognize the audio received so far.",
+        "tags": [
+          "Live speech"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A partial transcript and its event cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}/final": {
+      "post": {
+        "operationId": "post_api_live_session_id_final",
+        "summary": "Finish the audio turn.",
+        "tags": [
+          "Live speech"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Final recognized text and its event cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}/cancel": {
+      "post": {
+        "operationId": "post_api_live_session_id_cancel",
+        "summary": "Cancel recognition or speech and clear the audio.",
+        "tags": [
+          "Live speech"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled session status and event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/live/{session_id}/speak": {
+      "post": {
+        "operationId": "post_api_live_session_id_speak",
+        "summary": "Stream reply audio from a local model.",
+        "tags": [
+          "Live speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Reply text, up to 500 characters."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "description": "Named voice for buffered playback."
+                  },
+                  "engine": {
+                    "type": "string",
+                    "description": "Engine for native speech streaming."
+                  },
+                  "voice_description": {
+                    "type": "string",
+                    "description": "Engine-supported voice design description."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Optional native speech language."
+                  },
+                  "speaker": {
+                    "type": "string",
+                    "description": "Native preset ID."
+                  },
+                  "mode": {
+                    "type": "string",
+                    "description": "Native engine mode."
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "A blind listening session's id, from `GET /api/evaluations/blind-sessions`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Start, PCM audio and completion events.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }

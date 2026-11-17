@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Transcribe local audio, translate speech to English, and stream live replies through local API sessions. Review a
+  Voice Slate handoff in Cast and import its recording as a candidate.
+
 - Install speech recognition from System & backups. Transcript drafts run on your computer.
 
 - Make repeatable sound effects and master a WAV or FLAC locally. Choose 16-bit PCM, 24-bit PCM or floating-point WAV

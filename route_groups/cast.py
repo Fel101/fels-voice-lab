@@ -4,13 +4,16 @@ reads (reference_catalog.py)."""
 
 import base64
 import json
+from threading import Lock
 from urllib.parse import parse_qs
 
-from cast_store import MAX_UPLOAD_BYTES, PRESET_VOICE_ENGINES
+from cast_store import MAX_UPLOAD_BYTES, PRESET_VOICE_ENGINES, REFERENCE_ENGINES
 import engine_adapters
 from performance_settings import performance_controls
 from reference_catalog import list_references, list_voice_library, resolve_reference_audio
 import transcript_suggest
+from recorder_import import import_clip
+from slate_bundle import MAX_BUNDLE_BYTES, read_bundle
 
 
 def add_voice(engines, cast, character_id, req):
@@ -42,6 +45,35 @@ def add_voice(engines, cast, character_id, req):
 def register(router, lab):
     """The Cast rows of api_spec.ROUTES, and the lists of references and saved voices the page reads."""
     serve, engines, cast = lab.serve, lab.engines, lab.cast
+
+    slate_import_lock = Lock()
+
+    @router.post("/api/cast/slate-clip/preview")
+    def preview_slate_clip(self, parsed, req):
+        clip = read_bundle(self._read_body(MAX_BUNDLE_BYTES), accept_asr_draft=True)
+        self._json(200, {"clip": clip.summary(), "engines": sorted(REFERENCE_ENGINES & engines.api_entries.keys())})
+
+    @router.post("/api/cast/slate-clip/import")
+    def register_slate_clip(self, parsed, req):
+        params = parse_qs(parsed.query)
+        character = params.get("character", [""])[0]
+        engine = params.get("engine_id", [""])[0]
+        if engine not in REFERENCE_ENGINES or engine not in engines.api_entries:
+            raise ValueError("Choose a model that can use a voice recording.")
+        clip = read_bundle(self._read_body(MAX_BUNDLE_BYTES), accept_asr_draft=params.get("accept_draft") == ["1"])
+        reviewed = params.get("sidecar_sha256")
+        if reviewed is not None and reviewed != [clip.sidecar_sha256]:
+            raise ValueError("The clip changed after preview. Pick the handoff file again to review it.")
+        with slate_import_lock:
+            result = import_clip(
+                clip,
+                character=character,
+                engine_id=engine,
+                create_character=params.get("create_character") == ["1"],
+                store=cast,
+                identity_check=False,
+            )
+        self._json(201, {key: result[key] for key in ("status", "character_id", "identity_id", "reference_id", "warnings")})
 
     @router.get("/api/references")
     def reference_list(self, parsed, req):

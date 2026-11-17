@@ -281,6 +281,10 @@ def register(router, lab):
     def openai_models(self, parsed, req):
         rows = [{"id": key, "object": "model", "created": 0, "owned_by": "fels-voice-lab", "name": name}
                 for key, name in voice_models()]  # fmt: skip
+        from speech_input import available_models
+
+        rows.extend({"id": ident, "object": "model", "created": 0, "owned_by": "fels-voice-lab",
+                     "name": name, "capabilities": ["transcribe", "translate"]} for ident, name in available_models())
         self._json(200, {"object": "list", "data": rows})
 
     @router.get("/v1/audio/models")

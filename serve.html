@@ -235,6 +235,19 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <div class="workflow-note" id="castSampleNote" hidden><p>No characters yet. Open the sample scene for two characters with Kokoro’s preset voices and a short scene to render, or create your own below.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
   <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
   <p><a href="#projects" id="castImportVoiceFile">Import a voice file</a></p>
+  <details>
+    <summary>Import from Voice Slate</summary>
+    <p class="meta">In Voice Slate, use Save for Voice Lab on a kept clip. Review its transcript and allowed use here, then import it as a candidate.</p>
+    <label class="field compact">Voice Slate handoff<input id="slateBundle" type="file" accept=".voiceslate"></label>
+    <form id="slateImportForm" hidden>
+      <p class="meta" id="slateClipDetails" style="white-space:pre-line"></p>
+      <div class="row"><label class="field compact">Character name (creates one if needed)<input id="slateCharacter" maxlength="80" required></label>
+        <label class="field compact">Cloning model<select id="slateEngine" required></select></label></div>
+      <label id="slateDraftLabel" hidden><input id="slateAcceptDraft" type="checkbox"> I understand that the transcript is a draft and needs checking</label>
+      <button type="submit" id="slateImportGo">Import as candidate</button>
+    </form>
+    <p class="meta" id="slateImportStatus" role="status" aria-live="polite"></p>
+  </details>
   <details id="castEditor"><summary>Create or edit a character, its voices and its recordings</summary>
   <p class="meta">Build your cast and approve a voice recording for each character. Your recordings and every saved version stay on this PC.</p>
   <div class="cast-grid">

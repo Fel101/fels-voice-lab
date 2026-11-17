@@ -207,8 +207,8 @@ class TableTests(unittest.TestCase):
                 self.assertIn(row.method, ("GET", "POST"))
                 self.assertIn(row.group, groups)
                 self.assertTrue(row.summary.endswith("."), "a summary is a sentence")
-                self.assertIn(row.reply_kind, ("json", "wav", "ndjson", "csv", "audio", "html", "javascript", "file"))
-                self.assertIn(row.body_kind, ("json", "audio", "archive", "none"))
+                self.assertIn(row.reply_kind, ("json", "wav", "ndjson", "csv", "audio", "html", "javascript", "file", "transcript"))
+                self.assertIn(row.body_kind, ("json", "audio", "archive", "multipart", "none"))
                 self.assertTrue(200 <= row.status < 300)
                 self.assertFalse({status for status, _ in row.errors} & {row.status})
                 if row.method == "GET":
@@ -223,7 +223,7 @@ class TableTests(unittest.TestCase):
         for row in api_spec.ROUTES:
             for field in row.query + row.body + row.headers:
                 with self.subTest(f"{api_spec.key(row)} {field.name}"):
-                    self.assertRegex(field.type, r"^(string|integer|number|boolean|object)(\[\])?$")
+                    self.assertRegex(field.type, r"^(string|integer|number|boolean|object|binary)(\[\])?$")
                     self.assertTrue(field.doc.endswith((".", "`")), "a field's meaning is a sentence")
             names = [field.name for field in row.body]
             self.assertEqual(len(names), len(set(names)), api_spec.key(row))
@@ -335,14 +335,19 @@ class OpenApiTests(unittest.TestCase):
                         described = dict(schema["properties"][item.name])
                         self.assertEqual(described.pop("description"), item.doc)
                         self.assertEqual(described, schema_of(item.type))
+                elif row.body_kind == "multipart":
+                    schema = body["content"]["multipart/form-data"]["schema"]
+                    self.assertEqual(schema["required"], ["file", "model"])
+                    self.assertEqual(schema["properties"]["file"]["format"], "binary")
                 elif row.body_kind == "audio":
                     self.assertEqual(list(body["content"]), ["application/octet-stream"])
                     self.assertIn("X-Reference-Metadata", [item["name"] for item in parameters if item["in"] == "header"])
                 elif row.body_kind == "archive":
+                    self.assertTrue(body["required"])
                     self.assertEqual(body["content"], {
                         "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
                     })
-                    self.assertNotIn("X-Reference-Metadata", [item["name"] for item in parameters])
+                    self.assertNotIn("X-Reference-Metadata", [item["name"] for item in parameters if item["in"] == "header"])
                 else:
                     self.assertNotIn("requestBody", operation)
                 responses = operation["responses"]
@@ -356,9 +361,12 @@ class OpenApiTests(unittest.TestCase):
                                      {"$ref": f"#/components/schemas/{error}"})
                 success = responses[str(row.status)]
                 self.assertEqual(success["description"], row.reply or "The answer.")
-                self.assertEqual(success["content"],
-                                 {media[row.reply_kind]: {"schema": {"type": "object"} if row.reply_kind == "json"
-                                                          else {"type": "string", "format": "binary"}}})
+                if row.reply_kind == "transcript":
+                    self.assertEqual(set(success["content"]), {"application/json", "text/plain", "text/vtt"})
+                else:
+                    self.assertEqual(success["content"],
+                                     {media[row.reply_kind]: {"schema": {"type": "object"} if row.reply_kind == "json"
+                                                              else {"type": "string", "format": "binary"}}})
                 self.assertEqual({name: item["description"] for name, item in success.get("headers", {}).items()},
                                  {item.name: item.doc for item in row.headers})
 
@@ -387,8 +395,9 @@ class OpenApiTests(unittest.TestCase):
                 continue
             content = body["content"]
             with self.subTest(f"{method} {path}"):
-                if "application/json" in content:
-                    schema = content["application/json"]["schema"]
+                fmt = next(iter(content))
+                if fmt in ("application/json", "multipart/form-data"):
+                    schema = content[fmt]["schema"]
                     self.assertTrue(set(schema.get("required", [])) <= set(schema["properties"]))
                     self.assertEqual(body["required"], bool(schema.get("required")))
                 else:
@@ -498,7 +507,7 @@ class GeneratedFilesTests(unittest.TestCase):
     def test_each_section_sits_in_its_group_and_says_everything_its_row_says(self):
         sections = self.sections()
         kinds = {"json": "JSON", "wav": "`audio/wav`", "ndjson": "`application/x-ndjson`", "csv": "`text/csv`",
-                 "audio": "audio", "html": "HTML", "javascript": "JavaScript", "file": "a file"}
+                 "audio": "audio", "transcript": "JSON or caption text", "html": "HTML", "javascript": "JavaScript", "file": "a file"}
         for row in api_spec.documented():
             heading, section = sections[api_spec.key(row)]
             with self.subTest(api_spec.key(row)):

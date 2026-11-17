@@ -666,6 +666,8 @@ For apps that can send text to any server that answers like OpenAI's speech API:
 | Method | Path | What it does |
 |---|---|---|
 | POST | [`/v1/audio/speech`](#post-v1-audio-speech) | Speak text as OpenAI's speech API does, in one of the Lab's voices. |
+| POST | [`/v1/audio/transcriptions`](#post-v1-audio-transcriptions) | Transcribe a local audio file. |
+| POST | [`/v1/audio/translations`](#post-v1-audio-translations) | Translate local speech to English. |
 | GET | [`/v1/models`](#get-v1-models) | List the models that have a voice ready to speak, as OpenAI lists models. |
 | GET | [`/v1/audio/models`](#get-v1-audio-models) | List the same models in the shape some apps ask for. |
 | GET | [`/v1/audio/voices`](#get-v1-audio-voices) | List the voices ready to speak, for apps that offer a choice of voices. |
@@ -703,6 +705,44 @@ Speak text as OpenAI's speech API does, in one of the Lab's voices.
 
 Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.
 
+<a id="post-v1-audio-transcriptions"></a>
+
+#### `POST /v1/audio/transcriptions`
+
+Transcribe a local audio file.
+
+**Request:** a `multipart/form-data` file upload.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `file` (required) | binary | A local audio upload, up to 25 MiB. |
+| `model` (required) | string | Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model. |
+| `language` | string | Optional ISO language code. |
+| `prompt` | string | Optional spelling prompt. |
+| `temperature` | number | Decoding temperature from 0 to 1. |
+| `response_format` | string | json, verbose_json, text, srt or vtt. |
+| `timestamp_granularities[]` | string[] | Optional word and segment timestamp granularity. |
+
+**Answer:** `200`, JSON or caption text. Transcript text, optionally with timestamps or formatted as captions.
+
+<a id="post-v1-audio-translations"></a>
+
+#### `POST /v1/audio/translations`
+
+Translate local speech to English.
+
+**Request:** a `multipart/form-data` file upload.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `file` (required) | binary | A local audio upload, up to 25 MiB. |
+| `model` (required) | string | Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model. |
+| `prompt` | string | Optional English spelling prompt. |
+| `temperature` | number | Decoding temperature from 0 to 1. |
+| `response_format` | string | json, verbose_json, text, srt or vtt. |
+
+**Answer:** `200`, JSON or caption text. English transcript text, optionally with timestamps or as captions.
+
 <a id="get-v1-models"></a>
 
 #### `GET /v1/models`
@@ -735,6 +775,8 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 
 | Method | Path | What it does |
 |---|---|---|
+| POST | [`/api/cast/slate-clip/preview`](#post-api-cast-slate-clip-preview) | Check a Voice Slate handoff file without saving it. |
+| POST | [`/api/cast/slate-clip/import`](#post-api-cast-slate-clip-import) | Import a kept Voice Slate clip as a candidate. |
 | GET | [`/api/cast`](#get-api-cast) | List every character with its voices and their recordings. |
 | POST | [`/api/characters`](#post-api-characters) | Create a character. |
 | POST | [`/api/characters/{character_id}`](#post-api-characters-character_id) | Rename a character or change its description. |
@@ -753,6 +795,46 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 | POST | [`/api/retirements/restore`](#post-api-retirements-restore) | Lift a retirement. |
 | GET | [`/api/purges/preview`](#get-api-purges-preview) | Show what purging a retired item would delete. |
 | POST | [`/api/purges`](#post-api-purges) | Permanently delete a retired item, everything made from it, and their audio. |
+
+<a id="post-api-cast-slate-clip-preview"></a>
+
+#### `POST /api/cast/slate-clip/preview`
+
+Check a Voice Slate handoff file without saving it.
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `200`, JSON. `clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.
+
+| Also answers | When |
+|---|---|
+| `400` | The bundle or source file is invalid. |
+| `413` | The bundle exceeds the upload limit. |
+
+<a id="post-api-cast-slate-clip-import"></a>
+
+#### `POST /api/cast/slate-clip/import`
+
+Import a kept Voice Slate clip as a candidate.
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `character` (required) | string | The Cast character name or ID. |
+| `engine_id` (required) | string | A reference-cloning engine from the preview. |
+| `create_character` | string | Send 1 to create the character when the name is new. |
+| `accept_draft` | string | Send 1 only after explicitly accepting an unchecked transcript draft. |
+| `sidecar_sha256` | string | Optional preview hash. Refuse a clip whose sidecar differs from the one reviewed. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, and `warnings`.
+
+| Also answers | When |
+|---|---|
+| `400` | The clip or requested assignment is invalid. |
+| `413` | The bundle exceeds the upload limit. |
+
+The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies them. A master recording stays in Slate and an imported reference still needs Cast approval.
 
 <a id="get-api-cast"></a>
 
@@ -1673,6 +1755,133 @@ Download a preview's WAV.
 | `preview_file` | The file name in a preview answer's `audio_url`, without its `.wav`. |
 
 **Answer:** `200`, `audio/wav`. The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.
+
+### Live speech
+
+Short-lived sessions with ordered local audio input and speech replies.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | [`/api/live`](#get-api-live) | Discover local live speech capabilities. |
+| POST | [`/api/live`](#post-api-live) | Start a short-lived audio session. |
+| GET | [`/api/live/{session_id}`](#get-api-live-session_id) | Replay a live session's events. |
+| POST | [`/api/live/{session_id}/audio`](#post-api-live-session_id-audio) | Append ordered 16 kHz signed PCM samples. |
+| POST | [`/api/live/{session_id}/partial`](#post-api-live-session_id-partial) | Recognize the audio received so far. |
+| POST | [`/api/live/{session_id}/final`](#post-api-live-session_id-final) | Finish the audio turn. |
+| POST | [`/api/live/{session_id}/cancel`](#post-api-live-session_id-cancel) | Cancel recognition or speech and clear the audio. |
+| POST | [`/api/live/{session_id}/speak`](#post-api-live-session_id-speak) | Stream reply audio from a local model. |
+
+<a id="get-api-live"></a>
+
+#### `GET /api/live`
+
+Discover local live speech capabilities.
+
+**Answer:** `200`, JSON. ASR readiness, input format and speech engines with native streaming.
+
+<a id="post-api-live"></a>
+
+#### `POST /api/live`
+
+Start a short-lived audio session.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `language` | string | Optional input language code. |
+
+**Answer:** `201`, JSON. Session ID, input format and cursor.
+
+<a id="get-api-live-session_id"></a>
+
+#### `GET /api/live/{session_id}`
+
+Replay a live session's events.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `after` | integer | Return events after this cursor. |
+
+**Answer:** `200`, JSON. Text events, state and next sample offset.
+
+<a id="post-api-live-session_id-audio"></a>
+
+#### `POST /api/live/{session_id}/audio`
+
+Append ordered 16 kHz signed PCM samples.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `offset` (required) | integer | Sample offset for this chunk. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `200`, JSON. The next sample offset. Repeated identical chunks are accepted.
+
+<a id="post-api-live-session_id-partial"></a>
+
+#### `POST /api/live/{session_id}/partial`
+
+Recognize the audio received so far.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+**Answer:** `200`, JSON. A partial transcript and its event cursor.
+
+<a id="post-api-live-session_id-final"></a>
+
+#### `POST /api/live/{session_id}/final`
+
+Finish the audio turn.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+**Answer:** `200`, JSON. Final recognized text and its event cursor.
+
+<a id="post-api-live-session_id-cancel"></a>
+
+#### `POST /api/live/{session_id}/cancel`
+
+Cancel recognition or speech and clear the audio.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+**Answer:** `200`, JSON. Cancelled session status and event.
+
+<a id="post-api-live-session_id-speak"></a>
+
+#### `POST /api/live/{session_id}/speak`
+
+Stream reply audio from a local model.
+
+| Path parameter | Meaning |
+|---|---|
+| `session_id` | A blind listening session's id, from `GET /api/evaluations/blind-sessions`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `text` (required) | string | Reply text, up to 500 characters. |
+| `voice` | string | Named voice for buffered playback. |
+| `engine` | string | Engine for native speech streaming. |
+| `voice_description` | string | Engine-supported voice design description. |
+| `language` | string | Optional native speech language. |
+| `speaker` | string | Native preset ID. |
+| `mode` | string | Native engine mode. |
+
+**Answer:** `200`, `application/x-ndjson`. Start, PCM audio and completion events.
 
 ### Production
 

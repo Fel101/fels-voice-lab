@@ -404,6 +404,15 @@ class Lab:
         self.address_note = None
         self.in_address_file = False
         self._drama, self._drama_lock = [], threading.Lock()
+        self._live, self._live_lock = None, threading.Lock()
+
+    def live_sessions(self):
+        with self._live_lock:
+            if self._live is None:
+                from live_speech import Sessions
+
+                self._live = Sessions(self.library_root)
+            return self._live
 
     def logged(self, kind, work, describe):
         """Wrap a backup, check or restore so the service log says how it ended: what was made and how big, or why it failed."""
@@ -720,7 +729,7 @@ class Handler(BaseHTTPRequestHandler):
         route, handler, params = found
         try:
             req = None
-            if method == "POST" and route.body_kind not in ("audio", "archive"):
+            if method == "POST" and route.body_kind not in ("audio", "archive", "multipart"):
                 scene_call = path == "/api/scenes" or path.startswith("/api/scenes/")
                 book_call = path == "/api/books" or path.startswith("/api/books/")
                 limit = MAX_BOOK_REQUEST_BYTES if book_call else MAX_SCENE_REQUEST_BYTES if scene_call else MAX_REQUEST_BYTES

@@ -105,6 +105,7 @@ GROUPS = (
               "that names its original."),
     ("Scenes", "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in "
                "[scene-schema-v1.md](scenes/scene-schema-v1.md)."),
+    ("Live speech", "Short-lived sessions with ordered local audio input and speech replies."),
     ("Production", "Search saved projects and share local project or voice files."),
     ("Books", "Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages."),
     ("Exports", "Delivery packages: a scene's selected takes, converted, checked and written to `out/exports`."),
@@ -442,6 +443,21 @@ ROUTES = [
                     "not installed or cannot make it (`ffmpeg_not_installed`).")),
       notes="Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this "
             "computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes."),
+    R("POST", "/v1/audio/transcriptions", "OpenAI-style", "Transcribe a local audio file.", body_kind="multipart",
+      body=(F("file", "binary", "A local audio upload, up to 25 MiB.", True),
+            F("model", "string", "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model.", True),
+            F("language", "string", "Optional ISO language code."), F("prompt", "string", "Optional spelling prompt."),
+            F("temperature", "number", "Decoding temperature from 0 to 1."),
+            F("response_format", "string", "json, verbose_json, text, srt or vtt."),
+            F("timestamp_granularities[]", "string[]", "Optional word and segment timestamp granularity.")),
+      reply_kind="transcript", reply="Transcript text, optionally with timestamps or formatted as captions."),
+    R("POST", "/v1/audio/translations", "OpenAI-style", "Translate local speech to English.", body_kind="multipart",
+      body=(F("file", "binary", "A local audio upload, up to 25 MiB.", True),
+            F("model", "string", "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model.", True),
+            F("prompt", "string", "Optional English spelling prompt."),
+            F("temperature", "number", "Decoding temperature from 0 to 1."),
+            F("response_format", "string", "json, verbose_json, text, srt or vtt.")),
+      reply_kind="transcript", reply="English transcript text, optionally with timestamps or as captions."),
     R("GET", "/v1/models", "OpenAI-style", "List the models that have a voice ready to speak, as OpenAI lists models.",
       reply="`object` (`list`) and `data`: each model's `id`, `object` (`model`), `created` (0), `owned_by` and `name`."),
     R("GET", "/v1/audio/models", "OpenAI-style", "List the same models in the shape some apps ask for.",
@@ -452,6 +468,19 @@ ROUTES = [
             "address."),
 
     # ---------------------------------------------------------------- Cast
+    R("POST", "/api/cast/slate-clip/preview", "Cast", "Check a Voice Slate handoff file without saving it.",
+      body_kind="archive", reply="`clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.",
+      errors=((400, "The bundle or source file is invalid."), (413, "The bundle exceeds the upload limit."))),
+    R("POST", "/api/cast/slate-clip/import", "Cast", "Import a kept Voice Slate clip as a candidate.",
+      body_kind="archive", status=201, query=(F("character", "string", "The Cast character name or ID.", True),
+        F("engine_id", "string", "A reference-cloning engine from the preview.", True),
+        F("create_character", "string", "Send 1 to create the character when the name is new."),
+        F("accept_draft", "string", "Send 1 only after explicitly accepting an unchecked transcript draft."),
+        F("sidecar_sha256", "string", "Optional preview hash. Refuse a clip whose sidecar differs from the one reviewed.")),
+      reply="`status`, Cast character, identity and reference IDs, and `warnings`.",
+      notes="The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies "
+            "them. A master recording stays in Slate and an imported reference still needs Cast approval.",
+      errors=((400, "The clip or requested assignment is invalid."), (413, "The bundle exceeds the upload limit."))),
     R("GET", "/api/cast", "Cast", "List every character with its voices and their recordings.",
       reply="`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each "
             "identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, "
@@ -818,6 +847,27 @@ ROUTES = [
       reply_kind="file", reply="A declared file from the delivery.", errors=((416, "The requested range is outside the file."),)),
     R("GET", "/api/books/{book_id}/auditions/{delivery_id}/{book_file}", "Books", "Stream a saved chapter audition.",
       reply_kind="file", reply="The chapter WAV or its manifest.", errors=((416, "The requested range is outside the file."),)),
+    R("GET", "/api/live", "Live speech", "Discover local live speech capabilities.",
+      reply="ASR readiness, input format and speech engines with native streaming."),
+    R("POST", "/api/live", "Live speech", "Start a short-lived audio session.", status=201,
+      body=(F("language", "string", "Optional input language code."),), reply="Session ID, input format and cursor."),
+    R("GET", "/api/live/{session_id}", "Live speech", "Replay a live session's events.",
+      query=(F("after", "integer", "Return events after this cursor."),), reply="Text events, state and next sample offset."),
+    R("POST", "/api/live/{session_id}/audio", "Live speech", "Append ordered 16 kHz signed PCM samples.",
+      body_kind="archive", query=(F("offset", "integer", "Sample offset for this chunk.", True),),
+      reply="The next sample offset. Repeated identical chunks are accepted."),
+    R("POST", "/api/live/{session_id}/partial", "Live speech", "Recognize the audio received so far.", body_kind="none",
+      reply="A partial transcript and its event cursor."),
+    R("POST", "/api/live/{session_id}/final", "Live speech", "Finish the audio turn.", body_kind="none",
+      reply="Final recognized text and its event cursor."),
+    R("POST", "/api/live/{session_id}/cancel", "Live speech", "Cancel recognition or speech and clear the audio.",
+      body_kind="none", reply="Cancelled session status and event."),
+    R("POST", "/api/live/{session_id}/speak", "Live speech", "Stream reply audio from a local model.",
+      body=(F("text", "string", "Reply text, up to 500 characters.", True),
+            F("voice", "string", "Named voice for buffered playback."), F("engine", "string", "Engine for native speech streaming."),
+            F("voice_description", "string", "Engine-supported voice design description."),
+            F("language", "string", "Optional native speech language."), F("speaker", "string", "Native preset ID."),
+            F("mode", "string", "Native engine mode.")), reply_kind="ndjson", reply="Start, PCM audio and completion events."),
     R("GET", "/api/exports", "Exports", "List export packages and say which formats FFmpeg can write.",
       query=(F("recheck", "string", "`1` asks FFmpeg again, after an install."),),
       reply="`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and "
@@ -1129,6 +1179,8 @@ _MEDIA = {"json": "application/json", "wav": "audio/wav", "ndjson": "application
 
 
 def _schema(kind):
+    if kind == "binary":
+        return {"type": "string", "format": "binary"}
     if kind.endswith("[]"):
         return {"type": "array", "items": _schema(kind[:-2])}
     return {"type": kind}
@@ -1170,14 +1222,20 @@ def _operation(route):
     if route.body_kind in ("audio", "archive"):
         operation["requestBody"] = {"required": True, "content": {
             "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}
+    elif route.body_kind == "multipart":
+        operation["requestBody"] = {"required": True, "content": {
+            "multipart/form-data": {"schema": _fields_schema(route.body)}}}
     elif route.body_kind == "json" and route.body:
         operation["requestBody"] = {"required": any(item.required for item in route.body),
                                     "content": {"application/json": {"schema": _fields_schema(route.body)}}}
     if parameters:
         operation["parameters"] = parameters
-    media = _MEDIA[route.reply_kind]
+    media = _MEDIA.get(route.reply_kind)
     success = {"description": route.reply or "The answer."}
-    if route.reply_kind == "json":
+    if route.reply_kind == "transcript":
+        success["content"] = {kind: {"schema": {"type": shape}} for kind, shape in (
+            ("application/json", "object"), ("text/plain", "string"), ("text/vtt", "string"))}
+    elif route.reply_kind == "json":
         success["content"] = {media: {"schema": {"type": "object"}}}
     else:
         success["content"] = {media: {"schema": {"type": "string", "format": "binary"}}}
@@ -1261,12 +1319,17 @@ def _section(route):
         lines += ["**Request:** the recording's bytes, and an `X-Reference-Metadata` header.", ""]
     elif route.body_kind == "archive":
         lines += ["**Request:** file bytes (`application/octet-stream`).", ""]
+    elif route.body_kind == "multipart":
+        lines += ["**Request:** a `multipart/form-data` file upload.", ""]
+        lines += _table(["Request field", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.body]) + [""]
     elif route.body and route.body_kind == "json":
         lines += _table(["Request field", "Type", "Meaning"],
                         [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
                          for item in route.body]) + [""]
     reply = {"json": "JSON", "wav": "`audio/wav`", "ndjson": "`application/x-ndjson`", "csv": "`text/csv`",
-             "audio": "audio", "html": "HTML", "javascript": "JavaScript", "file": "a file"}[route.reply_kind]
+             "audio": "audio", "transcript": "JSON or caption text", "html": "HTML", "javascript": "JavaScript", "file": "a file"}[route.reply_kind]
     lines += [f"**Answer:** `{route.status}`, {reply}." + (f" {route.reply}" if route.reply else ""), ""]
     if route.headers:
         lines += _table(["Answer header", "Meaning"], [(f"`{item.name}`", item.doc) for item in route.headers]) + [""]

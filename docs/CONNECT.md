@@ -150,3 +150,14 @@ Invoke-WebRequest -Method Post -Uri http://127.0.0.1:8765/api/speak -ContentType
 ```
 
 [The API guide](API.md) describes every call, its errors and their codes.
+
+## Local speech input
+
+Choose **Install speech recognition** in **System & backups**. The OpenAI-style API accepts files at
+`/v1/audio/transcriptions` and `/v1/audio/translations` with `model=whisper-1`. It uses Whisper Tiny for
+transcription and Whisper Small for speech-to-English translation. Ask for SRT or WebVTT to import captions in Scenes.
+Audio is processed on this computer.
+
+For partial and final words, start a session with `POST /api/live` and send ordered mono 16 kHz PCM chunks. The session
+supports retries of identical chunks, event replay and cancellation. Use the session's speech route for replies.
+See [the service API](API.md) for request fields, limits and response events.
