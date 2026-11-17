@@ -171,7 +171,12 @@ ROUTES = [
             "`description`) and `free_ram_gb`."),
     R("GET", "/api/catalog", "Service", "List every engine the Lab knows, with its pinned checkpoint, capabilities and license.",
       reply="The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose "
-            "`integration.service_api` is true answer them."),
+            "`integration.service_api` is true answer them. Each engine also has `facts`, what its card on the Models page "
+            "says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good "
+            "first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, "
+            "`converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its "
+            "`screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with "
+            "its `text` in plain words."),
     R("GET", "/api/engines/status", "Service",
       "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
       reply="`device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: "

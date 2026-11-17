@@ -41,6 +41,11 @@ class Drama3(Adapter):
         "top_p": ("Top-p", 0.05, 1.0, 0.01),
         "max_seconds": ("Maximum seconds per chunk", 0.5, 95.1, 0.1),
     }
+    output_use_words = (
+        "What its audio may be used for: commercial use only on the Fish Audio Community License's conditions, among them "
+        "combined affiliate revenue below USD 500,000; a hosted speech or voice-cloning service needs a separate agreement. "
+        'Keep the credit "Built with Fish Audio".'
+    )
     output_license = {
         "code_license": "MIT speech.cpp runtime, separately installed; runtime dependencies retain their own terms.",
         "weights_license": "Fish Audio Community License 1.0, including Q4 derivative.",

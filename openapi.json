@@ -116,7 +116,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them.",
+            "description": "The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.",
             "content": {
               "application/json": {
                 "schema": {

@@ -8,6 +8,7 @@ at the foot of every page and in `/api/health`; `python serve.py --version` prin
 ## What do you want to do?
 
 - [Install a first model](#the-first-time)
+- [Find the model that fits: no graphics card, cloning a voice, a language](#choose-a-model)
 - [Hear a whole scene without writing one: the sample scene](#the-sample-scene)
 - [Clone your own voice](#clone-your-own-voice)
 - [Hear a line in a model's voice, or design a voice from a description](#hear-a-line-in-model-studio)
@@ -421,9 +422,28 @@ Limits: loose files in the `reference` and `data/voices` folders are not Cast re
 retire or delete them in their folders. Character-level retirement is available through
 the local API but has no button yet. Make a [library backup](#back-up-and-restore-the-library) first.
 
+## Choose a model
+
+Each card in **Models & features** says, in plain words, whether the model runs without a graphics card or needs one and how
+much memory it needs, whether it clones a voice from a recording, has preset voices or makes a voice from a description,
+whether it takes acting directions, its languages, and what its audio may be used for. **Kokoro 82M** is marked as a good
+first model: a small download, no graphics card and no recording needed. A card's **Details** hold what the
+[language screen](LANGUAGE_MATRIX.md) heard in each language.
+
+Above the cards, **Which model fits?** asks three questions: **I have no graphics card**, **I want to clone a voice from a
+recording**, and a **Language**. Each answer hides the cards that do not fit, and the line below says which models are left.
+For a computer with no graphics card, cloning a voice in Spanish, three clicks leave Drama 3. A language counts when the
+screen understood it, even partly, or when the model offers it and it was never screened; Drama 3 counts only languages the
+screen heard, because the language a line names is only a note for it.
+
+Every fact comes from the Lab's records (the catalog, each model's adapter, its installer and the language screen), and
+[MODEL_CAPABILITIES.md](../MODEL_CAPABILITIES.md) says the same; a test checks the two against each other. Where the records
+say nothing, the card says **not stated**: the audio of most models, for example, and of Phonon's preset voices, whose
+repository states no licence. GET `/api/catalog` gives each model's facts as `facts`.
+
 ## Check which models can speak
 
-Open **Models & features** to see each model's state. **Integrated** means this build contains
+Open **Models & features** to see each model's state. A card's **Details** say whether it is **integrated**: this build contains
 its adapter. **Installed** means its Python environment and pinned checkpoint files are on disk;
 the page checks this without loading a model. **Usable** means a test on the current device
 loaded the model and spoke one short sentence. A test describes the model as it was when it ran, so it

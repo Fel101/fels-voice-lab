@@ -267,13 +267,15 @@ test('speed table shows an empty message, then one row per device with its real-
     ['turbo', 'GPU', '1', '—', '1.23 s for 4.00 s of audio']);
 });
 
-test('model cards keep integration apart from their buttons, and every card has its switch and buttons from the start', () => {
+test('model cards keep integration under Details, apart from their buttons, and every card has its switch and buttons from the start', () => {
   const {context: c, fields} = harness();
   c.renderModelOverview({engines: [
     {id: 'kokoro', name: 'Kokoro 82M', integration: {service_api: true}, capabilities: {voice_selection: {status: 'supported'}}},
     {id: 'chatterbox-vc', name: 'Chatterbox VC', integration: {service_api: true, task_only: true}, capabilities: {}}]});
   const [kokoro, conversion] = fields.modelOverview.children;
-  assert.equal(kokoro.children[1].textContent, 'Integrated');
+  const details = item => item.children.find(child => child.className === 'model-more');
+  assert.deepEqual(details(kokoro).children.map(child => child.textContent), ['Details', 'Integrated: this build has its adapter.', '']);
+  assert.equal(details(kokoro).hidden, false);
   const actions = kokoro.children.find(child => child.className === 'model-actions');
   assert.deepEqual(actions.children.map(child => [child.tag, child.textContent, child.hidden]),
     [['button', 'Test', false], ['button', '', true], ['button', 'Uninstall…', true]]);
@@ -283,7 +285,7 @@ test('model cards keep integration apart from their buttons, and every card has 
   assert.equal(devices.hidden, true);    // until the status says whether the service has a graphics card
   assert.deepEqual(['gpu', 'cpu'].map(value => [c.modelCards.kokoro.radios[value].type, c.modelCards.kokoro.radios[value].name]),
     [['radio', 'device-kokoro'], ['radio', 'device-kokoro']]);
-  assert.equal(conversion.children[1].textContent, 'Integrated · conversion');
+  assert.equal(details(conversion).children[1].textContent, 'Integrated, as a conversion task: this build has its adapter.');
   // A conversion task has no test, but it has an Install button for when it is missing.
   assert.ok(conversion.children.find(child => child.className === 'model-actions').children.some(child => child.tag === 'button'));
   assert.equal(page.includes('model-card wide'), false);
@@ -697,6 +699,93 @@ test('a model the app cannot install goes under More models, which counts them, 
   assert.equal(c.modelCards.breeze.card.parentNode, fields.modelOverview);
   assert.deepEqual(fields.modelMore.children, [c.modelCards.qwen.card]);
   assert.equal(fields.modelsMoreSummary.textContent, '1 more model needs manual setup');
+});
+
+// Facts as GET /api/catalog gives them (model_facts.py); the page shows and filters on these, and holds none of its own.
+function facts({cpu = true, clones = false, languages = ['English'], first = false, partly = []} = {}) {
+  return {first_model: first,
+    runs: {cpu, gpu: !cpu, gpu_memory_gb: cpu ? null : 8, text: cpu ? 'Runs without a graphics card.' : 'Needs a graphics card with at least 8 GB of memory.'},
+    voices: {clones, presets: !clones, designs: false, converts: false, text: clones ? 'Clones a voice from a recording.' : 'Has preset voices.'},
+    direction: {takes: false, acts_tags: false, text: 'Takes no acting directions.'},
+    languages: {offered: [], filter: [...languages, ...partly].sort(), summary: `Languages: ${languages.join(', ')}.`,
+      text: `Understood in the Lab's language screen: ${languages.join(', ')}.`},
+    output: {status: 'not_stated', text: 'What its audio may be used for: not stated.'}};
+}
+const service = {service_api: true};
+const PICKING = {engines: [
+  {id: 'kokoro', name: 'Kokoro 82M', integration: service, capabilities: {}, facts: facts({first: true, languages: ['English', 'Spanish']})},
+  {id: 'turbo', name: 'Chatterbox Turbo', integration: service, capabilities: {}, facts: facts({clones: true})},
+  {id: 'qwen', name: 'Qwen Base', integration: service, capabilities: {}, facts: facts({cpu: false, clones: true, languages: ['Chinese', 'Spanish'], partly: ['Japanese']})},
+  {id: 'drama-3', name: 'Drama 3', integration: service, capabilities: {}, facts: facts({clones: true, languages: ['English', 'Spanish']})}]};
+const visible = c => Object.keys(c.modelCards).filter(id => !c.modelCards[id].card.hidden);
+function answer(fields, id) { fields[id].checked = !fields[id].checked; return fields[id].handlers.change(); }
+function pickLanguage(fields, name) {
+  const label = fields.modelFilterLanguages.children.find(item => item.children[1].textContent === name);
+  label.children[0].checked = true;
+  return label.children[0].handlers.change();
+}
+
+test('a card states its facts in plain words, marks a good first model, and keeps the language screen under Details', () => {
+  const {context: c, fields} = harness();
+  c.renderModelOverview(PICKING);
+  const [kokoro, turbo] = fields.modelOverview.children;
+  assert.deepEqual(kokoro.children.slice(0, 2).map(child => [child.tag, child.textContent]),
+    [['h3', 'Kokoro 82M'], ['p', 'Good first model']]);
+  assert.equal(turbo.children.some(child => child.className === 'first-model'), false);
+  const list = kokoro.children.find(child => child.className === 'model-facts');
+  assert.deepEqual(list.children.map(child => child.textContent), ['Runs without a graphics card.', 'Has preset voices.',
+    'Takes no acting directions.', 'Languages: English, Spanish.', 'What its audio may be used for: not stated.']);
+  const details = kokoro.children.find(child => child.className === 'model-more');
+  assert.deepEqual(details.children.slice(1, 3).map(child => child.textContent),
+    ['Integrated: this build has its adapter.', "Understood in the Lab's language screen: English, Spanish."]);
+  assert.equal(fields.modelFilter.hidden, false);
+  assert.deepEqual(fields.modelFilterLanguages.children.map(label => [label.children[0].value, label.children[1].textContent, label.className]),
+    [['', 'Any', 'on'], ['Chinese', 'Chinese', ''], ['English', 'English', ''], ['Japanese', 'Japanese', ''], ['Spanish', 'Spanish', '']]);
+  assert.equal(fields.modelFilterMatch.hidden, true);
+});
+
+test('three answers find the model that clones a voice with no graphics card in Spanish', () => {
+  const {context: c, fields} = harness();
+  c.renderModelOverview(PICKING);
+  answer(fields, 'modelFilterCpu');
+  assert.deepEqual(visible(c), ['kokoro', 'turbo', 'drama-3']);
+  assert.equal(fields.modelFilterMatch.textContent, '3 models fit: Kokoro 82M, Chatterbox Turbo and Drama 3.');
+  answer(fields, 'modelFilterClone');
+  assert.deepEqual(visible(c), ['turbo', 'drama-3']);
+  pickLanguage(fields, 'Spanish');
+  assert.deepEqual(visible(c), ['drama-3']);
+  assert.equal(fields.modelFilterMatch.hidden, false);
+  assert.equal(fields.modelFilterMatch.textContent, '1 model fits: Drama 3.');
+  assert.deepEqual(fields.modelFilterLanguages.children.filter(label => label.className === 'on').map(label => label.children[0].value), ['Spanish']);
+  // A language counts when the screen understood it only partly, and nothing fits says so.
+  pickLanguage(fields, 'Japanese');
+  assert.equal(fields.modelFilterMatch.textContent, 'No model fits all of these. Clear one to see more.');
+  answer(fields, 'modelFilterCpu');
+  assert.deepEqual(visible(c), ['qwen']);
+  // Clearing every answer shows every card again and hides the line.
+  answer(fields, 'modelFilterClone');
+  pickLanguage(fields, 'Any');
+  assert.deepEqual(visible(c), ['kokoro', 'turbo', 'qwen', 'drama-3']);
+  assert.equal(fields.modelFilterMatch.hidden, true);
+});
+
+test('the answers stay when the cards are drawn again, and More models counts only the cards that fit', () => {
+  const {context: c, fields} = harness();
+  c.renderModelOverview(PICKING);
+  answer(fields, 'modelFilterClone');
+  c.renderModelOverview(PICKING);
+  assert.deepEqual(visible(c), ['turbo', 'qwen', 'drama-3']);
+  c.renderEngineStatus(snapshot([kokoroMissing, manual('qwen', 'Qwen Base'), manual('drama-3', 'Drama 3', {state: 'not_checked',
+    installation: {installed: true, missing: []}})]));
+  assert.equal(c.modelCards.qwen.card.parentNode, fields.modelMore);
+  assert.equal(fields.modelsMoreSummary.textContent, '1 more model needs manual setup');
+  assert.equal(fields.modelsMoreBox.open, true, 'a model that fits is not left folded away');
+  answer(fields, 'modelFilterCpu');
+  assert.equal(fields.modelsMoreBox.hidden, true);
+  // A catalog without facts (no answer asked) shows every card, as before.
+  c.renderModelOverview({engines: [{id: 'kokoro', name: 'Kokoro 82M', integration: service, capabilities: {}}]});
+  assert.equal(fields.modelFilter.hidden, true);
+  assert.deepEqual(visible(c), ['kokoro']);
 });
 
 test('the More models fold stays hidden while every model is installed or can be installed', () => {

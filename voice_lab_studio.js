@@ -402,27 +402,38 @@ function renderFirstRun(status){
   button.textContent='Install '+offer.name;button.disabled=!!status.busy;
 }
 function placeCards(status){
-  var main=$('modelOverview'),more=$('modelMore'),apart=0;
+  var main=$('modelOverview'),more=$('modelMore');
   (status.engines||[]).forEach(function(row){
     var view=modelCards[row.id];if(!view){return;}
     var manual=row.state==='not_installed'&&!(row.installation||{}).installer,target=manual?more:main;
-    if(manual){apart+=1;}
     if(view.card.parentNode!==target){target.appendChild(view.card);}
   });
-  $('modelsMoreBox').hidden=!apart;
-  $('modelsMoreSummary').textContent=apart+(apart===1?' more model needs':' more models need')+' manual setup';
+  applyModelFilter();
 }
 function cardNode(tag,className,text){var node=document.createElement(tag);if(className){node.className=className;}if(text!==undefined){node.textContent=text;}return node;}
+// A card's facts, in plain words from GET /api/catalog (model_facts.py): where it runs, its voices, acting directions, its
+// languages and what its audio may be used for. The language screen's results and whether the model is integrated are under
+// Details.
+function modelFactNodes(facts){
+  if(!facts){return [];}
+  return [facts.runs.text,facts.voices.text,facts.direction.text,facts.languages.summary,facts.output.text].map(function(text){return cardNode('li','',text);});
+}
+function integrationText(integration){
+  if(!integration.service_api){return 'Not integrated: this build has no adapter for it.';}
+  return integration.task_only?'Integrated, as a conversion task: this build has its adapter.':'Integrated: this build has its adapter.';
+}
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
   (result.engines||[]).forEach(function(entry){
-    var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),integrated=cardNode('p','eyebrow'),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('p','meta'),ram=cardNode('p','meta');
+    var facts=entry.facts||null,first=facts&&facts.first_model?cardNode('p','first-model','Good first model'):null;
+    var card=cardNode('article','model-card'),title=cardNode('h3','',entry.name),state=cardNode('p','engine-state'),details=cardNode('p','meta'),features=cardNode('ul','model-facts'),ram=cardNode('p','meta');
     var more=cardNode('details','model-more'),moreText=cardNode('p','meta');
-    more.appendChild(cardNode('summary','','Details'));more.appendChild(moreText);more.hidden=true;
+    more.appendChild(cardNode('summary','','Details'));more.appendChild(cardNode('p','meta',integrationText(entry.integration||{})));
+    if(facts&&facts.languages.text){more.appendChild(cardNode('p','meta',facts.languages.text));}
+    more.appendChild(moreText);moreText.hidden=true;
     var devices=cardNode('div','device-switch'),choices=cardNode('span','device-choices'),note=cardNode('p','meta device-note'),actions=cardNode('div','model-actions'),button=cardNode('button','','Test'),extra=cardNode('button'),uninstall=cardNode('button','','Uninstall…');
-    var integration=entry.integration||{},caps=entry.capabilities||{},radios={};
-    integrated.textContent=integration.service_api?(integration.task_only?'Integrated · conversion':'Integrated'):'Not integrated';
-    features.textContent=['voice_design','voice_cloning','voice_direction','voice_selection'].filter(function(key){return caps[key]&&['supported','worker_verified'].indexOf(caps[key].status)>=0;}).map(function(key){return key.replace(/_/g,' ');}).join(' · ')||(integration.task_only?'Audio-to-audio voice conversion':'See model-specific controls');
+    var radios={};
+    modelFactNodes(facts).forEach(function(node){features.appendChild(node);});features.hidden=!facts;
     devices.setAttribute('role','radiogroup');devices.setAttribute('aria-label','Runs on');devices.hidden=true;
     devices.appendChild(cardNode('span','meta','Runs on'));devices.appendChild(choices);
     ['gpu','cpu'].forEach(function(value){
@@ -439,10 +450,67 @@ function renderModelOverview(result){
     button.addEventListener('click',function(){var view=modelCards[entry.id];return view.action==='install'?planInstall(entry.id,view.installGpu):view.action==='progress'?showProgress(entry.id):checkEngine(entry.id);});
     extra.addEventListener('click',function(){return modelCards[entry.id].extra==='gpu'?planInstall(entry.id,true):showProgress(entry.id);});
     actions.appendChild(button);actions.appendChild(extra);actions.appendChild(uninstall);
-    [title,integrated,state,details,more,features,ram,devices,note,actions].forEach(function(node){card.appendChild(node);});
+    [title,first,state,details,more,features,ram,devices,note,actions].forEach(function(node){if(node){card.appendChild(node);}});
     container.appendChild(card);
-    modelCards[entry.id]={name:entry.name,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,uninstallButton:uninstall,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
+    modelCards[entry.id]={name:entry.name,facts:facts,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,uninstallButton:uninstall,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
   });
+  renderModelFilter(result);
+  applyModelFilter();
+}
+// The three questions above the cards (roadmap issue 3): no graphics card, cloning a voice, and a language. A card fits by its
+// facts alone, so the page holds no fact about any model.
+var modelFilter={cpu:false,clone:false,language:''},modelFilterWired=false;
+function modelFits(facts,filter){
+  if(!filter.cpu&&!filter.clone&&!filter.language){return true;}
+  if(!facts){return false;}
+  if(filter.cpu&&!facts.runs.cpu){return false;}
+  if(filter.clone&&!facts.voices.clones){return false;}
+  return !filter.language||(facts.languages.filter||[]).indexOf(filter.language)>=0;
+}
+function wordList(items){return items.length<2?items.join(''):items.slice(0,-1).join(', ')+' and '+items[items.length-1];}
+function filterLanguages(result){
+  var seen={};
+  (result.engines||[]).forEach(function(entry){((entry.facts||{}).languages||{filter:[]}).filter.forEach(function(name){seen[name]=true;});});
+  return Object.keys(seen).sort();
+}
+function chooseFilterLanguage(value){
+  modelFilter.language=value;
+  Array.prototype.forEach.call($('modelFilterLanguages').children,function(label){label.className=label.children[0].value===value?'on':'';});
+  applyModelFilter();
+}
+function renderModelFilter(result){
+  var box=$('modelFilterLanguages'),languages=filterLanguages(result);
+  if(languages.indexOf(modelFilter.language)<0){modelFilter.language='';}
+  box.textContent='';
+  [''].concat(languages).forEach(function(value){
+    var label=cardNode('label'),input=cardNode('input');
+    input.type='radio';input.name='modelLanguage';input.value=value;input.checked=value===modelFilter.language;
+    input.addEventListener('change',function(){if(input.checked){chooseFilterLanguage(value);}});
+    label.appendChild(input);label.appendChild(cardNode('span','',value||'Any'));label.className=input.checked?'on':'';
+    box.appendChild(label);
+  });
+  // With no facts to answer from (a catalog without them), no question is asked, so no card is hidden.
+  $('modelFilter').hidden=!languages.length;
+  if(!languages.length){modelFilter={cpu:false,clone:false,language:''};$('modelFilterCpu').checked=false;$('modelFilterClone').checked=false;}
+  if(modelFilterWired){return;}
+  modelFilterWired=true;
+  $('modelFilterCpu').addEventListener('change',function(){modelFilter.cpu=!!$('modelFilterCpu').checked;applyModelFilter();});
+  $('modelFilterClone').addEventListener('change',function(){modelFilter.clone=!!$('modelFilterClone').checked;applyModelFilter();});
+}
+function applyModelFilter(){
+  var more=$('modelMore'),asked=modelFilter.cpu||modelFilter.clone||!!modelFilter.language,fits=[],apart=0;
+  Object.keys(modelCards).forEach(function(id){
+    var view=modelCards[id],fit=modelFits(view.facts,modelFilter);
+    view.card.hidden=!fit;
+    if(fit){fits.push(view.name);if(view.card.parentNode===more){apart+=1;}}
+  });
+  $('modelsMoreBox').hidden=!apart;
+  $('modelsMoreSummary').textContent=apart+(apart===1?' more model needs':' more models need')+' manual setup';
+  if(asked&&apart){$('modelsMoreBox').open=true;}
+  var line=$('modelFilterMatch');
+  line.hidden=!asked;
+  line.textContent=!asked?'':!fits.length?'No model fits all of these. Clear one to see more.'
+    :(fits.length===1?'1 model fits: ':fits.length+' models fit: ')+wordList(fits)+'.';
 }
 var installRunning=false,installTimer=null;
 function refreshEngineStatus(){
@@ -485,7 +553,7 @@ function renderEngineStatus(status){
     view.state.textContent=engineStateText(row,device,mine);
     view.details.textContent=engineDetailText(row,device,mine);
     var more=engineMoreText(row,mine);
-    view.moreText.textContent=more;view.more.hidden=!more;
+    view.moreText.textContent=more;view.moreText.hidden=!more;
     view.ram.textContent=need.text;view.ram.className=need.short?'meta warn':'meta';
     view.button.textContent=view.action==='install'?'Install':view.action==='progress'?'Show progress':(row.check?'Test again':'Test');
     view.button.hidden=view.action==='none';

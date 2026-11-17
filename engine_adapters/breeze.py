@@ -62,6 +62,10 @@ class Breeze(Adapter):
         "depth_top_k": ("Depth top-k", 0, 200, 1),
         "depth_top_p": ("Depth top-p", 0.05, 1.0, 0.01),
     }
+    output_use_words = (
+        "What its audio may be used for: research and non-commercial use only, by the BreezeBlue Research and "
+        "Non-Commercial License that covers its weights."
+    )
     output_license = {
         "code_license": "Apache-2.0; retained upstream notices in licenses/ and THIRD_PARTY_NOTICES.md.",
         "weights_license": "BreezeBlue Research and Non-Commercial License 1.1; covers derived checkpoints.",

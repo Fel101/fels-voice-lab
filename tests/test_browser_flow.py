@@ -1010,3 +1010,44 @@ class SamplePageTests(unittest.TestCase):
                 if page is not None:
                     page.close()
                 server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class ModelHelpPageTests(unittest.TestCase):
+    """The Models page answers "which model clones a voice on a computer with no graphics card, in Spanish?" in three clicks,
+    from the real catalog's facts."""
+
+    def test_three_clicks_find_the_model_that_clones_with_no_graphics_card_in_spanish(self):
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            page = None
+            shown = ("Array.from(document.querySelectorAll('#models .model-card')).filter((card) => card.getClientRects().length)"
+                     ".map((card) => card.querySelector('h3').textContent)")
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#models")
+                page.wait_until("document.querySelectorAll('#modelFilterLanguages input').length > 1"
+                                " && !document.getElementById('modelFilter').hidden")
+                self.assertEqual(page.evaluate("Array.from(document.querySelectorAll('.first-model'))"
+                                               ".map((badge) => badge.closest('.model-card').querySelector('h3').textContent)"),
+                                 ["Kokoro 82M"])
+                page.click("#modelFilterCpu")
+                page.click("#modelFilterClone")
+                page.click('#modelFilterLanguages input[value="Spanish"]')
+                drama = "Fish Audio Drama 3 (35B MoE / Q4_K)"
+                page.wait_until(f"document.getElementById('modelFilterMatch').textContent === '1 model fits: {drama}.'")
+                self.assertEqual(page.evaluate(shown), [drama])
+                facts = page.evaluate("Array.from(document.querySelectorAll('#models .model-card')).find((card) => card.getClientRects()"
+                                      ".length).querySelectorAll('.model-facts li').length")
+                self.assertEqual(facts, 5)
+                page.click('#modelFilterLanguages input[value=""]')
+                page.click("#modelFilterClone")
+                page.click("#modelFilterCpu")
+                page.wait_until("document.getElementById('modelFilterMatch').hidden")
+                self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card').length"), len(server.engines.catalog["engines"]))
+                self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card[hidden]').length"), 0)
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()

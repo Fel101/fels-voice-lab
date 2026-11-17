@@ -26,6 +26,8 @@ class Kokoro(Adapter):
     fixed_voices = True
     # The sample scene (sample_project.py) is Kokoro's: its first model, installed from the first-run note, with no recording.
     sample_voices = ("af_heart", "am_michael")
+    # A good first model: a small download, no graphics card and no recording needed, and preset voices in several languages.
+    first_model = True
     phonemizes = True
     # Its voices are its own, so it reads no voice recording but the bundled one (reference_paths.resolve_reference_path).
     takes_voice_recordings = False

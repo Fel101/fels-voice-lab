@@ -16,6 +16,7 @@ from common import free_ram_gb
 import engine_adapters
 import job_queue
 from lab_errors import NotInstalled
+import model_facts
 import openai_speech
 from performance_settings import DEFAULTS, effective_settings
 from reference_catalog import save_designed_reference
@@ -73,7 +74,7 @@ def register(router, lab):
 
     @router.get("/api/catalog")
     def catalog(self, parsed, req):
-        self._json(200, engines.catalog)
+        self._json(200, model_facts.catalog_with_facts(engines.catalog))
 
     @router.get("/api/voices")
     def voices(self, parsed, req):

@@ -128,6 +128,17 @@ pre { white-space:pre-wrap; }
 .model-card p { margin:8px 0; }
 .model-card .model-more { margin:0; padding:0; border:0; } .model-more summary { font-size:.85rem; font-weight:normal; color:var(--muted); }
 .engine-state { font-weight:600; }
+.model-card .first-model { margin:-4px 0 4px; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+.model-facts { margin:8px 0; padding-left:18px; font-size:.88rem; } .model-facts li { margin:4px 0; }
+.model-filter { border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:18px 0 0; display:flex; flex-direction:column; gap:8px; }
+.model-filter legend { font-weight:600; padding:0 6px; }
+.language-choices { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+#modelFilterLanguages { display:flex; flex-wrap:wrap; gap:6px; }
+#modelFilterLanguages label { position:relative; padding:2px 12px; border:1px solid var(--line); border-radius:999px; font-size:.85rem; cursor:pointer; color:var(--muted); }
+#modelFilterLanguages input { position:absolute; inset:0; margin:0; opacity:0; cursor:pointer; }
+#modelFilterLanguages label.on { background:var(--accent); border-color:var(--accent); color:var(--bg); font-weight:600; }
+#modelFilterLanguages label:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
+#modelFilterMatch { margin:0; font-weight:600; color:var(--fg); }
 .model-card .warn, #engineHint, .install-dialog .warn { color:var(--err); }
 /* The buttons sit at the foot of every card, so a card in a taller row keeps them in line with its neighbours. */
 .model-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:8px; }
@@ -617,8 +628,15 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 <section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
 <section class="card" id="models"><h2>Models &amp; features</h2><p class="meta">Each card is a voice model. Press Install on a model the app can install itself, and Test to check that an installed model speaks on this computer: the test loads it and speaks one short sentence. Models the app cannot install yet are listed under More models, with what each one needs.</p>
-<details><summary>What these words mean</summary><p class="meta">Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device. An integrated model does not mean every upstream feature has been exposed or tested. The RAM on a card is the free memory the Lab wants before it loads that model.</p></details>
-<p class="meta" id="modelsRam"></p><p class="meta" id="modelsDevice"></p><div id="modelOverview" class="model-grid"></div>
+<details><summary>What these words mean</summary><p class="meta">Each card's facts come from the Lab's records: its catalog, its adapters, the installers and the language screen (docs/LANGUAGE_MATRIX.md); where they say nothing, the card says "not stated". A card's Details say whether it is integrated and what the language screen heard. Integrated means the adapter is in this build. Installed means its environment and pinned checkpoint are on disk. Usable means a short test passed on this device. An integrated model does not mean every upstream feature has been exposed or tested. The RAM on a card is the free memory the Lab wants before it loads that model.</p></details>
+<p class="meta" id="modelsRam"></p><p class="meta" id="modelsDevice"></p>
+<fieldset class="model-filter" id="modelFilter" hidden><legend>Which model fits?</legend>
+  <label><input type="checkbox" id="modelFilterCpu"> I have no graphics card</label>
+  <label><input type="checkbox" id="modelFilterClone"> I want to clone a voice from a recording</label>
+  <div class="language-choices" role="radiogroup" aria-labelledby="modelFilterLanguageLabel"><span class="meta" id="modelFilterLanguageLabel">Language</span><span id="modelFilterLanguages"></span></div>
+  <p class="meta" id="modelFilterMatch" aria-live="polite" hidden></p>
+</fieldset>
+<div id="modelOverview" class="model-grid"></div>
 <details id="modelsMoreBox" hidden><summary id="modelsMoreSummary">More models</summary><p class="meta">The app cannot install these yet. docs/SETUP.md (Model runtimes) says what each one needs.</p><div id="modelMore" class="model-grid"></div></details>
 <h3>Measured speed on this computer</h3><p class="meta">Time per second of speech is the seconds it took to make one second of audio, the median of the clips, so below 1 is faster than real time. Rows come from the clips and tests this computer ran on each device. Precision is not measured; this table records speed only.</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">Model</th><th scope="col">Runs on</th><th scope="col">Clips</th><th scope="col">Typical time per second of speech</th><th scope="col">Last clip</th></tr></thead><tbody id="speedRows"></tbody></table></div>

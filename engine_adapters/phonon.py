@@ -30,6 +30,10 @@ class Phonon(Adapter):
         "duration_delta": ("Pace shift (negative is faster)", *phonon_support.DURATION_DELTA_RANGE, 0.1),
     }
     generation_mode = "fixed_voice"
+    output_use_words = (
+        "What its audio may be used for: not stated. The model is Apache-2.0, but the repository of its 37 preset voices "
+        "states no licence: ask Gradium before you publish audio made with one."
+    )
     output_license = {
         "code_license": "MIT OR Apache-2.0 ptts runtime, separately installed.",
         "weights_license": "Apache-2.0 per the gradium/phonon-31m-en model card, which covers the weights, tokenizer and "
