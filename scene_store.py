@@ -1068,9 +1068,15 @@ class SceneStore:
         }
 
     def _write_job_manifest(self, job_id):
+        """Write a batch's record file after its row changed. A job's status changes before its file is written, so a
+        scene can be deleted in between (delete_scene holds the store lock throughout). Taking that lock here means the
+        file is either written before the scene's folder goes, or not at all once the job is gone. Returns None then."""
         path = self._job_manifest_path(job_id)
-        with _path_lock(path):
-            job = self.get_job(job_id)
+        with self._lock, _path_lock(path):
+            try:
+                job = self.get_job(job_id)
+            except KeyError:
+                return None
             payload = self._job_manifest_payload(job)
             payload["checksum"] = digest_json(payload)
             self._atomic_json(path, payload)
@@ -1078,7 +1084,7 @@ class SceneStore:
 
     def verify_job_manifest(self, job_id):
         path = self._job_manifest_path(job_id)
-        with _path_lock(path):
+        with self._lock, _path_lock(path):  # the same order as _write_job_manifest
             job = self.get_job(job_id)
             expected = self._job_manifest_payload(job)
             expected_checksum = digest_json(expected)

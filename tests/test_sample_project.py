@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import api_service  # noqa: E402
 import kokoro_support  # noqa: E402
 import sample_project  # noqa: E402
+import scene_store  # noqa: E402
 
 VOICES = ["af_heart", "am_michael", "bf_emma"]
 
@@ -229,6 +230,31 @@ class DeleteSceneTests(SampleCase):
         self.assertEqual(self.cast.get_take(take_id)["id"], take_id)
         with self.assertRaises(KeyError):
             self.scenes.delete_scene(scene["scene_id"])
+
+    def test_a_batch_record_written_as_its_scene_goes_does_not_bring_the_folder_back(self):
+        # The runner marks a batch completed, then writes its record file. A deletion that falls between the two must
+        # win: the late write waits for it and then finds no job.
+        scene = self.scene()
+        job = self.scenes.create_job(scene["scene_id"])
+        folder = self.scenes.output_root / scene["scene_id"]
+        self.assertTrue(folder.is_dir())
+        with self.scenes._connect() as db:
+            db.execute("UPDATE jobs SET status='completed' WHERE id=?", (job["id"],))
+        written = []
+        late = threading.Thread(target=lambda: written.append(self.scenes._write_job_manifest(job["id"])))
+        remove = scene_store.shutil.rmtree
+
+        def remove_then_write(path, *args, **kwargs):
+            remove(path, *args, **kwargs)
+            late.start()
+            late.join(0.3)
+
+        with mock.patch.object(scene_store.shutil, "rmtree", remove_then_write):
+            self.scenes.delete_scene(scene["scene_id"])
+        late.join(5)
+        self.assertEqual(written, [None])
+        self.assertFalse(folder.exists())
+        self.assertEqual(self.scenes.list_scenes(), [])
 
     def test_a_queued_batch_stops_it(self):
         scene = self.scene()
