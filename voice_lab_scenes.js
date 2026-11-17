@@ -2495,6 +2495,22 @@ function dubPlayUrl(url, file) {
 function dubSeekTo(seconds) {
   if (dubPlayer && Number.isFinite(dubPlayer.duration)) dubPlayer.currentTime = Math.min(seconds, dubPlayer.duration);
 }
+function dubSpokenLanguage(line, tag) {
+  if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/.test(tag))
+    throw new Error('Enter a target language code such as en, es or pt-br.');
+  var names = new Intl.DisplayNames(['en'], {type:'language'});
+  var name = names.of(tag), base = names.of(tag.split('-')[0]).toLowerCase();
+  var found = sceneIdentityById(line.identity_id);
+  var supported = sceneLanguageOptions(found && found.identity, line);
+  var exact = supported.find(function (language) { return language.toLowerCase() === name.toLowerCase(); });
+  if (exact) return exact;
+  var related = supported.filter(function (language) {
+    return language.toLowerCase().split(/[^a-z]+/).includes(base);
+  });
+  var match = related.includes(line.language) ? line.language : related[0];
+  if (!match) throw new Error('Choose a Cast voice that can speak ' + name + ', then save again.');
+  return match;
+}
 function dubSave() {
   var scene = sceneBody(), line = dubSelectedLine(scene), id = dubSceneId;
   if (!line || scene.scene_id !== id) throw new Error('Open a timed cue.');
@@ -2505,7 +2521,11 @@ function dubSave() {
   line.text = target;
   line.dub = {fit: $('dubFit').value, speed: Number($('dubSpeed').value),
     gain_db: Number($('dubGain').value), mute: $('dubMute').checked};
-  if ($('dubTo').value.trim()) scene.dub_target_language = $('dubTo').value.trim().toLowerCase();
+  var targetLanguage = $('dubTo').value.trim().toLowerCase();
+  if (targetLanguage) {
+    line.language = dubSpokenLanguage(line, targetLanguage);
+    scene.dub_target_language = targetLanguage;
+  }
   updateSceneEditor(scene, null);
   renderSceneForm();
   return saveAndGetScene().then(function () { if (id === dubSceneId) dubNote('Line saved.'); });

@@ -2304,6 +2304,7 @@ Search saved projects and share local project or voice files.
 | POST | [`/api/audio-tools/master`](#post-api-audio-tools-master) | Master a local WAV or FLAC to a separate WAV. |
 | GET | [`/api/audio-tools/{delivery_id}/audio.wav`](#get-api-audio-tools-delivery_id-audio-wav) | Stream a saved audio tool WAV. |
 | GET | [`/api/audio-tools/{delivery_id}/receipt.json`](#get-api-audio-tools-delivery_id-receipt-json) | Read an audio tool receipt. |
+| POST | [`/api/audio-tools/{delivery_id}/dub-background`](#post-api-audio-tools-delivery_id-dub-background) | Attach a generated effect as the dub background. |
 
 <a id="get-api-projects"></a>
 
@@ -2429,6 +2430,22 @@ Read an audio tool receipt.
 | `delivery_id` | A saved delivery or audition ID. |
 
 **Answer:** `200`, JSON. Provenance and readings from the saved file.
+
+<a id="post-api-audio-tools-delivery_id-dub-background"></a>
+
+#### `POST /api/audio-tools/{delivery_id}/dub-background`
+
+Attach a generated effect as the dub background.
+
+| Path parameter | Meaning |
+|---|---|
+| `delivery_id` | A saved delivery or audition ID. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `scene_id` (required) | string | Timed scene ID. |
+
+**Answer:** `201`, JSON. The prepared background stem.
 
 ### Books
 

@@ -771,3 +771,8 @@ Open **Batch jobs and watch folders** under **Dub media** to queue a saved scene
 takes. You can cancel before the delivery begins writing. For a watch folder, save a job file into a folder you
 choose and then enable that folder. Voice Lab waits for files to finish copying, and keeps each completed delivery
 available after restarting.
+
+To use a generated effect in a dub, choose the timed scene under **Sound effects** and click **Use as dub background**.
+You can include the original media and a background file in a portable dub project. Check **Include the book cover or
+attached audio and video** when exporting, then choose whether to copy the included files after preview. The archive
+holds up to 96 MiB.

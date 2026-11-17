@@ -1,8 +1,11 @@
 """Local sound effects and WAV mastering."""
 
+import json
 import re
 
 import audio_tools
+import dubbing
+from portable_projects import _id
 
 
 def _artifact(root, ident, name):
@@ -31,3 +34,22 @@ def register(router, lab):
     @router.get("/api/audio-tools/{delivery_id}/receipt.json")
     def receipt(self, parsed, req, delivery_id):
         self._send_path(_artifact(lab.scenes.root, delivery_id, "receipt.json"), "application/json")
+
+    @router.post("/api/audio-tools/{delivery_id}/dub-background")
+    def use_background(self, parsed, req, delivery_id):
+        path = _artifact(lab.scenes.root, delivery_id, "audio.wav")
+        info = json.loads(path.with_name("receipt.json").read_text(encoding="utf-8"))
+        if info.get("method") != "procedural-sfx-v1":
+            raise ValueError("Choose a generated sound effect for the dub background.")
+        key = _id(req.get("scene_id"))
+        with path.open("rb") as source:
+            result = dubbing.attach(
+                lab.scenes,
+                key,
+                source,
+                path.stat().st_size,
+                info["preset"] + ".wav",
+                background=True,
+                expected_source_sha=info["output_sha256"],
+            )
+        self._json(201, {"background": result})

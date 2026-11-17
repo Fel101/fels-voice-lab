@@ -838,6 +838,9 @@ ROUTES = [
       reply="Audio and measured output receipt. Send X-Reference-Metadata with base64url JSON settings."),
     R("GET", "/api/audio-tools/{delivery_id}/audio.wav", "Production", "Stream a saved audio tool WAV.", reply_kind="wav", reply="The saved WAV."),
     R("GET", "/api/audio-tools/{delivery_id}/receipt.json", "Production", "Read an audio tool receipt.", reply="Provenance and readings from the saved file."),
+    R("POST", "/api/audio-tools/{delivery_id}/dub-background", "Production", "Attach a generated effect as the dub background.",
+      status=201, body=(F("scene_id", "string", "Timed scene ID.", True),), reply="The prepared background stem."),
+
     R("GET", "/api/books", "Books", "List saved books.", reply="Book IDs, titles and chapter counts."),
     R("POST", "/api/books/import/preview", "Books", "Preview an uploaded manuscript without creating a book.",
       body_kind="archive", query=(F("name", "string", "TXT or Markdown file name.", True),

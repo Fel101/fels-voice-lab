@@ -223,6 +223,7 @@ class DubbingTests(ExportPanelBase):
             page.click("#dubSaveCue")
             page.wait_until("document.getElementById('dubStatus').textContent === 'Line saved.'")
             self.assertEqual(self.scenes.get_scene(scene["scene_id"])["lines"][0]["text"], "Llama al puerto.")
+            self.assertEqual(self.scenes.get_scene(scene["scene_id"])["lines"][0]["language"], "Spanish")
             self.render(scene["scene_id"], [scene["lines"][0]["line_id"]])
             page.evaluate("refreshSceneList().then(() => true)")
             page.click("#dubExport")

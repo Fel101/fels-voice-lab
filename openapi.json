@@ -5838,6 +5838,62 @@
         }
       }
     },
+    "/api/audio-tools/{delivery_id}/dub-background": {
+      "post": {
+        "operationId": "post_api_audio_tools_delivery_id_dub_background",
+        "summary": "Attach a generated effect as the dub background.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scene_id": {
+                    "type": "string",
+                    "description": "Timed scene ID."
+                  }
+                },
+                "required": [
+                  "scene_id"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The prepared background stem.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/books": {
       "get": {
         "operationId": "get_api_books",

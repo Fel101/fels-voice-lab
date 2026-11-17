@@ -1,4 +1,5 @@
 // Local WAV mastering and sound effects.
+var lastEffect = null;
 function audioToolResult(result) {
   var delivery = result.delivery, urls = [['audioToolPlayer','src','audio_url'],
     ['audioToolDownload','href','audio_url'],['audioToolReceipt','href','receipt_url']];
@@ -19,7 +20,7 @@ function audioToolResult(result) {
 }
 function runAudioTool(button, action) {
   $(button).addEventListener('click',async function() {
-    var buttons = ['makeSfx','makeMaster'];
+    var buttons = ['makeSfx','makeMaster','addSfxBackground'];
     if (buttons.some(function(id) {return $(id).disabled;})) return;
     buttons.forEach(function(id) {$(id).disabled = true;});
     $('audioToolStatus').textContent = 'Working locally…';
@@ -29,7 +30,16 @@ function runAudioTool(button, action) {
 }
 runAudioTool('makeSfx',async function() {
   var result = await fetchJson('/api/audio-tools/sound',{description:$('sfxWords').value,seconds:Number($('sfxSeconds').value),seed:Number($('sfxSeed').value)});
-  audioToolResult(result);
+  audioToolResult(result); lastEffect = result.delivery;
+  var dubs = await fetchJson('/api/projects?kind=dub'), select = $('sfxDub');
+  select.textContent = '';
+  (dubs.projects || []).forEach(function(row) {option(select,row.id,row.title);});
+  $('sfxDubRow').hidden = !select.options.length;
+});
+runAudioTool('addSfxBackground',async function() {
+  if (!lastEffect || !$('sfxDub').value) throw new Error('Generate an effect and choose a timed dub.');
+  await fetchJson('/api/audio-tools/'+lastEffect.id+'/dub-background',{scene_id:$('sfxDub').value});
+  $('audioToolStatus').textContent = 'Saved the effect as the dub background.';
 });
 runAudioTool('makeMaster',async function() {
   audioToolResult(await productionUpload('/api/audio-tools/master',$('masterSource').files[0],{

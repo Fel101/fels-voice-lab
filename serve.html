@@ -785,7 +785,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <ul id="projectRows"></ul>
   <details><summary>Export a project</summary>
     <label class="field">Project<select id="projectArchive"></select></label>
-    <label><input id="projectArchiveMedia" type="checkbox"> Include the book cover</label>
+    <label><input id="projectArchiveMedia" type="checkbox"> Include the book cover or attached audio and video</label>
     <label><input id="projectArchiveVoices" type="checkbox"> Include approved voice recordings</label>
     <div class="row"><button id="exportProjectArchive" type="button">Export project ZIP</button></div>
     <label><input id="archiveSharePermission" type="checkbox"> I have permission to share the included voice recordings</label>
@@ -797,7 +797,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div id="portableReview" hidden>
       <p id="portableTitle"></p>
       <div id="portableMappings"></div>
-      <label><input id="portableMedia" type="checkbox"> Copy the included book cover</label>
+      <label><input id="portableMedia" type="checkbox"> Copy the included cover or attached media</label>
       <label><input id="portablePermission" type="checkbox"> I reviewed the included voice recording terms and may use it</label>
       <div class="row"><button id="importPortable" type="button">Import reviewed archive</button></div>
     </div>
@@ -812,6 +812,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="row"><label class="field compact">Seconds<input id="sfxSeconds" type="number" min=".4" max="180" step=".1" value="6"></label>
       <label class="field compact">Variation number<input id="sfxSeed" type="number" min="0" max="4294967295" value="42"></label>
       <button id="makeSfx" type="button">Generate effect</button></div>
+    <div id="sfxDubRow" class="row" hidden><label class="field">Timed dub<select id="sfxDub"></select></label>
+      <button id="addSfxBackground" type="button">Use as dub background</button></div>
   </details>
   <details><summary>Mastering</summary>
     <label class="field">Local WAV or FLAC<input id="masterSource" type="file" accept=".wav,.flac"></label>

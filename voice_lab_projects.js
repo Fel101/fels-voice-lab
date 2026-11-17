@@ -143,7 +143,7 @@ async function reviewPortable() {
     parent.appendChild(field);
   });
   $('portablePermission').closest('label').hidden = !archiveReview.voices.some(function (source) { return source.sample; });
-  $('portableMedia').closest('label').hidden = archiveReview.kind !== 'book';
+  $('portableMedia').closest('label').hidden = !(archiveReview.media || []).length;
   $('importPortable').textContent = archiveReview.kind === 'persona' ? 'Import as candidate' : 'Import reviewed project';
   $('portableReview').hidden = false;
   $('projectsStatus').textContent = '';

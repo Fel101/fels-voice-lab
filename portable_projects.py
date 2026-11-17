@@ -6,12 +6,14 @@ import io
 import json
 from pathlib import Path
 import re
+import shutil
 import tempfile
 import zipfile
 
 import soundfile as sf
 
 import book_export
+import dubbing
 import engine_adapters
 from cast_store import MAX_REFERENCE_TEXT, REFERENCE_POLICIES, TRANSCRIPT_ENGINES
 from output_license import license_profile
@@ -28,7 +30,7 @@ MAX_MANIFEST = 8 * 1024 * 1024
 MAX_FILES = 240
 ID = re.compile(r"[a-f0-9]{32}")
 ASSET = re.compile(r"asset-[0-9]{3}\.(?:wav|mp3|ogg|flac|m4a|mp4|mov|mkv|webm|jpg)")
-SCENE_FIELDS = {"name", "timeline", "book_pronunciations"}
+SCENE_FIELDS = {"name", "timeline", "source_media", "transcript_source", "dub_target_language", "book_pronunciations"}
 LINE_FIELDS = {
     "line_id",
     "line_type",
@@ -42,6 +44,8 @@ LINE_FIELDS = {
     "target_duration_ms",
     "use_pronunciations",
     "cue",
+    "dub",
+    "dub_source_text",
     "manuscript_text",
     "manuscript_spoken",
     "manuscript_speaker",
@@ -327,6 +331,15 @@ def export_project(sc, request):
         if media and book["cover"]:
             pin = book["cover"]["sha256"]
             content["media"]["cover"] = files.add(Books(sc).root / ident / "covers" / (pin + ".jpg"), "book_cover", pin)
+    if media and kind == "dub":
+        folder = sc.root / "out" / "dubs" / ident
+        for role in ("source", "background"):
+            saved = dubbing._read(folder / role)
+            if saved:
+                content["media"][role] = {
+                    "asset": files.add(folder / role / saved["original_file"], role, saved["sha256"]),
+                    "name": saved["name"],
+                }
     return files.publish(sc.root / "out" / "portable", kind, content)
 
 
@@ -473,11 +486,15 @@ def preview(sc, raw):
             _voice_manifest(item)
             _id(item.get("id"))
             _sample(envelope, archive, item)
+        media = data.get("media", {})
+        if not isinstance(media, dict):
+            raise ValueError("The archive has invalid attachment information.")
         return {
             "kind": kind,
             "title": data.get("title"),
             "voices": items,
             "chapters": len(data.get("scenes") or []),
+            "media": [role for role in ("cover", "source", "background") if role in media],
             "assets": envelope["assets"],
             "archive_sha256": _sha(raw),
         }
@@ -649,7 +666,8 @@ def _import_project(sc, envelope, archive, request):
     if request.get("import_voice_samples") is True:
         raise ValueError("Import voice samples as individual candidates for review before assigning them to a project.")
     assets = data.get("media")
-    if not isinstance(assets, dict) or set(assets) - ({"cover"} if book_id else set()):
+    roles = {"cover"} if book_id else {"source", "background"} if kind == "dub" else set()
+    if not isinstance(assets, dict) or set(assets) - roles:
         raise ValueError("Unexpected media in this project type.")
     if not assets or request.get("include_media") is not True:
         assets = {}
@@ -694,6 +712,46 @@ def _import_project(sc, envelope, archive, request):
                 raise ValueError("Invalid cover dimensions.")
             book["cover"] = {"sha256": receipt["sha256"], "original_sha256": receipt["sha256"]}
             target = books.root / book_id
+        if kind == "dub" and assets:
+            target = sc.root / "out" / "dubs" / scenes[0]["scene_id"]
+            for role, info in assets.items():
+                if not isinstance(info, dict) or not isinstance(info.get("asset"), str):
+                    raise ValueError("Invalid dub attachment metadata.")
+                key, name = info.get("asset"), info.get("name")
+                receipt = envelope["assets"].get(key, {})
+                if (
+                    receipt.get("role") != role
+                    or not isinstance(name, str)
+                    or not name
+                    or len(name) > 255
+                    or Path(name).name != name
+                ):
+                    raise ValueError("A dub attachment has incomplete source information.")
+                suffix = Path(key).suffix
+                if suffix not in dubbing.FORMATS:
+                    raise ValueError("Unsupported dub attachment format.")
+                source = scenes[0].get("source_media") if role == "source" else None
+                if source and (not isinstance(source, dict) or source.get("sha256") != receipt["sha256"]):
+                    raise ValueError("The included original does not match the timed transcript.")
+                folder = root / "publication" / role
+                folder.mkdir(parents=True)
+                upload = folder / ("upload" + suffix)
+                with archive.open(key) as read, upload.open("wb") as write:
+                    shutil.copyfileobj(read, write, length=256 * 1024)
+                prepared = dubbing._prepare(upload, folder, dubbing.FORMATS[suffix])
+                if role == "background" and (prepared["video"] or not prepared["audio"]):
+                    raise ValueError("The background entry must be audio-only.")
+                dubbing.write_json_atomic(
+                    folder / "manifest.json",
+                    {
+                        **prepared,
+                        "name": name,
+                        "size_bytes": receipt["bytes"],
+                        "sha256": receipt["sha256"],
+                        "original_file": upload.name,
+                        "transcript_source_verified": bool(source),
+                    },
+                )
         with sc._connect() as db:
             for scene in scenes:
                 sc._insert_scene(db, scene, stamp)
