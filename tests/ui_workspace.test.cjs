@@ -1328,3 +1328,13 @@ test('a file from this computer is uploaded and chosen in its list, and a target
 function pageHtml() {
   return source.slice(0, source.indexOf('</html>'));
 }
+
+test('the dub language lists name each language once, by its current code', () => {
+  const c = vm.createContext({Intl});
+  vm.runInContext(sourceBetween('var dubLanguageDisplay', 'function dubVoiceLanguage('), c);
+  const choices = Array.from(vm.runInContext('dubLanguageChoices', c));
+  const names = choices.map((tag) => vm.runInContext(`dubLanguageName(${JSON.stringify(tag)})`, c));
+  assert.deepEqual(names.filter((name, index) => names.indexOf(name) !== index), []);
+  for (const tag of ['he', 'id', 'yi', 'jv', 'ro', 'ak', 'en', 'es', 'en-us', 'pt-br', 'tl']) assert.ok(choices.includes(tag), tag);
+  for (const tag of ['iw', 'in', 'ji', 'jw', 'mo', 'tw', 'sh']) assert.ok(!choices.includes(tag), tag);
+});

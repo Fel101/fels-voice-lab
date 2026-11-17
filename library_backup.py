@@ -1,7 +1,8 @@
 """A one-file backup of the library, and a restore that builds a checked copy in a new folder.
 
 The library holds Cast, Scenes and Evaluations with their media, the appearance setting, and recipes and their runs.
-Saved voices, export packages, dub media and deliveries, audio tool files, and Drama studio jobs can be added. Model
+Saved voices, export packages with project and voice files, dub media and deliveries, audio tool files, and Drama studio
+jobs can be added. Model
 caches, environments, logs, voice conversions and the safety copies in migration-backups are left out.
 
 A backup is one ZIP. BACKUP_MANIFEST.json lists every other member with its size and SHA-256, the schema number of each
@@ -35,7 +36,10 @@ from housekeeping import is_link
 from runtime_folders import COMPARISONS_DIR, LEGACY_COMPARISONS_DIR
 
 FORMAT = "fels-voice-lab-library-backup"
-FORMAT_VERSION = 1
+# Format 2 (0.4.0) adds the recipes database and the dub, audio tool and shared-file folders. 0.3.0 reads format 1 and
+# would refuse those members as being outside the library; with format 2 it says the backup is newer and to update the
+# app. This build reads both.
+FORMAT_VERSION = 2
 MANIFEST = "BACKUP_MANIFEST.json"
 MEMBER_ROOT = "library/"
 BACKUP_FOLDER = "backups"
@@ -76,7 +80,8 @@ SECTIONS = (
     Section("settings", "Appearance setting", ("data/ui",)),
     Section("automation", "Recipes, runs and their audio", ("data/automation",)),
     Section("voices", "Saved voices", ("data/voices",), True),
-    Section("exports", "Export packages and audiobooks", ("out/exports", "out/books"), True),
+    Section("exports", "Export packages, audiobooks, and project and voice files", ("out/exports", "out/books", "out/portable"),
+            True),
     Section("drama", "Drama studio jobs", ("out/drama3/studio",), True),
     Section("dubs", "Attached dub media and deliveries", ("out/dubs",), True),
     Section("audio-tools", "Audio tool files", ("out/audio-tools",), True),

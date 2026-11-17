@@ -63,6 +63,9 @@ class ImportTests(unittest.TestCase):
             "Part of the crew stayed below, out of the cold.",
             "Book a berth before sunrise.",
             "Chapter and verse were read aloud.",
+            "Part two of the plan was simple.",
+            "Book One was better than the film.",
+            "Part II The sea was rough.",
         ]
         for format_, prefix, suffix in (("txt", "Chapter II", "Chapter 3"), ("md", "# Across the water", "# Safe on shore")):
             for separator in ("\n", "\n\n"):

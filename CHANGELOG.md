@@ -16,6 +16,9 @@
 
 - Install speech recognition from System & backups. Transcript drafts run on your computer.
 
+- Back up recipes and their runs with the library, and choose to include attached dub media, audio tool files, and
+  project and voice files. Version 0.3.0 cannot restore these backups and asks you to update.
+
 - Make repeatable sound effects and master a WAV or FLAC locally. Choose 16-bit PCM, 24-bit PCM or floating-point WAV
   for mastering and scene deliveries.
 

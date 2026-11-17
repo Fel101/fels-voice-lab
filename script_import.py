@@ -346,8 +346,13 @@ _TEENS = r"ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eightee
 _TENS = r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
 _NUMBER_WORD = rf"(?:(?:{_TENS})(?:[ -](?:{_ONE_TO_NINE}))?|{_TEENS}|{_ONE_TO_NINE})"
 _ROMAN_NUMBER = r"(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
+# A title may follow the number after a separator, or after a space when it reads as a title: a capital first and no
+# full stop at the end. So "Chapter 1 The Harbor" is a heading, and the one-line paragraph "Part two of the plan was simple."
+# stays a passage.
 TEXT_HEADING = re.compile(
-    rf"(?:chapter|part|book)[ \t]+(?:[0-9]+|{_NUMBER_WORD}|{_ROMAN_NUMBER})(?:\s*[:.–—-]\s*.*|[ \t]+\S.*)?", re.I
+    rf"(?:chapter|part|book)[ \t]+(?:[0-9]+|{_NUMBER_WORD}|{_ROMAN_NUMBER})"
+    r"(?:\s*[:.–—-]\s*.*|[ \t]+(?-i:[A-Z0-9\"'“‘(])(?!.*[.…][\"'”’)]*$).*)?",
+    re.I,
 )
 MARKDOWN_HEADING = re.compile(r"^#{1,6}\s+(\S.*?)\s*#*\s*$")
 

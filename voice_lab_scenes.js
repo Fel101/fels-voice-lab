@@ -2521,10 +2521,15 @@ function dubLanguageName(tag) {
   try { return dubLanguageDisplay.of(tag); } catch (_) { return undefined; }
 }
 var dubLanguageChoices = Object.keys(dubLanguageNames);
+var dubListedLanguages = new Set(dubLanguageChoices.map(dubLanguageName));
 for (const firstLetter of 'abcdefghijklmnopqrstuvwxyz') {
   for (const secondLetter of 'abcdefghijklmnopqrstuvwxyz') {
-    const languageTag = firstLetter + secondLetter;
-    if (!dubLanguageChoices.includes(languageTag) && dubLanguageName(languageTag)) dubLanguageChoices.push(languageTag);
+    const languageTag = firstLetter + secondLetter, name = dubLanguageName(languageTag);
+    // Retired codes such as iw and in name the same language as he and id, and tw is listed as Akan: one row each.
+    if (!name || dubLanguageChoices.includes(languageTag) || dubListedLanguages.has(name) ||
+      Intl.getCanonicalLocales(languageTag)[0] !== languageTag) continue;
+    dubLanguageChoices.push(languageTag);
+    dubListedLanguages.add(name);
   }
 }
 function dubVoiceLanguage(tag, supported, current) {

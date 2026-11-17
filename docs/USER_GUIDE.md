@@ -683,7 +683,7 @@ nothing else.
 
 **System & backups, Back up now** writes one ZIP into `backups/` inside the library folder, named
 `voice-lab-library-<date>-<time>.zip`. It holds the Cast, Scenes and Comparisons databases with their audio, and the
-appearance setting, recipes, runs and their audio. Tick **Saved voices**, **Export packages and audiobooks**, **Drama
+appearance setting, recipes, runs and their audio. Tick **Saved voices**, **Export packages, audiobooks, and project and voice files**, **Drama
 studio jobs**, **Attached dub media and deliveries**, or **Audio tool files** to include those files. Keep the dub media
 option selected to restore the source video or audio, backgrounds and deliveries with your dub scenes. The backup leaves
 out model files and environments, logs, voice conversions (`out/conversions`), the `migration-backups` copies, lock and
@@ -704,7 +704,8 @@ encrypted, so it holds your recordings and scripts the way the library does.
 folder, checks every file and database, opens the stores (which moves a database from an older structure forward in the
 copy, with the usual safety copy beside it), looks for the audio the database names, and only then gives the folder its
 name. A folder that already holds anything is refused, and a backup made by a newer version of the app is refused with a
-note to update. If the library was already missing some audio when the backup was made, the restore says how many files.
+note to update. Version 0.3.0 cannot restore a backup made by this version, which holds recipes and dub files; it
+says so and asks you to update. If the library was already missing some audio when the backup was made, the restore says how many files.
 If the backup itself lost audio it fails, and nothing is left behind. On the page, one backup, check or restore runs at a
 time.
 

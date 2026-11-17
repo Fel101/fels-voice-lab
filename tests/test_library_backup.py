@@ -92,6 +92,7 @@ class LibraryBase(unittest.TestCase):
         self.put("out/scenes/scene-1/jobs/job-1.json", b'{"rows": 1}')
         self.put("out/exports/package-1/manifest.json", b'{"files": 1}')
         self.put("out/exports/package-1/line.flac", b"fLaC" + os.urandom(4096))
+        self.put("out/portable/voice-1.zip", b"PK" + os.urandom(512))
         self.put("data/voices/narrator/20260928-210223/voice.wav", wav_bytes(1.0))
         self.put("data/ui/preferences.json", b'{"theme": "dark"}')
         self.put("out/drama3/studio/job-1/job.json", b'{"status": "done"}')
@@ -133,7 +134,7 @@ class CreateTests(LibraryBase):
         members = self.members(result["path"])
         self.assertTrue({"data/cast/cast.sqlite3", "data/scenes/scenes.sqlite3", "data/evaluations/evaluations.sqlite3",
                          "out/comparisons/run-1/comparison.json", "out/scenes/scene-1/jobs/job-1.json",
-                         "out/exports/package-1/manifest.json", "out/exports/package-1/line.flac",
+                         "out/exports/package-1/manifest.json", "out/exports/package-1/line.flac", "out/portable/voice-1.zip",
                          "data/voices/narrator/20260928-210223/voice.wav", "data/ui/preferences.json",
                          "out/drama3/studio/job-1/job.json"} <= members)
         self.assertTrue(any(name.startswith("data/cast/media/takes/") for name in members))
@@ -156,7 +157,7 @@ class CreateTests(LibraryBase):
         result = self.make(include=["voices"])
         members = self.members(result["path"])
         self.assertIn("data/voices/narrator/20260928-210223/voice.wav", members)
-        self.assertFalse(any(name.startswith(("out/exports/", "out/drama3/")) for name in members))
+        self.assertFalse(any(name.startswith(("out/exports/", "out/portable/", "out/drama3/")) for name in members))
         self.assertEqual(set(self.manifest(result["path"])["included"]), {"cast", "scenes", "evaluations", "settings", "automation", "voices"})
         with self.assertRaisesRegex(BackupError, "Unknown backup section: nonsense"):
             self.make(include=["nonsense"])
@@ -165,7 +166,7 @@ class CreateTests(LibraryBase):
         result = self.make()
         manifest = self.manifest(result["path"])
         self.assertEqual((manifest["format"], manifest["format_version"], manifest["app_version"]),
-                         (library_backup.FORMAT, 1, "9.9.9"))
+                         (library_backup.FORMAT, 2, "9.9.9"))
         self.assertEqual(manifest["databases"]["cast"], {"path": "data/cast/cast.sqlite3", "schema_version": CAST_SCHEMA_VERSION})
         by_path = {entry["path"]: entry for entry in manifest["files"]}
         take = self.takes[0]
@@ -421,9 +422,9 @@ class VerifyTests(LibraryBase):
 
     def test_a_backup_from_a_newer_format_or_schema_says_to_update_the_app(self):
         def newer_format(manifest):
-            manifest["format_version"] = 2
+            manifest["format_version"] = 3
         outcome = library_backup.verify(self.broken("format.zip", manifest_change=newer_format))
-        self.assertRegex(outcome["problems"][0], "newer version of the app \\(backup format 2\\)")
+        self.assertRegex(outcome["problems"][0], "newer version of the app \\(backup format 3\\)")
 
         def foreign(manifest):
             manifest["format"] = "something-else"
@@ -598,6 +599,15 @@ class RestoreTests(LibraryBase):
         self.assertEqual(len(copies), 1)
         self.assertEqual(CastStore(self.base / "migrated").get_take(self.takes[0]["id"])["loudness"], {"status": "not_measured", "meter": None})
         self.assertEqual(library_backup.schema_versions(self.root)["cast"], 7, "the library in use is still at its own schema")
+
+    def test_a_format_1_backup_from_0_3_0_still_restores(self):
+        def from_0_3_0(manifest):
+            manifest["format_version"] = 1
+        old = self.base / "format-1.zip"
+        rewrite_zip(self.backup, old, manifest_change=from_0_3_0)
+        self.assertTrue(library_backup.verify(old)["ok"])
+        result = library_backup.restore(old, self.base / "from-0.3.0")
+        self.assertEqual(result["counts"]["characters"], 1)
 
     def test_a_backup_made_before_the_comparison_folder_was_renamed_restores_with_the_folder_and_database_moved(self):
         db_path = self.root / library_backup.DATABASES["evaluations"]

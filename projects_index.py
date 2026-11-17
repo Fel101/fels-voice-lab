@@ -11,7 +11,7 @@ def projects(sc, kind="", query=""):
     query = query.strip().casefold()
     if len(query) > 120:
         raise ValueError("Project searches support up to 120 characters.")
-    native = sc.list_scenes()
+    native = sc.list_scenes(group_subtitles=True)
     by_id = {row["scene_id"]: row for row in native}
     books = Books(sc)
     candidates = []

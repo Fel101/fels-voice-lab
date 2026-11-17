@@ -21,6 +21,17 @@ from tests.test_browser_flow import BROWSER, DevToolsPage
 
 
 class ProjectFilesTests(ExportPanelBase):
+    def open_page(self):
+        # Closed in tearDown, before the base class removes the library: a page still loading audio holds its file open.
+        page = DevToolsPage(BROWSER)
+        self.pages = [*getattr(self, "pages", []), page]
+        return page
+
+    def tearDown(self):
+        for page in getattr(self, "pages", []):
+            page.close()
+        super().tearDown()
+
     def request(self, path, data=None, metadata=None):
         headers = {}
         if isinstance(data, dict):
@@ -91,6 +102,20 @@ class ProjectFilesTests(ExportPanelBase):
                 archive.writestr(name, data)
         self.assertIn("SHA-256", self.checked_json("/api/portable/preview", 400, broken.getvalue())["error"])
 
+    def test_projects_list_subtitle_sections_in_their_own_order_after_an_edit(self):
+        # Projects and the recipe scene picker read this list, as Scenes reads its own.
+        self.start_server()
+        subtitles = "\n\n".join(f"{i + 1}\n0{i}:31:00,000 --> 0{i}:31:01,000\nMira: A timed line." for i in range(3))
+        scenes, _ = self.scenes.import_script(
+            subtitles, "srt", {"Mira": {"identity_id": self.identity["id"]}}, name="Harbor film"
+        )
+        ids = [scene["scene_id"] for scene in scenes]
+        last = self.scenes.get_scene(ids[2])
+        last["name"] = "Harbor film finale"
+        self.scenes.update_scene(ids[2], last, expected_revision=last["revision"])
+        listed = [row["id"] for row in self.checked_json("/api/projects?kind=dub", 200)["projects"]]
+        self.assertEqual([key for key in listed if key in ids], ids)
+
     @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
     def test_page_groups_subtitle_sections_and_book_chapters_and_reports_line_counts(self):
         self.start_server()
@@ -120,8 +145,7 @@ class ProjectFilesTests(ExportPanelBase):
         regular["lines"] = regular["lines"][:1]
         self.scenes.create_scene(regular)
 
-        page = DevToolsPage(BROWSER)
-        self.addCleanup(page.close)
+        page = self.open_page()
         page.open(self.base + "/#scenes")
         page.wait_until("$('sceneSelect').options.length === 6")
         choices = page.evaluate("Array.from($('sceneSelect').options, o => o.value)")
@@ -163,8 +187,7 @@ class ProjectFilesTests(ExportPanelBase):
         models = self.checked_json("/api/catalog", 200)["engines"]
         words = next(entry["facts"]["output"]["text"] for entry in models if entry["id"] == "kokoro")
         self.assertEqual(words, "What its audio may be used for: not stated.")
-        page = DevToolsPage(BROWSER)
-        self.addCleanup(page.close)
+        page = self.open_page()
         page.open(self.base + "/#projects")
         page.click("#portableImportPanel summary")
         page.set_files("#portableFile", file)
