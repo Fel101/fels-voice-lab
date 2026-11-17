@@ -92,7 +92,9 @@ def recipe(value):
         if operation == "speak" and not isinstance(options.get("voice"), str):
             raise ValueError("Choose a Voice Lab voice name for speech.")
         if operation == "convert":
-            _id(options.get("identity_id"))
+            identity_id = options.get("identity_id")
+            if not isinstance(identity_id, str) or not ID.fullmatch(identity_id):
+                raise ValueError("Choose an approved Cast voice with a recording.")
         if operation == "translate" and (
             not isinstance(options.get("source_language"), str) or not isinstance(options.get("target_language"), str)
         ):

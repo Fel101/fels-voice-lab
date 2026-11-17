@@ -78,6 +78,7 @@ class ImportTests(unittest.TestCase):
     def test_standalone_numbered_and_consecutive_headings_stay_in_the_preview(self):
         for format_, source, title in (
             ("md", "# Part One\n## Chapter 1\nThe voyage began.", "Part One: Chapter 1"),
+            ("txt", "Chapter 1 The Harbor\n\nThe voyage began.", "Chapter 1 The Harbor"),
             ("txt", "Book Ninety-Nine: The Port\n\nChapter 3\n\nThe voyage began.", "Book Ninety-Nine: The Port: Chapter 3"),
         ):
             with self.subTest(format=format_):

@@ -39,9 +39,9 @@ def number(value, label, low, high):
 
 
 def seed_value(value):
-    seed = number(value, "Seed", 0, 2**32 - 1)
+    seed = number(value, "Variation number", 0, 2**32 - 1)
     if not seed.is_integer():
-        raise ValueError("Seed must be a whole number.")
+        raise ValueError("Variation number must be a whole number.")
     return int(seed)
 
 

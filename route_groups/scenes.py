@@ -24,7 +24,7 @@ def register(router, lab):
 
     @router.get("/api/scenes")
     def scene_list(self, parsed, req):
-        saved = scenes.list_scenes()
+        saved = scenes.list_scenes(group_subtitles=True)
         books = Books(scenes).chapter_books() if any(scene.get("book_id") for scene in saved) else {}
         self._json(200, {"schema_version": 1, "scenes": saved, **({"chapter_books": books} if books else {})})
 

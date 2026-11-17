@@ -95,7 +95,21 @@ def register(router, lab):
 
     @router.get("/api/cast")
     def cast_list(self, parsed, req):
-        self._json(200, {"schema_version": 1, "characters": cast.list_cast()})
+        characters = cast.list_cast()
+        for character in characters:
+            for voice in character["identities"]:
+                adapter = engine_adapters.get(voice["engine_id"])
+                languages = adapter.voice_languages(voice["engine_options"]) if adapter else None
+                if languages:
+                    voice["voice_languages"] = languages
+                if voice["status"] == "approved" and not voice["retired"]:
+                    approved = voice["approved_reference_id"]
+                    if any(ref["id"] == approved and not ref["retired"] for ref in voice["references"]):
+                        try:
+                            voice["approved_recording_available"] = cast.get_media_path("reference", approved).is_file()
+                        except (OSError, KeyError, ValueError):
+                            voice["approved_recording_available"] = False
+        self._json(200, {"schema_version": 1, "characters": characters})
 
     @router.post("/api/characters")
     def create_character(self, parsed, req):

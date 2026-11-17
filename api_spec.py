@@ -490,7 +490,8 @@ ROUTES = [
             "identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, "
             "`fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the "
             "recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, "
-            "`duration_seconds` and `audio_url`). Retired items say so."),
+            "`duration_seconds` and `audio_url`). A voice can also report `voice_languages` and whether its "
+            "`approved_recording_available` file is present. Retired items say so."),
     R("POST", "/api/characters", "Cast", "Create a character.", status=201,
       body=(F("name", "string", "1 to 80 characters.", True), F("description", "string", "Up to 2000 characters."),
             F("tags", "string[]", "Up to 40 characters each.")),
@@ -645,7 +646,7 @@ ROUTES = [
     # ---------------------------------------------------------------- Scenes
     R("GET", "/api/scenes", "Scenes", "List scenes.",
       reply="`schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, "
-            "`chapter_books` maps its scene ID to the book ID and title."),
+            "`chapter_books` maps its scene ID to the book ID, title and chapter position (starting at 1)."),
     R("POST", "/api/scenes", "Scenes", "Create a scene from a manifest.", status=201,
       body=(F("name", "string", "1 to 120 characters. Default `Untitled scene`."),
             F("lines", "object[]", "1 to 500 lines, in order; see the scene schema.", True),

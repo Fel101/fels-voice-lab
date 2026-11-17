@@ -842,7 +842,7 @@ The bundle contains the kept WAV and its exact sidecar. The existing recorder br
 
 List every character with its voices and their recordings.
 
-**Answer:** `200`, JSON. `schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds` and `audio_url`). Retired items say so.
+**Answer:** `200`, JSON. `schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds` and `audio_url`). A voice can also report `voice_languages` and whether its `approved_recording_available` file is present. Retired items say so.
 
 <a id="post-api-characters"></a>
 
@@ -1379,7 +1379,7 @@ Ordered scripts rendered line by line through the same performance call. The man
 
 List scenes.
 
-**Answer:** `200`, JSON. `schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, `chapter_books` maps its scene ID to the book ID and title.
+**Answer:** `200`, JSON. `schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, `chapter_books` maps its scene ID to the book ID, title and chapter position (starting at 1).
 
 <a id="post-api-scenes"></a>
 

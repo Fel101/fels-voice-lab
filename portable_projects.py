@@ -16,7 +16,7 @@ import book_export
 import dubbing
 import engine_adapters
 from cast_store import MAX_REFERENCE_TEXT, REFERENCE_POLICIES, TRANSCRIPT_ENGINES
-from output_license import license_profile
+from model_facts import output_use
 from reference_catalog import _choose_audition
 import synthetic_label
 from book_store import Books, metadata, milliseconds, pronunciations
@@ -177,10 +177,9 @@ class Files:
 
 def _model_pin(engine_id, options):
     entry = next((row for row in read_catalog()["engines"] if row["id"] == engine_id), {})
-    rights = license_profile(engine_id, entry, options)
     return {
         "name": entry.get("name", engine_id),
-        "allowed_use": rights["output_use"],
+        "allowed_use": output_use(engine_adapters.get(engine_id))["text"],
         "checkpoint": options.get("checkpoint") or entry.get("checkpoint"),
         "revision": options.get("checkpoint_revision") or entry.get("local_revision"),
         "revision_basis": "Cast identity" if options.get("checkpoint_revision") else "Lab catalog",

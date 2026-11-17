@@ -647,10 +647,21 @@ class SceneStore:
             raise RuntimeError(f"Scene manifest checksum mismatch for {scene_id}.")
         return scene
 
-    def list_scenes(self):
+    def list_scenes(self, *, group_subtitles=False):
         with self._connect() as db:
-            ids = [row[0] for row in db.execute("SELECT id FROM scenes ORDER BY updated_at DESC,id")]
-        return [self.get_scene(scene_id) for scene_id in ids]
+            rows = db.execute("SELECT id,created_at FROM scenes ORDER BY updated_at DESC,id").fetchall()
+        saved = [self.get_scene(row["id"]) for row in rows]
+        if not group_subtitles:
+            return saved
+        # Every section of one subtitle import has the same creation stamp and source checksum.
+        # Those stay put when a scene is edited or renamed. Different imports of the same file stay separate.
+        groups = {}
+        for row, scene in zip(rows, saved, strict=True):
+            timeline = scene.get("timeline", {})
+            key = (row["created_at"], timeline["source_sha256"]) if "source_offset_ms" in timeline else row["id"]
+            groups.setdefault(key, []).append(scene)
+        return [scene for group in groups.values()
+                for scene in sorted(group, key=lambda item: item.get("timeline", {}).get("source_offset_ms", 0))]
 
     def delete_scene(self, scene_id):
         """Delete a scene, its batch jobs, its manifest and its folder under out/scenes (built previews, batch records).

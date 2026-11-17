@@ -35,8 +35,9 @@ async function refreshProjects() {
     title.href = project.kind === 'book' ? '#books' : '#scenes';
     title.textContent = project.title;
     title.addEventListener('click', function(event) {event.preventDefault(); openProductionProject(project.kind,project.id);});
-    info.textContent = ' · '+projectKindName(project.kind)+' · '+project.passages+' passages · '+project.voices.length+' voices · '+
-      project.selected_takes+' selected takes'+(project.latest_job_status?' · '+project.latest_job_status:'');
+    var units = project.kind === 'book' ? sceneCount(project.passages, 'passage', 'passages') : sceneCount(project.passages, 'line', 'lines');
+    info.textContent = ' · ' + [projectKindName(project.kind), units, sceneCount(project.voices.length, 'voice', 'voices'),
+      sceneCount(project.selected_takes, 'selected take', 'selected takes'), project.latest_job_status].filter(Boolean).join(' · ');
     line.append(title,info);
     [['Transcript',project.transcript],['Job',project.latest_job],
       ['Selected take',project.selected_take_ids.length?'/api/takes/'+project.selected_take_ids[0]+'/audio':'']]
@@ -105,7 +106,7 @@ async function reviewPortable() {
     if (source.sample) {
       var kind = source.sample.source_type === 'designed' ? 'Designed voice' : 'Cloned from a voice recording';
       message += ' · ' + kind + ' · Source ' + source.sample.origin + ' · Allowed use ' + source.sample.allowed_use;
-    } else if (source.model && source.model.allowed_use) message += ' · Allowed use ' + source.model.allowed_use;
+    } else if (source.model && source.model.allowed_use) message += ' · ' + source.model.allowed_use;
     if (!source.model_installed) message += ' · Install ' + model + ' on Models & features to speak with this voice.';
     field.textContent = message;
     var playable = source.audition || source.sample;

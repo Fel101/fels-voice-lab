@@ -312,6 +312,7 @@ function changeSceneIdentity(index, identityId) {
   scene.lines[index] = next;
   updateSceneEditor(scene);
   renderSceneForm();
+  if (scene.timeline && $('sceneDub').open) paintDubLanguages(scene);
   if (resets.length) $('sceneStatus').textContent += ' Voice change reset unsupported values: ' + resets.join(', ') + '.';
 }
 function mutateSceneLine(index, action) {
@@ -1269,14 +1270,29 @@ function renderScene(scene) {
   });
   return Promise.all([jobs, refreshSceneLineStates()]).then(function () {});
 }
+function scenePickerOrder(scenes, books) {
+  // Keep each book where its most recently edited chapter was, with its chapters in reading order.
+  var groups = new Map();
+  scenes.forEach(function (scene) {
+    var book = books[scene.scene_id];
+    var key = book ? 'book:' + book.id : scene.scene_id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(scene);
+  });
+  return Array.from(groups.values()).flatMap(function (rows) {
+    if (rows.length > 1) rows.sort(function (a, b) {return books[a.scene_id].position - books[b.scene_id].position;});
+    return rows;
+  });
+}
 function refreshSceneList(preferred) {
   return fetchJson('/api/scenes').then(function (result) {
     var select = $('sceneSelect'),
       keep = preferred || activeSceneId;
     sceneListCount = (result.scenes || []).length;
     select.textContent = '';
-    (result.scenes || []).forEach(function (scene) {
-      var book = result.chapter_books && result.chapter_books[scene.scene_id];
+    var books = result.chapter_books || {};
+    scenePickerOrder(result.scenes || [], books).forEach(function (scene) {
+      var book = books[scene.scene_id];
       var name = book ? book.title + ' · ' + scene.name : scene.name;
       option(select, scene.scene_id, name + ' / r' + scene.revision);
     });
@@ -2343,7 +2359,7 @@ function bindDubScene(scene) {
       dubPlayer.hidden = true;
       dubPlayer = null;
     }
-    $('dubTo').value = '';
+    $('dubFrom').value = $('dubTo').value = '';
     $('dubKeep').checked = $('dubUseBed').checked = $('dubDuck').checked = false;
     $('dubBurn').value = '';
     $('dubAlternate').replaceChildren();
@@ -2438,7 +2454,7 @@ function refreshDub() {
     option(select, line.line_id, sceneCueRange(line.cue) + ' · ' + sceneShortText(line.text));
   });
   if (scene.lines.some(function (line) { return line.line_id === keep; })) select.value = keep;
-  if (!$('dubTo').value && scene.dub_target_language) $('dubTo').value = scene.dub_target_language;
+  paintDubLanguages(scene);
   paintDubCue(scene);
   var sourceCaptions = scene.timeline.source_cues && scene.timeline.source_cues.length ? ['source.srt', 'source.vtt'] : [];
   dubLinks($('dubReviewFiles'), dubUrl() + '/captions',
@@ -2495,20 +2511,61 @@ function dubPlayUrl(url, file) {
 function dubSeekTo(seconds) {
   if (dubPlayer && Number.isFinite(dubPlayer.duration)) dubPlayer.currentTime = Math.min(seconds, dubPlayer.duration);
 }
-function dubSpokenLanguage(line, tag) {
-  if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/.test(tag))
-    throw new Error('Enter a target language code such as en, es or pt-br.');
-  var names = new Intl.DisplayNames(['en'], {type:'language'});
-  var name = names.of(tag), base = names.of(tag.split('-')[0]).toLowerCase();
-  var found = sceneIdentityById(line.identity_id);
-  var supported = sceneLanguageOptions(found && found.identity, line);
-  var exact = supported.find(function (language) { return language.toLowerCase() === name.toLowerCase(); });
+var dubLanguageDisplay = new Intl.DisplayNames(['en'], {type:'language', fallback:'none'});
+var dubLanguageNames = {
+  'en-us':'American English', 'en-gb':'British English', 'pt-br':'Brazilian Portuguese',
+  'my':'Burmese', 'ht':'Haitian Creole', 'tl':'Filipino'
+};
+function dubLanguageName(tag) {
+  if (dubLanguageNames[tag]) return dubLanguageNames[tag];
+  try { return dubLanguageDisplay.of(tag); } catch (_) { return undefined; }
+}
+var dubLanguageChoices = Object.keys(dubLanguageNames);
+for (const firstLetter of 'abcdefghijklmnopqrstuvwxyz') {
+  for (const secondLetter of 'abcdefghijklmnopqrstuvwxyz') {
+    const languageTag = firstLetter + secondLetter;
+    if (!dubLanguageChoices.includes(languageTag) && dubLanguageName(languageTag)) dubLanguageChoices.push(languageTag);
+  }
+}
+function dubVoiceLanguage(tag, supported, current) {
+  var name = dubLanguageName(tag), base = (dubLanguageName(tag.split('-')[0]) || '').toLowerCase();
+  var exact = supported.find(function (language) { return language.toLowerCase() === (name || '').toLowerCase(); });
   if (exact) return exact;
+  if (!base) return undefined;
   var related = supported.filter(function (language) {
-    return language.toLowerCase().split(/[^a-z]+/).includes(base);
+    var label = language.toLowerCase();
+    return dubLanguageNames[tag] && tag.includes('-') ? label === base : (' ' + label + ' ').includes(' ' + base + ' ');
   });
-  var match = related.includes(line.language) ? line.language : related[0];
-  if (!match) throw new Error('Choose a Cast voice that can speak ' + name + ', then save again.');
+  return related.includes(current) ? current : related[0];
+}
+function dubLineLanguages(line) {
+  var match = sceneIdentityById(line.identity_id), voice = match && match.identity;
+  var modelLanguages = sceneLanguageOptions(voice, line);
+  return voice && voice.voice_languages ? modelLanguages.filter(function (name) {
+    return voice.voice_languages.includes(name);
+  }) : modelLanguages;
+}
+function paintDubLanguages(scene) {
+  var distinctVoices = new Map(scene.lines.map(function (line) {return [line.identity_id, line];}));
+  var supported = Array.from(distinctVoices.values()).flatMap(dubLineLanguages);
+  var transcript = (scene.transcript_source || {}).cue_languages || {};
+  var original = transcript[(dubSelectedLine(scene) || {}).line_id];
+  [[ $('dubFrom'), original ], [ $('dubTo'), scene.dub_target_language ]].forEach(function ([select, fallback]) {
+    var selected = select.value || String(fallback || '').toLowerCase();
+    var tags = Array.from(new Set(dubLanguageChoices.concat(selected || [])));
+    var rows = tags.map(function (tag) {
+      return {tag: tag, name: dubLanguageName(tag) || 'Saved language', preferred: !!dubVoiceLanguage(tag, supported)};
+    });
+    rows.sort(function (a, b) {return Number(b.preferred) - Number(a.preferred) || a.name.localeCompare(b.name);});
+    select.replaceChildren();
+    option(select, '', 'Choose a language');
+    rows.forEach(function (row) {option(select, row.tag, row.name);});
+    select.value = selected;
+  });
+}
+function dubSpokenLanguage(line, tag) {
+  var match = dubVoiceLanguage(tag, dubLineLanguages(line), line.language);
+  if (!match) throw new Error('Choose a Cast voice that can speak ' + (dubLanguageName(tag) || 'the selected language') + ', then save again.');
   return match;
 }
 function dubSave() {
@@ -2551,7 +2608,7 @@ $('dubProviderPanel').addEventListener('toggle', async function () {
   }
 });
 ['dubProvider', 'dubFrom', 'dubTo', 'dubSourceText'].forEach(function (id) {
-  $(id).addEventListener('input', clearDubDraft);
+  $(id).addEventListener(id === 'dubSourceText' ? 'input' : 'change', clearDubDraft);
 });
 $('dubRequestDraft').addEventListener('click', function () {
   var scene = sceneBody(), line = dubSelectedLine(scene);
@@ -2560,7 +2617,7 @@ $('dubRequestDraft').addEventListener('click', function () {
   if (sceneDirty || $('dubSourceText').value.trim() !== dubOriginalText(line, scene).trim())
     return dubNote('Save the original wording before asking for a draft.');
   var source = $('dubFrom').value.trim(), target = $('dubTo').value.trim();
-  if (!source || !target) return dubNote('Enter the source and target language codes.');
+  if (!source || !target) return dubNote('Choose the source and target languages.');
   if (!window.confirm('Send this line’s original wording, source language and target language to ' + selected.destination + '?')) return;
   dubAction('Waiting for the approved provider…', async function (id) {
     var result = await fetchJson(dubUrl() + '/translate', {expected_revision:scene.revision,

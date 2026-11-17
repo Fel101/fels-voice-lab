@@ -118,6 +118,46 @@ class ProviderRoutes(test_openai_route.RouteCase):
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class AutomationBrowser(test_openai_route.RouteCase):
+    def test_voice_conversion_chooses_an_approved_recording_by_name(self):
+        from tests.test_export_panel import tone_wav
+
+        cast = self.service.cast
+        character = cast.create_character("Mira", "")
+        approved = cast.create_identity(character["id"], "qwen3-tts-1.7b-base", "Reading voice")
+        candidate = cast.create_identity(character["id"], "qwen3-tts-1.7b-base", "Alternate")
+        cast.create_identity(character["id"], "kokoro", "Preset", {"voice": "af_heart"})
+        for voice in (approved, candidate):
+            version = cast.add_reference(
+                voice["id"],
+                "fixture.wav",
+                tone_wav(),
+                transcript="An original test recording.",
+                origin="fixture",
+                allowed_use="test",
+            )
+            if voice == approved:
+                cast.update_identity(voice["id"], {"status": "approved", "reference_version_id": version["id"]})
+
+        page = DevToolsPage(BROWSER)
+        self.addCleanup(page.close)
+        page.open(self.service.base)
+        page.show("automation")
+        page.set_value("#automationName", "Convert to Mira")
+        page.set_value("#automationKind", "audio")
+        page.set_value("#automationOptions", "convert")
+        page.click("#automationAdd")
+        picker = "#automationSteps fieldset select"
+        page.choose(picker, "Mira · Reading voice")
+        self.assertEqual(
+            page.evaluate("Array.from(document.querySelector('#automationSteps select').options, o=>o.text)"),
+            ["Choose a voice", "Mira · Reading voice"],
+        )
+        page.click("#automationSave")
+        page.wait_until("$('automationStatus').textContent === 'Recipe saved.'")
+        recipes = self.service.get_json("/api/automation/recipes")["recipes"]
+        self.assertEqual(recipes[0]["steps"][0]["settings"]["identity_id"], approved["id"])
+        self.assertEqual(page.problems, [])
+
     def test_save_preview_and_run_a_branched_recipe(self):
         page = DevToolsPage(BROWSER)
         self.addCleanup(page.close)

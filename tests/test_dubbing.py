@@ -171,6 +171,13 @@ class DubbingTests(ExportPanelBase):
         wav.write_bytes(b"corrupt")
         self.assertIn("SHA-256", self.checked_json(delivery_url + "/verify", 400, {})["error"])
 
+    def test_damaged_slate_transcript_explains_how_to_recover(self):
+        self.start_server()
+        error = self.checked_json(
+            "/api/scenes/import/preview", 400, {"format": "transcript", "content": '{"schema":"fels-voice-transcript-v1"}'}
+        )["error"]
+        self.assertEqual(error, "This Voice Slate file is damaged or from a newer version. Export it again from Voice Slate.")
+
     @unittest.skipUnless(HAS_FFMPEG, "Requires FFmpeg and ffprobe")
     def test_library_backup_restores_recipes_and_attached_video(self):
         scene_id = self.scene()["scene_id"]
@@ -273,7 +280,15 @@ class DubbingTests(ExportPanelBase):
             page.wait_until("document.getElementById('dubAudio').duration >= 2", timeout=15)
             page.click("#dubSeekCue")
             self.assertAlmostEqual(page.evaluate("document.getElementById('dubAudio').currentTime"), 0.4, places=2)
-            page.set_value("#dubTo", "es")
+            page.click("#dubProviderPanel summary")
+            page.choose("#dubFrom", "English")
+            page.choose("#dubTo", "Spanish")
+            self.assertTrue(
+                page.evaluate(
+                    "Array.from($('dubTo').options).findIndex(o => o.value === 'es') < "
+                    "Array.from($('dubTo').options).findIndex(o => o.value === 'af')"
+                )
+            )
             page.set_value("#dubTargetText", "Llama al puerto.")
             self.assertEqual(self.scenes.get_scene(scene["scene_id"])["lines"][0]["text"], "Call the harbor.")
             page.click("#dubSaveCue")

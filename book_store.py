@@ -140,7 +140,9 @@ class Books:
         with self.scenes._connect() as db:
             books = [json.loads(row[0]) for row in db.execute("SELECT document FROM books")]
         return {
-            chapter: {"id": book["id"], "title": book["metadata"]["title"]} for book in books for chapter in book["chapters"]
+            chapter: {"id": book["id"], "title": book["metadata"]["title"], "position": position}
+            for book in books
+            for position, chapter in enumerate(book["chapters"], 1)
         }
 
     def _chapter_scene(self, raw, roles, paragraph_pause, rules):

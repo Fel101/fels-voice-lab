@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import unittest
 import urllib.error
 import urllib.request
 import zipfile
@@ -16,6 +17,7 @@ from cast_store import CastStore
 from scene_store import SceneStore
 from tests.test_export_panel import ExportPanelBase
 import portable_projects
+from tests.test_browser_flow import BROWSER, DevToolsPage
 
 
 class ProjectFilesTests(ExportPanelBase):
@@ -88,6 +90,88 @@ class ProjectFilesTests(ExportPanelBase):
                     data = data[:-1] + bytes([data[-1] ^ 1])
                 archive.writestr(name, data)
         self.assertIn("SHA-256", self.checked_json("/api/portable/preview", 400, broken.getvalue())["error"])
+
+    @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+    def test_page_groups_subtitle_sections_and_book_chapters_and_reports_line_counts(self):
+        self.start_server()
+        book = self.checked_json(
+            "/api/books",
+            201,
+            {
+                "metadata": {"title": "Harbor book"},
+                "chapters": [
+                    {"title": name, "lines": [{"text": "One passage.", "speaker": ""}]} for name in ("Opening", "Closing")
+                ],
+                "voices": {"": self.identity["id"]},
+            },
+        )["book"]
+        subtitles = "\n\n".join(f"{i + 1}\n0{i}:31:00,000 --> 0{i}:31:01,000\nMira: A timed line." for i in range(3))
+        scenes, _ = self.scenes.import_script(
+            subtitles, "srt", {"Mira": {"identity_id": self.identity["id"]}}, name="Harbor film"
+        )
+        ids = [scene["scene_id"] for scene in scenes]
+        self.assertEqual(len(ids), 3)
+        for scene_id in (ids[2], book["chapters"][1]):
+            scene = self.scenes.get_scene(scene_id)
+            if scene_id == ids[2]:
+                scene["name"] = "Harbor film finale"
+            self.scenes.update_scene(scene_id, scene, expected_revision=scene["revision"])
+        regular = self.scene_payload("Harbor scene")
+        regular["lines"] = regular["lines"][:1]
+        self.scenes.create_scene(regular)
+
+        page = DevToolsPage(BROWSER)
+        self.addCleanup(page.close)
+        page.open(self.base + "/#scenes")
+        page.wait_until("$('sceneSelect').options.length === 6")
+        choices = page.evaluate("Array.from($('sceneSelect').options, o => o.value)")
+        self.assertEqual([key for key in choices if key in ids], ids)
+        self.assertEqual([key for key in choices if key in book["chapters"]], book["chapters"])
+        page.show("projects")
+        page.wait_until("$('projectRows').children.length === 5")
+        rows = page.evaluate("Array.from($('projectRows').children, row => row.textContent)")
+        self.assertTrue(all("1 line · 1 voice" in row for row in rows if "Harbor book" not in row), rows)
+        self.assertIn("2 passages · 1 voice", next(row for row in rows if "Harbor book" in row))
+        page.show("cast")
+        page.wait_until("document.querySelector('[aria-label=\"Export this voice: Mira\"]') !== null")
+        self.assertEqual(page.problems, [])
+
+    @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+    def test_kokoro_voice_file_preview_uses_the_model_card_words(self):
+        self.start_server()
+        voice = self.cast.create_identity(self.character["id"], "kokoro", "Harbor preset", {"voice": "af_heart"})
+        self.cast.update_identity(voice["id"], {"status": "approved"})
+        generation = self.cast.get_generation_identity(voice["id"])
+        self.cast.create_take(
+            generation,
+            line_id="proof",
+            text="Listen to the harbor.",
+            spoken_text="Listen to the harbor.",
+            language="American English",
+            direction="",
+            settings={},
+            model={"backend": "fixture"},
+            wav=np.sin(np.arange(2400) * 0.08).astype(np.float32) * 0.1,
+            sample_rate=24000,
+            generation_info={},
+        )
+        archive = self.checked_json("/api/portable/export", 201, {"kind": "persona", "identity_id": voice["id"]})["archive"]
+        status, raw = self.request(archive["download"])
+        self.assertEqual(status, 200)
+        file = self.root / "harbor.voice.zip"
+        file.write_bytes(raw)
+        models = self.checked_json("/api/catalog", 200)["engines"]
+        words = next(entry["facts"]["output"]["text"] for entry in models if entry["id"] == "kokoro")
+        self.assertEqual(words, "What its audio may be used for: not stated.")
+        page = DevToolsPage(BROWSER)
+        self.addCleanup(page.close)
+        page.open(self.base + "/#projects")
+        page.click("#portableImportPanel summary")
+        page.set_files("#portableFile", file)
+        page.click("#previewPortable")
+        page.wait_until("!$('portableReview').hidden")
+        self.assertIn(words, page.evaluate("$('portableMappings').textContent"))
+        self.assertEqual(page.problems, [])
 
     def test_projects_find_and_copy_a_scene_with_local_voice_assignments(self):
         scene_id = self.render_selected_scene()

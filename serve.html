@@ -437,7 +437,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label class="field compact" id="dubSeekLabel" hidden>Seek through media<input id="dubSeek" type="range" min="0" max="0" step="0.01" value="0"></label>
     </div>
     <div class="row">
-      <label class="field compact">Target language code<input id="dubTo" placeholder="es" size="8"></label>
+      <label class="field compact">Target language<select id="dubTo"></select></label>
     </div>
     <div class="row"><label class="field compact">Line<select id="dubCue"></select></label><button id="dubSeekCue" type="button">Seek to line</button></div>
     <label class="field">Original wording<textarea id="dubSourceText" rows="2"></textarea></label>
@@ -445,7 +445,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <details id="dubProviderPanel">
       <summary>Ask a provider for a draft</summary>
       <div class="row">
-        <label class="field compact">Source language code<input id="dubFrom" placeholder="en" size="8"></label>
+        <label class="field compact">Source language<select id="dubFrom"></select></label>
         <label class="field compact">Provider<select id="dubProvider"></select></label>
         <button type="button" id="dubRequestDraft">Draft this line</button>
         <a href="#automation">Manage provider profiles</a>

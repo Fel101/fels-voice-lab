@@ -251,7 +251,10 @@ def _fountain(text):
 
 
 def _transcript(text):
-    document = validate(json.loads(text, object_pairs_hook=_unique))
+    try:
+        document = validate(json.loads(text, object_pairs_hook=_unique))
+    except (ValueError, RecursionError) as exc:
+        raise ValueError("This Voice Slate file is damaged or from a newer version. Export it again from Voice Slate.") from exc
     duration = document["source_media"]["duration_ms"]
     if duration > subtitle_import.MAX_TIMELINE_MS or len(document["cues"]) > 500:
         raise ValueError("Export SRT from Voice Slate and import it as subtitles to split this transcript into scenes.")
@@ -343,7 +346,9 @@ _TEENS = r"ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eightee
 _TENS = r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
 _NUMBER_WORD = rf"(?:(?:{_TENS})(?:[ -](?:{_ONE_TO_NINE}))?|{_TEENS}|{_ONE_TO_NINE})"
 _ROMAN_NUMBER = r"(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
-TEXT_HEADING = re.compile(rf"(?:chapter|part|book)[ \t]+(?:[0-9]+|{_NUMBER_WORD}|{_ROMAN_NUMBER})(?:\s*[:.–—-]\s*.*)?", re.I)
+TEXT_HEADING = re.compile(
+    rf"(?:chapter|part|book)[ \t]+(?:[0-9]+|{_NUMBER_WORD}|{_ROMAN_NUMBER})(?:\s*[:.–—-]\s*.*|[ \t]+\S.*)?", re.I
+)
 MARKDOWN_HEADING = re.compile(r"^#{1,6}\s+(\S.*?)\s*#*\s*$")
 
 

@@ -131,6 +131,7 @@
       buttons.append(studio,perform,action(voice,'Edit voice','edit'));
       if (!voice.retired && voice.identity_status === 'approved') {
         var share=node('button','Export this voice');share.type='button';
+        share.setAttribute('aria-label','Export this voice: '+voice.character_name);
         share.addEventListener('click',async function(){
           if(busyNavigation)return;
           var recorded=voice.identity_kind==='reference'&&!String(voice.origin||'').startsWith('Original synthetic voice design via ');

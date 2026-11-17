@@ -30,6 +30,8 @@ class AudioToolsTests(unittest.TestCase):
     def test_procedural_effect_repeats_for_the_same_variation_number(self):
         with tempfile.TemporaryDirectory() as tmp:
             params = {"description": "light rain", "seconds": 0.5, "seed": 42}
+            with self.assertRaisesRegex(ValueError, "Variation number must be a whole number"):
+                audio_tools.sound_effect(tmp, {**params, "seed": 1.5})
             first = audio_tools.sound_effect(tmp, params)
             second = audio_tools.sound_effect(tmp, params)
             other = audio_tools.sound_effect(tmp, {**params, "seed": 43})

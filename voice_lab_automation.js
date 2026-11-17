@@ -6,12 +6,12 @@ var automationOperations = {
     target_language:['Target language','es','text'],provider:['Provider','',['']]}],
   normalize: ['audio','audio','Master audio',{target_lufs:['Target LUFS','-18','number'],
     ceiling_dbtp:['True-peak ceiling','-1','number'],precision:['WAV encoding','PCM_24',['PCM_16','PCM_24','FLOAT']]}],
-  convert: ['audio','audio','Convert voice',{identity_id:['Approved Cast identity ID','','text']}],
+  convert: ['audio','audio','Convert voice',{identity_id:['Approved Cast voice','',[]]}],
   dub: ['scene','dub_job','Send to dub queue',{target_language:['Target language','es','text'],
     format:['Output format','wav',['wav','mp4']],render_missing:['Render missing cues',true,'checkbox']}],
 };
 var automationRecipe = {id:'', revision:0, /** @type {any[]} */ steps:[]};
-var configuredAutomationProviders = [];
+var configuredAutomationProviders = [], automationConversionVoices = [];
 var automationSaved = [], automationBusy = false, simulationUrl = '';
 function automationError(error) { $('automationStatus').textContent = error.message || String(error); }
 function automationDocument() {
@@ -45,7 +45,14 @@ function automationForm() {
         if(name==='provider') choices=choices.concat(configuredAutomationProviders.filter(function(provider){
           return provider.capabilities.includes(row.operation);
         }).map(function(provider){return provider.id;}));
-        choices.forEach(function(value) {option(select,value,value);});
+        if (name === 'identity_id') {
+          var saved = row.settings[name];
+          option(select, '', automationConversionVoices.length ? 'Choose a voice' : 'Approve a voice recording in Cast');
+          if (saved && !automationConversionVoices.some(function(voice) {return voice.id === saved;})) {
+            option(select, saved, 'Saved voice is unavailable', true);
+          }
+          automationConversionVoices.forEach(function(voice) {option(select, voice.id, voice.label);});
+        } else choices.forEach(function(value) {option(select,value,value);});
         select.value = row.settings[name];
         select.addEventListener('change',function(){ row.settings[name]=select.value; });
         label.append(select);
@@ -85,12 +92,16 @@ function fillAutomationOperations(kind) {
   $('automationAdd').disabled = !ops.options.length || automationRecipe.steps.length>=8;
 }
 async function refreshAutomation() {
-  var [recipes, projects, voices, profiles] = await Promise.all([
+  var [recipes, projects, voices, profiles, cast] = await Promise.all([
     fetchJson('/api/automation/recipes'), fetchJson('/api/projects?kind=dub'), fetchJson('/api/voices'),
-    fetchJson('/api/automation/providers')
+    fetchJson('/api/automation/providers'), fetchJson('/api/cast')
   ]);
   configuredAutomationProviders=profiles.providers;
   automationSaved=recipes.recipes;
+  automationConversionVoices = cast.characters.flatMap(function(character) {
+    return character.identities.filter(function(voice) {return voice.approved_recording_available;})
+      .map(function(voice) {return {id: voice.id, label: character.name + ' · ' + voice.label};});
+  });
   automationForm();
   var chooser=$('automationChoice'); chooser.textContent=''; option(chooser,'','New recipe');
   automationSaved.forEach(function(row){option(chooser,row.id,row.name);});

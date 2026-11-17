@@ -347,7 +347,7 @@ its own scene and export code.
    A voice choice carries through the chapter until another tag. `[pause 0.5s]` inserts silence.
    `[emotion:Quietly]` adds acting direction when the model supports it. The create step reports which passages need a model that accepts acting direction.
 3. Click **Create book**. Each chapter opens in **Scenes & batch** with the normal manuscript text, Cast, pause,
-   speed and delivery controls for the engine. Reopen the book to see chapter status and an estimated listening time.
+   speed and delivery controls for the model. Reopen the book to see chapter status and an estimated listening time.
    **Book details, cover and pronunciations** sets credits, JPEG/PNG cover, between-chapter gaps and pronunciations for
    this project. Enter one pronunciation per line, for example `harbor = har-bor`. The edit box
    and captions retain the authored wording.
