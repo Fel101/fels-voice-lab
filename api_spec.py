@@ -1084,7 +1084,8 @@ ROUTES = [
     R("GET", "/api/system", "System", "Report the version, the system, the library, FFmpeg, disk space and engine states.",
       query=(F("recheck", "string", "`1` asks FFmpeg again."),),
       reply="`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, "
-            "`backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it."),
+            "`backups`, `setup` (states for connections, provider profiles and speech recognition), and `diagnostics`, "
+            "a plain-text report with workspace counts and setup states. It omits scripts, transcripts and names."),
     R("GET", "/api/system/storage", "System", "Measure the library's folders and what a cleanup would remove.",
       reply="`library`, `other` and `cleanup`. Never walks the Drama model folder."),
     R("GET", "/api/system/backups", "System", "List backups, what a new one would include, and the running job.",

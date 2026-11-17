@@ -670,6 +670,10 @@ shows what the update will do and asks; then the Lab closes, updates in a window
 [Updating the Lab](SETUP.md#updating-the-lab) says what it does and how `update.bat --undo` goes back. **Open the Lab's
 folder** shows the Lab's folder in File Explorer.
 
+**Tell us what you need** opens the Voice Lab Discussions page in your browser. If you include diagnostics in a bug report
+or feature request, **Show the report** lets you review the exact text before copying it. The report counts your saved work
+and says whether local app connections, provider profiles and speech recognition are set up.
+
 **Connect other apps** shows the address where programs on this computer, such as your own scripts, can make the Lab speak
 while it is open: `http://127.0.0.1:8765` unless another program has that port, and then it says why and which port the Lab
 took. **Copy the address** and **Copy the test command** put them on the clipboard; the test command, pasted into a command

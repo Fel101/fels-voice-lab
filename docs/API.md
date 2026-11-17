@@ -3080,7 +3080,7 @@ Report the version, the system, the library, FFmpeg, disk space and engine state
 |---|---|---|
 | `recheck` | string | `1` asks FFmpeg again. |
 
-**Answer:** `200`, JSON. `generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.
+**Answer:** `200`, JSON. `generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups`, `setup` (states for connections, provider profiles and speech recognition), and `diagnostics`, a plain-text report with workspace counts and setup states. It omits scripts, transcripts and names.
 
 <a id="get-api-system-storage"></a>
 

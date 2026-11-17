@@ -11,10 +11,14 @@ import os
 import platform
 import re
 import shutil
+import sqlite3
 import sys
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
+import asr_installation
+import connector_profiles
 import housekeeping
 import library_backup
 
@@ -25,7 +29,9 @@ ENGINE_STATES = ("usable", "not_checked", "check_outdated", "check_failed", "not
 STATE_WORDS = {"usable": "usable", "not_checked": "installed, not tested", "check_outdated": "test out of date",
                "check_failed": "test failed", "not_installed": "not installed", "conversion_task": "conversion task"}
 COUNT_LABELS = (("characters", "character", "characters"), ("identities", "voice identity", "voice identities"),
-                ("references", "reference", "references"), ("takes", "take", "takes"), ("scenes", "scene", "scenes"))
+                ("references", "reference", "references"), ("takes", "take", "takes"), ("scenes", "scene", "scenes"),
+                ("dubs", "dub", "dubs"), ("narrations", "narration", "narrations"), ("projects", "project", "projects"),
+                ("audio_tools", "audio tool file", "audio tool files"), ("recipes", "recipe", "recipes"))
 
 
 def redact(text):
@@ -97,8 +103,55 @@ def log_info(path):
     return {"file": str(path), "folder": str(path.parent), "bytes": size}
 
 
+def _database_count(root, key, read, empty):
+    path = (root / library_backup.DATABASES[key]).resolve()
+    if not path.is_file():
+        return empty
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            return read(db)
+    except sqlite3.Error:
+        return None
+
+
+def _project_counts(db):
+    books_created = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='books'").fetchone()
+    narrations = db.execute("SELECT COUNT(*) FROM books").fetchone()[0] if books_created else 0
+    regular, dubs = db.execute("""
+        WITH projects AS (
+            SELECT DISTINCT json_extract(manifest_json, '$.timeline') IS NOT NULL AS dub,
+                CASE WHEN json_type(manifest_json, '$.timeline.source_offset_ms') IS NULL
+                     THEN id ELSE json_extract(manifest_json, '$.timeline.source_sha256') END AS project,
+                CASE WHEN json_type(manifest_json, '$.timeline.source_offset_ms') IS NOT NULL
+                     THEN created_at END AS import_stamp
+            FROM scenes WHERE coalesce(json_extract(manifest_json, '$.book_id'), '') = ''
+        )
+        SELECT count(CASE WHEN NOT dub THEN 1 END), count(CASE WHEN dub THEN 1 END) FROM projects
+    """).fetchone()
+    return dubs, narrations, regular + dubs + narrations
+
+
+def _production_counts(root):
+    dubs, narrations, projects = _database_count(root, "scenes", _project_counts, (0, 0, 0)) or (None, None, None)
+    recipes = _database_count(root, "automation", lambda db: db.execute("SELECT COUNT(*) FROM recipes").fetchone()[0], 0)
+    audio_tools = sum(1 for path in (root / "out" / "audio-tools").glob("*/audio.wav")
+                      if re.fullmatch("[0-9a-f]{32}", path.parent.name) and path.is_file()
+                      and (path.parent / "receipt.json").is_file())
+    return {"dubs": dubs, "narrations": narrations, "projects": projects, "audio_tools": audio_tools, "recipes": recipes}
+
+
+def _setup_summary(local_connection):
+    try:
+        providers = bool(connector_profiles.configured_profiles())
+    except ValueError:
+        providers = None
+    speech = asr_installation.status()
+    return {"local_connection": bool(local_connection), "provider_profiles": providers,
+            "speech_recognition": any(speech["models"].values())}
+
+
 def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, log_path, free_ram, total_ram=None,
-          hardware=None):
+          hardware=None, local_connection=False):
     """The report as a dict the page renders. Paths are real here; diagnostics_text() redacts them. `hardware` is
     hardware_facts() or a stand-in for it."""
     root = Path(state_root)
@@ -112,7 +165,8 @@ def build(*, app, version, state_root, out_dir, device, ffmpeg, engine_status, l
                    "free_ram_gb": round(free_ram, 1), "total_ram_gb": None if total_ram is None else round(total_ram, 1),
                    "processor": facts.get("processor"), "graphics_cards": facts.get("graphics_cards") or []},
         "library": {"path": str(root), "schemas": library_backup.schema_versions(root),
-                    "counts": library_backup.library_counts(root)},
+                    "counts": {**library_backup.library_counts(root), **_production_counts(root)}},
+        "setup": _setup_summary(local_connection),
         "ffmpeg": ffmpeg,
         "disk": {"library": disk(root), "install": disk(out_dir)},
         "engines": engines_summary(engine_status),
@@ -188,6 +242,14 @@ def diagnostics_text(report):
     newest = backups["latest"]
     lines.append(f"Backups: {backups['count']} in {backups['folder']}"
                  + (f"; newest {newest['name']} ({library_backup.format_bytes(newest['bytes'])})" if newest else ""))
+    if "setup" in report:
+        setup = report["setup"]
+        providers = setup["provider_profiles"]
+        lines.extend((
+            "Connection for local apps: " + ("set up" if setup["local_connection"] else "not set up"),
+            "Provider profiles: " + ("could not read settings" if providers is None else "set up" if providers else "not set up"),
+            "Speech recognition: " + ("installed" if setup["speech_recognition"] else "not installed"),
+        ))
     lines.append("Not included: scripts, transcripts, names of characters or voices, and recordings. "
                  "The home folder is shown as ~.")
     return redact("\n".join(lines))

@@ -8,7 +8,8 @@ about: Report a reproducible local issue without private recordings
 **Steps to reproduce**
 
 **Environment**
-Windows/Python version, model ID, runtime/checkpoint revision, CPU/GPU, desktop or browser launch.
+In the Lab, open **System & backups**, choose **Show the report** to review it, and use
+**Copy report for a bug report** to paste the text here. Tell us if you opened the desktop window or the browser page.
 
 **Minimal error**
 Review logs first. Remove usernames, paths, transcripts, credentials and personal audio.

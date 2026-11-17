@@ -9,14 +9,18 @@ import unittest
 import urllib.error
 import urllib.request
 import zipfile
+from unittest import mock
 
 import numpy as np
 import soundfile as sf
 
 from cast_store import CastStore
 from scene_store import SceneStore
-from tests.test_export_panel import ExportPanelBase
+from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
 import portable_projects
+import connector_profiles
+import dubbing
+from app_version import REPOSITORY
 from tests.test_browser_flow import BROWSER, DevToolsPage
 
 
@@ -235,6 +239,114 @@ class ProjectFilesTests(ExportPanelBase):
             else:
                 page.wait_until(f"location.hash === '#books' && activeBook?.id === {json.dumps(item['id'])}")
             page.show("home")
+        self.assertEqual(page.problems, [])
+
+    @unittest.skipUnless(HAS_FFMPEG, "needs FFmpeg to attach a synthetic video")
+    def test_diagnostics_counts_workspaces_without_reporting_any_private_values(self):
+        self.engines.engine_status = lambda: {"device": "cpu", "busy": False, "engines": [], "speed": []}
+        self.start_server()
+        private_path = Path.home() / "Private project folder" / "Only my notes.txt"
+        profile_address = "https://private-provider.example/v1"
+        profile_key = "fixture-private-provider-key"
+        video_name = "Never share this video.mp4"
+        book_title = "Unannounced book title"
+        recipe_name = "Private production recipe"
+        self.scenes.create_scene(self.scene_payload("Private ordinary scene"))
+        timed, _ = self.scenes.import_script(
+            "1\n00:00:00,400 --> 00:00:00,810\nMira: A private caption.",
+            "srt",
+            {"Mira": {"identity_id": self.identity["id"]}},
+        )
+        video = self.root / video_name
+        dubbing._ffmpeg(
+            "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=25:duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", video
+        )
+        source = self.checked_json(
+            f"/api/scenes/{timed[0]['scene_id']}/dub/source?name=Never%20share%20this%20video.mp4",
+            201,
+            video.read_bytes(),
+        )
+        self.assertEqual(source["asset"]["name"], video_name)
+        self.cast.add_reference(
+            self.identity["id"],
+            "source.wav",
+            tone_wav(),
+            transcript="Another private transcript.",
+            origin=str(private_path),
+            allowed_use="Synthetic test fixture",
+        )
+        self.checked_json(
+            "/api/books",
+            201,
+            {
+                "metadata": {"title": book_title},
+                "chapters": [{"title": "Opening", "lines": [{"text": "A private chapter.", "speaker": ""}]}],
+                "voices": {"": self.identity["id"]},
+            },
+        )
+        self.checked_json(
+            "/api/automation/recipes",
+            201,
+            {
+                "schema_version": 1,
+                "name": recipe_name,
+                "input_kind": "text",
+                "steps": [{"operation": "speak", "settings": {"voice": "test"}}],
+            },
+        )
+        self.checked_json("/api/audio-tools/sound", 201, {"description": "Rain", "seconds": 1})
+        with (
+            mock.patch.dict("os.environ", {"VOICE_LAB_PROVIDER_FILE": ""}),
+            mock.patch.object(connector_profiles, "SETTINGS", self.root / "providers.json"),
+            mock.patch.object(connector_profiles, "_session_keys", {}),
+            mock.patch("system_report.asr_installation.status", return_value={"models": {"tiny": True, "small": False}}),
+        ):
+            connector_profiles.save(
+                {"id": "provider-private", "base_url": profile_address, "model": "example", "capabilities": ["translate"]},
+                profile_key,
+            )
+            report = self.checked_json("/api/system", 200)
+        text = report["diagnostics"]
+        self.assertEqual(
+            {key: report["library"]["counts"][key] for key in ("dubs", "narrations", "projects", "audio_tools", "recipes")},
+            {"dubs": 1, "narrations": 1, "projects": 3, "audio_tools": 1, "recipes": 1},
+        )
+        self.assertIn("Provider profiles: set up", text)
+        self.assertIn("Speech recognition: installed", text)
+        self.assertIn("Connection for local apps: not set up", text)
+        for private in (
+            self.character["name"],
+            self.identity["label"],
+            self.reference["transcript"],
+            "Another private transcript.",
+            str(private_path),
+            private_path.name,
+            video_name,
+            book_title,
+            recipe_name,
+            profile_address,
+            profile_key,
+            self.base,
+        ):
+            self.assertNotIn(private, text)
+        self.assertNotIn(profile_address, json.dumps(report))
+        self.assertNotIn(profile_key, json.dumps(report))
+
+    @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+    def test_system_shows_the_full_report_and_links_to_discussions(self):
+        self.engines.engine_status = lambda: {"device": "cpu", "busy": False, "engines": [], "speed": []}
+        self.start_server()
+        page = self.open_page()
+        page.open(self.base + "/#system")
+        page.wait_until("$('systemDiagnostics').textContent.includes('Speech recognition:')")
+        self.assertEqual(page.evaluate("$('systemFeedback').href"), f"https://github.com/{REPOSITORY}/discussions")
+        self.assertEqual(page.evaluate("$('systemFeedback').target"), "_blank")
+        self.assertFalse(page.evaluate("$('systemDiagnostics').closest('details').open"))
+        page.click("details:has(#systemDiagnostics) summary")
+        page.wait_until("$('systemDiagnostics').closest('details').open")
+        visible = page.evaluate("$('systemDiagnostics').innerText")
+        self.assertEqual(visible, page.evaluate("$('systemDiagnostics').textContent"))
+        self.assertIn("0 dubs, 0 narrations, 0 projects, 0 audio tool files, 0 recipes", visible)
         self.assertEqual(page.problems, [])
 
     def test_projects_find_and_copy_a_scene_with_local_voice_assignments(self):

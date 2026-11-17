@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- System & backups links to feedback and includes workspace counts and setup status in the report you can review and
+  copy. The diagnostics idea draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath
+  (`debpalash`) and its contributors.
+
 - Home opens on your recent projects. Empty workspaces explain where to start, and Scenes has one place to import
   a script or subtitles. The Home view draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by
   Palash Debnath (`debpalash`) and its contributors.

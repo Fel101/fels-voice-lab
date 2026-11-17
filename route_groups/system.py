@@ -153,6 +153,7 @@ def register(router, lab):
             log_path=getattr(log, "path", None),
             free_ram=ram["free_gb"],
             total_ram=ram["total_gb"],
+            local_connection=lab.in_address_file,
         )
         report["diagnostics"] = system_report.diagnostics_text(report)
         self._json(200, report)

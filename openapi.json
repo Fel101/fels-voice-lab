@@ -8921,7 +8921,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups` and `diagnostics`, a plain-text version for a bug report with no scripts, transcripts or names in it.",
+            "description": "`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, `backups`, `setup` (states for connections, provider profiles and speech recognition), and `diagnostics`, a plain-text report with workspace counts and setup states. It omits scripts, transcripts and names.",
             "content": {
               "application/json": {
                 "schema": {

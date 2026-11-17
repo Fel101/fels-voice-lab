@@ -1,0 +1,33 @@
+name: Feature request
+description: Tell us what you make and what would help.
+body:
+  - type: dropdown
+    id: project
+    attributes:
+      label: What are you making?
+      options:
+        - Audio drama
+        - Game voices
+        - Audiobook
+        - Video voice-over
+        - Accessibility
+        - A voice for an assistant
+        - Language learning
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: What are you trying to do?
+      description: Describe the step that is difficult and what would make it easier.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Voice Lab diagnostics
+      description: >-
+        In System & backups, choose Show the report to review it, then use Copy report for a bug report.
+        Paste the text here. Leave out recordings, transcripts, provider details and anything private.
+      render: text

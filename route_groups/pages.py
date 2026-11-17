@@ -1,6 +1,10 @@
 """The pages: the studio (serve.html) and the comparison page (compare.html) with the person's saved choices written into
 them (ui_preferences.py), the scripts they load, and the files under out/ that they play."""
 
+from app_version import REPOSITORY
+
+DISCUSSIONS_URL = f"https://github.com/{REPOSITORY}/discussions"
+
 
 def register(router, lab):
     """The Pages rows of api_spec.ROUTES, and the page's saved choices (/api/preferences)."""
@@ -8,7 +12,9 @@ def register(router, lab):
 
     @router.get("/", "/index.html")
     def main_page(self, parsed, req):
-        self._send(200, preferences.render(serve.PAGE), "text/html; charset=utf-8")
+        self._send(
+            200, preferences.render(serve.PAGE.replace("__DISCUSSIONS_URL__", DISCUSSIONS_URL)), "text/html; charset=utf-8"
+        )
 
     @router.get("/compare", "/compare.html")
     def compare_page(self, parsed, req):
