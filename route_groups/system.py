@@ -113,6 +113,8 @@ def register(router, lab):
                 # The MCP server runs with the Python this service runs with, from the Lab's folder.
                 "mcp": lab_address.mcp_settings(LAB, sys.executable),
                 "connect_guide": f"https://github.com/{REPOSITORY}/blob/v{VERSION}/docs/CONNECT.md",
+                # The base address apps that speak to OpenAI's speech API are given (POST /v1/audio/speech).
+                "openai_base": f"{url}/v1",
             },
         )
 

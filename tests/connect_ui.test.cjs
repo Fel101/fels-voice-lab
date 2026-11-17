@@ -14,7 +14,7 @@ const KNOWN = 'http://127.0.0.1:8765';
 const INFO = {url: KNOWN, known_url: KNOWN, note: null, in_address_file: true,
   address_file: 'D:\\Profiles\\AppData\\Local\\FelsVoiceLabService\\service.json', window_port: 8765,
   test: 'curl.exe http://127.0.0.1:8765/api/health', guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/API.md',
-  connect_guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/CONNECT.md',
+  connect_guide: 'https://github.com/Fel101/fels-voice-lab/blob/v0.4.0/docs/CONNECT.md', openai_base: 'http://127.0.0.1:8765/v1',
   mcp: {name: 'voice-lab', claude_code: 'claude mcp add --scope user --transport stdio voice-lab -- "D:\\Lab\\.venv\\Scripts\\python.exe" '
     + '"D:\\Lab\\tools\\mcp_server.py"', settings: '{\n  "mcpServers": {\n    "voice-lab": {}\n  }\n}'}};
 
@@ -28,7 +28,7 @@ function harness(replies, {clipboard = 'works', execCommand = false} = {}) {
   const copied = [];
   const fields = {};
   for (const id of ['connectUrl', 'connectNote', 'connectTest', 'connectGuide', 'connectStatus', 'connectPort',
-    'connectPortStatus', 'connectMcp', 'connectMcpGuide']) {
+    'connectPortStatus', 'connectMcp', 'connectMcpGuide', 'connectOpenAI']) {
     fields[id] = element(id);
   }
   const body = {children: [], appendChild(child) { this.children.push(child); }, removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }};
@@ -63,6 +63,7 @@ test('on the known port it shows the address, the test command and the guide, an
   assert.equal(fields.connectGuide.href, INFO.guide);
   assert.equal(fields.connectMcp.textContent, INFO.mcp.claude_code);
   assert.equal(fields.connectMcpGuide.href, INFO.connect_guide);
+  assert.equal(fields.connectOpenAI.textContent, 'http://127.0.0.1:8765/v1');
   assert.equal(fields.connectPort.value, '8765');
   assert.equal(fields.connectNote.hidden, true);
 });
@@ -146,6 +147,9 @@ test('the Claude Code line and the settings for other MCP apps are copied, and b
   await context.copyMcpSettings();
   assert.deepEqual(copied, [INFO.mcp.claude_code, INFO.mcp.settings]);
   assert.match(fields.connectStatus.textContent, /^Copied the settings\. Paste them into the app’s MCP settings/);
+  await context.copyConnect('openai');
+  assert.equal(copied.at(-1), 'http://127.0.0.1:8765/v1');
+  assert.match(fields.connectStatus.textContent, /^Copied http:\/\/127\.0\.0\.1:8765\/v1\. In the app, choose OpenAI for speech/);
   const blocked = harness({'/api/system/connect': INFO}, {clipboard: 'refused', execCommand: false});
   await blocked.context.refreshConnect();
   await blocked.context.copyMcpSettings();

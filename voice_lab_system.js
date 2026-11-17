@@ -374,6 +374,7 @@ function renderConnect(info){
   $('connectGuide').href=info.guide;
   $('connectMcp').textContent=info.mcp.claude_code;
   $('connectMcpGuide').href=info.connect_guide;
+  $('connectOpenAI').textContent=info.openai_base;
   var note=connectNoteText(info);$('connectNote').textContent=note;$('connectNote').hidden=!note;
   $('connectPort').value=String(info.window_port);
 }
@@ -391,6 +392,7 @@ var CONNECT_COPIES={
   url:function(info){return [info.url,'Copied '+info.url+'.'];},
   test:function(info){return [info.test,'Copied the test command. Paste it into a command window; it prints the Lab’s health as one line of JSON.'];},
   mcp:function(info){return [info.mcp.claude_code,'Copied the Claude Code line. Paste it into a command window, then start a new Claude Code session and ask it to say something aloud.'];},
+  openai:function(info){return [info.openai_base,'Copied '+info.openai_base+'. In the app, choose OpenAI for speech, paste it as the base address, type any key, and choose a voice by its name in the Lab.'];},
   settings:function(info){return [info.mcp.settings,'Copied the settings. Paste them into the app’s MCP settings, as the guide shows, and open the app again.'];}
 };
 function copyConnect(which){
@@ -439,6 +441,7 @@ $('connectCopy').addEventListener('click',function(){copyConnect('url');});
 $('connectCopyTest').addEventListener('click',function(){copyConnect('test');});
 $('connectCopyMcp').addEventListener('click',function(){copyConnect('mcp');});
 $('connectCopyMcpSettings').addEventListener('click',function(){copyMcpSettings();});
+$('connectCopyOpenAI').addEventListener('click',function(){copyConnect('openai');});
 $('connectPortSave').addEventListener('click',saveConnectPort);
 refreshUpdates();
 refreshUpdateNotice();

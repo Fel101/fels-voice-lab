@@ -26,6 +26,10 @@
       "description": "Turn text into audio. `speak` and `performance` answer with the finished WAV file in one response."
     },
     {
+      "name": "OpenAI-style",
+      "description": "For apps that can send text to any server that answers like OpenAI's speech API: give them `http://127.0.0.1:8765/v1` as the base address and any key. The Lab's voices, by the names `GET /api/voices` gives; nothing is kept in the library. Errors take OpenAI's shape: `{\"error\": {\"message\", \"type\", \"param\", \"code\"}}`, with the Lab's `code`."
+    },
+    {
       "name": "Cast",
       "description": "Characters, the voices (identities) they speak with, the recordings that clone those voices, and pronunciations. Retiring blocks new use of an item and everything made from it; purging deletes it."
     },
@@ -1515,6 +1519,207 @@
           },
           "default": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/audio/speech": {
+      "post": {
+        "operationId": "post_v1_audio_speech",
+        "summary": "Speak text as OpenAI's speech API does, in one of the Lab's voices.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "description": "Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "string",
+                    "description": "What to say, 1 to 10,000 characters (OpenAI's own limit is 4,096). Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "description": "A voice's name from `GET /v1/audio/voices`, the same names as `GET /api/voices`. `{\"id\": \"Mira\"}` works too. OpenAI's own voices (alloy, nova...) are not the Lab's."
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "A model's id from `GET /v1/models`, which must be the voice's own. Any other name, such as `tts-1`, means the voice's own model."
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "description": "`mp3` (the default, as OpenAI's), `opus` (in Ogg), `aac` (ADTS), `flac`, `wav` or `pcm` (24 kHz, 16-bit signed little-endian, mono, no header). MP3, Opus and AAC are made by FFmpeg."
+                  },
+                  "speed": {
+                    "type": "number",
+                    "description": "0.25 to 4.0, default 1. Only a model with a speed control takes another value than 1, and only in its own range (Kokoro 82M: 0.5 to 2.0)."
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "How to say it, for a voice whose model takes an acting direction (`takes_direction` in `GET /api/voices`). Other voices speak without it."
+                  },
+                  "stream_format": {
+                    "type": "string",
+                    "description": "Only `audio`, the default: the answer is the whole file."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "How long to wait in line while the model worker is busy, at most 3600. Default 600 here, since apps send a reply sentence by sentence."
+                  }
+                },
+                "required": [
+                  "input",
+                  "voice"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The clip in the format asked for: `audio/mpeg`, `audio/ogg`, `audio/aac`, `audio/flac`, `audio/wav` or `audio/pcm`. Every format with room for it carries the AI-generated label; `pcm` and `aac` have none. No take is kept.",
+            "content": {
+              "audio/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Audio-Seconds": {
+                "description": "The clip's length in seconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Parts": {
+                "description": "How many parts a long text was spoken in, when more than one.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No voice has that name (`not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Twenty requests already wait for the model worker, or this one waited `wait_seconds` (`busy`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIError"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel` (`cancelled`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The voice's model is not installed (`model_not_installed`), or the format is made by FFmpeg, which is not installed or cannot make it (`ffmpeg_not_installed`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIError"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "operationId": "get_v1_models",
+        "summary": "List the models that have a voice ready to speak, as OpenAI lists models.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "responses": {
+          "200": {
+            "description": "`object` (`list`) and `data`: each model's `id`, `object` (`model`), `created` (0), `owned_by` and `name`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
+    "/v1/audio/models": {
+      "get": {
+        "operationId": "get_v1_audio_models",
+        "summary": "List the same models in the shape some apps ask for.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "responses": {
+          "200": {
+            "description": "`models`: each model's `id` and `name`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
+          }
+        }
+      }
+    },
+    "/v1/audio/voices": {
+      "get": {
+        "operationId": "get_v1_audio_voices",
+        "summary": "List the voices ready to speak, for apps that offer a choice of voices.",
+        "tags": [
+          "OpenAI-style"
+        ],
+        "description": "Open WebUI reads this list, and `GET /v1/audio/models`, when its speech engine is OpenAI with another base address.",
+        "responses": {
+          "200": {
+            "description": "`voices`: each voice's `id` (its name, to send as `voice`) and `name` (what it is and its model, to show).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/OpenAIError"
           }
         }
       }
@@ -5541,7 +5746,44 @@
           },
           "code": {
             "type": "string",
-            "description": "A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` (409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), `failed` (500), `upstream_failed` (502), `model_not_installed` (503) or `timeout` (504)."
+            "description": "A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` (409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), `failed` (500), `upstream_failed` (502), `model_not_installed` (503), `ffmpeg_not_installed` (503, where the route says so) or `timeout` (504)."
+          }
+        }
+      },
+      "OpenAIError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "message",
+              "type",
+              "code"
+            ],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "What went wrong."
+              },
+              "type": {
+                "type": "string",
+                "description": "`invalid_request_error` (4xx) or `server_error` (5xx)."
+              },
+              "param": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Always null."
+              },
+              "code": {
+                "type": "string",
+                "description": "A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` (409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), `failed` (500), `upstream_failed` (502), `model_not_installed` (503), `ffmpeg_not_installed` (503, where the route says so) or `timeout` (504)."
+              }
+            }
           }
         }
       }
@@ -5553,6 +5795,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "OpenAIError": {
+        "description": "Any other failure, in OpenAI's shape.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OpenAIError"
             }
           }
         }

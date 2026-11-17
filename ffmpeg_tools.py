@@ -33,7 +33,7 @@ DECODE_TIMEOUT = 120
 # The encoder each package format needs, named as the keys of a status report's "encoders".
 FORMAT_ENCODER = {"wav": None, "flac": "flac", "ogg": "vorbis", "mp3": "mp3", "m4a": "aac"}
 FORMAT_LABEL = {"wav": "WAV", "flac": "FLAC", "ogg": "Ogg Vorbis", "mp3": "MP3", "m4a": "AAC (M4A)"}
-_ENCODER_NAME = {"mp3": "libmp3lame", "aac": "aac", "vorbis": "libvorbis", "flac": "flac"}
+_ENCODER_NAME = {"mp3": "libmp3lame", "aac": "aac", "vorbis": "libvorbis", "flac": "flac", "opus": "libopus"}
 _LISTING = re.compile(r"^\s*[AVS][.FSXBD]{5}\s+(\S+)", re.MULTILINE)
 _status_lock = threading.Lock()
 _status_cache = {"at": 0.0, "value": None}

@@ -341,6 +341,19 @@ def error_status(exc):
     return None
 
 
+# The routes for apps that speak to OpenAI's speech API (openai_speech.py). Their errors take OpenAI's shape, and a request
+# waits in line for the model worker unless it says otherwise.
+OPENAI_PREFIX = "/v1/"
+OPENAI_WAIT_SECONDS = 600
+
+
+def openai_error(status, answer):
+    """A Lab error answer in the shape OpenAI's API gives, which apps read: the sentence as error.message, the Lab's code as
+    error.code."""
+    kind = "invalid_request_error" if status < 500 else "server_error"
+    return {"error": {"message": answer["error"], "type": kind, "param": None, "code": answer.get("code")}}
+
+
 def error_text(exc):
     """An error's sentence for its answer. A KeyError's str() is the repr of its message, quotes and all, so its message
     is used as it was written."""
@@ -350,7 +363,7 @@ def error_text(exc):
 
 
 # What the queue (GET /api/queue) calls the work a route asks of the model worker.
-QUEUE_LABELS = {"/api/speak": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
+QUEUE_LABELS = {"/api/speak": "Clip", "/v1/audio/speech": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
                 "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
                 "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview"}
 
@@ -564,6 +577,8 @@ class Handler(BaseHTTPRequestHandler):
             if "error" in obj and "code" not in obj:
                 obj = {**obj, "code": ERROR_CODES.get(code, "failed")}
             self._note(error=obj.get("error"))
+            if self.path.startswith(OPENAI_PREFIX) and isinstance(obj.get("error"), str):
+                obj = openai_error(code, obj)
         if code >= 500 and sys.exc_info()[0] is not None:
             self._note(traceback=traceback.format_exc())
         self._send(code, json.dumps(obj).encode("utf-8"), "application/json")
@@ -689,7 +704,10 @@ class Handler(BaseHTTPRequestHandler):
             status = error_status(exc)
             if status is None:
                 raise
-            return self._json(status, {"error": error_text(exc)})
+            answer = {"error": error_text(exc)}
+            if isinstance(getattr(exc, "error_code", None), str):  # a code more exact than its status's
+                answer["code"] = exc.error_code
+            return self._json(status, answer)
 
     def _place_in_line(self, route, req):
         """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and
@@ -698,6 +716,8 @@ class Handler(BaseHTTPRequestHandler):
         time, or its caller going away."""
         wait = req.pop("wait_seconds", None) if isinstance(req, dict) else None
         priority = req.pop("wait_priority", "normal") if isinstance(req, dict) else "normal"
+        if wait is None and route.path.startswith(OPENAI_PREFIX):
+            wait = OPENAI_WAIT_SECONDS  # apps send a reply sentence by sentence, each while the one before is made
         wait = job_queue.parse_wait(wait)
         if priority not in job_queue.PRIORITIES:
             raise ValueError("wait_priority must be normal or low.")

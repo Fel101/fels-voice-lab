@@ -53,7 +53,8 @@ def cast_voices(characters, entries, installed):
         for identity in usable:
             entry = entries[identity["engine_id"]]
             why = None
-            if not installed(identity["engine_id"]):
+            missing = not installed(identity["engine_id"])
+            if missing:
                 why = _not_installed(entry)
             elif identity["kind"] == "reference":
                 recordings = {item["id"]: item for item in identity.get("references", [])}
@@ -75,6 +76,7 @@ def cast_voices(characters, entries, installed):
                     "ready": why is None,
                     "why_not": why,
                     "_short": character["name"] if identity is default else None,
+                    "_missing_model": missing,
                 }
             )
     return voices
@@ -104,6 +106,7 @@ def preset_voices(entries, installed, loaded_info=None):
                     "ready": ready,
                     "why_not": None if ready else _not_installed(entry),
                     "_request": {"engine": model, **voice["request"]},
+                    "_missing_model": not ready,
                 }
             )
     return voices

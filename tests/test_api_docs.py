@@ -342,11 +342,13 @@ class OpenApiTests(unittest.TestCase):
                     self.assertNotIn("requestBody", operation)
                 responses = operation["responses"]
                 self.assertEqual(set(responses) - {"default"}, {str(row.status)} | {str(status) for status, _ in row.errors})
-                self.assertEqual(responses["default"], {"$ref": "#/components/responses/Error"})
+                # The OpenAI-style routes answer errors in OpenAI's shape; every other route in the Lab's.
+                error = "OpenAIError" if row.path.startswith("/v1/") else "Error"
+                self.assertEqual(responses["default"], {"$ref": f"#/components/responses/{error}"})
                 for status, meaning in row.errors:
                     self.assertEqual(responses[str(status)]["description"], meaning)
                     self.assertEqual(responses[str(status)]["content"]["application/json"]["schema"],
-                                     {"$ref": "#/components/schemas/Error"})
+                                     {"$ref": f"#/components/schemas/{error}"})
                 success = responses[str(row.status)]
                 self.assertEqual(success["description"], row.reply or "The answer.")
                 self.assertEqual(success["content"],

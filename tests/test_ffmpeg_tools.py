@@ -121,7 +121,7 @@ class FindingFFmpegTests(unittest.TestCase):
         report = ffmpeg_tools.capabilities(FFMPEG, ffmpeg_tools.find_ffprobe())
         self.assertTrue(report["found"])
         self.assertRegex(report["version"], r"^\d")
-        self.assertEqual(sorted(report["encoders"]), ["aac", "flac", "mp3", "vorbis"])
+        self.assertEqual(sorted(report["encoders"]), ["aac", "flac", "mp3", "opus", "vorbis"])
         self.assertTrue(all(isinstance(value, bool) for value in report["encoders"].values()))
         self.assertIn("aac", report["decoders"])
 

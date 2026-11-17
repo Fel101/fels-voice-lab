@@ -548,7 +548,8 @@ took. **Copy the address** and **Copy the test command** put them on the clipboa
 window, prints the Lab's health. Programs on other computers cannot reach it. **Copy the Claude Code line** copies the
 command that gives Claude Code the Lab's voices, and **Copy the settings for other MCP apps** the same for apps that read an
 `mcpServers` settings file; [connecting other apps](CONNECT.md) says what the assistant can then do, and that it starts the
-Lab's service by itself when the Lab is closed. **Port for the Lab's window** chooses the port
+Lab's service by itself when the Lab is closed. **Copy the OpenAI-style address** copies the base address for apps that can
+use OpenAI's speech API with another server, such as Open WebUI: they speak with the Lab's voices by name. **Port for the Lab's window** chooses the port
 the window asks for the next time it opens, or 0 for any free port; programs then find it through the address file that
 [the API guide](API.md#the-basics) describes.
 

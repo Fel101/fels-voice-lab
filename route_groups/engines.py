@@ -1,7 +1,8 @@
 """Engines and speech: the models (their status, Test, Install and device), loading and unloading them, the line for the
 model worker, and speaking: the voices a program can name (/api/voices), a clip (/api/speak), a live clip (/api/stream), a
-line as a Cast voice, kept as a take or not (/api/performance), and Kokoro's pronunciation preview. Also the service's health,
-info, catalog and OpenAPI document."""
+line as a Cast voice, kept as a take or not (/api/performance), and Kokoro's pronunciation preview; and the same speaking
+for apps that speak to OpenAI's speech API (/v1/audio/speech, its voices and models; openai_speech.py). Also the service's
+health, info, catalog and OpenAPI document."""
 
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ from common import free_ram_gb
 import engine_adapters
 import job_queue
 from lab_errors import NotInstalled
+import openai_speech
 from performance_settings import DEFAULTS, effective_settings
 from reference_catalog import save_designed_reference
 from scene_store import MAX_LINE_TEXT, MAX_SEGMENT_TEXT
@@ -263,6 +265,76 @@ def register(router, lab):
         if info.get("sampling"):
             headers["X-Effective-Sampling-Settings"] = json.dumps(info["sampling"], separators=(",", ":"))
         self._send(200, audio_body, "audio/wav", headers)
+
+    # ---------------------------------------------------------------------------------------- OpenAI-style speaking
+
+    def ready_voices():
+        return [voice for voice in voice_names.list_voices(cast, engines) if voice["ready"]]
+
+    def voice_models():
+        """The models that have a voice ready to speak, as (id, name), in the catalog's order."""
+        found = {voice["model"]: voice["model_name"] for voice in ready_voices()}
+        return [(key, found[key]) for key in engines.api_entries if key in found]
+
+    @router.get("/v1/models")
+    def openai_models(self, parsed, req):
+        rows = [{"id": key, "object": "model", "created": 0, "owned_by": "fels-voice-lab", "name": name}
+                for key, name in voice_models()]  # fmt: skip
+        self._json(200, {"object": "list", "data": rows})
+
+    @router.get("/v1/audio/models")
+    def openai_audio_models(self, parsed, req):
+        self._json(200, {"models": [{"id": key, "name": name} for key, name in voice_models()]})
+
+    @router.get("/v1/audio/voices")
+    def openai_voices(self, parsed, req):
+        rows = []
+        for voice in ready_voices():
+            about = f"{voice['name']} · Cast" if voice["kind"] == "cast" else voice["label"]
+            rows.append({"id": voice["name"], "name": f"{about} · {voice['model_name']}"})
+        self._json(200, {"voices": rows})
+
+    @router.post("/v1/audio/speech")
+    def openai_speech_route(self, parsed, req):
+        asked = openai_speech.parse(req)
+        try:
+            voice = voice_names.find(asked["voice"], voice_names.list_voices(cast, engines))
+        except KeyError:
+            raise KeyError(openai_speech.unknown_voice(asked["voice"])) from None
+        model = asked["model"]
+        if model in engines.api_entries and model != voice["model"]:
+            other = engines.api_entries[model].get("name", model)
+            raise ValueError(
+                f"{voice['name']} is a voice of {voice['model_name']}, not of {other}. Send model {voice['model']}, or a "
+                "name such as tts-1, which means the voice's own model."
+            )
+        if not voice["ready"]:
+            raise NotInstalled(voice["why_not"]) if voice["_missing_model"] else ValueError(voice["why_not"])
+        openai_speech.check_format(asked["format"])
+        speed = openai_speech.model_speed(voice, asked["speed"])
+        direction = asked["instructions"] if voice["takes_direction"] else ""
+        if voice["kind"] == "cast":
+            line = {"identity_id": voice["identity_id"], "text": asked["text"]}
+            if direction:
+                line["direction"] = direction
+            if speed is not None:
+                line["settings"] = {"speed": speed}
+            wav, headers = cast_clip(self, line, keep=False)
+            headers = {key: value for key, value in headers.items() if key in ("X-Audio-Seconds", "X-Parts")}
+        else:
+            request = voice_names.speak_request(voice, {"text": asked["text"]})
+            if speed is not None:
+                request["speed"] = speed
+            if direction:
+                request["direction"] = direction
+            self._note(engine=voice["model"])
+            samples, rate, info = engines.speak(request)
+            wav = synthetic_label.wav_bytes(samples, rate, engine_id=voice["model"])
+            headers = {"X-Audio-Seconds": f"{len(samples) / rate:.2f}"}
+            if info.get("parts"):
+                headers["X-Parts"] = str(info["parts"])
+        audio, media_type = openai_speech.encode(wav, asked["format"], voice["model"])
+        self._send(200, audio, media_type, headers)
 
     @router.post("/api/stream")
     def stream(self, parsed, req):

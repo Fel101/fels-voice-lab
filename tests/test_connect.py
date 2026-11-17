@@ -52,6 +52,7 @@ class ConnectRouteTests(unittest.TestCase):
                 "guide": f"https://github.com/Fel101/fels-voice-lab/blob/v{VERSION}/docs/API.md",
                 "mcp": lab_address.mcp_settings(ROOT, sys.executable),
                 "connect_guide": f"https://github.com/Fel101/fels-voice-lab/blob/v{VERSION}/docs/CONNECT.md",
+                "openai_base": f"{self.service.base}/v1",
             },
         )
         line = answer["mcp"]["claude_code"]

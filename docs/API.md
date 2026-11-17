@@ -659,6 +659,76 @@ Show the phonemes Kokoro would speak for a text.
 
 Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot take is refused with a 400 before anything loads.
 
+### OpenAI-style
+
+For apps that can send text to any server that answers like OpenAI's speech API: give them `http://127.0.0.1:8765/v1` as the base address and any key. The Lab's voices, by the names `GET /api/voices` gives; nothing is kept in the library. Errors take OpenAI's shape: `{"error": {"message", "type", "param", "code"}}`, with the Lab's `code`.
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | [`/v1/audio/speech`](#post-v1-audio-speech) | Speak text as OpenAI's speech API does, in one of the Lab's voices. |
+| GET | [`/v1/models`](#get-v1-models) | List the models that have a voice ready to speak, as OpenAI lists models. |
+| GET | [`/v1/audio/models`](#get-v1-audio-models) | List the same models in the shape some apps ask for. |
+| GET | [`/v1/audio/voices`](#get-v1-audio-voices) | List the voices ready to speak, for apps that offer a choice of voices. |
+
+<a id="post-v1-audio-speech"></a>
+
+#### `POST /v1/audio/speech`
+
+Speak text as OpenAI's speech API does, in one of the Lab's voices.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `input` (required) | string | What to say, 1 to 10,000 characters (OpenAI's own limit is 4,096). Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. The call can be cancelled between parts. A voice invented from a description (design mode) is refused for such a text, since it would change from one part to the next. |
+| `voice` (required) | string | A voice's name from `GET /v1/audio/voices`, the same names as `GET /api/voices`. `{"id": "Mira"}` works too. OpenAI's own voices (alloy, nova...) are not the Lab's. |
+| `model` | string | A model's id from `GET /v1/models`, which must be the voice's own. Any other name, such as `tts-1`, means the voice's own model. |
+| `response_format` | string | `mp3` (the default, as OpenAI's), `opus` (in Ogg), `aac` (ADTS), `flac`, `wav` or `pcm` (24 kHz, 16-bit signed little-endian, mono, no header). MP3, Opus and AAC are made by FFmpeg. |
+| `speed` | number | 0.25 to 4.0, default 1. Only a model with a speed control takes another value than 1, and only in its own range (Kokoro 82M: 0.5 to 2.0). |
+| `instructions` | string | How to say it, for a voice whose model takes an acting direction (`takes_direction` in `GET /api/voices`). Other voices speak without it. |
+| `stream_format` | string | Only `audio`, the default: the answer is the whole file. |
+| `wait_seconds` | number | How long to wait in line while the model worker is busy, at most 3600. Default 600 here, since apps send a reply sentence by sentence. |
+
+**Answer:** `200`, audio. The clip in the format asked for: `audio/mpeg`, `audio/ogg`, `audio/aac`, `audio/flac`, `audio/wav` or `audio/pcm`. Every format with room for it carries the AI-generated label; `pcm` and `aac` have none. No take is kept.
+
+| Answer header | Meaning |
+|---|---|
+| `X-Audio-Seconds` | The clip's length in seconds. |
+| `X-Parts` | How many parts a long text was spoken in, when more than one. |
+
+| Also answers | When |
+|---|---|
+| `404` | No voice has that name (`not_found`). |
+| `409` | Twenty requests already wait for the model worker, or this one waited `wait_seconds` (`busy`). |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel` (`cancelled`). |
+| `503` | The voice's model is not installed (`model_not_installed`), or the format is made by FFmpeg, which is not installed or cannot make it (`ffmpeg_not_installed`). |
+
+Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.
+
+<a id="get-v1-models"></a>
+
+#### `GET /v1/models`
+
+List the models that have a voice ready to speak, as OpenAI lists models.
+
+**Answer:** `200`, JSON. `object` (`list`) and `data`: each model's `id`, `object` (`model`), `created` (0), `owned_by` and `name`.
+
+<a id="get-v1-audio-models"></a>
+
+#### `GET /v1/audio/models`
+
+List the same models in the shape some apps ask for.
+
+**Answer:** `200`, JSON. `models`: each model's `id` and `name`.
+
+<a id="get-v1-audio-voices"></a>
+
+#### `GET /v1/audio/voices`
+
+List the voices ready to speak, for apps that offer a choice of voices.
+
+**Answer:** `200`, JSON. `voices`: each voice's `id` (its name, to send as `voice`) and `name` (what it is and its model, to show).
+
+Open WebUI reads this list, and `GET /v1/audio/models`, when its speech engine is OpenAI with another base address.
+
 ### Cast
 
 Characters, the voices (identities) they speak with, the recordings that clone those voices, and pronunciations. Retiring blocks new use of an item and everything made from it; purging deletes it.

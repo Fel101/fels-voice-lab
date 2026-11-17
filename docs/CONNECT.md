@@ -1,15 +1,15 @@
 # Connect other apps
 
 Fel's Voice Lab can be the voice of other programs on this computer: an assistant such as Claude Code, any other app that
-uses MCP, the command-line tool, and your own scripts. Everything stays on this computer. Programs on other computers cannot
+uses MCP, apps that can use OpenAI's speech API with another server, the command-line tool, and your own scripts. Everything stays on this computer. Programs on other computers cannot
 reach the Lab, and a web page from another site cannot use it.
 
 In the Lab, **System & backups** has **Connect other apps**. It shows the lines on this page with this computer's real paths,
 each with a Copy button, so nothing needs typing.
 
 [Claude Code](#claude-code) · [Other MCP apps](#other-mcp-apps) · [What the tools do](#what-the-tools-do) ·
-[When the Lab is closed](#when-the-lab-is-closed) · [The command-line tool](#the-command-line-tool) ·
-[Your own programs](#your-own-programs)
+[When the Lab is closed](#when-the-lab-is-closed) · [Apps that use OpenAI's speech API](#apps-that-use-openais-speech-api) ·
+[The command-line tool](#the-command-line-tool) · [Your own programs](#your-own-programs)
 
 ## Claude Code
 
@@ -87,6 +87,47 @@ itself.
 
 When something goes wrong, the server writes what happened to its standard error, which the app keeps with its own logs,
 and a service it started writes `service.log` in the server's folder under `out\spoken\`.
+
+## Apps that use OpenAI's speech API
+
+Many chat and assistant apps can send text to any server that answers like OpenAI's speech API. The Lab answers that way,
+on this computer:
+
+1. In the Lab, press **Copy the OpenAI-style address** under **Connect other apps**. It is `http://127.0.0.1:8765/v1`
+   unless the Lab is on another port.
+2. In the app's speech settings, choose OpenAI (or "OpenAI-compatible"), paste the address as the base address (API base
+   URL), and type any key: the Lab does not check it.
+3. As the voice, give a voice's name from the Lab, such as `Mira` or `af_heart`. Apps that ask for a list of voices, as
+   Open WebUI does, show the Lab's own. As the model, `tts-1` or any other name works: it means the voice's own model.
+
+| What the app sends | What the Lab does with it |
+|---|---|
+| `input` | Speaks up to 10,000 characters; longer text is made in parts and joined. |
+| `response_format` | MP3, the default, and Opus and AAC are made by FFmpeg: press **Install FFmpeg** on **System & backups** first, or ask for `wav`, `flac` or `pcm`. |
+| `speed` | Used by a model with a speed control (Kokoro 82M: 0.5 to 2.0). Other voices speak at their own pace and refuse any other speed than 1. |
+| `instructions` | An acting direction, for a voice whose model takes one. Other voices speak without it. |
+
+Nothing is kept in your library, and every file with room for it carries the label that marks it as AI-generated. Requests
+wait their turn for the model, so an app that sends a reply sentence by sentence hears the sentences in order. OpenAI's own
+voices (alloy, nova and the rest) are not in the Lab.
+
+The app must run on this computer, as a program. An app in a Docker container or on another computer cannot reach the Lab,
+which answers this computer only; listening on the network needs a key and a design of its own, which the Lab does not
+have yet. A web page that calls the address from your browser is refused too, as every other website is.
+
+With the official `openai` package for Python:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8765/v1", api_key="not-needed")
+with client.audio.speech.with_streaming_response.create(
+    model="tts-1", voice="Mira", input="Hello from the Lab.", response_format="wav"
+) as response:
+    response.stream_to_file("hello.wav")
+```
+
+[The API guide](API.md#openai-style) lists the routes, `GET /v1/audio/voices` and `GET /v1/models` among them.
 
 ## The command-line tool
 

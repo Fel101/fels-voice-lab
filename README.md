@@ -211,8 +211,9 @@ Browser mode, without the desktop window:
 Open `http://127.0.0.1:8765/`. Closing a browser tab does not stop a foreground service. The desktop
 window listens on the same address; when this Lab is already running there, started by `serve.bat`, the window opens on it
 and leaves it running when it closes. Other programs on this computer find the Lab there too: **Connect other apps** on
-**System & backups** shows the address, a command that tests it, and the line that gives Claude Code, or another app that
-uses MCP, the Lab's voices ([connecting other apps](docs/CONNECT.md), [the API guide](docs/API.md)).
+**System & backups** shows the address, a command that tests it, the line that gives Claude Code, or another app that uses
+MCP, the Lab's voices, and the address for apps that use OpenAI's speech API ([connecting other apps](docs/CONNECT.md),
+[the API guide](docs/API.md)).
 Read [desktop and state behavior](docs/SETUP.md).
 
 ## Roadmap
@@ -230,7 +231,7 @@ What is planned, and what anyone can pick up, is in the pinned
 | [Setup](docs/SETUP.md) | Environments, hardware, desktop launch, known installation limits, updating and removing the Lab |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | What runs on which computer, setup and RAM problems, graphics cards, updates, FFmpeg, reporting a problem |
 | [User guide](docs/USER_GUIDE.md) | Design through delivery, stopping and backups |
-| [Connect other apps](docs/CONNECT.md) | Claude Code and other MCP apps, the command-line tool, your own programs |
+| [Connect other apps](docs/CONNECT.md) | Claude Code and other MCP apps, apps that use OpenAI's speech API, the command-line tool, your own programs |
 | [Architecture](docs/ARCHITECTURE.md) | For contributors: the processes and environments, a request's path, where things are decided |
 | [Capabilities](MODEL_CAPABILITIES.md) | Integrated features versus trials and blocked models |
 | [Language screen](docs/LANGUAGE_MATRIX.md) | Languages each engine was screened in, with word error rates and the hardware used |

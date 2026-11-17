@@ -23,7 +23,8 @@ OPENAPI_VERSION = "3.1.0"
 # The codes an error answer carries beside its message (serve.ERROR_CODES), for a program to act on.
 ERROR_CODE_DOC = ("A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` "
                   "(409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), "
-                  "`failed` (500), `upstream_failed` (502), `model_not_installed` (503) or `timeout` (504).")
+                  "`failed` (500), `upstream_failed` (502), `model_not_installed` (503), `ffmpeg_not_installed` (503, where the "
+                  "route says so) or `timeout` (504).")
 DEFAULT_URL = "http://127.0.0.1:8765"
 
 
@@ -89,6 +90,10 @@ PATH_PARAMS = {
 GROUPS = (
     ("Service", "Is it running, what is loaded, which engines exist. None of these makes audio, except an engine check."),
     ("Speaking", "Turn text into audio. `speak` and `performance` answer with the finished WAV file in one response."),
+    ("OpenAI-style", "For apps that can send text to any server that answers like OpenAI's speech API: give them "
+                     "`http://127.0.0.1:8765/v1` as the base address and any key. The Lab's voices, by the names `GET "
+                     "/api/voices` gives; nothing is kept in the library. Errors take OpenAI's shape: `{\"error\": "
+                     "{\"message\", \"type\", \"param\", \"code\"}}`, with the Lab's `code`."),
     ("Cast", "Characters, the voices (identities) they speak with, the recordings that clone those voices, and "
              "pronunciations. Retiring blocks new use of an item and everything made from it; purging deletes it."),
     ("Takes", "Saved performances. Every `performance` call and every scene render saves a take with its text, settings, "
@@ -394,6 +399,46 @@ ROUTES = [
       notes="Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is "
             "not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot "
             "take is refused with a 400 before anything loads."),
+
+    # ---------------------------------------------------------------- OpenAI-style
+    R("POST", "/v1/audio/speech", "OpenAI-style", "Speak text as OpenAI's speech API does, in one of the Lab's voices.",
+      body=(F("input", "string", "What to say, 1 to 10,000 characters (OpenAI's own limit is 4,096). " + LONG_TEXT, True),
+            F("voice", "string", "A voice's name from `GET /v1/audio/voices`, the same names as `GET /api/voices`. "
+                                 "`{\"id\": \"Mira\"}` works too. OpenAI's own voices (alloy, nova...) are not the Lab's.",
+              True),
+            F("model", "string", "A model's id from `GET /v1/models`, which must be the voice's own. Any other name, such "
+                                 "as `tts-1`, means the voice's own model."),
+            F("response_format", "string", "`mp3` (the default, as OpenAI's), `opus` (in Ogg), `aac` (ADTS), `flac`, `wav` "
+                                           "or `pcm` (24 kHz, 16-bit signed little-endian, mono, no header). MP3, Opus "
+                                           "and AAC are made by FFmpeg."),
+            F("speed", "number", "0.25 to 4.0, default 1. Only a model with a speed control takes another value than 1, "
+                                 "and only in its own range (Kokoro 82M: 0.5 to 2.0)."),
+            F("instructions", "string", "How to say it, for a voice whose model takes an acting direction "
+                                        "(`takes_direction` in `GET /api/voices`). Other voices speak without it."),
+            F("stream_format", "string", "Only `audio`, the default: the answer is the whole file."),
+            F("wait_seconds", "number", "How long to wait in line while the model worker is busy, at most 3600. Default "
+                                        "600 here, since apps send a reply sentence by sentence.")),
+      reply_kind="audio",
+      reply="The clip in the format asked for: `audio/mpeg`, `audio/ogg`, `audio/aac`, `audio/flac`, `audio/wav` or "
+            "`audio/pcm`. Every format with room for it carries the AI-generated label; `pcm` and `aac` have none. No take "
+            "is kept.",
+      headers=(F("X-Audio-Seconds", "string", "The clip's length in seconds."),
+               F("X-Parts", "string", "How many parts a long text was spoken in, when more than one.")),
+      errors=((404, "No voice has that name (`not_found`)."),
+              (409, "Twenty requests already wait for the model worker, or this one waited `wait_seconds` (`busy`)."),
+              (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel` (`cancelled`)."),
+              (503, "The voice's model is not installed (`model_not_installed`), or the format is made by FFmpeg, which is "
+                    "not installed or cannot make it (`ffmpeg_not_installed`).")),
+      notes="Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this "
+            "computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes."),
+    R("GET", "/v1/models", "OpenAI-style", "List the models that have a voice ready to speak, as OpenAI lists models.",
+      reply="`object` (`list`) and `data`: each model's `id`, `object` (`model`), `created` (0), `owned_by` and `name`."),
+    R("GET", "/v1/audio/models", "OpenAI-style", "List the same models in the shape some apps ask for.",
+      reply="`models`: each model's `id` and `name`."),
+    R("GET", "/v1/audio/voices", "OpenAI-style", "List the voices ready to speak, for apps that offer a choice of voices.",
+      reply="`voices`: each voice's `id` (its name, to send as `voice`) and `name` (what it is and its model, to show).",
+      notes="Open WebUI reads this list, and `GET /v1/audio/models`, when its speech engine is OpenAI with another base "
+            "address."),
 
     # ---------------------------------------------------------------- Cast
     R("GET", "/api/cast", "Cast", "List every character with its voices and their recordings.",
@@ -873,7 +918,8 @@ ROUTES = [
             "`in_address_file` (whether the address file names it), `address_file`, `window_port` (what the desktop window "
             "asks for; 0 is any free port), `test` (a command that asks for its health), `guide` (the API guide of this "
             "version, on GitHub), `mcp` (`name`, `claude_code`: the line that adds this Lab's MCP server to Claude Code, and "
-            "`settings`: its `mcpServers` entry for other apps) and `connect_guide` (docs/CONNECT.md of this version)."),
+            "`settings`: its `mcpServers` entry for other apps), `connect_guide` (docs/CONNECT.md of this version) and "
+            "`openai_base` (the base address for apps that speak to OpenAI's speech API)."),
     R("POST", "/api/system/connect/port", "Page helpers", "Choose the port the desktop window's service asks for, from the next "
                                                           "time the window opens.",
       internal=True, body=(F("port", "integer", "0 for any free port, or 1024 to 65535; 8765 is the default.", True),),
@@ -975,8 +1021,13 @@ def _fields_schema(fields):
     return schema
 
 
-def _error(meaning):
-    return {"description": meaning, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+def _error(meaning, schema="Error"):
+    return {"description": meaning, "content": {"application/json": {"schema": {"$ref": f"#/components/schemas/{schema}"}}}}
+
+
+def _error_schema(route):
+    """OpenAI's error shape for the OpenAI-style routes, the Lab's for every other."""
+    return "OpenAIError" if route.path.startswith("/v1/") else "Error"
 
 
 def _operation(route):
@@ -1012,8 +1063,8 @@ def _operation(route):
         success["headers"] = {item.name: {"description": item.doc, "schema": {"type": "string"}} for item in route.headers}
     responses = {str(route.status): success}
     for status, meaning in route.errors:
-        responses[str(status)] = _error(meaning)
-    responses["default"] = {"$ref": "#/components/responses/Error"}
+        responses[str(status)] = _error(meaning, _error_schema(route))
+    responses["default"] = {"$ref": f"#/components/responses/{_error_schema(route)}"}
     operation["responses"] = responses
     return operation
 
@@ -1041,9 +1092,19 @@ def build_openapi():
         "components": {
             "schemas": {"Error": {"type": "object", "required": ["error", "code"],
                                   "properties": {"error": {"type": "string", "description": "What went wrong."},
-                                                 "code": {"type": "string", "description": ERROR_CODE_DOC}}}},
+                                                 "code": {"type": "string", "description": ERROR_CODE_DOC}}},
+                        "OpenAIError": {"type": "object", "required": ["error"], "properties": {"error": {
+                            "type": "object", "required": ["message", "type", "code"],
+                            "properties": {"message": {"type": "string", "description": "What went wrong."},
+                                           "type": {"type": "string",
+                                                    "description": "`invalid_request_error` (4xx) or `server_error` (5xx)."},
+                                           "param": {"type": ["string", "null"], "description": "Always null."},
+                                           "code": {"type": "string", "description": ERROR_CODE_DOC}}}}}},
             "responses": {"Error": {"description": "Any other failure: a JSON object with an `error` message and a `code`.",
-                                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+                                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+                          "OpenAIError": {"description": "Any other failure, in OpenAI's shape.",
+                                          "content": {"application/json": {
+                                              "schema": {"$ref": "#/components/schemas/OpenAIError"}}}}},
         },
         "x-internal-routes": sorted(key(route) for route in internal()),
     }
