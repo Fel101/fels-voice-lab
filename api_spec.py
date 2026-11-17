@@ -934,6 +934,11 @@ ROUTES = [
             "rest beside it. A source may be 0.5 to 60 seconds long and a target 0.5 to 10."),
 
     # ---------------------------------------------------------------- System
+    R("GET", "/api/asr/install", "System", "Check local speech recognition and its install progress.",
+      reply="`speech_recognition` reports installed model files. `install` contains the latest job."),
+    R("POST", "/api/asr/install", "System", "Plan or start the speech recognition install.",
+      status=202, body=(F("dry_run", "boolean", "Return the plan without downloading anything."),),
+      reply="The install plan or the progress snapshot.", errors=((409, "An install is running."),)),
     R("GET", "/api/system", "System", "Report the version, the system, the library, FFmpeg, disk space and engine states.",
       query=(F("recheck", "string", "`1` asks FFmpeg again."),),
       reply="`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, "

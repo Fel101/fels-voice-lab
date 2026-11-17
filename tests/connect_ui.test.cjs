@@ -49,7 +49,7 @@ function harness(replies, {clipboard = 'works', execCommand = false} = {}) {
     },
   });
   vm.runInContext(sourceBetween('function systemNote(', 'function renderSystem('), context);
-  vm.runInContext(sourceBetween('// Connect other apps:', 'function refreshSystemPage('), context);
+  vm.runInContext(sourceBetween('// Connect other apps:', '// Install speech recognition.'), context);
   return {context, fields, calls, copied, body};
 }
 

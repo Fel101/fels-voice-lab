@@ -806,7 +806,10 @@ and MP3 references still import, and the export panel and the import errors say 
 
 ### Transcripts and speaker matching
 
-Transcript drafts optionally use an isolated `.venv-asr` environment built from `requirements/asr-faster-whisper.txt` and a local copy of the Systran faster-whisper-tiny snapshot (revision d90ca5fe) in `hf-cache/faster-whisper-tiny-d90ca5fe`; `align_takes.py` uses the same pair for word times ([alignment notes](ALIGNMENT.md)).
+Choose **Install speech recognition** in **System & backups** to set up local transcript drafts and the speech models.
+The installer builds `.venv-asr` from `requirements/asr-faster-whisper.txt` and checks the pinned Tiny and Small snapshots
+against the file hashes in `catalog/asr_checkpoints.json`. The Tiny path stays compatible with `align_takes.py`.
+To see the installer plan from a terminal, run `.venv\Scripts\python.exe tools\install_asr.py --dry-run`.
 The UI reports unavailable if they are absent. Speaker matching (the voice match on
 takes, the second-voice warning in the reference screen, and the identity checks on
 cleaned and imported clips) needs only Chatterbox Turbo's speaker encoder, `ve.safetensors`

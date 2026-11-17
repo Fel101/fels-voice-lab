@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Install speech recognition from System & backups. Transcript drafts run on your computer.
+
 - Make repeatable sound effects and master a WAV or FLAC locally. Choose 16-bit PCM, 24-bit PCM or floating-point WAV
   for mastering and scene deliveries.
 

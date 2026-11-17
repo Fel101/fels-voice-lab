@@ -68,7 +68,10 @@ CARDS_SECONDS = 30
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 DRY_RUN_DONE = "Checks passed."
 # Tool id -> (its name, the script that installs it). See the note above.
-TOOLS = {"ffmpeg": ("FFmpeg", "tools/install_ffmpeg.py")}
+TOOLS = {
+    "ffmpeg": ("FFmpeg", "tools/install_ffmpeg.py"),
+    "asr": ("Speech recognition", "tools/install_asr.py"),
+}
 _STEP = re.compile(r"(?:\d+\.|-)\s")
 _TERMINATORS = re.compile(r"(\r\n|\n|\r)")
 
@@ -122,6 +125,7 @@ class EngineInstaller:
         self.clock = clock
         self._amd = None
         self._jobs = {}    # the latest install of each kind: "engine" or "tool"
+        self._tools_seen = {}
         self._process = None
 
     def _running(self):
@@ -250,36 +254,37 @@ class EngineInstaller:
         name = entry.get("name", key)
         if nvidia and (tool or key not in self.gpu_builds):
             raise ValueError(f"{name} has no GPU build the app can install.")
-        with self._lock:
-            if self._running():
-                raise worker_pool.WorkerBusy(f"{self._running_name()} is already being installed.")
         if not tool and self.pool.install_probe(entry)["installed"]:
             if not nvidia:
                 raise ValueError(f"{name} is already installed.")
             if self.pool.build_probe(entry)[0] != "cpu":
                 raise ValueError(f"{name} is already installed, and its PyTorch is not the CPU build.")
-        if not tool:
-            self.pool.hold(f"{name} is being installed")
-        try:
-            log_path = self._new_log(key)
-            log = log_path.open("wb")
-            try:
-                process = subprocess.Popen([*command, *([GPU_OPTION] if nvidia else []), "--yes"], cwd=self.root,
-                                           env=_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                           stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
-            except Exception:
-                log.close()
-                raise
-        except Exception:
-            if not tool:
-                self.pool.release_hold()
-            raise
-        job = {"engine": key, "kind": "tool" if tool else "engine", "name": name, "nvidia": nvidia, "state": "running",
-               "started": time.time(), "ended": None,
-               "exit_code": None, "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
-               "log": f"{LOG_FOLDER}/{log_path.name}"}
         with self._lock:
+            if self._running():
+                raise worker_pool.WorkerBusy(f"{self._running_name()} is already being installed.")
+            if not tool:
+                self.pool.hold(f"{name} is being installed")
+            try:
+                log_path = self._new_log(key)
+                log = log_path.open("wb")
+                try:
+                    process = subprocess.Popen([*command, *([GPU_OPTION] if nvidia else []), "--yes"], cwd=self.root,
+                                               env=_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                               stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
+                except Exception:
+                    log.close()
+                    raise
+            except Exception:
+                if not tool:
+                    self.pool.release_hold()
+                raise
+            job = {"engine": key, "kind": "tool" if tool else "engine", "name": name, "nvidia": nvidia, "state": "running",
+                   "started": time.time(), "ended": None,
+                   "exit_code": None, "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
+                   "log": f"{LOG_FOLDER}/{log_path.name}"}
             self._jobs[job["kind"]], self._process = job, process
+            if tool:
+                self._tools_seen[key] = job
         threading.Thread(target=self._pump, args=(job, process, log), name=f"install-{key}", daemon=True).start()
         return self.snapshot(job["kind"])
 
@@ -353,13 +358,13 @@ class EngineInstaller:
                 if job["kind"] == "engine":
                     self.pool.release_hold()    # after the state is final, so a page that sees the service free sees the result
 
-    def snapshot(self, kind="engine"):
+    def snapshot(self, kind="engine", *, tool_key=None):
         """The latest install of that kind ("engine", or "tool" for FFmpeg), or None when none has run since the service
         started: engine (the engine's or tool's id), name, nvidia (the GPU build),
         state (running, finished or failed), started_at, ended_at, seconds so far, exit_code, the end of its output as lines,
         and its log file."""
         with self._lock:
-            job = self._jobs.get(kind)
+            job = self._jobs.get(kind) if tool_key is None else self._tools_seen.get(tool_key)
             if job is None:
                 return None
             lines = list(job["lines"]) + ([job["current"]] if job["current"] else [])

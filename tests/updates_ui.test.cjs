@@ -52,7 +52,7 @@ function harness(replies, extra = {}) {
     },
   });
   vm.runInContext(sourceBetween('function systemNote(', 'function refreshSystem('), context);
-  vm.runInContext(sourceBetween('// Updates:', 'function refreshSystemPage('), context);
+  vm.runInContext(sourceBetween('// Updates:', '// Install speech recognition.'), context);
   return {context, fields, calls, installs};
 }
 

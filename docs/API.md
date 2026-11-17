@@ -2404,6 +2404,8 @@ The service's report, folder sizes, library backups and housekeeping.
 
 | Method | Path | What it does |
 |---|---|---|
+| GET | [`/api/asr/install`](#get-api-asr-install) | Check local speech recognition and its install progress. |
+| POST | [`/api/asr/install`](#post-api-asr-install) | Plan or start the speech recognition install. |
 | GET | [`/api/system`](#get-api-system) | Report the version, the system, the library, FFmpeg, disk space and engine states. |
 | GET | [`/api/system/storage`](#get-api-system-storage) | Measure the library's folders and what a cleanup would remove. |
 | GET | [`/api/system/backups`](#get-api-system-backups) | List backups, what a new one would include, and the running job. |
@@ -2412,6 +2414,30 @@ The service's report, folder sizes, library backups and housekeeping.
 | POST | [`/api/system/backups/restore`](#post-api-system-backups-restore) | Restore a backup into a new folder inside the library, in the background. |
 | GET | [`/api/system/task`](#get-api-system-task) | Say how the running backup, check or restore is getting on. |
 | POST | [`/api/system/cleanup`](#post-api-system-cleanup) | Remove old worker scratch folders, desktop sessions and service logs. |
+
+<a id="get-api-asr-install"></a>
+
+#### `GET /api/asr/install`
+
+Check local speech recognition and its install progress.
+
+**Answer:** `200`, JSON. `speech_recognition` reports installed model files. `install` contains the latest job.
+
+<a id="post-api-asr-install"></a>
+
+#### `POST /api/asr/install`
+
+Plan or start the speech recognition install.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `dry_run` | boolean | Return the plan without downloading anything. |
+
+**Answer:** `202`, JSON. The install plan or the progress snapshot.
+
+| Also answers | When |
+|---|---|
+| `409` | An install is running. |
 
 <a id="get-api-system"></a>
 

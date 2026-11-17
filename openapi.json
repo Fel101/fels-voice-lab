@@ -6816,6 +6816,78 @@
         }
       }
     },
+    "/api/asr/install": {
+      "get": {
+        "operationId": "get_api_asr_install",
+        "summary": "Check local speech recognition and its install progress.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "`speech_recognition` reports installed model files. `install` contains the latest job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_asr_install",
+        "summary": "Plan or start the speech recognition install.",
+        "tags": [
+          "System"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "Return the plan without downloading anything."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The install plan or the progress snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An install is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/system": {
       "get": {
         "operationId": "get_api_system",

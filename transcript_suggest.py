@@ -34,9 +34,9 @@ def suggest(audio_path):
     audio = Path(audio_path)
     if not ASR_PYTHON.is_file() or not ASR_WORKER.is_file():
         raise TranscriptUnavailable(
-            "Transcript suggestions are not set up. They need the optional .venv-asr environment described in docs/SETUP.md.")
+            "Open System & backups and choose Install speech recognition to draft the words in this recording.")
     if not (ASR_MODEL_DIR / "model.bin").is_file():
-        raise TranscriptUnavailable("The local transcript model is missing from hf-cache/. docs/SETUP.md says which copy it needs.")
+        raise TranscriptUnavailable("Open System & backups and choose Install speech recognition to download the speech models.")
     if not audio.is_file():
         raise FileNotFoundError("Reference audio is missing.")
     if not _suggest_lock.acquire(blocking=False):

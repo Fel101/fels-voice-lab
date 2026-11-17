@@ -416,7 +416,43 @@ function saveConnectPort(){
     systemNote('connectPortStatus',(result.window_port===0?'Saved. The window takes any free port':'Saved. The window asks for port '+result.window_port)+' the next time it opens.',false);
   }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
 }
-function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall(),refreshConnect()]);}
+// Install speech recognition.
+var asrInstallTimer = null;
+async function refreshAsrInstall() {
+  clearTimeout(asrInstallTimer);
+  try {
+    var status = await fetchJson('/api/asr/install');
+    var running = status.install && status.install.state === 'running';
+    var ready = status.speech_recognition.ready;
+    $('systemAsrInstall').hidden = ready && !running;
+    $('systemAsrInstall').disabled = !!running;
+    $('systemAsrState').textContent = running
+      ? 'Installing speech recognition. Close the Lab to stop it, then choose Install again to continue.'
+      : ready ? 'Speech recognition is ready. Audio is processed on this computer.'
+        : status.install && status.install.state === 'failed' ? 'The install stopped. Choose Install speech recognition to try again.'
+          : 'Install speech recognition to draft transcripts on this computer.';
+    if (running) asrInstallTimer = setTimeout(refreshAsrInstall, 1200);
+  } catch (_) {
+    $('systemAsrInstall').disabled = false;
+    $('systemAsrState').textContent = 'Could not check speech recognition. Choose Refresh to try again.';
+  }
+}
+$('systemAsrInstall').addEventListener('click', async function () {
+  var button = $('systemAsrInstall');
+  button.disabled = true;
+  try {
+    var response = await fetchJson('/api/asr/install',{dry_run:true});
+    var plan = response.plan;
+    if (!plan.ok) throw new Error(plan.problems.join(' ') || 'Check the available disk space and try again.');
+    if (!window.confirm('Install speech recognition? This downloads about 564 MB of models and the packages they need. Audio stays on this computer.')) { button.disabled = false; return; }
+    await fetchJson('/api/asr/install',{});
+    await refreshAsrInstall();
+  } catch (error) {
+    button.disabled = false;
+    $('systemAsrState').textContent = error.message;
+  }
+});
+function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall(),refreshAsrInstall(),refreshConnect()]);}
 $('systemRefresh').addEventListener('click',function(){refreshSystemPage();});
 $('systemCopy').addEventListener('click',function(){copyDiagnostics();});
 $('systemFfmpegCheck').addEventListener('click',function(){refreshSystem(true);});

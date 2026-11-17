@@ -288,7 +288,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <audio id="referencePlayer" controls></audio>
     <p class="meta" id="referenceAnalysis"></p>
     <label class="field">Exact words in the recording<textarea id="referenceTranscript" placeholder="Type and verify every word; guessed transcripts are never marked exact"></textarea></label>
-    <div class="cast-actions"><button type="button" id="suggestTranscript">Suggest the words from the saved clip</button><span class="meta">A local draft to check word by word. It is not saved or marked exact.</span></div>
+    <div class="cast-actions"><button type="button" id="suggestTranscript">Suggest the words from the saved clip</button><span class="meta">A local draft to check word by word. It is not saved or marked exact.</span> <a href="#system">Speech recognition setup</a></div>
     <div class="cast-grid"><label class="field">Where it comes from<input id="referenceOrigin" type="text" maxlength="1000" placeholder="Where this recording/design came from"></label>
       <label class="field">Who may use it, and how<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="Permission and use limits; restrictions carry forward"></label></div>
     <div class="cast-actions"><button type="button" id="saveReference">Save the recording</button><button type="button" id="saveReferenceVersion" hidden>Save edited version</button>
@@ -799,6 +799,9 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><button type="button" class="go" id="updateNow" hidden>Update now</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>
 <label class="meta"><input id="updateAuto" type="checkbox"> Check when the Lab opens, at most once a day</label>
 <p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. <strong>Update now</strong> shows what the update will do and asks first; then the Lab closes, a window of its own shows the update, and the Lab opens again. It keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> in the Lab's folder puts the previous version back. <code>update.bat</code> does the same update with the Lab closed.</p>
+<h3>Speech recognition</h3>
+<p class="meta" id="systemAsrState" role="status"></p>
+<button type="button" id="systemAsrInstall">Install speech recognition</button>
 <h3>FFmpeg</h3>
 <p class="meta" id="systemFfmpeg" role="status"></p>
 <p class="meta" id="systemFfmpegProgress" role="status" hidden></p>

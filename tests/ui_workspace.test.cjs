@@ -711,7 +711,7 @@ test('Perform and Scenes take cards both carry the loudness line', () => {
 
 // The export panel offers only what this PC's FFmpeg can write.
 // The FFmpeg install button and its progress line, shared by the System page and the export panel (voice_lab_system.js).
-const FFMPEG_INSTALL_SOURCE = () => sourceBetween('// Install FFmpeg: the button here', 'function refreshSystemPage(');
+const FFMPEG_INSTALL_SOURCE = () => sourceBetween('// Install FFmpeg: the button here', '// Install speech recognition.');
 function exportPanel(report, {job = null} = {}) {
   const make = (id, extra = {}) => ({id, disabled: false, checked: false, hidden: false, textContent: '', className: '', ...extra});
   const note = make('exportFfmpeg'), buttons = ['exportPreview', 'exportCreate', 'exportVerify'].map(id => make(id));
@@ -823,7 +823,7 @@ function systemPanel({answers = {}, confirm = true, navigator = {}, copyAllowed 
   ['systemFacts', 'systemFfmpeg', 'systemFfmpegInstall', 'systemFfmpegProgress', 'exportFfmpegInstall', 'exportFfmpegProgress', 'systemDisk', 'systemModels', 'systemDiagnostics', 'systemCopy', 'systemCopied', 'systemError',
     'systemStatus', 'systemMeasure', 'systemClean', 'systemStorage', 'systemCleanup', 'backupFolder', 'backupSections', 'backupSize',
     'backupProgress', 'backupStatus', 'backupList', 'backupCreate', 'restoreBox', 'restoreName', 'restoreFolder', 'restoreGo',
-    'restoreUse', 'restoreHint', 'restoreCommand'].forEach(id => { nodes[id] = make(id, 'div'); });
+    'restoreUse', 'restoreHint', 'restoreCommand', 'systemAsrInstall', 'systemAsrState'].forEach(id => { nodes[id] = make(id, 'div'); });
   const inputs = () => nodes.backupSections.children.flatMap(label => label.children).filter(item => item.tagName === 'input');
   const context = vm.createContext({
     $: id => nodes[id], navigator,
@@ -833,13 +833,33 @@ function systemPanel({answers = {}, confirm = true, navigator = {}, copyAllowed 
     setTimeout: (callback, delay) => { timers.push({callback, delay}); return timers.length; }, clearTimeout() {},
     fetchJson: (url, body) => {
       calls.push([url, body === undefined ? undefined : JSON.parse(JSON.stringify(body))]);  // plain objects of this realm, so deepEqual can compare them
-      const answer = typeof answers[url] === 'function' ? answers[url]() : answers[url];
+      const answer = typeof answers[url] === 'function' ? answers[url](body) : answers[url];
       return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
     }});
   vm.runInContext(sourceBetween('var systemTaskTimer=', "$('systemRefresh').addEventListener"), context);
   return {nodes, calls, timers, context, inputs, posted: url => calls.filter(call => call[0] === url)};
 }
 const GB = 1024 ** 3;
+test('speech recognition asks before installing and follows the job until it is ready', async () => {
+  const route = '/api/asr/install';
+  let state = 'running';
+  const answers = {[route]: body => body?.dry_run ? {plan: {ok: true}}
+    : {speech_recognition: {ready: state === 'finished'}, install: {state}}};
+  const cancelled = systemPanel({answers, confirm: false});
+  await cancelled.nodes.systemAsrInstall.clickHandler();
+  assert.equal(cancelled.posted(route).length, 1);
+  assert.equal(cancelled.nodes.systemAsrInstall.disabled, false);
+  const panel = systemPanel({answers});
+  await panel.nodes.systemAsrInstall.clickHandler();
+  assert.deepEqual(panel.posted(route), [[route, {dry_run: true}], [route, {}], [route, undefined]]);
+  assert.equal(panel.nodes.systemAsrInstall.disabled, true);
+  assert.match(panel.nodes.systemAsrState.textContent, /Installing speech recognition/);
+  state = 'finished';
+  await panel.timers.at(-1).callback();
+  assert.equal(panel.nodes.systemAsrInstall.hidden, true);
+  assert.match(panel.nodes.systemAsrState.textContent, /is ready/);
+});
+
 const systemReport = (extra = {}) => ({
   app: {name: "Fel's Voice Lab", version: '0.3.0'}, system: {python: '3.12.4', platform: 'Windows-11', device: 'cuda', free_ram_gb: 21.5},
   library: {path: 'D:\\VoiceLab', schemas: {evaluations: 2, scenes: 1, cast: 8},

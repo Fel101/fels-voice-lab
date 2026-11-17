@@ -238,7 +238,7 @@ def register(router, lab):
 
     @router.get("/api/ffmpeg/install")
     def ffmpeg_install_status(self, parsed, req):
-        self._json(200, {"install": installer.snapshot("tool")})
+        self._json(200, {"install": installer.snapshot(tool_key="ffmpeg")})
 
     @router.post("/api/ffmpeg/install")
     def ffmpeg_install(self, parsed, req):

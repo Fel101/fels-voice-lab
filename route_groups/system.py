@@ -3,6 +3,7 @@ backups, their checks and restores (library_backup.py), cleaning up out/ (housek
 (updates.py), Update now (self_update.py), and choosing the library the desktop app opens."""
 
 import sys
+import asr_installation
 from urllib.parse import parse_qs
 
 from app_version import APP_NAME, REPOSITORY, VERSION
@@ -95,6 +96,20 @@ def register(router, lab):
             self._json(200, lab.updater.open_folder())
         except (UpdateNowError, OSError) as exc:
             self._json(400, {"error": f"The folder could not be opened: {exc}"})
+
+    @router.get("/api/asr/install")
+    def asr_status(self, parsed, req):
+        self._json(200, {"speech_recognition": asr_installation.status(), "install": lab.installer.snapshot(tool_key="asr")})
+
+    @router.post("/api/asr/install")
+    def asr_install(self, parsed, req):
+        dry_run = req.get("dry_run", False)
+        if type(dry_run) is not bool:
+            raise ValueError("Choose Install speech recognition to start the installer.")
+        if dry_run:
+            self._json(200, {"plan": lab.installer.plan("asr", tool=True)})
+        else:
+            self._json(202, {"install": lab.installer.start("asr", tool=True)})
 
     @router.get("/api/system/connect")
     def connect(self, parsed, req):
