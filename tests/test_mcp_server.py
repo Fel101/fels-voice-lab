@@ -343,6 +343,30 @@ class SpeakingTests(InProcessCase):
         self.call(2, "speak", {"text": "Hello.", "direction": "softly", "play": False})
         self.assertIn("The Lab's default voice takes no acting direction", self.result(2)["content"][0]["text"])
 
+    def test_how_a_call_stands_before_the_lab_is_found_asks_nothing_of_the_lab(self):
+        # The progress thread once asked the Lab's queue on every tick, so a tick before the Lab's address was known
+        # stopped it with a TypeError and the client heard nothing more.
+        self.enterContext(mock.patch.object(mcp_server, "PROGRESS_SECONDS", 0.01))
+        lab = mcp_server.Lab(url=self.service.base, environ={"VOICE_LAB_ADDRESS_FILE": str(self.clips / "none.json")})
+        with self.assertRaisesRegex(mcp_server.ToolError, "has not been found yet"):
+            lab.get("/api/queue")
+        server = mcp_server.Server(mcp_server.Tools(lab, self.player, clips=self.clips), self.wire)
+        call, done = mcp_server.Call(1, "speak"), threading.Event()
+        call.state = "starting"
+        thread = threading.Thread(target=server.progress, args=(call, "p0", done))
+        thread.start()
+        deadline = time.monotonic() + 10
+        while len([item for item in self.wire.messages if item.get("method") == "notifications/progress"]) < 3:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        call.state = "making"  # the Lab is still not found: making_message says so in general words
+        time.sleep(0.05)
+        done.set()
+        thread.join(5)
+        messages = [item["params"]["message"] for item in self.wire.messages if item.get("method") == "notifications/progress"]
+        self.assertEqual(messages[:3], ["Starting Fel's Voice Lab."] * 3)
+        self.assertIn("The Lab is making the clip.", messages)
+
     def test_a_long_call_hears_how_it_stands(self):
         self.enterContext(mock.patch.object(mcp_server, "PROGRESS_SECONDS", 0.05))
         self.engines.gate = threading.Event()

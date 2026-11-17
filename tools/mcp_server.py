@@ -185,7 +185,9 @@ class Lab:
 
     def call(self, method, path, body=None, *, headers=None, timeout=QUICK_SECONDS):
         """One request: (status, headers with lower-case names, bytes). An error answer raises ToolError with the
-        service's sentence; nothing answering raises ToolError too."""
+        service's sentence; nothing answering raises ToolError too, as does a Lab not found yet."""
+        if not self.url:
+            raise ToolError(f"Fel's Voice Lab has not been found yet. {NOT_RUNNING_HINT}")
         address = urllib.parse.urlsplit(self.url)
         connection = http.client.HTTPConnection(address.hostname, address.port or 80, timeout=timeout)
         data = json.dumps(body).encode("utf-8") if body is not None else None
@@ -822,12 +824,15 @@ class Server:
         count = 0
         while not done.wait(PROGRESS_SECONDS):
             count += 1
-            message = {
-                "queued": "Waiting for the clip before this one to finish.",
-                "starting": "Starting Fel's Voice Lab.",
-                "making": self.making_message(call),
-                "playing": "Playing the clip.",
-            }.get(call.state, "Working.")
+            # Only a clip the Lab is making asks the Lab how it stands: before then there may be no Lab to ask.
+            if call.state == "making":
+                message = self.making_message(call)
+            else:
+                message = {
+                    "queued": "Waiting for the clip before this one to finish.",
+                    "starting": "Starting Fel's Voice Lab.",
+                    "playing": "Playing the clip.",
+                }.get(call.state, "Working.")
             if done.is_set():
                 return
             self.send(
