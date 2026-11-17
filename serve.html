@@ -816,30 +816,30 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 
 <section class="card" id="projects">
-  <h2>Projects</h2>
+  <h2>{{ui:projects.heading}}</h2>
   <div class="row">
-    <label class="field">Search titles or script<input id="projectsQuery" type="search" maxlength="120"></label>
-    <label class="field compact">Project type<select id="projectsKind"><option value="">All</option><option value="scene">Scenes</option><option value="dub">Timed scenes</option><option value="book">Books</option></select></label>
-    <button id="searchProjects" type="button">Search</button>
+    <label class="field">{{ui:projects.search_query}}<input id="projectsQuery" type="search" maxlength="120"></label>
+    <label class="field compact">{{ui:projects.type}}<select id="projectsKind"><option value="">{{ui:projects.all}}</option><option value="scene">{{ui:projects.scenes}}</option><option value="dub">{{ui:projects.timed_scenes}}</option><option value="book">{{ui:projects.books}}</option></select></label>
+    <button id="searchProjects" type="button">{{ui:projects.search}}</button>
   </div>
   <ul id="projectRows"></ul>
-  <details><summary>Export a project</summary>
-    <label class="field">Project<select id="projectArchive"></select></label>
-    <label><input id="projectArchiveMedia" type="checkbox"> Include the book cover or attached audio and video</label>
-    <label><input id="projectArchiveVoices" type="checkbox"> Include approved voice recordings</label>
-    <div class="row"><button id="exportProjectArchive" type="button">Export project ZIP</button></div>
-    <label><input id="archiveSharePermission" type="checkbox"> I have permission to share the included voice recordings</label>
-    <p><a id="projectDownload" download hidden>Download ZIP</a></p>
+  <details><summary>{{ui:projects.export_heading}}</summary>
+    <label class="field">{{ui:projects.archive_project}}<select id="projectArchive"></select></label>
+    <label><input id="projectArchiveMedia" type="checkbox"> {{ui:projects.archive_media}}</label>
+    <label><input id="projectArchiveVoices" type="checkbox"> {{ui:projects.archive_voices}}</label>
+    <div class="row"><button id="exportProjectArchive" type="button">{{ui:projects.archive_export}}</button></div>
+    <label><input id="archiveSharePermission" type="checkbox"> {{ui:projects.archive_permission}}</label>
+    <p><a id="projectDownload" download hidden>{{ui:projects.archive_download}}</a></p>
   </details>
-  <details id="portableImportPanel"><summary>Import a project or voice file</summary>
-    <label class="field">Portable ZIP<input id="portableFile" type="file" accept=".zip,application/zip"></label>
-    <div class="row"><button id="previewPortable" type="button">Check archive</button></div>
+  <details id="portableImportPanel"><summary>{{ui:projects.import_heading}}</summary>
+    <label class="field">{{ui:projects.import_file}}<input id="portableFile" type="file" accept=".zip,application/zip"></label>
+    <div class="row"><button id="previewPortable" type="button">{{ui:projects.check_archive}}</button></div>
     <div id="portableReview" hidden>
       <p id="portableTitle"></p>
       <div id="portableMappings"></div>
-      <label><input id="portableMedia" type="checkbox"> Copy the included cover or attached media</label>
-      <label><input id="portablePermission" type="checkbox"> I reviewed the included voice recording terms and may use it</label>
-      <div class="row"><button id="importPortable" type="button">Import reviewed archive</button></div>
+      <label><input id="portableMedia" type="checkbox"> {{ui:projects.copy_media}}</label>
+      <label><input id="portablePermission" type="checkbox"> {{ui:projects.accept_terms}}</label>
+      <div class="row"><button id="importPortable" type="button">{{ui:projects.import_review}}</button></div>
     </div>
   </details>
   <p id="projectsStatus" role="status"></p>

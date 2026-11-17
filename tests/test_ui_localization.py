@@ -1,5 +1,6 @@
 """The local page catalogs and the words the service renders before JavaScript."""
 
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -89,12 +90,29 @@ class PageTextTests(unittest.TestCase):
 
     @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
     def test_picker_persists_and_renders_both_pages_with_partial_draft_catalog(self):
-        self.save_catalog("es", "Español", {"language.label": "Idioma"}, draft=True)
+        self.save_catalog(
+            "es",
+            "Español",
+            {
+                "language.label": "Idioma",
+                "projects.heading": "Proyectos",
+                "projects.kind.scene": "Escena",
+                "projects.voice_count": {"one": "{count} voz", "other": "{count} voces"},
+                "projects.line_count": {"one": "{count} línea", "other": "{count} líneas"},
+            },
+            draft=True,
+        )
         page_text = PageText(self.catalogs)
         with mock.patch.object(serve, "UiPreferences", lambda root: UiPreferences(root, page_text)):
             server = FlowServer(self.root / "library")
         page = None
         try:
+            character = server.cast.create_character("Mira", "")
+            voice = server.cast.create_identity(character["id"], "kokoro", "Warm", {"voice": "af_heart"})
+            server.cast.update_identity(voice["id"], {"status": "approved"})
+            server.scenes.import_script(
+                "Mira: Leave the light on.", "text", {"Mira": {"identity_id": voice["id"]}}, name="Porch light"
+            )
             page = DevToolsPage(BROWSER)
             page.open(server.base + "/#projects")
             self.assertEqual(page.evaluate("document.documentElement.lang"), "en")
@@ -105,6 +123,13 @@ class PageTextTests(unittest.TestCase):
             self.assertIn(
                 "draft, not yet checked by a speaker", page.evaluate("$('languageChoice').selectedOptions[0].textContent")
             )
+            page.wait_until("document.querySelector('#projectRows li')?.textContent.includes('1 voz')")
+            self.assertIn(
+                "Porch light · Escena · 1 línea · 1 voz · 0 selected takes",
+                page.evaluate("document.querySelector('#projectRows li').textContent"),
+            )
+            self.assertEqual(page.evaluate("document.querySelector('#projects h2').textContent"), "Proyectos")
+            self.assertIn("Search titles or script", page.evaluate("$('projectsQuery').labels[0].innerText"))
             page.open(server.base + "/compare")
             self.assertEqual(page.evaluate("document.documentElement.lang"), "es")
             self.assertTrue(page.evaluate("document.querySelector('label[for=languageChoice]').innerText.startsWith('Idioma')"))
@@ -117,3 +142,20 @@ class PageTextTests(unittest.TestCase):
             if page is not None:
                 page.close()
             server.close()
+
+    def test_all_project_markup_text_and_labels_use_the_catalog(self):
+        class ProjectMarkup(HTMLParser):
+            def handle_data(self, data):
+                if data.strip():
+                    self.check(data.strip())
+
+            def handle_starttag(self, tag, attributes):
+                for name, value in attributes:
+                    if name in {"title", "aria-label", "placeholder", "alt"} and value:
+                        self.check(value)
+
+        page = (ROOT / "serve.html").read_text(encoding="utf-8")
+        block = page.split('<section class="card" id="projects">', 1)[1].split("</section>", 1)[0]
+        parser = ProjectMarkup()
+        parser.check = lambda word: self.assertIsNotNone(TOKEN.fullmatch(word), word)
+        parser.feed(block)
