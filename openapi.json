@@ -4855,6 +4855,167 @@
         }
       }
     },
+    "/api/audio-tools/sound": {
+      "post": {
+        "operationId": "post_api_audio_tools_sound",
+        "summary": "Create a seeded procedural sound effect.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string",
+                    "description": "Description naming one supported sound."
+                  },
+                  "seconds": {
+                    "type": "number",
+                    "description": "Length in seconds."
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "Repeatable sound seed."
+                  }
+                },
+                "required": [
+                  "description"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Audio and sound receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/audio-tools/master": {
+      "post": {
+        "operationId": "post_api_audio_tools_master",
+        "summary": "Master a local WAV or FLAC to a separate WAV.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Audio and measured output receipt. Send X-Reference-Metadata with base64url JSON settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/audio-tools/{delivery_id}/audio.wav": {
+      "get": {
+        "operationId": "get_api_audio_tools_delivery_id_audio_wav",
+        "summary": "Stream a saved audio tool WAV.",
+        "tags": [
+          "Production"
+        ],
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved WAV.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/audio-tools/{delivery_id}/receipt.json": {
+      "get": {
+        "operationId": "get_api_audio_tools_delivery_id_receipt_json",
+        "summary": "Read an audio tool receipt.",
+        "tags": [
+          "Production"
+        ],
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provenance and readings from the saved file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/books": {
       "get": {
         "operationId": "get_api_books",
@@ -5694,6 +5855,10 @@
                     },
                     "description": "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."
                   },
+                  "wav_precision": {
+                    "type": "string",
+                    "description": "PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16."
+                  },
                   "filename_template": {
                     "type": "string",
                     "description": "Default `{line_id}`."
@@ -5875,6 +6040,10 @@
                       "type": "string"
                     },
                     "description": "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."
+                  },
+                  "wav_precision": {
+                    "type": "string",
+                    "description": "PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16."
                   },
                   "filename_template": {
                     "type": "string",
@@ -7045,6 +7214,7 @@
     "GET /out/*",
     "GET /theme.js",
     "GET /voice_lab_app.js",
+    "GET /voice_lab_audio.js",
     "GET /voice_lab_books.js",
     "GET /voice_lab_cast.js",
     "GET /voice_lab_cast_bindings.js",

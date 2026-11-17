@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Make repeatable sound effects and master a WAV or FLAC locally. Choose 16-bit PCM, 24-bit PCM or floating-point WAV
+  for mastering and scene deliveries.
+
 - Find saved scenes and books in Projects and move portable copies between libraries. Share an approved voice as a
   checked file, and review imported voices as candidates. Inspired by VoiceStudio’s library workflows.
 

@@ -2141,6 +2141,7 @@ function exportRequest() {
     scene_id: activeSceneId,
     formats: formats,
     filename_template: $('exportTemplate').value,
+    wav_precision: $('exportWavPrecision').value,
     output_rate: exportNumber('exportRate', 'Sample rate'),
     trim_start_seconds: exportNumber('exportTrimStart', 'Trim start') || 0,
     trim_end_seconds: exportNumber('exportTrimEnd', 'Trim end') || 0,

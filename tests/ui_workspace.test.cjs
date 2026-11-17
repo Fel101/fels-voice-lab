@@ -89,7 +89,7 @@ test('take waveform checks are plain text beside each Perform and Scenes take', 
 });
 
 test('cloning is a full workspace; navigation shows exactly one panel', () => {
-  const ids = ['studio','cloning','cast','perform','scenes','conversion','books','projects','library','models','system'];
+  const ids = ['studio','cloning','cast','perform','scenes','conversion','books','projects','audio-tools','library','models','system'];
   const opened = [];
   const fields = Object.fromEntries(ids.map(id=>[id,{hidden:false,classList:{add(){}},
     querySelector:()=>({textContent:id})}]));
@@ -102,7 +102,7 @@ test('cloning is a full workspace; navigation shows exactly one panel', () => {
     document:{documentElement:{classList:{add(){}}},querySelectorAll:()=>links},
     window:{scrollTo(){}}});
   vm.runInContext(sourceBetween('function showWorkspace()', "window.addEventListener('hashchange',showWorkspace)"),c);
-  for(const active of ['cloning','cast','perform','studio','models','books','projects','system','unknown']){
+  for(const active of ['cloning','cast','perform','studio','models','books','projects','audio-tools','system','unknown']){
     c.location.hash='#'+active;c.showWorkspace();
     const expected=active==='unknown'?'studio':active;
     assert.deepEqual(ids.filter(id=>!fields[id].hidden),[expected]);

@@ -181,7 +181,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -413,6 +413,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label><input type="checkbox" name="exportFormat" value="mp3"> MP3</label>
       <label><input type="checkbox" name="exportFormat" value="m4a"> AAC (M4A)</label></fieldset>
       <label class="field compact">File names<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{character}__{line_id}"></label>
+      <label class="field compact">WAV precision<select id="exportWavPrecision"><option value="PCM_16">16-bit PCM</option>
+        <option value="PCM_24">24-bit PCM</option><option value="FLOAT">32-bit float</option></select></label>
       <label class="field compact">Sample rate (blank keeps the take’s)<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
     <div class="row"><label class="field compact">Trim start (s)<input id="exportTrimStart" type="number" min="0" step="0.01" value="0"></label>
       <label class="field compact">Trim end (s)<input id="exportTrimEnd" type="number" min="0" step="0.01" value="0"></label>
@@ -660,6 +662,30 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <p id="projectsStatus" role="status"></p>
 </section>
 
+<section class="card" id="audio-tools">
+  <h2>Audio tools</h2>
+  <details open><summary>Sound effects</summary>
+    <label class="field">Description<input id="sfxWords" maxlength="180" placeholder="Rain, surf, wind, fire, or a chime"></label>
+    <div class="row"><label class="field compact">Seconds<input id="sfxSeconds" type="number" min=".4" max="180" step=".1" value="6"></label>
+      <label class="field compact">Variation number<input id="sfxSeed" type="number" min="0" max="4294967295" value="42"></label>
+      <button id="makeSfx" type="button">Generate effect</button></div>
+  </details>
+  <details><summary>Mastering</summary>
+    <label class="field">Local WAV or FLAC<input id="masterSource" type="file" accept=".wav,.flac"></label>
+    <div class="row">
+      <label class="field compact">WAV precision<select id="masterPrecision"><option value="PCM_24">24-bit PCM</option><option value="PCM_16">16-bit PCM</option><option value="FLOAT">32-bit float</option></select></label>
+      <label class="field compact">Gain (dB)<input id="masterGain" type="number" step=".1" value="0"></label>
+      <label class="field compact">Target loudness (LUFS)<input id="masterLoudness" type="number" step=".1" placeholder="Keep source loudness"></label>
+      <label class="field compact">Peak ceiling (dBTP)<input id="masterPeak" type="number" step=".1" value="-1"></label>
+    </div>
+    <label><input id="masterLimit" type="checkbox" checked> Limit true peak</label>
+    <div class="row"><button id="makeMaster" type="button">Make preview WAV</button></div>
+  </details>
+  <p id="audioToolStatus" role="status"></p>
+  <audio id="audioToolPlayer" controls hidden></audio>
+  <p><a id="audioToolDownload" download hidden>Download WAV</a> <a id="audioToolReceipt" hidden>See how it was made</a></p>
+</section>
+
 <section class="card" id="books">
   <h2>Stories &amp; audiobooks</h2>
   <details open>
@@ -818,6 +844,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <script src="/voice_lab_scenes.js"></script>
 <script src="/voice_lab_books.js"></script>
 <script src="/voice_lab_projects.js"></script>
+<script src="/voice_lab_audio.js"></script>
 <script src="/voice_lab_cast_bindings.js"></script>
 <script src="/voice_lab_generate.js"></script>
 <script src="/voice_lab_system.js"></script>

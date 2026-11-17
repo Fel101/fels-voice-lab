@@ -390,6 +390,16 @@ choose **Import as candidate**. Open the new voice in Cast to review and approve
 These workflows are inspired by Palash Debnath (`debpalash`) and the VoiceStudio contributors.
 [VoiceStudio](https://github.com/debpalash/voicestudio)
 
+### Make a sound effect or adjust a finished clip
+
+In **Audio tools**, describe rain, surf, wind, fire or a chime, set the length and choose **Generate effect**.
+Use the same variation number to repeat the sound. Listen to the result and download its WAV.
+
+In **Mastering**, choose a local WAV or FLAC. Adjust the gain or set a loudness target, choose the WAV precision,
+and choose **Make preview WAV**. The Lab shows the measured loudness and peak of the output and saves it as a
+separate file. **See how it was made** opens the measurement record. **Scenes & batch** also lets you select
+16-bit PCM, 24-bit PCM or 32-bit floating-point encoding for an exported WAV.
+
 ## One thing at a time
 
 The model worker does one thing at a time: one load, clip, take, test or install. What you ask for while it is busy waits

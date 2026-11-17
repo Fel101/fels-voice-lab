@@ -75,7 +75,7 @@ def _page(name):
 PAGE = _page("serve.html")
 # Scripts that serve.html loads from this folder. Only these names are served, never arbitrary paths.
 PAGE_SCRIPTS = frozenset({"voice_lab_queue.js", "voice_lab_studio.js", "voice_lab_cast.js", "voice_lab_take_edit.js", "voice_lab_scenes.js",
-                          "voice_lab_books.js", "voice_lab_projects.js",
+                          "voice_lab_books.js", "voice_lab_projects.js", "voice_lab_audio.js",
                           "voice_lab_cast_bindings.js", "voice_lab_generate.js", "voice_lab_system.js", "voice_lab_app.js",
                           "voice_lab_drama.js"})
 # The folder that holds desktop.local.json, which tells the desktop app which library to open. The tests point it elsewhere.

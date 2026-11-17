@@ -50,6 +50,7 @@ FORMAT_CONFIG = {
     "m4a": (".m4a", ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]),
 }
 # The codec ffprobe reports for each format's deliverables, checked when a package is verified.
+WAV_CODECS = {"PCM_16": "pcm_s16le", "PCM_24": "pcm_s24le", "FLOAT": "pcm_f32le"}
 FORMAT_CODEC = {"wav": "pcm_s16le", "flac": "flac", "ogg": "vorbis", "mp3": "mp3", "m4a": "aac"}
 # The sample rates a lossy encoder accepts. FFmpeg stops with an error at any other, so the export checks first.
 ENCODER_RATES = {
@@ -142,7 +143,7 @@ def filename_from_template(template, *, line_id, character_name, take_id):
 def probe_media(path, ffprobe):
     command = [
         ffprobe, "-v", "error", "-select_streams", "a:0",
-        "-show_entries", "stream=codec_name,sample_rate,channels,duration:stream_tags=comment",
+        "-show_entries", "stream=codec_name,sample_rate,channels,duration,bits_per_sample:stream_tags=comment",
         "-show_entries", "format=duration:format_tags=comment", "-of", "json", str(path),
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
@@ -156,6 +157,7 @@ def probe_media(path, ffprobe):
         comment = (data.get("format", {}).get("tags") or {}).get("comment") or (stream.get("tags") or {}).get("comment")
         return {
             "codec": stream.get("codec_name"),
+            "bits_per_sample": stream.get("bits_per_sample") or None,
             "sample_rate": int(stream["sample_rate"]),
             "channels": int(stream["channels"]),
             "duration_seconds": float(duration),
@@ -367,6 +369,11 @@ def processing_steps(args, fmt, output_duration):
 def transcode(ffmpeg, source, destination, fmt, args, source_probe):
     filters, output_duration = ffmpeg_filters(args, source_probe["duration_seconds"])
     extension, codec = FORMAT_CONFIG[fmt]
+    if fmt == "wav":
+        precision = getattr(args, "wav_precision", "PCM_16")
+        if not isinstance(precision, str) or precision not in WAV_CODECS:
+            raise ExportError("Choose WAV PCM_16, PCM_24 or FLOAT.")
+        codec = ["-c:a", WAV_CODECS[precision]]
     if destination.suffix.lower() != extension:
         raise ExportError(f"Internal extension mismatch for requested format {fmt}.")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -730,6 +737,7 @@ def _asset_record(*, root, asset_type, scene, line=None, take=None, output_path,
         "output_path": str(output_path),
         "output_sha256": output_hash,
         "codec": media.get("codec"),
+        "bits_per_sample": media.get("bits_per_sample"),
         "sample_rate": media.get("sample_rate"),
         "channels": media.get("channels"),
         "duration_seconds": media.get("duration_seconds"),
@@ -1055,6 +1063,7 @@ def export_package(args):
             "filename_template": args.filename_template,
             "transforms": {
                 "sample_rate_hz": args.output_rate,
+                "wav_precision": getattr(args, "wav_precision", "PCM_16"),
                 "trim_start_seconds": args.trim_start_seconds,
                 "trim_end_seconds": args.trim_end_seconds,
                 "fade_in_ms": args.fade_in_ms,
@@ -1187,7 +1196,10 @@ def verify_export(args):
             media = probe_media(asset_path, ffprobe)
             expected_ext = record["asset_type"].rsplit("_", 1)[-1]
             if expected_ext in FORMAT_CODEC:
-                if media["codec"] != FORMAT_CODEC[expected_ext]:
+                expected_codec = FORMAT_CODEC[expected_ext]
+                if expected_ext == "wav" and record["asset_type"] != "scene_mix_raw_wav":
+                    expected_codec = WAV_CODECS.get(manifest.get("transforms", {}).get("wav_precision", "PCM_16"))
+                if media["codec"] != expected_codec:
                     raise ExportError(f"{ffmpeg_tools.FORMAT_LABEL[expected_ext]} deliverable codec mismatch: "
                                       f"{record['output_path']} ({media['codec']})")
                 if abs(media["duration_seconds"] - record["duration_seconds"]) > 0.03:
@@ -1241,6 +1253,7 @@ def verify_export(args):
 
 
 def add_processing_arguments(parser):
+    parser.add_argument("--wav-precision", choices=WAV_CODECS, default="PCM_16", help="Encoding for WAV deliverables.")
     parser.add_argument("--output-rate", type=int, help="Explicit deliverable sample rate, 8000–192000 Hz.")
     parser.add_argument("--loudness-lufs", type=float, help="Explicit FFmpeg loudnorm target, -70 through -5 LUFS.")
     parser.add_argument("--loudness-true-peak", type=float, help="Loudnorm true-peak target; requires --loudness-lufs (defaults to -1 dBTP).")

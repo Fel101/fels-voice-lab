@@ -1686,6 +1686,10 @@ Search saved projects and share local project or voice files.
 | POST | [`/api/portable/voice-preview`](#post-api-portable-voice-preview) | Play a verified archive voice sample without importing. |
 | POST | [`/api/portable/import`](#post-api-portable-import) | Import the exact portable ZIP previewed locally. |
 | GET | [`/api/portable/{delivery_id}.zip`](#get-api-portable-delivery_id-zip) | Read a portable ZIP. |
+| POST | [`/api/audio-tools/sound`](#post-api-audio-tools-sound) | Create a seeded procedural sound effect. |
+| POST | [`/api/audio-tools/master`](#post-api-audio-tools-master) | Master a local WAV or FLAC to a separate WAV. |
+| GET | [`/api/audio-tools/{delivery_id}/audio.wav`](#get-api-audio-tools-delivery_id-audio-wav) | Stream a saved audio tool WAV. |
+| GET | [`/api/audio-tools/{delivery_id}/receipt.json`](#get-api-audio-tools-delivery_id-receipt-json) | Read an audio tool receipt. |
 
 <a id="get-api-projects"></a>
 
@@ -1763,6 +1767,54 @@ Read a portable ZIP.
 | `delivery_id` | A saved delivery or audition ID. |
 
 **Answer:** `200`, a file. The generated local archive.
+
+<a id="post-api-audio-tools-sound"></a>
+
+#### `POST /api/audio-tools/sound`
+
+Create a seeded procedural sound effect.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `description` (required) | string | Description naming one supported sound. |
+| `seconds` | number | Length in seconds. |
+| `seed` | integer | Repeatable sound seed. |
+
+**Answer:** `201`, JSON. Audio and sound receipt.
+
+<a id="post-api-audio-tools-master"></a>
+
+#### `POST /api/audio-tools/master`
+
+Master a local WAV or FLAC to a separate WAV.
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. Audio and measured output receipt. Send X-Reference-Metadata with base64url JSON settings.
+
+<a id="get-api-audio-tools-delivery_id-audio-wav"></a>
+
+#### `GET /api/audio-tools/{delivery_id}/audio.wav`
+
+Stream a saved audio tool WAV.
+
+| Path parameter | Meaning |
+|---|---|
+| `delivery_id` | A saved delivery or audition ID. |
+
+**Answer:** `200`, `audio/wav`. The saved WAV.
+
+<a id="get-api-audio-tools-delivery_id-receipt-json"></a>
+
+#### `GET /api/audio-tools/{delivery_id}/receipt.json`
+
+Read an audio tool receipt.
+
+| Path parameter | Meaning |
+|---|---|
+| `delivery_id` | A saved delivery or audition ID. |
+
+**Answer:** `200`, JSON. Provenance and readings from the saved file.
 
 ### Books
 
@@ -2065,6 +2117,7 @@ Check an export request and report what it would write, writing nothing.
 |---|---|---|
 | `scene_id` (required) | string | The scene to export. |
 | `formats` | string[] | `wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `["wav"]`. |
+| `wav_precision` | string | PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16. |
 | `filename_template` | string | Default `{line_id}`. |
 | `name` | string | The package folder's name. |
 | `output_rate` | integer | Sample rate in hertz. |
@@ -2088,6 +2141,7 @@ Write an export package. An existing package is never overwritten.
 |---|---|---|
 | `scene_id` (required) | string | The scene to export. |
 | `formats` | string[] | `wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `["wav"]`. |
+| `wav_precision` | string | PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16. |
 | `filename_template` | string | Default `{line_id}`. |
 | `name` | string | The package folder's name. |
 | `output_rate` | integer | Sample rate in hertz. |
@@ -2472,6 +2526,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_scenes.js` | A page script. |
 | GET | `/voice_lab_books.js` | A page script. |
 | GET | `/voice_lab_projects.js` | A page script. |
+| GET | `/voice_lab_audio.js` | A page script. |
 | GET | `/voice_lab_cast_bindings.js` | A page script. |
 | GET | `/voice_lab_take_edit.js` | A page script. |
 | GET | `/voice_lab_generate.js` | A page script. |

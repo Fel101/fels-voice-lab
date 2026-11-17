@@ -79,12 +79,16 @@ def _build_args(state_root, req, *, dry_run):
         name = _default_name()
     elif not isinstance(name, str) or not EXPORT_NAME.fullmatch(name):
         raise ValueError("Package folder names may use letters, numbers, dots, dashes and underscores (90 characters at most).")
+    precision = req.get("wav_precision", "PCM_16")
+    if not isinstance(precision, str) or precision not in _exporter().WAV_CODECS:
+        raise ValueError("Choose WAV PCM_16, PCM_24 or FLOAT.")
     loudness = _number(req, "loudness_lufs", float)
     return Namespace(
         command="export", project_root=str(state_root), scene_id=scene_id, character_id=None,
         formats=formats, name=name, filename_template=template, dry_run=dry_run,
         ffmpeg=None, ffprobe=None,
         output_rate=_number(req, "output_rate", int),
+        wav_precision=precision,
         trim_start_seconds=_number(req, "trim_start_seconds", float, 0.0),
         trim_end_seconds=_number(req, "trim_end_seconds", float, 0.0),
         fade_in_ms=_number(req, "fade_in_ms", int, 0),
