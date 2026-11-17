@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Dub local media using timed scenes and edited dialogue. Review the picture, fit lines when needed and
+  verify the audio, video and caption delivery.
+
 - Transcribe local audio, translate speech to English, and stream live replies through local API sessions. Review a
   Voice Slate handoff in Cast and import its recording as a candidate.
 

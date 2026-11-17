@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from book_store import Books
+import dubbing
 import export_panel
 import sample_project
 import voice_names
@@ -227,6 +228,58 @@ def register(router, lab):
                     pass  # it finished, or had not reached the worker, in the meantime
         batches.wake()
         self._json(200, {"job": job})
+
+    @router.get("/api/scenes/{scene_id}/dub")
+    def dub_status(self, parsed, req, scene_id):
+        self._json(200, dubbing.status(scenes, scene_id))
+
+    @router.post("/api/scenes/{scene_id}/dub/source", "/api/scenes/{scene_id}/dub/background")
+    def dub_attach(self, parsed, req, scene_id):
+        length = self._declared_length()
+        if length > dubbing.MAX_MEDIA_BYTES:
+            raise OverflowError("Dubbing media uploads are limited to 512 MiB.")
+        name = (parse_qs(parsed.query).get("name") or [""])[0]
+        if "\\" in name or "/" in name or any(ord(ch) < 32 for ch in name):
+            raise ValueError("Supply a media file name without a directory.")
+        # The browser sends a chosen local file as the raw body. Stream it to staging rather than buffering it.
+        self.connection.settimeout(60)
+        self._json(
+            201,
+            {
+                "asset": dubbing.attach(
+                    scenes, scene_id, self.rfile, length, name, background=parsed.path.endswith("/background")
+                )
+            },
+        )
+
+    @router.get("/api/scenes/{scene_id}/dub/captions/{dub_file}")
+    def dub_captions(self, parsed, req, scene_id, dub_file):
+        _, scene = dubbing._directory(scenes, scene_id)
+        text = dubbing.captions(scene).get(dub_file)
+        if text is None:
+            raise KeyError("Caption file not found.")
+        self._send(
+            200,
+            text.encode("utf-8"),
+            dubbing.TYPES[dub_file.rsplit(".", 1)[1]],
+            {"Content-Disposition": f'attachment; filename="{dub_file}"'},
+        )
+
+    @router.post("/api/scenes/{scene_id}/dub/exports")
+    def dub_export(self, parsed, req, scene_id):
+        self._json(201, {"delivery": dubbing.export(scenes, scene_id, req)})
+
+    @router.post("/api/scenes/{scene_id}/dub/exports/{delivery_id}/verify")
+    def dub_verify(self, parsed, req, scene_id, delivery_id):
+        self._json(200, dubbing.verify(scenes, scene_id, delivery_id))
+
+    @router.get(
+        "/api/scenes/{scene_id}/dub/source/{dub_file}",
+        "/api/scenes/{scene_id}/dub/exports/{delivery_id}/{dub_file}",
+    )
+    def dub_file_bytes(self, parsed, req, scene_id, dub_file, delivery_id=None):
+        target = dubbing.path_for(scenes, scene_id, dub_file, delivery_id)
+        self._send_path(target, dubbing.TYPES[target.suffix.lstrip(".")])
 
     @router.get("/api/exports")
     def export_list(self, parsed, req):

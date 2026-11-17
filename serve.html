@@ -374,9 +374,15 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <button type="button" id="sceneStarter">Start from the Perform line</button></div>
   <div class="workflow-note" id="sampleNote" hidden><p id="sampleText"></p><div class="cast-actions"><button class="go" type="button" id="sampleOpen" hidden>Open the sample scene</button><button type="button" id="sampleRemove" hidden>Remove the sample…</button></div><p class="meta" id="sampleStatus" role="status"></p></div>
   <p class="meta" id="sceneTimelineNote" hidden></p>
-  <details id="sceneScriptImport"><summary>Paste a script or subtitles</summary>
+  <details id="sceneScriptImport"><summary>Paste a script, subtitles or a Slate transcript</summary>
+    <div class="row">
+      <label class="field compact">Audio for a subtitle draft<input id="sceneSpeechFile" type="file" accept=".wav,.mp3,.mp4,.m4a,.aac,.ogg,.flac,.webm"></label>
+      <button type="button" id="sceneSpeechDraft">Draft subtitles</button>
+      <a href="#system">Speech recognition setup</a>
+    </div>
+    <p class="meta" id="sceneSpeechNote" role="status">Process up to 10 minutes or 25 MB of audio on this computer and check the draft before importing.</p>
     <p class="meta">Plain text has one speech per line, written <code>NAME: words</code>. A direction in brackets or parentheses at the start of the words becomes the line's acting direction. Fountain is the screenplay format, with each name in capitals above its lines. Choose a file above, or paste the script here, then read it and choose a voice for each speaker.</p>
-    <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option><option value="srt">SRT subtitles</option><option value="vtt">WebVTT subtitles</option></select></label>
+    <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option><option value="srt">SRT subtitles</option><option value="vtt">WebVTT subtitles</option><option value="transcript">Voice Slate timed transcript</option></select></label>
       <button type="button" id="sceneScriptRead">Read the script</button></div>
     <label class="field">Script<textarea id="sceneScriptText" rows="8" spellcheck="false" placeholder="MARA: I kept the light on.&#10;TOMAS: (quietly) I saw it from the boat."></textarea></label>
     <div id="sceneScriptMatch" hidden>
@@ -414,6 +420,51 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <label class="field">Scene, exactly as rendered<audio id="scenePreviewPlayer" controls></audio></label>
   <label class="field">Scene, evened out in loudness<audio id="sceneMasteredPlayer" controls></audio></label>
   <p class="meta" id="scenePreviewMeta"></p>
+  <details id="sceneDub" hidden>
+    <summary>Dub media</summary>
+    <p class="meta">Import subtitles or a Voice Slate timed transcript, then attach its local audio or video. Use the scene editor to set Cast voices, render and select takes.</p>
+    <div class="row">
+      <label class="field compact">Source media <span id="dubSourceOffset"></span><input id="dubSourceFile" type="file" accept=".mp4,.mov,.m4a,.mkv,.webm,.wav,.mp3,.flac,.ogg"></label>
+      <label class="field compact">Aligned background stem<input id="dubBedFile" type="file" accept=".m4a,.wav,.mp3,.flac,.ogg"></label>
+      <button id="dubOriginal" type="button" disabled>Original preview</button>
+      <button id="dubDubbed" type="button" disabled>Dubbed preview</button>
+    </div>
+    <p class="meta" id="dubAttachments"></p>
+    <video id="dubVideo" controls preload="metadata" style="width:100%;max-height:40vh" hidden></video>
+    <audio id="dubAudio" controls preload="metadata" hidden></audio>
+    <div class="row">
+      <canvas id="dubWave" width="720" height="58" style="width:min(100%,720px);cursor:pointer" aria-label="Source audio waveform" hidden></canvas>
+      <label class="field compact" id="dubSeekLabel" hidden>Seek through media<input id="dubSeek" type="range" min="0" max="0" step="0.01" value="0"></label>
+    </div>
+    <div class="row">
+      <label class="field compact">Target language code<input id="dubTo" placeholder="es" size="8"></label>
+    </div>
+    <div class="row"><label class="field compact">Line<select id="dubCue"></select></label><button id="dubSeekCue" type="button">Seek to line</button></div>
+    <label class="field">Original wording<textarea id="dubSourceText" rows="2"></textarea></label>
+    <p class="meta">Enter the translated words, then save and render new takes. Choose Speed up to fit only if you want timing adjusted.</p>
+    <label class="field">Target text<textarea id="dubTargetText" rows="2"></textarea></label>
+    <div class="row">
+      <label class="field compact">Fit<select id="dubFit"><option value="natural">Keep natural timing</option><option value="fit">Speed up to fit (up to 1.35×)</option></select></label>
+      <label class="field compact">Speed<input id="dubSpeed" type="number" value="1" min="0.8" max="1.35" step="0.01"></label>
+      <label class="field compact">Gain (dB)<input id="dubGain" type="number" value="0" min="-30" max="6" step="0.5"></label>
+      <label><input type="checkbox" id="dubMute"> Mute in dub</label>
+      <button id="dubSaveCue" type="button">Save cue edits</button>
+    </div>
+    <div class="row" id="dubReviewFiles"></div>
+    <div class="row">
+      <label><input type="checkbox" id="dubKeep"> Include original audio track</label>
+      <label><input type="checkbox" id="dubUseBed"> Mix background stem</label>
+      <label class="field compact">Background gain (dB)<input id="dubBedGain" type="number" min="-30" max="6" value="0" step="0.5"></label>
+      <label><input type="checkbox" id="dubDuck"> Duck background under speech</label>
+      <label class="field compact">Burn captions into picture<select id="dubBurn"><option value="">Off</option><option value="target">Target</option><option value="bilingual">Bilingual</option><option value="karaoke">Target word highlight</option></select></label>
+      <button id="dubExport" type="button">Export dub</button>
+      <button id="dubVerify" type="button" disabled>Verify delivery</button>
+    </div>
+    <label class="field compact">Alternate language deliveries<select id="dubAlternate" multiple size="3"></select></label>
+    <div class="row" id="dubDeliveryFiles"></div>
+    <ul id="dubWarnings" class="meta"></ul>
+    <p id="dubStatus" class="meta" role="status"></p>
+  </details>
   <details id="sceneExport"><summary>Export package</summary>
     <p class="meta">Writes WAV, FLAC, Ogg, MP3 or AAC (M4A) line files, the raw scene mix, captions, a transcript and a checksummed manifest under <code>out/exports/</code>. FFmpeg writes the files. Original Cast takes are copied byte for byte. Save the scene before exporting.</p>
     <p class="meta" id="exportFfmpeg" role="status"></p>

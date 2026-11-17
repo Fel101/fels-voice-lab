@@ -26,8 +26,8 @@ def _timestamp(value, label):
 
 
 def validate_timeline(value):
-    if not isinstance(value, dict) or value.get("format") not in FORMATS:
-        raise ValueError("A timed scene needs a timeline with format srt or vtt.")
+    if not isinstance(value, dict) or value.get("format") not in (*FORMATS, "transcript"):
+        raise ValueError("Import SRT, WebVTT or a Voice Slate transcript to add a timeline.")
     duration = _timestamp(value.get("duration_ms"), "Timeline duration")
     if not duration:
         raise ValueError("Timeline duration must be positive.")
@@ -140,19 +140,62 @@ def resample_take(audio, rate):
     return resample_poly(audio, SAMPLE_RATE // divisor, rate // divisor).astype(np.float32)
 
 
-def mix(timeline, tracks):
+def validate_dub_settings(value):
+    if not isinstance(value, dict):
+        raise ValueError("Dubbing controls must be an object.")
+    fit = value.get("fit", "natural")
+    speed = value.get("speed", 1)
+    gain = value.get("gain_db", 0)
+    mute = value.get("mute", False)
+    if fit not in ("natural", "fit") or type(speed) not in (float, int) or not 0.8 <= speed <= 1.35:
+        raise ValueError("Choose natural or bounded fit with speed from 0.8× to 1.35×.")
+    if type(gain) not in (float, int) or not -30 <= gain <= 6 or type(mute) is not bool:
+        raise ValueError("Cue gain must be between −30 and +6 dB and mute must be true or false.")
+    return {"fit": fit, "speed": speed, "gain_db": gain, "mute": mute}
+
+
+def _dub_parts(line, parts, slot, warnings, label):
+    from dubbing import change_tempo
+
+    controls = validate_dub_settings(line.get("dub", {}))
+    original = sum(len(part) for part in parts)
+    speed = controls["speed"]
+    if controls["fit"] == "fit" and slot:
+        speed = min(1.35, max(speed, original / max(slot - SAMPLE_RATE // 100, 1)))
+    if speed != 1 and original:
+        parts = [change_tempo(np.concatenate(parts), speed)]
+    gain = 10 ** (controls["gain_db"] / 20)
+    if gain != 1:
+        parts = [part * gain for part in parts]
+    if controls["fit"] == "fit" and sum(len(part) for part in parts) > slot:
+        warnings.append(
+            {
+                "code": "fit_limit",
+                "message": f"{label} still runs long at the speed limit. Shorten the words or move the cue end.",
+            }
+        )
+    return parts, {**controls, "applied_speed": speed, "original_samples": original}
+
+
+def mix(timeline, tracks, *, dub=False):
     """Mix each line's sequential take segments at its exact cue start on a common sample grid."""
     samples_per_ms = SAMPLE_RATE // 1000
     max_samples = MAX_TIMELINE_MS * samples_per_ms
     end = timeline["duration_ms"] * samples_per_ms
     audio = np.zeros(end, dtype=np.float32)
-    placements, warnings = [], []
+    placements, warnings, adjustments = [], [], []
     for number, (line, parts) in enumerate(tracks, 1):
         cue = line["cue"]
         start = cue["start_ms"] * samples_per_ms
         slot_end = cue["end_ms"] * samples_per_ms
-        amount = sum(len(part) for part in parts)
         label = f"Line {number} ({clock_time(cue['start_ms'])})"
+        if dub and line.get("dub", {}).get("mute"):
+            adjustments.append({"line_id": line["line_id"], **validate_dub_settings(line["dub"])})
+            continue
+        if dub:
+            parts, controls = _dub_parts(line, parts, slot_end - start, warnings, label)
+            adjustments.append({"line_id": line["line_id"], **controls})
+        amount = sum(len(part) for part in parts)
         if amount == 0 or start + amount > max_samples:
             raise ValueError(f"{label} has no audio or runs beyond the scene limit. Choose a shorter take or move it earlier.")
         placements.append((line["line_id"], start, start + amount, label))
@@ -170,7 +213,7 @@ def mix(timeline, tracks):
             overrun = (start + amount - slot_end) / SAMPLE_RATE
             duration = f"{overrun:.1f} s" if overrun >= 0.05 else "less than 0.1 s"
             warnings.append({"code": "overrun", "message": f"{label} runs {duration} past its cue."})
-    if not placements:
+    if not placements and not adjustments:
         raise ValueError("A timed scene has no selected audio. Render the lines and choose their takes.")
     warnings.extend(cue_overlaps((start, stop, label) for _, start, stop, label in placements))
     audio = audio[:end]
@@ -180,7 +223,8 @@ def mix(timeline, tracks):
         audio *= gain
         warnings.append({"code": "peak_reduced", "message": "Mix level reduced to avoid clipping."})
     return audio, {
-        "mode": "timed_cues",
+        "mode": "dub" if dub else "timed_cues",
+        **({"adjustments": adjustments} if dub else {}),
         "gain": gain,
         "warnings": warnings,
         **(

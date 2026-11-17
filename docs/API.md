@@ -1357,6 +1357,14 @@ Ordered scripts rendered line by line through the same performance call. The man
 | POST | [`/api/scenes/{scene_id}/choose-newest`](#post-api-scenes-scene_id-choose-newest) | Choose the newest take that fits for every segment without one. |
 | POST | [`/api/scenes/{scene_id}/preview`](#post-api-scenes-scene_id-preview) | Assemble the selected takes into one preview. |
 | GET | [`/api/scenes/{scene_id}/previews/{preview_file}.wav`](#get-api-scenes-scene_id-previews-preview_file-wav) | Download a preview's WAV. |
+| GET | [`/api/scenes/{scene_id}/dub`](#get-api-scenes-scene_id-dub) | Read the source, background stem and most recent dubbing delivery. |
+| POST | [`/api/scenes/{scene_id}/dub/source`](#post-api-scenes-scene_id-dub-source) | Attach a local audio or video file to a timed scene. |
+| POST | [`/api/scenes/{scene_id}/dub/background`](#post-api-scenes-scene_id-dub-background) | Attach an aligned audio-only background stem. |
+| GET | [`/api/scenes/{scene_id}/dub/captions/{dub_file}`](#get-api-scenes-scene_id-dub-captions-dub_file) | Export review text or captions on the cue clock. |
+| POST | [`/api/scenes/{scene_id}/dub/exports`](#post-api-scenes-scene_id-dub-exports) | Publish dubbed audio and optional video for selected takes. |
+| POST | [`/api/scenes/{scene_id}/dub/exports/{delivery_id}/verify`](#post-api-scenes-scene_id-dub-exports-delivery_id-verify) | Verify a delivery manifest and files. |
+| GET | [`/api/scenes/{scene_id}/dub/source/{dub_file}`](#get-api-scenes-scene_id-dub-source-dub_file) | Stream the source preview with byte ranges. |
+| GET | [`/api/scenes/{scene_id}/dub/exports/{delivery_id}/{dub_file}`](#get-api-scenes-scene_id-dub-exports-delivery_id-dub_file) | Stream a file declared by a dubbing delivery. |
 
 <a id="get-api-scenes"></a>
 
@@ -1755,6 +1763,142 @@ Download a preview's WAV.
 | `preview_file` | The file name in a preview answer's `audio_url`, without its `.wav`. |
 
 **Answer:** `200`, `audio/wav`. The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.
+
+<a id="get-api-scenes-scene_id-dub"></a>
+
+#### `GET /api/scenes/{scene_id}/dub`
+
+Read the source, background stem and most recent dubbing delivery.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+**Answer:** `200`, JSON. The attached assets, current scene revision and newest published delivery.
+
+<a id="post-api-scenes-scene_id-dub-source"></a>
+
+#### `POST /api/scenes/{scene_id}/dub/source`
+
+Attach a local audio or video file to a timed scene.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `name` (required) | string | Local media file name and extension. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. The SHA-256 and browser preview of the preserved source file. Send one supported media file up to 512 MiB.
+
+| Also answers | When |
+|---|---|
+| `413` | The media is larger than 512 MiB. |
+
+<a id="post-api-scenes-scene_id-dub-background"></a>
+
+#### `POST /api/scenes/{scene_id}/dub/background`
+
+Attach an aligned audio-only background stem.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `name` (required) | string | Local media file name and extension. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. The SHA-256 and preview metadata for the preserved background source.
+
+<a id="get-api-scenes-scene_id-dub-captions-dub_file"></a>
+
+#### `GET /api/scenes/{scene_id}/dub/captions/{dub_file}`
+
+Export review text or captions on the cue clock.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+| `dub_file` | A file name listed in the dubbing delivery, captions or source preview. |
+
+**Answer:** `200`, a file. Target TXT, source/target/bilingual SRT and VTT, or target/bilingual ASS.
+
+<a id="post-api-scenes-scene_id-dub-exports"></a>
+
+#### `POST /api/scenes/{scene_id}/dub/exports`
+
+Publish dubbed audio and optional video for selected takes.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `expected_revision` (required) | integer | Saved scene revision. |
+| `target_language` (required) | string | Target language tag. |
+| `keep_original` | boolean | Include the original as an alternate MP4 audio track. |
+| `background` | boolean | Mix the attached background stem. |
+| `background_gain_db` | number | Background gain from −30 to +6 dB. |
+| `duck` | boolean | Duck the background during dialogue. |
+| `burn` | string | Optional target, bilingual or karaoke burned captions. |
+| `additional_deliveries` | string[] | Previous language deliveries for this source. |
+
+**Answer:** `201`, JSON. Delivery ID, source checksum, selected takes, timing adjustments, stream metadata and file hashes.
+
+<a id="post-api-scenes-scene_id-dub-exports-delivery_id-verify"></a>
+
+#### `POST /api/scenes/{scene_id}/dub/exports/{delivery_id}/verify`
+
+Verify a delivery manifest and files.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+| `delivery_id` | A saved delivery or audition ID. |
+
+**Answer:** `200`, JSON. Delivery ID and number of verified files.
+
+<a id="get-api-scenes-scene_id-dub-source-dub_file"></a>
+
+#### `GET /api/scenes/{scene_id}/dub/source/{dub_file}`
+
+Stream the source preview with byte ranges.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+| `dub_file` | A file name listed in the dubbing delivery, captions or source preview. |
+
+**Answer:** `200`, a file. Browser-ready original.mp4 or original.wav.
+
+| Also answers | When |
+|---|---|
+| `416` | The range is outside the file. |
+
+<a id="get-api-scenes-scene_id-dub-exports-delivery_id-dub_file"></a>
+
+#### `GET /api/scenes/{scene_id}/dub/exports/{delivery_id}/{dub_file}`
+
+Stream a file declared by a dubbing delivery.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+| `delivery_id` | A saved delivery or audition ID. |
+| `dub_file` | A file name listed in the dubbing delivery, captions or source preview. |
+
+**Answer:** `200`, a file. The requested manifest, video, audio stem or caption file.
+
+| Also answers | When |
+|---|---|
+| `416` | The range is outside the file. |
 
 ### Live speech
 

@@ -1242,6 +1242,7 @@ function renderScene(scene) {
     scene.name + ' / revision ' + scene.revision + ' / ' + scene.lines.length + ' ordered lines / SHA-256 ' + scene.checksum;
   $('sceneExportJson').href = '/api/scenes/' + scene.scene_id + '/export.json';
   $('sceneExportCsv').href = '/api/scenes/' + scene.scene_id + '/export.csv';
+  bindDubScene(scene);
   var videoStart = scene.timeline && scene.timeline.source_offset_ms;
   $('sceneTimelineNote').hidden = videoStart === undefined;
   $('sceneTimelineNote').textContent = videoStart === undefined ? '' :
@@ -1300,6 +1301,7 @@ function refreshSceneList(preferred) {
     $('sceneJobRows').textContent = '';
     $('sceneExportJson').hidden = true;
     $('sceneExportCsv').hidden = true;
+    bindDubScene(null);
     $('sceneTimelineNote').hidden = true;
     return Promise.resolve();
   }).then(function () {
@@ -1465,6 +1467,7 @@ function sceneScriptFormatOf(name) {
   var lower = String(name).toLowerCase();
   if (/\.(fountain|spmd)$/.test(lower)) return 'fountain';
   if (/\.srt$/.test(lower)) return 'srt';
+  if (lower.endsWith('.transcript.json')) return 'transcript';
   if (/\.vtt$/.test(lower)) return 'vtt';
   return /\.txt$/.test(lower) ? 'text' : null;
 }
@@ -1621,6 +1624,42 @@ function readSceneScript() {
     },
   );
 }
+function draftSceneSubtitles() {
+  var button = $('sceneSpeechDraft'), note = $('sceneSpeechNote');
+  var file = $('sceneSpeechFile').files[0];
+  if (!file) {
+    note.textContent = 'Choose the audio file to transcribe.';
+    return;
+  }
+  var oldText = $('sceneScriptText').value;
+  if (oldText.trim() && !window.confirm('Replace the text in the import box with a subtitle draft?')) return;
+  button.disabled = true;
+  note.textContent = 'Listening to the file. This can take several minutes.';
+  var form = new FormData();
+  form.set('file', file);
+  form.set('model', 'whisper-1');
+  form.set('response_format', 'srt');
+  fetch('/v1/audio/transcriptions', {method:'POST', body:form}).then(async function(response) {
+    if (!response.ok) {
+      var failed = await response.json();
+      throw new Error(failed.error?.message || 'Could not draft subtitles. Check the file and try again.');
+    }
+    var text = await response.text();
+    if (!text.trim()) throw new Error('No words were heard. Choose a recording with clear speech and try again.');
+    if ($('sceneScriptText').value !== oldText) {
+      if (!window.confirm('Replace your new edits in the import box with the finished draft?')) return;
+    }
+    $('sceneScriptFormat').value = 'srt';
+    $('sceneScriptText').value = text;
+    await readSceneScript();
+    note.textContent = 'Draft ready. Check the words and times before creating a scene.';
+  }).catch(function(error) {
+    note.textContent = error.message;
+  }).finally(function() {
+    button.disabled = false;
+  });
+}
+$('sceneSpeechDraft').addEventListener('click', draftSceneSubtitles);
 function loadSceneScriptFile(file) {
   return file.text().then(function (content) {
     $('sceneScriptFormat').value = sceneScriptFormatOf(file.name);
@@ -2276,4 +2315,251 @@ $('exportRefresh').addEventListener('click', function () {
 });
 $('sceneExport').addEventListener('toggle', function () {
   if (this.open) refreshExports().catch(showExportError);
+});
+
+var dubSceneId = null, dubState = null, dubPlayer = null, dubBusy = false, dubRefresh = 0;
+function dubUrl() {
+  return '/api/scenes/' + dubSceneId + '/dub';
+}
+function dubNote(text) {
+  $('dubStatus').textContent = text;
+}
+function dubMessage(error) {
+  dubNote(error.message || String(error));
+}
+function bindDubScene(scene) {
+  var next = scene && scene.timeline ? scene.scene_id : null;
+  $('sceneDub').hidden = !next;
+  var offset = next && scene.timeline.source_offset_ms;
+  $('dubSourceOffset').textContent = offset ? '(use a clip beginning at ' + sceneCueTime(offset) + ' in the original)' : '';
+  if (next !== dubSceneId) {
+    dubSceneId = next;
+    dubState = null;
+    if (dubPlayer) {
+      dubPlayer.removeAttribute('src');
+      dubPlayer.load();
+      dubPlayer.hidden = true;
+      dubPlayer = null;
+    }
+    $('dubTo').value = '';
+    $('dubKeep').checked = $('dubUseBed').checked = $('dubDuck').checked = false;
+    $('dubBurn').value = '';
+    $('dubAlternate').replaceChildren();
+    dubNote('');
+    paintDubAssets();
+  }
+  if (next && $('sceneDub').open) refreshDub().catch(dubMessage);
+}
+function dubOriginalText(line, scene) {
+  var cue = line.cue;
+  if (line.dub_source_text !== undefined) return line.dub_source_text;
+  var ids = cue.source_line_ids || [line.line_id];
+  var source = (scene.timeline.source_cues || []).filter(function (row) { return ids.includes(row.line_id); });
+  return source.length ? source.map(function (row) { return row.text; }).join('\n') : (cue.source_text || '');
+}
+function dubSelectedLine(scene) {
+  return scene.lines.find(function (line) { return line.line_id === $('dubCue').value; });
+}
+function paintDubCue(scene) {
+  var line = dubSelectedLine(scene);
+  if (!line) return;
+  var controls = line.dub || {};
+  $('dubSourceText').value = dubOriginalText(line, scene);
+  $('dubTargetText').value = line.text;
+  $('dubFit').value = controls.fit || 'natural';
+  $('dubSpeed').value = controls.speed ?? 1;
+  $('dubGain').value = controls.gain_db ?? 0;
+  $('dubMute').checked = controls.mute === true;
+}
+function dubLinks(parent, base, files) {
+  parent.replaceChildren();
+  files.forEach(function (name) {
+    var link = document.createElement('a');
+    link.textContent = name;
+    link.href = base + '/' + name;
+    link.download = name;
+    parent.appendChild(link);
+  });
+}
+function paintDubWave() {
+  var canvas = /** @type {HTMLCanvasElement} */ ($('dubWave'));
+  var peaks = (dubState && dubState.source && dubState.source.waveform) || [];
+  canvas.hidden = !peaks.length;
+  $('dubSeekLabel').hidden = !dubPlayer;
+  if (!peaks.length) return;
+  var ctx = canvas.getContext('2d'), rect = canvas.getBoundingClientRect();
+  var time = dubPlayer ? dubPlayer.currentTime : 0;
+  var h = canvas.height, w = canvas.width, spacing = w / peaks.length;
+  ctx.clearRect(0, 0, w, h);
+  var progress = time / (dubState.source.duration_ms / 1000);
+  peaks.forEach(function (peak, i) {
+    var half = Math.max(1, peak * h / 2);
+    ctx.fillStyle = i / peaks.length < progress ? '#818cf8' : '#64748b';
+    ctx.fillRect(i * spacing, h / 2 - half, Math.max(1, spacing - 0.4), 2 * half);
+  });
+  if (rect.width && dubPlayer) {
+    ctx.fillStyle = '#c7d2fe';
+    ctx.fillRect(Math.min(w, progress * w), 0, 2, h);
+  }
+}
+function paintDubAssets() {
+  var source = dubState && dubState.source, bed = dubState && dubState.background, output = dubState && dubState.delivery;
+  $('dubAttachments').textContent = [
+    source ? source.name + ' · ' + sceneCueTime(source.duration_ms) + (source.transcript_source_verified ? ' · source hash matched' : '') : '',
+    bed ? 'Background: ' + bed.name : '',
+    output ? 'Last delivery: revision ' + output.scene_revision + (dubState.scene_revision !== output.scene_revision ? ' · older than the saved scene' : '') : ''
+  ].filter(Boolean).join(' / ');
+  $('dubSourceFile').disabled = dubBusy || !!source;
+  $('dubBedFile').disabled = dubBusy || !!bed;
+  $('dubOriginal').disabled = !source;
+  $('dubDubbed').disabled = !output;
+  $('dubVerify').disabled = dubBusy || !output;
+  $('dubKeep').disabled = !source || !source.video || !source.audio;
+  $('dubBurn').disabled = !source || !source.video;
+  $('dubUseBed').disabled = !bed;
+  $('dubExport').disabled = dubBusy;
+  dubLinks($('dubDeliveryFiles'), output ? dubUrl() + '/exports/' + output.id : '',
+    output ? Object.keys(output.files).concat('manifest.json') : []);
+  $('dubWarnings').replaceChildren();
+  if (output) output.timing.warnings.forEach(function (warning) {
+    var item = document.createElement('li');
+    item.textContent = warning.message;
+    $('dubWarnings').appendChild(item);
+  });
+  paintDubWave();
+}
+function refreshDub() {
+  if (!dubSceneId || !$('sceneDub').open) return Promise.resolve();
+  var serial = ++dubRefresh, id = dubSceneId, scene = sceneBody(), select = $('dubCue'), keep = select.value;
+  select.replaceChildren();
+  scene.lines.forEach(function (line) {
+    option(select, line.line_id, sceneCueRange(line.cue) + ' · ' + sceneShortText(line.text));
+  });
+  if (scene.lines.some(function (line) { return line.line_id === keep; })) select.value = keep;
+  if (!$('dubTo').value && scene.dub_target_language) $('dubTo').value = scene.dub_target_language;
+  paintDubCue(scene);
+  var sourceCaptions = scene.timeline.source_cues && scene.timeline.source_cues.length ? ['source.srt', 'source.vtt'] : [];
+  dubLinks($('dubReviewFiles'), dubUrl() + '/captions',
+    ['target.txt', 'target.srt', 'target.vtt', 'target.ass', 'bilingual.srt', 'bilingual.vtt', 'bilingual.ass'].concat(sourceCaptions));
+  return fetchJson(dubUrl()).then(function (state) {
+    if (id !== dubSceneId || serial !== dubRefresh) return;
+    dubState = state;
+    paintDubAssets();
+  });
+}
+function dubAction(message, action) {
+  if (dubBusy || !dubSceneId) return;
+  var id = dubSceneId;
+  dubBusy = true;
+  paintDubAssets();
+  dubNote(message);
+  Promise.resolve().then(function () { return action(id); }).catch(function (error) {
+    if (id === dubSceneId) dubMessage(error);
+  }).finally(function () {
+    dubBusy = false;
+    paintDubAssets();
+  });
+}
+function dubPlay(useOutput) {
+  var entry = dubState && (useOutput ? dubState.delivery : dubState.source);
+  if (!entry) return;
+  var file = useOutput ? (entry.files['dub.mp4'] ? 'dub.mp4' : 'dub.wav') : entry.preview;
+  var url = dubUrl() + (useOutput ? '/exports/' + entry.id : '/source') + '/' + file;
+  dubPlayUrl(url, file);
+}
+function dubPlayUrl(url, file) {
+  var time = dubPlayer ? dubPlayer.currentTime : 0;
+  var playing = dubPlayer && !dubPlayer.paused;
+  if (dubPlayer) {
+    dubPlayer.pause();
+    dubPlayer.hidden = true;
+  }
+  dubPlayer = /** @type {HTMLMediaElement} */ ($(file.endsWith('.mp4') ? 'dubVideo' : 'dubAudio'));
+  dubPlayer.hidden = false;
+  dubPlayer.onloadedmetadata = function () {
+    this.currentTime = Math.min(time, this.duration);
+    $('dubSeek').max = this.duration;
+    if (playing) this.play().catch(dubMessage);
+    paintDubWave();
+  };
+  dubPlayer.ontimeupdate = function () {
+    $('dubSeek').value = this.currentTime;
+    paintDubWave();
+  };
+  dubPlayer.onerror = function () { dubNote('This browser could not play the preview. Download it to open in a media player.'); };
+  dubPlayer.src = url;
+  paintDubWave();
+}
+function dubSeekTo(seconds) {
+  if (dubPlayer && Number.isFinite(dubPlayer.duration)) dubPlayer.currentTime = Math.min(seconds, dubPlayer.duration);
+}
+function dubSave() {
+  var scene = sceneBody(), line = dubSelectedLine(scene), id = dubSceneId;
+  if (!line || scene.scene_id !== id) throw new Error('Open a timed cue.');
+  if (!$('dubSpeed').checkValidity() || !$('dubGain').checkValidity()) throw new Error('Enter a valid speed and gain.');
+  var source = $('dubSourceText').value.trim(), target = $('dubTargetText').value.trim();
+  if (!target) throw new Error('Enter the target wording.');
+  if (source !== dubOriginalText(line, scene)) line.dub_source_text = source;
+  line.text = target;
+  line.dub = {fit: $('dubFit').value, speed: Number($('dubSpeed').value),
+    gain_db: Number($('dubGain').value), mute: $('dubMute').checked};
+  if ($('dubTo').value.trim()) scene.dub_target_language = $('dubTo').value.trim().toLowerCase();
+  updateSceneEditor(scene, null);
+  renderSceneForm();
+  return saveAndGetScene().then(function () { if (id === dubSceneId) dubNote('Line saved.'); });
+}
+$('sceneDub').addEventListener('toggle', function () { refreshDub().catch(dubMessage); });
+$('dubCue').addEventListener('change', function () { paintDubCue(sceneBody()); });
+$('dubSeekCue').addEventListener('click', function () {
+  var line = dubSelectedLine(sceneBody());
+  if (line) dubSeekTo(line.cue.start_ms / 1000);
+});
+$('dubSeek').addEventListener('input', function () { dubSeekTo(Number(this.value)); });
+$('dubWave').addEventListener('click', function (event) {
+  if (dubState && dubState.source && this.clientWidth) {
+    dubSeekTo(event.offsetX / this.clientWidth * dubState.source.duration_ms / 1000);
+  }
+});
+$('dubOriginal').addEventListener('click', function () { dubPlay(false); });
+$('dubDubbed').addEventListener('click', function () { dubPlay(true); });
+$('dubSaveCue').addEventListener('click', function () { dubAction('Saving cue…', function () { return dubSave(); }); });
+['dubSourceFile', 'dubBedFile'].forEach(function (control) {
+  $(control).addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    dubAction('Preparing the local media…', async function (id) {
+      var role = control === 'dubBedFile' ? 'background' : 'source';
+      var response = await fetch(dubUrl() + '/' + role + '?name=' + encodeURIComponent(file.name),
+        {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file});
+      var result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Media preparation failed.');
+      if (id !== dubSceneId) return;
+      await refreshDub();
+      if (id === dubSceneId) dubNote('Media attached.');
+    });
+  });
+});
+function dubExportOptions(scene) {
+  return {expected_revision: scene.revision, target_language: $('dubTo').value,
+    keep_original: !$('dubKeep').disabled && $('dubKeep').checked,
+    background: !$('dubUseBed').disabled && $('dubUseBed').checked,
+    additional_deliveries: Array.from($('dubAlternate').selectedOptions, function (item) { return item.value; }),
+    background_gain_db: Number($('dubBedGain').value), duck: $('dubDuck').checked,
+    burn: $('dubBurn').disabled ? null : $('dubBurn').value || null};
+}
+$('dubExport').addEventListener('click', function () {
+  dubAction('Verifying takes and writing the dub…', async function (id) {
+    if (sceneDirty) throw new Error('Save the scene and select its rendered takes before exporting.');
+    await fetchJson(dubUrl() + '/exports', dubExportOptions(sceneBody()));
+    if (id !== dubSceneId) return;
+    await refreshDub();
+    if (id === dubSceneId) dubNote('Dub delivery ready.');
+  });
+});
+$('dubVerify').addEventListener('click', function () {
+  dubAction('Checking delivery hashes…', async function (id) {
+    var result = await fetchJson(dubUrl() + '/exports/' + dubState.delivery.id + '/verify', {});
+    if (id === dubSceneId) dubNote(result.files + ' delivery files verified.');
+  });
 });

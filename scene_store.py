@@ -33,8 +33,7 @@ from db_snapshots import snapshot_before_migration
 from local_ownership import LocalOwnership
 from performance_settings import effective_settings
 from scene_selection import take_problem, validate_selected_take
-from script_import import parse_script
-from subtitle_import import FORMATS as SUBTITLE_FORMATS
+from script_import import TIMED_FORMATS, parse_script
 
 
 SCHEMA_VERSION = 1
@@ -563,7 +562,12 @@ class SceneStore:
                 selected_take_id = checked_selected.get(segments_value[0]["id"])
             else:
                 selected_take_id = None
+            if cue and "dub_source_text" in source and (
+                not isinstance(source["dub_source_text"], str) or len(source["dub_source_text"]) > 10_000
+            ):
+                raise ValueError(f"Line {index} can contain up to 10,000 characters of source text.")
             normalized.append({**source,
+                **({"dub": timed_scene.validate_dub_settings(source["dub"])} if cue and "dub" in source else {}),
                 **({"cue": cue} if cue else {}),
                 "line_id": line_id, "line_type": kind, "character_id": character_id,
                 "identity_id": identity_id, "engine_id": engine_id,
@@ -771,7 +775,7 @@ class SceneStore:
         defaults a new line gets on the page: the voice's default acting direction when the script gives none, 250 ms after
         it, one take, and the model's own settings. A direction for a model that takes none is left out and reported."""
         script = parse_script(content, fmt)
-        is_timed = fmt in SUBTITLE_FORMATS
+        is_timed = fmt in TIMED_FORMATS
         if is_timed and script["unread"]:
             issue = script["unread"][0]
             raise ValueError(f"Fix the subtitle at line {issue['number']} before importing. {issue['reason']}")
@@ -804,6 +808,9 @@ class SceneStore:
             return identities[identity_id]
 
         width = max(3, len(str(len(script["lines"]))))
+
+        def cue_id(index, line):
+            return line.get("cue_id") or f"cue-{index:0{width}d}"
         lines, left_out, directions = [], [], []
         for index, line in enumerate(script["lines"], start=1):
             speaker = line["speaker"]
@@ -820,7 +827,7 @@ class SceneStore:
                 if line["direction"]:
                     directions.append({**where, "direction": line["direction"]})
                 direction = ""
-            line_id = f"cue-{index:0{width}d}" if is_timed else f"line-{len(lines) + 1:0{width}d}"
+            line_id = cue_id(index, line) if is_timed else f"line-{len(lines) + 1:0{width}d}"
             lines.append({"line_id": line_id, "line_type": line["kind"],
                           "character_id": identity["character_id"], "identity_id": identity["id"], "text": line["text"],
                           "direction": direction, "pause_before_ms": 0, "pause_after_ms": 0 if is_timed else 250, "take_count": 1,
@@ -836,6 +843,19 @@ class SceneStore:
         report = {"lines": len(lines), "left_out": left_out, "unread": script["unread"], "directions_left_out": directions}
         manifest = {"schema_version": SCHEMA_VERSION, "name": title, "lines": lines}
         if not is_timed:
+            return [manifest], report
+        if fmt == "transcript":
+            manifest["timeline"] = {"format": fmt, "duration_ms": script["duration_ms"],
+                                    "source_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                                    "source_cues": [
+                                        {"line_id": cue_id(index, line), "start_ms": line["cue"]["source_start_ms"],
+                                         "end_ms": line["cue"]["source_end_ms"],
+                                         "text": " ".join(line["cue"]["source_text"].split()),
+                                         "speaker": line["speaker"] or ""}
+                                        for index, line in enumerate(script["lines"], start=1)
+                                    ]}
+            manifest["transcript_source"] = script["transcript_source"]
+            manifest["source_media"] = script["transcript_source"]["source_media"]
             return [manifest], report
         sections = subtitle_import.scene_sections(script["lines"])
         fingerprint = hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -1355,7 +1375,7 @@ class SceneStore:
         self.cast.mark_takes_selected(picked)
         return scene, len(picked), len(lines)
 
-    def assemble_preview(self, scene_id, *, output_dir=None):
+    def assemble_preview(self, scene_id, *, dub=False, output_dir=None):
         scene = self.get_scene(scene_id)
         recent_jobs = self.list_jobs(scene_id)
         if recent_jobs and recent_jobs[0]["status"] == "failed" and recent_jobs[0]["failed"]:
@@ -1366,7 +1386,7 @@ class SceneStore:
         missing = [
             f"{line['line_id']}/{segment['id']}"
             for line in scene["lines"] for segment in line["segments"]
-            if not line.get("selected_takes", {}).get(segment["id"])
+            if not line.get("selected_takes", {}).get(segment["id"]) and not (dub and line.get("dub", {}).get("mute"))
         ]
         if missing:
             raise ValueError("Scene preview requires a selected successful take for every line segment: " + ", ".join(missing))
@@ -1375,6 +1395,9 @@ class SceneStore:
             nonlocal output_rate
             for line in scene["lines"]:
                 parts = []
+                if dub and line.get("dub", {}).get("mute"):
+                    yield line, parts
+                    continue
                 for segment in line["segments"]:
                     take_id = line["selected_takes"][segment["id"]]
                     try:
@@ -1406,7 +1429,7 @@ class SceneStore:
                 yield line, parts
 
         if timeline:
-            audio, timing = timed_scene.mix(timeline, selected_lines())
+            audio, timing = timed_scene.mix(timeline, selected_lines(), dub=dub)
         else:
             audio_parts = []
             for line, parts in selected_lines():

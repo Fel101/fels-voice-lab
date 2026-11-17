@@ -6469,6 +6469,481 @@
         }
       }
     },
+    "/api/scenes/{scene_id}/dub": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_dub",
+        "summary": "Read the source, background stem and most recent dubbing delivery.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The attached assets, current scene revision and newest published delivery.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/source": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_dub_source",
+        "summary": "Attach a local audio or video file to a timed scene.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "Local media file name and extension.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The SHA-256 and browser preview of the preserved source file. Send one supported media file up to 512 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The media is larger than 512 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/background": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_dub_background",
+        "summary": "Attach an aligned audio-only background stem.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "Local media file name and extension.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The SHA-256 and preview metadata for the preserved background source.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/captions/{dub_file}": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_dub_captions_dub_file",
+        "summary": "Export review text or captions on the cue clock.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "dub_file",
+            "in": "path",
+            "required": true,
+            "description": "A file name listed in the dubbing delivery, captions or source preview.",
+            "example": "dub.mp4",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]+[.](?:mp4|wav|srt|vtt|ass|txt|json)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Target TXT, source/target/bilingual SRT and VTT, or target/bilingual ASS.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/exports": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_dub_exports",
+        "summary": "Publish dubbed audio and optional video for selected takes.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "description": "Saved scene revision."
+                  },
+                  "target_language": {
+                    "type": "string",
+                    "description": "Target language tag."
+                  },
+                  "keep_original": {
+                    "type": "boolean",
+                    "description": "Include the original as an alternate MP4 audio track."
+                  },
+                  "background": {
+                    "type": "boolean",
+                    "description": "Mix the attached background stem."
+                  },
+                  "background_gain_db": {
+                    "type": "number",
+                    "description": "Background gain from −30 to +6 dB."
+                  },
+                  "duck": {
+                    "type": "boolean",
+                    "description": "Duck the background during dialogue."
+                  },
+                  "burn": {
+                    "type": "string",
+                    "description": "Optional target, bilingual or karaoke burned captions."
+                  },
+                  "additional_deliveries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Previous language deliveries for this source."
+                  }
+                },
+                "required": [
+                  "expected_revision",
+                  "target_language"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Delivery ID, source checksum, selected takes, timing adjustments, stream metadata and file hashes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/exports/{delivery_id}/verify": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_dub_exports_delivery_id_verify",
+        "summary": "Verify a delivery manifest and files.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery ID and number of verified files.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/source/{dub_file}": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_dub_source_dub_file",
+        "summary": "Stream the source preview with byte ranges.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "dub_file",
+            "in": "path",
+            "required": true,
+            "description": "A file name listed in the dubbing delivery, captions or source preview.",
+            "example": "dub.mp4",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]+[.](?:mp4|wav|srt|vtt|ass|txt|json)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Browser-ready original.mp4 or original.wav.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The range is outside the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/exports/{delivery_id}/{dub_file}": {
+      "get": {
+        "operationId": "get_api_scenes_scene_id_dub_exports_delivery_id_dub_file",
+        "summary": "Stream a file declared by a dubbing delivery.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "dub_file",
+            "in": "path",
+            "required": true,
+            "description": "A file name listed in the dubbing delivery, captions or source preview.",
+            "example": "dub.mp4",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]+[.](?:mp4|wav|srt|vtt|ass|txt|json)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested manifest, video, audio stem or caption file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The range is outside the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/exports": {
       "get": {
         "operationId": "get_api_exports",

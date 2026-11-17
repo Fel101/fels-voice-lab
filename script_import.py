@@ -16,11 +16,15 @@ headings, transitions, page breaks, sections, synopses, notes ([[...]]) and bone
 kept as narration, like a plain-text line with no name.
 """
 
+import json
 import re
 
 import subtitle_import
 
-FORMATS = ("text", "fountain", *subtitle_import.FORMATS)
+from voice_transcript import _unique, validate
+
+TIMED_FORMATS = (*subtitle_import.FORMATS, "transcript")
+FORMATS = ("text", "fountain", *TIMED_FORMATS)
 MAX_NAME = 60
 MAX_DIRECTION = 1000
 
@@ -246,6 +250,59 @@ def _fountain(text):
     return reader.result("fountain")
 
 
+def _transcript(text):
+    document = validate(json.loads(text, object_pairs_hook=_unique))
+    duration = document["source_media"]["duration_ms"]
+    if duration > subtitle_import.MAX_TIMELINE_MS or len(document["cues"]) > 500:
+        raise ValueError("Export SRT from Voice Slate and import it as subtitles to split this transcript into scenes.")
+    labels = {}
+    used = set()
+    for speaker in document["speakers"]:
+        label = " ".join(speaker["label"].split())[:60]
+        if label.casefold() in used:
+            label = f"{label[:45]} ({len(labels) + 1})"
+            while label.casefold() in used:
+                label += "!"
+        labels[speaker["id"]] = label
+        used.add(label.casefold())
+    reader = _Reader()
+    for index, row in enumerate(document["cues"], 1):
+        edit = row.get("edit", {})
+        speaker = labels.get(row.get("speaker_id"))
+        reader.speech(index, speaker, edit.get("text", row["source_text"]))
+        reader.lines[-1]["cue"] = {
+            "start_ms": edit.get("start_ms", row["start_ms"]),
+            "end_ms": edit.get("end_ms", row["end_ms"]),
+            "source_start_ms": row["start_ms"],
+            "source_end_ms": row["end_ms"],
+            "source_text": row["source_text"],
+            "source_id": row["id"],
+            "speaker": speaker or "",
+        }
+        reader.lines[-1]["cue_id"] = row["id"]
+        reader.lines[-1]["source_language"] = row.get("language", document["language"])
+    return {
+        **reader.result("transcript"),
+        "duration_ms": duration,
+        "warnings": subtitle_import.cue_overlaps(
+            (
+                line["cue"]["start_ms"],
+                line["cue"]["end_ms"],
+                f"Line {index} ({subtitle_import.clock_time(line['cue']['start_ms'])})",
+            )
+            for index, line in enumerate(reader.lines, 1)
+        ),
+        "transcript_source": {
+            "source_media": document["source_media"],
+            "provenance": document["provenance"],
+            "speakers": document["speakers"],
+            "speaker_turns": document.get("speaker_turns", []),
+            "words": {cue["id"]: cue["words"] for cue in document["cues"] if cue.get("words")},
+            "cue_languages": {cue["id"]: cue.get("language", document["language"]) for cue in document["cues"]},
+        },
+    }
+
+
 def parse_script(text, fmt):
     """The script's lines, speakers and unread lines; see the module's notes. Raises ValueError for an unknown format."""
     if fmt not in FORMATS:
@@ -253,6 +310,8 @@ def parse_script(text, fmt):
     if not isinstance(text, str):
         raise ValueError("A script must be text.")
     text = text.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n")
+    if fmt == "transcript":
+        return _transcript(text)
     if fmt in subtitle_import.FORMATS:
         reader = _Reader()
         rows, reader.unread = subtitle_import.parse_subtitles(text, fmt)

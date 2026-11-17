@@ -752,3 +752,17 @@ copies it into a `migration-backups` folder beside it (the newest three copies o
 kept) and stops without changing anything if it cannot make the copy. A new database needs
 no copy. To go back to an older build, stop the service and put the copy in place of the
 database file.
+
+
+### Dub a local recording
+
+In **Scenes & batch**, import subtitles or a Voice Slate timed transcript. Open **Dub media** and choose the source
+audio or video. For a scene section with a video start time, choose a clip beginning at that time. Select an approved
+voice for each speaker. Enter your target words, save the line, then render and select a new take as needed.
+
+Choose **Speed up to fit** on a line to allow time stretching up to 1.35× in the dub. The Lab keeps the take itself.
+Use **Export dub** and **Verify delivery** to check the dubbed WAV, captions and any video you included. Voice Lab
+keeps the original source and leaves the other scene exports on their existing timing.
+
+Inspired by VoiceStudio by Palash Debnath and its contributors.
+[VoiceStudio dubbing](https://github.com/debpalash/VoiceStudio/blob/main/docs/electron-dubbing.md)
