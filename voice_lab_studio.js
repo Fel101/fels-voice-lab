@@ -358,6 +358,12 @@ function wireFirstRun(){
   });
   $('go').addEventListener('click',function(){if(firstRun.ready){firstRun.ready=null;$('firstRun').hidden=true;}});
 }
+function placeFirstRun(workspace){
+  if(workspace==='home'||workspace==='studio'){
+    var target=$(workspace+'FirstRun'), note=$('firstRun');
+    if(note.parentElement!==target)target.appendChild(note);
+  }
+}
 function studioReady(job){
   // An install the note started has finished: close its window, which would keep the focus, and set the studio up to speak.
   firstRun.engine=null;firstRun.ready=job.name;
@@ -366,7 +372,10 @@ function studioReady(job){
   var engine=$('engine'),text=$('text');
   if(engine.value!==job.engine){engine.value=job.engine;if(typeof refresh==='function'){refresh();}}
   if(!String(text.value||'').trim()){text.value=text.defaultValue||'';}
-  if(!$('studio').hidden){$('go').focus();}
+  if(!$('home').hidden){
+    location.hash='#studio';
+    window.addEventListener('hashchange',function(){$('go').focus();},{once:true});
+  }else if(!$('studio').hidden){$('go').focus();}
 }
 function renderFirstRun(status){
   var rows=status.engines||[],job=status.install||null,box=$('firstRun'),button=$('firstRunButton');

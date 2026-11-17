@@ -183,13 +183,22 @@ def register(router, lab):
         scene, chosen, lines = scenes.choose_newest_takes(scene_id, req.get("line_ids"))
         self._json(200, {"scene": scene, "chosen": chosen, "lines": lines})
 
+    def preview_with_urls(scene_id, preview):
+        preview_url = f"/api/scenes/{scene_id}/previews/"
+        return {
+            **preview,
+            "audio_url": preview_url + Path(preview["audio_path"]).name,
+            "mastered_audio_url": preview_url + Path(preview["mastered_audio_path"]).name,
+        }
+
+    @router.get("/api/scenes/{scene_id}/preview")
+    def latest_scene_preview(self, parsed, req, scene_id):
+        preview = scenes.latest_preview(scene_id)
+        self._json(200, {"preview": preview_with_urls(scene_id, preview) if preview else None})
+
     @router.post("/api/scenes/{scene_id}/preview")
     def scene_preview(self, parsed, req, scene_id):
-        preview = scenes.assemble_preview(scene_id)
-        preview_url = f"/api/scenes/{scene_id}/previews/"
-        preview["audio_url"] = preview_url + Path(preview["audio_path"]).name
-        preview["mastered_audio_url"] = preview_url + Path(preview["mastered_audio_path"]).name
-        self._json(201, {"preview": preview})
+        self._json(201, {"preview": preview_with_urls(scene_id, scenes.assemble_preview(scene_id))})
 
     @router.get("/api/scenes/jobs/{job_id}")
     def scene_job(self, parsed, req, job_id):

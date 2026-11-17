@@ -196,6 +196,47 @@ class ProjectFilesTests(ExportPanelBase):
         self.assertIn(words, page.evaluate("$('portableMappings').textContent"))
         self.assertEqual(page.problems, [])
 
+    @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+    def test_home_lists_five_projects_by_last_saved_time_and_opens_each(self):
+        self.start_server()
+        scenes = [self.scenes.create_scene(self.scene_payload(f"Scene {n}")) for n in range(5)]
+        subtitles = "\n\n".join(f"{i + 1}\n0{i}:31:00,000 --> 0{i}:31:01,000\nMira: A timed line." for i in range(3))
+        parts, _ = self.scenes.import_script(
+            subtitles, "srt", {"Mira": {"identity_id": self.identity["id"]}}, name="Harbor film"
+        )
+        book = self.checked_json(
+            "/api/books",
+            201,
+            {
+                "metadata": {"title": "Harbor book"},
+                "chapters": [{"title": "Opening", "lines": [{"text": "One passage.", "speaker": ""}]}],
+                "voices": {"": self.identity["id"]},
+            },
+        )["book"]
+        # Set the fixture clock: the oldest created scene and the last subtitle part were just edited.
+        with self.scenes._connect() as db:
+            db.execute("UPDATE scenes SET updated_at = '2026-01-01T00:00:00.000+00:00'")
+            for day, scene in zip((6, 1, 1, 2, 3), scenes, strict=True):
+                db.execute(
+                    "UPDATE scenes SET updated_at = ? WHERE id = ?", (f"2026-01-0{day}T00:00:00.000+00:00", scene["scene_id"])
+                )
+            db.execute("UPDATE scenes SET updated_at = '2026-01-04T00:00:00.000+00:00' WHERE id = ?", (parts[-1]["scene_id"],))
+            db.execute("UPDATE books SET updated = '2026-01-05T00:00:00.000+00:00' WHERE id = ?", (book["id"],))
+        expected = [scenes[0], book, parts[0], scenes[4], scenes[3]]
+        titles = [row["name"] if "name" in row else row["metadata"]["title"] for row in expected]
+        page = self.open_page()
+        page.open(self.base + "/")
+        for index, item in enumerate(expected):
+            page.wait_until("!$('homeRecent').hidden && $('homeRecent').children.length === 5")
+            self.assertEqual(page.evaluate("Array.from($('homeRecent').querySelectorAll('a'), a => a.textContent)"), titles)
+            page.click(f"#homeRecent li:nth-child({index + 1}) a")
+            if "scene_id" in item:
+                page.wait_until(f"location.hash === '#scenes' && activeSceneId === {json.dumps(item['scene_id'])}")
+            else:
+                page.wait_until(f"location.hash === '#books' && activeBook?.id === {json.dumps(item['id'])}")
+            page.show("home")
+        self.assertEqual(page.problems, [])
+
     def test_projects_find_and_copy_a_scene_with_local_voice_assignments(self):
         scene_id = self.render_selected_scene()
         report = self.checked_json("/api/projects?q=road", 200)["projects"]

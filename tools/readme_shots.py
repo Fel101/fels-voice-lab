@@ -39,7 +39,7 @@ import test_browser_flow as flow  # noqa: E402  (the DevTools driver the browser
 from tools import lab_cli  # noqa: E402
 from tools.real_model_smoke import NO_WINDOW, START_SECONDS, NotStarted, free_port  # noqa: E402
 
-PICTURES = ("perform", "take-editor", "cast-library", "scene", "export")
+PICTURES = ("perform", "take-editor", "cast-library", "scene", "export", "home")
 # Two characters and their Kokoro voices, and the line Perform speaks.
 CHARACTERS = (("Mira", "Mira, warm", "af_heart"), ("Tobin", "Tobin, dry", "bm_george"))
 LINE = "I kept the porch light on. I hoped you'd find your way back."
@@ -192,8 +192,9 @@ def pictures(page, service, voices):
             "speakers": {name.upper(): {"identity_id": identity} for name, identity in voices.items()},
         },
     )["scene"]
-    page.show("scenes")
-    page.click("#sceneRefresh")  # the scene was imported behind the page's back
+    page.show("home")
+    page.wait_until("document.querySelector('#homeRecent a')?.textContent === 'The porch light'")
+    page.click("#homeRecent a")
     page.wait_until(
         f"[...document.getElementById('sceneSelect').options].some((o) => o.value === {json.dumps(scene['scene_id'])})"
     )
@@ -220,6 +221,9 @@ def pictures(page, service, voices):
     page.click("#exportVerify")
     page.wait_until("document.getElementById('exportStatus').textContent.startsWith('Verification passed')", timeout=180)
     picture(page, "export", "#sceneExport")
+    page.show("home")
+    page.wait_until("!document.getElementById('homeRecent').hidden")
+    picture(page, "home", "#home")
     if page.problems:
         raise AssertionError("The page reported errors: " + "; ".join(map(str, page.problems)))
 

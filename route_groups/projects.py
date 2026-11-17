@@ -4,7 +4,7 @@ from urllib.parse import parse_qs
 
 import portable_projects as portable
 import voice_names
-from projects_index import projects
+from projects_index import projects, recent_projects
 
 
 def register(router, lab):
@@ -12,6 +12,10 @@ def register(router, lab):
     def list_projects(self, parsed, req):
         q = parse_qs(parsed.query)
         self._json(200, {"projects": projects(lab.scenes, q.get("kind", [""])[0], q.get("q", [""])[0])})
+
+    @router.get("/api/projects/recent")
+    def recent(self, parsed, req):
+        self._json(200, {"projects": recent_projects(lab.scenes)})
 
     @router.post("/api/portable/export")
     def export(self, parsed, req):

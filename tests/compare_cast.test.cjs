@@ -21,6 +21,7 @@ class Element {
 function setup(takes = []) {
   const nodes = new Map();
   const document = {
+    documentElement: {classList: {add() {}}},
     getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element(/Select$/.test(id) ? 'select' : 'div')); return nodes.get(id); },
     createElement(name) { return new Element(name); },
     createTextNode(text) { const result = new Element('#text'); result.textContent = text; return result; },

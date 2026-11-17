@@ -89,14 +89,14 @@ test('take waveform checks are plain text beside each Perform and Scenes take', 
 });
 
 test('cloning is a full workspace; navigation shows exactly one panel', () => {
-  const ids = ['studio','cloning','cast','perform','scenes','conversion','books','projects','audio-tools','automation','library','models','system'];
+  const ids = ['home','studio','cloning','cast','perform','scenes','conversion','books','projects','audio-tools','automation','library','models','system'];
   const opened = [];
   const fields = Object.fromEntries(ids.map(id=>[id,{hidden:false,classList:{add(){}},
     querySelector:()=>({textContent:id})}]));
   const links = ids.map(id=>({current:false,getAttribute:()=> '#'+id,
     setAttribute(){this.current=true;},removeAttribute(){this.current=false;}}));
   const c = vm.createContext({$:id=>fields[id],location:{hash:'#cloning'},
-    loadReferences(){},refreshConversionAssets(){},refreshEngineStatus(){},refreshSystemPage(){opened.push('system');},
+    placeFirstRun(){},refreshHome(){opened.push('home');},loadReferences(){},refreshConversionAssets(){},refreshEngineStatus(){},refreshSystemPage(){opened.push('system');},
     refreshProjects(){opened.push('projects');return Promise.resolve();},projectsError(error){throw error;},
     refreshAutomation(){opened.push('automation');return Promise.resolve();},automationError(error){throw error;},
     refreshBooks(){opened.push('books');return Promise.resolve();},bookError(error){throw error;},
@@ -105,12 +105,12 @@ test('cloning is a full workspace; navigation shows exactly one panel', () => {
   vm.runInContext(sourceBetween('function showWorkspace()', "window.addEventListener('hashchange',showWorkspace)"),c);
   for(const active of ['cloning','cast','perform','studio','models','books','projects','audio-tools','automation','system','unknown']){
     c.location.hash='#'+active;c.showWorkspace();
-    const expected=active==='unknown'?'studio':active;
+    const expected=active==='unknown'?'home':active;
     assert.deepEqual(ids.filter(id=>!fields[id].hidden),[expected]);
     assert.deepEqual(ids.filter((id,index)=>links[index].current),[expected]);
     assert.equal(c.document.title,"Fel's Voice Lab · "+expected);
   }
-  assert.deepEqual(opened,['books','projects','automation','system'],'Books, Projects, Automation and System refresh when opened');
+  assert.deepEqual(opened,['books','projects','automation','system','home'],'Books, Projects, Automation, System and Home refresh when opened');
 });
 
 test('Chatterbox cloning sends the selected recording rather than a hardcoded preset',()=>{
@@ -211,11 +211,11 @@ test('unsaved scenes request unload protection and small screens reflow the work
 test('performer starter copies the actual engine and preserves seed zero', () => {
   const fields={performReference:{value:''},performText:{value:'Line'},performLanguage:{value:'English'},
     performDirection:{value:'Deliver clearly.'},performSeed:{value:'0'},usePronunciations:{checked:false},
-    sceneEditor:{value:''},sceneStatus:{textContent:''}};
+    sceneEditor:{value:''},sceneStatus:{textContent:''},sceneTimelineNote:{},sceneExportJson:{},sceneExportCsv:{}};
   const c=vm.createContext({sceneDirty:false,activeSceneId:null,$:id=>fields[id],
     performanceCharacter:()=>({id:'character',name:'Mira'}),
     performanceIdentity:()=>({id:'voice',kind:'preset_voice',engine_id:'qwen3-tts-1.7b-custom-voice'}),
-    performanceSettings:(identity,seed)=>({seed}),renderSceneForm(){},resetSceneHistory(){},window:{confirm:()=>true}});
+    performanceSettings:(identity,seed)=>({seed}),clearSceneOutputs(){},bindDubScene(){},renderSceneForm(){},resetSceneHistory(){},window:{confirm:()=>true}});
   vm.runInContext(sourceBetween('function startSceneFromPerformer(', 'function importSceneFile('),c);
   c.startSceneFromPerformer();const scene=JSON.parse(fields.sceneEditor.value);
   assert.equal(scene.lines[0].engine_id,'qwen3-tts-1.7b-custom-voice');assert.equal(scene.lines[0].settings.seed,0);

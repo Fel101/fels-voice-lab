@@ -21,6 +21,35 @@ function openProductionProject(kind, id) {
     refreshSceneList(id).catch(showSceneError);
   }
 }
+$('homeImportScript').addEventListener('click', function () {
+  $('sceneScriptImport').open = true;
+  requestAnimationFrame(function () { $('sceneImportFile').focus(); });
+});
+async function refreshHome() {
+  var list = $('homeRecent'), status = $('homeStatus');
+  try {
+    var result = await fetchJson('/api/projects/recent');
+    list.replaceChildren();
+    result.projects.forEach(function (project) {
+      var row = document.createElement('li'), link = document.createElement('a'), kind = document.createElement('span');
+      link.href = project.kind === 'book' ? '#books' : '#scenes';
+      link.textContent = project.title;
+      link.addEventListener('click', function(event) {
+        event.preventDefault();
+        openProductionProject(project.kind, project.id);
+      });
+      kind.className = 'meta';
+      kind.textContent = projectKindName(project.kind);
+      row.append(link, kind);
+      list.appendChild(row);
+    });
+    $('homeRecentHeading').hidden = list.hidden = !list.children.length;
+    $('homeStart').hidden = !!list.children.length;
+    status.textContent = '';
+  } catch (error) {
+    status.textContent = 'Recent work could not be loaded. Open a workspace from the menu, or reload this page to try again.';
+  }
+}
 async function refreshProjects() {
   var read = ++projectRead;
   var query = new URLSearchParams({q:$('projectsQuery').value,kind:$('projectsKind').value});

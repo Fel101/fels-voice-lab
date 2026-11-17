@@ -1,8 +1,51 @@
 """Read-only workspace index for native scenes, dubs and books."""
 
+import json
+
 import book_export
 import export_panel
 from book_store import Books
+from scene_store import subtitle_group
+
+
+def recent_projects(sc):
+    """The five most recently saved or rendered projects, with imports kept in reading order."""
+    with sc._connect() as db:
+        has_books = db.execute("SELECT 1 FROM sqlite_master WHERE name = 'books' AND type = 'table'").fetchone()
+        book_rows = db.execute("SELECT id,document,updated FROM books").fetchall() if has_books else ()
+        scene_rows = db.execute(
+            """SELECT scenes.id, scenes.name, scenes.created_at, scenes.updated_at, scenes.manifest_json,
+                      (SELECT MAX(jobs.updated_at) FROM jobs WHERE jobs.scene_id = scenes.id) AS last_batch
+               FROM scenes"""
+        ).fetchall()
+    scene_times = {row["id"]: max(row["updated_at"], row["last_batch"] or "") for row in scene_rows}
+    items = []
+    chapters = set()
+    for row in book_rows:
+        book = json.loads(row["document"])
+        chapters.update(book["chapters"])
+        stamp = max(row["updated"], *(scene_times.get(scene_id, "") for scene_id in book["chapters"]))
+        items.append({"id": row["id"], "title": book["metadata"]["title"], "kind": "book", "updated_at": stamp})
+    groups = {}
+    for row in scene_rows:
+        scene = json.loads(row["manifest_json"])
+        if row["id"] in chapters or scene.get("book_id"):
+            continue
+        timeline = scene.get("timeline", {})
+        key = subtitle_group(row, timeline)
+        project = {
+            "id": row["id"],
+            "title": row["name"],
+            "kind": "dub" if timeline else "scene",
+            "updated_at": scene_times[row["id"]],
+        }
+        groups.setdefault(key, []).append((timeline.get("source_offset_ms", 0), project))
+    for sections in groups.values():
+        _position, first = min(sections, key=lambda section: section[0])
+        items.append({**first, "updated_at": max(project["updated_at"] for _position, project in sections)})
+    items.sort(key=lambda project: project["title"].casefold())
+    items.sort(key=lambda project: project["updated_at"], reverse=True)
+    return items[:5]
 
 
 def projects(sc, kind="", query=""):

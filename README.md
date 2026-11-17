@@ -69,6 +69,11 @@ VoxCPM2.
 
 https://github.com/user-attachments/assets/e1bbee2f-c3ce-4242-96af-819682310bfe
 
+The Lab opens on **Home**, with links to your five most recent scenes, dubs and books.
+On an empty library, Home shows ways to start a scene or narrate a document.
+
+![Home showing a recent scene](docs/images/home.png)
+
 The pictures that follow are made by [`tools/readme_shots.py`](tools/readme_shots.py), with `af_heart` for Mira and
 `bm_george` for Tobin.
 

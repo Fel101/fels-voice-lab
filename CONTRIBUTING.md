@@ -49,7 +49,7 @@ does not wait for it, and it keeps the clip as an artifact.
 
 The README's pictures come from `tools/readme_shots.py`: the real page and service, with two of Kokoro's preset voices. When
 a change alters what one of them shows, close the Lab and run `.venv\Scripts\python.exe tools/readme_shots.py`. It needs
-Kokoro, Microsoft Edge or Google Chrome, and FFmpeg, works in a library of its own in a temporary folder, and writes the five
+Kokoro, Microsoft Edge or Google Chrome, and FFmpeg, works in a library of its own in a temporary folder, and writes the six
 pictures into `docs/images/`. Look at them before you commit them.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is a one-page map of the processes, the environments and which file decides what.

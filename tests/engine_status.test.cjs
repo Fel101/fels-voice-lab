@@ -860,6 +860,7 @@ test('while it installs the note shows its progress, and a failed install says w
 test('when the install the note started finishes, the studio is ready to speak', async () => {
   const {context: c, fields} = harness({'/api/engines/kokoro/install': {plan: {ok: true, paragraphs: [], problems: []}}});
   let focused = null;
+  fields.home = Object.assign(element('home'), {hidden:true});
   fields.go = Object.assign(element('go'), {focus() { focused = 'go'; }});
   fields.engine = Object.assign(element('engine'), {value: 'qwen3-tts-1.7b-voice-design'});
   fields.text = Object.assign(element('text'), {value: '  ', defaultValue: "Hey, you're back."});

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Home opens on your recent projects. Empty workspaces explain where to start, and Scenes has one place to import
+  a script or subtitles. The Home view draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by
+  Palash Debnath (`debpalash`) and its contributors.
+
 - Connect through local MCP with a voice per connection, more output formats, transcription and voice design.
   The n8n example uses the Lab from the same computer.
 

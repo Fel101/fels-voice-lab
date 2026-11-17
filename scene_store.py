@@ -89,6 +89,11 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def subtitle_group(row, timeline):
+    """Sections from one import share a creation stamp and source checksum."""
+    return (row["created_at"], timeline["source_sha256"]) if "source_offset_ms" in timeline else row["id"]
+
+
 def new_id():
     return uuid.uuid4().hex
 
@@ -658,7 +663,7 @@ class SceneStore:
         groups = {}
         for row, scene in zip(rows, saved, strict=True):
             timeline = scene.get("timeline", {})
-            key = (row["created_at"], timeline["source_sha256"]) if "source_offset_ms" in timeline else row["id"]
+            key = subtitle_group(row, timeline)
             groups.setdefault(key, []).append(scene)
         return [scene for group in groups.values()
                 for scene in sorted(group, key=lambda item: item.get("timeline", {}).get("source_offset_ms", 0))]
@@ -1393,6 +1398,31 @@ class SceneStore:
         scene = self.update_scene(scene_id, scene, expected_revision=scene["revision"])
         self.cast.mark_takes_selected(picked)
         return scene, len(picked), len(lines)
+
+    def latest_preview(self, scene_id):
+        """The newest complete mix for the saved revision, even after reopening or moving the library."""
+        scene = self.get_scene(scene_id)
+        folder = self.output_root / scene["scene_id"]
+        revision = scene["revision"]
+        manifests = {}
+        for path in folder.glob(f"scene-r{revision}-*.json"):
+            try:
+                manifests[path] = path.stat().st_mtime_ns
+            except OSError:
+                continue
+        for path in sorted(manifests, key=manifests.get, reverse=True):
+            try:
+                preview = json.loads(path.read_text(encoding="utf-8"))
+                if preview["scene_checksum"] != scene["checksum"] or not path.with_suffix(".wav").is_file():
+                    continue
+                mastered = re.split(r"[/\\]", preview["mastered_audio_path"])[-1]
+                if not re.fullmatch(rf"scene-mastered-r{revision}-[0-9a-f]{{8}}\.wav", mastered):
+                    continue
+                if (folder / mastered).is_file():
+                    return {**preview, "audio_path": path.with_suffix(".wav").name, "mastered_audio_path": mastered}
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        return None
 
     def assemble_preview(self, scene_id, *, dub=False, output_dir=None):
         scene = self.get_scene(scene_id)

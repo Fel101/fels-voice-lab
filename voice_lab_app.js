@@ -112,8 +112,8 @@ $('previewKokoroPhonemes').addEventListener('click',function(){
     .catch(function(error){$('kokoroPhonemes').textContent=error.message;});
 });
 function showWorkspace(){
-  var ids=['studio','cloning','cast','perform','scenes','books','projects','audio-tools','automation','conversion','library','models','system'];
-  var requested=location.hash.slice(1),active=ids.indexOf(requested)>=0?requested:'studio';
+  var ids=['home','studio','cloning','cast','perform','scenes','books','projects','audio-tools','automation','conversion','library','models','system'];
+  var requested=location.hash.slice(1),active=ids.indexOf(requested)>=0?requested:'home';
   ids.forEach(function(id){$(id).classList.add('workspace');$(id).hidden=id!==active;});
   document.querySelectorAll('.workspace-nav a[href^="#"]').forEach(function(link){
     if(link.getAttribute('href')==='#'+active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
@@ -121,6 +121,8 @@ function showWorkspace(){
   document.documentElement.classList.add('workspace-ready');
   document.title="Fel's Voice Lab · "+$(active).querySelector('h2').textContent;
   window.scrollTo(0,0);
+  placeFirstRun(active);
+  if(active==='home')refreshHome();
   if(active==='conversion')refreshConversionAssets();
   if(active==='cloning')loadReferences();
   if(active==='models')refreshEngineStatus();

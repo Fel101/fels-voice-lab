@@ -1,4 +1,10 @@
 // Voice Lab bindings: transcript drafts, cast and reference controls, and performance buttons.
+
+$('castCreateFirst').addEventListener('click',function(event){
+  event.preventDefault();
+  $('castEditor').open=true;
+  $('characterName').focus();
+});
 // Transcript draft for the selected saved reference version. It only fills the form; saving stays a separate, deliberate step.
 $('suggestTranscript').addEventListener('click',function(){
   var id=$('referenceVersion').value;

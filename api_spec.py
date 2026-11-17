@@ -814,6 +814,8 @@ ROUTES = [
     R("GET", "/api/automation/runs/{job_id}", "Automation", "Read a recipe run.", reply="A saved run and per-item status."),
     R("POST", "/api/automation/runs/{job_id}/cancel", "Automation", "Cancel unfinished work for a recipe run.",
       body_kind="none", reply="The updated run status."),
+    R("GET", "/api/projects/recent", "Page helpers", "List the five most recently changed projects.", internal=True),
+    R("GET", "/api/scenes/{scene_id}/preview", "Page helpers", "Open the latest mix for this scene revision.", internal=True),
     R("GET", "/api/projects", "Production", "Search local books, timed scenes and scenes.",
       query=(F("kind", "string", "`scene`, `dub` (timed scene), or `book`."), F("q", "string", "Search titles and script.")),
       reply="Project IDs, title, type, voices, takes and job status."),

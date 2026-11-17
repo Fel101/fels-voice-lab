@@ -768,6 +768,47 @@ class BrowserFlowTests(unittest.TestCase):
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class EmptyLibraryPageTests(unittest.TestCase):
+    def test_home_and_empty_workspaces_point_to_the_next_step(self):
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            server.engines.engine_status = lambda: {
+                "device": "cpu", "busy": False, "speed": [], "engines": [
+                    {"id": "kokoro", "name": "Kokoro 82M", "state": "not_installed",
+                     "installation": {"installed": False, "installer": "setup-kokoro.bat"}},
+                ],
+            }
+            page = None
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/")
+                page.wait_until("!$('home').hidden && !$('homeStart').hidden && !$('firstRun').hidden")
+                self.assertEqual(page.evaluate("$('firstRun').parentElement.id"), "homeFirstRun")
+                self.assertEqual(page.evaluate("$('homeRecent').children.length"), 0)
+                page.screenshot("empty-home", "#home")
+                page.click("#homeImportScript")
+                page.wait_until("!$('scenes').hidden && $('sceneScriptImport').open")
+                self.assertTrue(page.evaluate("$('sceneSaved').hidden && $('sceneWork').hidden"))
+                self.assertEqual(page.evaluate("document.querySelector('#sceneScriptImport summary').textContent"), "Import a script")
+                page.screenshot("empty-scenes", "#scenes")
+                page.click("#sceneStarter")
+                page.wait_until("!$('perform').hidden && !$('performEmpty').hidden && $('performEditor').hidden")
+                page.click("#performEmpty a")
+                page.wait_until("!$('cast').hidden && !$('castEmpty').hidden && $('castBrowsing').hidden")
+                page.click("#castCreateFirst")
+                self.assertTrue(page.evaluate("$('castEditor').open && document.activeElement.id === 'characterName'"))
+                page.open(server.base + "/compare")
+                page.wait_until("!$('compareEmpty').hidden && $('compareSavedTakes').hidden && $('compareRuns').hidden")
+                page.click("#compareEmpty a")
+                page.wait_until("location.hash === '#perform' && !$('performEmpty').hidden")
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class GenerateAfterInstallTests(unittest.TestCase):
     def test_a_page_opened_before_kokoro_was_installed_speaks_once_it_is(self):
         installed = []  # the Kokoro voices on disk: none while the page opens, two once the installer has run
@@ -777,7 +818,7 @@ class GenerateAfterInstallTests(unittest.TestCase):
             page = None
             try:
                 page = DevToolsPage(BROWSER)
-                page.open(server.base + "/")
+                page.open(server.base + "/#studio")
                 page.wait_until("document.getElementById('engine').value === 'kokoro'")
                 self.assertEqual(page.evaluate("document.getElementById('voice').options.length"), 0)
                 installed.extend(["af_heart", "bf_emma"])  # the installer finishes while the page stays open
@@ -976,6 +1017,7 @@ class SamplePageTests(unittest.TestCase):
                 page = DevToolsPage(BROWSER)
                 page.open(server.base + "/#cast")
                 page.wait_until("!document.getElementById('castSampleNote').hidden")
+                self.assertTrue(page.evaluate("$('sceneBatch').hidden && $('scenePlayers').hidden && $('sceneWork').hidden"))
                 self.assertTrue(page.evaluate("document.getElementById('sampleNote').hidden === false"
                                               " && document.getElementById('sampleRemove').hidden"))
                 self.assertEqual(server.cast.list_cast(), [])  # offered, never made unasked
@@ -988,11 +1030,14 @@ class SamplePageTests(unittest.TestCase):
                                 .startswith("This is the sample scene"))
                 self.assertTrue(page.evaluate("document.getElementById('castSampleNote').hidden"))
                 page.click("#sceneStart")
+                page.wait_until("!$('sceneBatch').hidden && $('scenePlayers').hidden")
                 page.wait_until(rows.format("choose_take"))
                 page.click("#sceneChooseNewest")
                 page.wait_until(rows.format("done"))
                 page.click("#scenePreview")
-                page.wait_until("document.getElementById('scenePreviewPlayer').getAttribute('src')")
+                page.wait_until("!$('scenePlayers').hidden && $('scenePreviewPlayer').getAttribute('src')")
+                page.open(server.base + "/?reopen#scenes")
+                page.wait_until("!$('scenePlayers').hidden && $('scenePreviewPlayer').getAttribute('src')")
                 self.assertEqual(page.evaluate("fetch(document.getElementById('scenePreviewPlayer').getAttribute('src'))"
                                                ".then((r) => r.status)"), 200)
                 self.assertEqual([request["voice"] for request in server.engines.requests[:2]], ["af_heart", "am_michael"])

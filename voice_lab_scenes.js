@@ -787,7 +787,8 @@ function renderSceneForm() {
   $('sceneName').disabled = true;
   $('sceneLineAdd').disabled = true;
   $('sceneTableTools').hidden = true;
-  if (!$('sceneEditor').value.trim()) {
+  $('sceneWork').hidden = !$('sceneEditor').value.trim();
+  if ($('sceneWork').hidden) {
     $('sceneName').value = '';
     container.textContent = 'Open a scene or start one from the current performer.';
     return;
@@ -1225,7 +1226,28 @@ $('sceneEditor').addEventListener('input', function () {
 function sceneJobLabel(job) {
   return job.status + ' / ' + job.completed + '/' + job.total + ' / ' + job.id.slice(0, 8);
 }
+var scenePreviewRead = 0;
+function clearSceneOutputs() {
+  scenePreviewRead++;
+  $('sceneBatch').hidden = true;
+  $('scenePlayers').hidden = true;
+  ['scenePreviewPlayer', 'sceneMasteredPlayer'].forEach(function (id) {
+    var player = $(id);
+    if (!player.hasAttribute('src')) return;
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+  });
+  $('scenePreviewMeta').textContent = '';
+}
+function restoreScenePreview(scene) {
+  var read = scenePreviewRead;
+  return fetchJson('/api/scenes/' + scene.scene_id + '/preview').then(function (result) {
+    if (read === scenePreviewRead && result.preview) showScenePreview(result.preview);
+  });
+}
 function renderScene(scene) {
+  clearSceneOutputs();
   if (scene.scene_id !== activeSceneId) {
     sceneTicked = new Set();
     sceneOpenLines = new Set();
@@ -1251,6 +1273,7 @@ function renderScene(scene) {
   $('sceneExportJson').hidden = false;
   $('sceneExportCsv').hidden = false;
   var jobs = fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
+    if (scene.scene_id !== activeSceneId) return;
     var select = $('sceneJobSelect'),
       previous = activeSceneJobId;
     select.textContent = '';
@@ -1266,9 +1289,10 @@ function renderScene(scene) {
       select.value = previous;
     else if (select.options.length) select.selectedIndex = 0;
     activeSceneJobId = select.value || null;
+    $('sceneBatch').hidden = !activeSceneJobId;
     return activeSceneJobId ? refreshSceneJob() : Promise.resolve();
   });
-  return Promise.all([jobs, refreshSceneLineStates()]).then(function () {});
+  return Promise.all([jobs, refreshSceneLineStates(), restoreScenePreview(scene)]).then(function () {});
 }
 function scenePickerOrder(scenes, books) {
   // Keep each book where its most recently edited chapter was, with its chapters in reading order.
@@ -1289,6 +1313,7 @@ function refreshSceneList(preferred) {
     var select = $('sceneSelect'),
       keep = preferred || activeSceneId;
     sceneListCount = (result.scenes || []).length;
+    $('sceneSaved').hidden = !sceneListCount;
     select.textContent = '';
     var books = result.chapter_books || {};
     scenePickerOrder(result.scenes || [], books).forEach(function (scene) {
@@ -1310,6 +1335,7 @@ function refreshSceneList(preferred) {
       });
     activeSceneId = null;
     activeSceneJobId = null;
+    clearSceneOutputs();
     sceneLineStates = {};
     $('sceneEditor').value = '';
     resetSceneHistory('');
@@ -1344,6 +1370,7 @@ function renderSampleNotes() {
     onSample = !!(sample && activeSceneId && sample.scene_id === activeSceneId),
     offer = sceneListCount === 0 && sampleOffered();
   $('sampleNote').hidden = !(onSample || offer);
+  $('homeSampleLink').hidden = !sampleOffered();
   $('sampleOpen').hidden = onSample;
   $('sampleRemove').hidden = !onSample;
   $('sampleText').textContent = onSample
@@ -1454,6 +1481,11 @@ function startSceneFromPerformer() {
     ],
   };
   activeSceneId = null;
+  activeSceneJobId = null;
+  clearSceneOutputs();
+  bindDubScene(null);
+  $('sceneTimelineNote').hidden = true;
+  $('sceneExportJson').hidden = $('sceneExportCsv').hidden = true;
   sceneDirty = true;
   $('sceneEditor').value = JSON.stringify(payload, null, 2);
   resetSceneHistory(null);
@@ -1910,6 +1942,7 @@ function startSceneBatch(request) {
         item.textContent = sceneJobLabel(result.job);
         select.insertBefore(item, select.firstChild);
         select.value = activeSceneJobId;
+        $('sceneBatch').hidden = false;
         return Promise.all([refreshSceneJob(), refreshSceneLineStates()]);
       });
     });
@@ -1951,29 +1984,44 @@ function sceneAction(action) {
 function previewScene() {
   if (!activeSceneId) throw new Error('Save a scene before assembly.');
   var save = sceneDirty ? saveAndGetScene() : Promise.resolve({ scene_id: activeSceneId });
+  var read = ++scenePreviewRead, button = $('scenePreview');
+  button.disabled = true;
+  $('sceneStatus').textContent = 'Building the scene from the chosen takes…';
   return save
     .then(function (scene) {
       return fetchJson('/api/scenes/' + scene.scene_id + '/preview', {});
     })
     .then(function (result) {
-      $('scenePreviewPlayer').src = result.preview.audio_url;
-      $('sceneMasteredPlayer').src = result.preview.mastered_audio_url;
-      var mastering = result.preview.mastering || {};
-      $('scenePreviewMeta').textContent =
-        (result.preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence') + ' / ' +
-        result.preview.duration_seconds.toFixed(2) +
-        ' s / ' +
-        result.preview.sample_rate +
-        ' Hz / mastered ' +
-        Number(mastering.target_lufs).toFixed(0) +
-        ' LUFS target, ' +
-        Number(mastering.peak_ceiling_dbfs).toFixed(0) +
-        ' dBFS sample-peak ceiling / no compression or crossfades.';
-      if (result.preview.timing && result.preview.timing.warnings.length)
-        $('scenePreviewMeta').textContent += ' ' + result.preview.timing.warnings.map(function (warning) {
-          return warning.message;
-        }).join(' ');
-    });
+      if (read !== scenePreviewRead) return;
+      showScenePreview(result.preview);
+      $('sceneStatus').textContent = 'Scene built. Listen below.';
+    })
+    .catch(function (error) {
+      if (read !== scenePreviewRead) return;
+      $('sceneStatus').textContent = '';
+      throw error;
+    })
+    .finally(function () { button.disabled = false; });
+}
+function showScenePreview(preview) {
+  $('scenePreviewPlayer').src = preview.audio_url;
+  $('sceneMasteredPlayer').src = preview.mastered_audio_url;
+  $('scenePlayers').hidden = false;
+  var mastering = preview.mastering || {};
+  $('scenePreviewMeta').textContent =
+    (preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence') + ' / ' +
+    preview.duration_seconds.toFixed(2) +
+    ' s / ' +
+    preview.sample_rate +
+    ' Hz / mastered ' +
+    Number(mastering.target_lufs).toFixed(0) +
+    ' LUFS target, ' +
+    Number(mastering.peak_ceiling_dbfs).toFixed(0) +
+    ' dBFS sample-peak ceiling / no compression or crossfades.';
+  if (preview.timing && preview.timing.warnings.length)
+    $('scenePreviewMeta').textContent += ' ' + preview.timing.warnings.map(function (warning) {
+      return warning.message;
+    }).join(' ');
 }
 $('sceneRefresh').addEventListener('click', function () {
   if (sceneDirty && !window.confirm('Discard unsaved scene edits and reload the saved scene?')) return;
@@ -2011,6 +2059,14 @@ $('sceneScriptCreate').addEventListener('click', function () {
   $(id).addEventListener(id === 'sceneScriptText' ? 'input' : 'change', clearSceneScript);
 });
 $('sceneStarter').addEventListener('click', function () {
+  if (!performanceCharacter() || !performanceIdentity()) {
+    location.hash = '#perform';
+    requestAnimationFrame(function () {
+      if (castCharacters.length) $('performCharacter').focus();
+      else $('performEmpty').querySelector('a').focus();
+    });
+    return;
+  }
   try {
     startSceneFromPerformer();
   } catch (error) {

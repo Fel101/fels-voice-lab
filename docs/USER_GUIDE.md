@@ -35,6 +35,11 @@ much it downloads and how much disk it takes. Its **Install** button starts the 
 progress** opens its window again. When it finishes, the studio is ready to speak: the model is chosen, a sentence is in the
 box and **Generate** has the focus.
 
+### Home
+
+Home shows up to five recent scenes, dubs and books, newest changes first. Open a title to continue working on it.
+With an empty library, choose a way to start. Install Kokoro from the first-run note if the Lab has no model yet.
+
 ### The sample scene
 
 Once Kokoro 82M is installed, the first-run note, an empty **Cast library** and an empty **Scenes & batch** offer **Open the
@@ -274,7 +279,8 @@ See [the scene schema](scenes/scene-schema-v1.md).
 
 ### Import a script
 
-**Import a script from text or Fountain** takes a script you already have, from a `.txt` or `.fountain` file or pasted in.
+Open **Import a script** in **Scenes & batch**. Use **Script or subtitle file** to choose a `.txt` or `.fountain` file,
+or paste text into **Script**.
 Plain text has one speech per line, written `NAME: words`. A direction in brackets or parentheses at the start of the words,
 after the name (`MARA (quietly): words`) or before it (`[quietly] MARA: words`), becomes the line's acting direction.
 Fountain is the screenplay format, with each name in capitals above its lines: a parenthetical is the direction of the words
@@ -316,7 +322,8 @@ Verifying a package checks each file's codec as well as its hash.
 
 ### Timed scenes from subtitle files
 
-In **Scenes & batch**, choose **Import a script or subtitles** and pick a UTF-8 `.srt` or `.vtt` file. You can also paste
+In **Scenes & batch**, open **Import a script** and choose a UTF-8 `.srt` or `.vtt` file under **Script or subtitle file**.
+You can also paste
 subtitles and choose the format. Review the cues, timestamps, and overlaps. Fix any reported cue errors before importing.
 Each cue can name one speaker with a `NAME: words` prefix or a WebVTT voice tag. Pick a Cast voice for each speaker and for
 any cues with no label, or choose to leave those cues out.

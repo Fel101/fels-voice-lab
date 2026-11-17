@@ -3169,6 +3169,8 @@ These serve the Lab's own pages. They can change at any time and are not part of
 
 | Method | Path | Used for |
 |---|---|---|
+| GET | `/api/projects/recent` | List the five most recently changed projects. |
+| GET | `/api/scenes/{scene_id}/preview` | Open the latest mix for this scene revision. |
 | GET | `/` | The Lab's main page. |
 | GET | `/index.html` | The Lab's main page. |
 | GET | `/compare` | The Compare page. |

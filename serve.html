@@ -69,6 +69,10 @@ main { max-width:1440px; padding:0 28px 60px; display:grid; grid-template-column
 .queue-item .meta { display:block; font-size:.8rem; } .queue-panel #queueError:empty { display:none; }
 .workspace { grid-column:2; grid-row:2; align-self:start; min-width:0; margin:28px 0; padding:28px; border-radius:16px; }
 html:not(.workspace-ready) .workspace { grid-row:auto; }
+#home ul, #home ol { padding-inline-start:24px; }
+#home li { padding-block:6px; }
+#homeRecent { list-style:none; padding-inline-start:0; }
+#homeRecent li { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 12px; border-bottom:1px solid var(--line); }
 .workspace h2 { font-size:1.5rem; letter-spacing:-.035em; margin-bottom:8px; }
 .workspace h3 { font-size:1rem; }
 .workspace > .meta { margin:0 0 24px; max-width:72ch; }
@@ -181,7 +185,27 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#automation">Automation</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#home">Home</a><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#automation">Automation</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+
+
+<section class="card" id="home">
+  <h2>Home</h2>
+  <div id="homeFirstRun">
+  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><button type="button" id="firstRunSample" hidden>Open the sample scene</button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
+  </div>
+  <div id="homeStart" hidden>
+    <p>Start a scene or turn a document into speech.</p>
+    <ul>
+      <li><a href="#scenes" id="homeImportScript">Import a script</a></li>
+      <li><a href="#perform">Start from the Perform line</a></li>
+      <li id="homeSampleLink" hidden><a href="#scenes">Find the sample scene in Scenes &amp; batch</a></li>
+      <li><a href="#books">Narrate a document</a></li>
+    </ul>
+  </div>
+  <h3 id="homeRecentHeading" hidden>Recent work</h3>
+  <ol id="homeRecent" aria-labelledby="homeRecentHeading" hidden></ol>
+  <p id="homeStatus" class="meta" role="status">Looking for recent work…</p>
+</section>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -226,14 +250,17 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <section class="card" id="cast">
   <h2>Cast library</h2>
   <p class="meta">Listen to your saved voices and choose one for dialogue. Each card shows how the voice was created and which model will use it.</p>
+  <div class="workflow-note" id="castEmpty" hidden><p>No characters yet. <a href="#cast" id="castCreateFirst">Create a character</a> or <a href="#cloning">start with a voice recording</a>.</p></div>
+  <div id="castBrowsing" hidden>
   <div class="row">
     <label class="field">Find a voice<input id="voiceSearch" type="text" placeholder="Name, character role, or model"></label>
     <button id="refreshVoices" type="button">Refresh voices</button>
   </div>
   <label class="meta"><input id="showRetiredVoices" type="checkbox"> Show retired voices</label>
   <p id="voiceLibraryStatus" class="meta" role="status" aria-live="polite"></p>
-  <div class="workflow-note" id="castSampleNote" hidden><p>No characters yet. Open the sample scene for two characters with Kokoro’s preset voices and a short scene to render, or create your own below.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
   <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
+  </div>
+  <div class="workflow-note" id="castSampleNote" hidden><p>Try two of Kokoro’s preset voices in a short scene you can render.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
   <p><a href="#projects" id="castImportVoiceFile">Import a voice file</a></p>
   <details>
     <summary>Import from Voice Slate</summary>
@@ -316,6 +343,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <section class="card" id="perform">
   <h2>Perform lines</h2>
   <p class="meta">Choose a character voice, direct a line, and audition variations. Every take is saved with the voice, voice recording and settings that made it.</p>
+  <p class="workflow-note" id="performEmpty" hidden>No characters yet. <a href="#cast">Add a character and voice in Cast</a>, then come back to make takes.</p>
+  <div id="performEditor" hidden>
   <div class="cast-grid"><label class="field">Character<select id="performCharacter"></select></label>
     <label class="field">Voice<select id="performIdentity"></select></label></div>
   <div class="row"><label class="field compact">Voice recording to use<select id="performReference"></select></label>
@@ -341,6 +370,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="row"><button type="button" id="savePronunciation">Save pronunciation</button><span class="meta" id="pronunciationList"></span></div>
   </details>
   <div id="nativeTags" class="cast-actions" hidden><span class="meta">Insert model-native event:</span></div>
+  </div>
 </section>
 
 <section class="card" id="conversion">
@@ -367,20 +397,24 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 
 <section class="card" id="scenes">
   <h2>Scenes &amp; batch</h2>
-  <p class="meta">Write dialogue, render a batch, and choose the takes for your scene. Jobs run one take at a time and can resume after a restart.</p>
-  <div class="row"><label class="field compact">Saved scene<select id="sceneSelect"></select></label>
-    <button type="button" id="sceneRefresh">Refresh scenes</button>
-    <label class="field compact">Import a script or subtitles<input id="sceneImportFile" type="file" accept=".txt,.fountain,.spmd,.srt,.vtt,.json,.csv,text/plain,text/vtt,application/json,text/csv"></label>
-    <button type="button" id="sceneStarter">Start from the Perform line</button></div>
+  <div class="row" id="sceneSaved" hidden><label class="field compact">Saved scene<select id="sceneSelect"></select></label>
+    <button type="button" id="sceneRefresh">Refresh scenes</button></div>
+  <div class="cast-actions"><button type="button" id="sceneStarter">Start from the Perform line</button>
+    <a href="#books">Narrate a document</a></div>
+  <p id="sceneError" role="alert"></p>
   <div class="workflow-note" id="sampleNote" hidden><p id="sampleText"></p><div class="cast-actions"><button class="go" type="button" id="sampleOpen" hidden>Open the sample scene</button><button type="button" id="sampleRemove" hidden>Remove the sample…</button></div><p class="meta" id="sampleStatus" role="status"></p></div>
-  <p class="meta" id="sceneTimelineNote" hidden></p>
-  <details id="sceneScriptImport"><summary>Paste a script, subtitles or a Slate transcript</summary>
+  <details id="sceneScriptImport"><summary>Import a script</summary>
+    <p class="meta">Choose a local script or subtitle file, or paste text, subtitles or a Voice Slate timed transcript below.</p>
+    <div class="row"><label class="field compact">Script or subtitle file<input id="sceneImportFile" type="file" accept=".txt,.fountain,.spmd,.srt,.vtt,.json,.csv,text/plain,text/vtt,application/json,text/csv"></label>
+      <a href="/api/scenes/template.json">JSON template</a><a href="/api/scenes/template.csv">CSV template</a></div>
+    <details><summary>Draft subtitles from audio</summary>
     <div class="row">
       <label class="field compact">Audio for a subtitle draft<input id="sceneSpeechFile" type="file" accept=".wav,.mp3,.mp4,.m4a,.aac,.ogg,.flac,.webm"></label>
       <button type="button" id="sceneSpeechDraft">Draft subtitles</button>
       <a href="#system">Speech recognition setup</a>
     </div>
     <p class="meta" id="sceneSpeechNote" role="status">Process up to 10 minutes or 25 MB of audio on this computer and check the draft before importing.</p>
+    </details>
     <p class="meta">Plain text has one speech per line, written <code>NAME: words</code>. A direction in brackets or parentheses at the start of the words becomes the line's acting direction. Fountain is the screenplay format, with each name in capitals above its lines. Choose a file above, or paste the script here, then read it and choose a voice for each speaker.</p>
     <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option><option value="srt">SRT subtitles</option><option value="vtt">WebVTT subtitles</option><option value="transcript">Voice Slate timed transcript</option></select></label>
       <button type="button" id="sceneScriptRead">Read the script</button></div>
@@ -395,8 +429,9 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     </div>
     <p class="meta" id="sceneScriptReport"></p>
   </details>
-  <div class="cast-actions"><a href="/api/scenes/template.json">JSON template</a><a href="/api/scenes/template.csv">CSV template</a>
-    <a id="sceneExportJson" href="#" hidden>Export JSON</a><a id="sceneExportCsv" href="#" hidden>Export CSV</a></div>
+  <div id="sceneWork" hidden>
+  <p class="meta" id="sceneTimelineNote" hidden></p>
+  <div class="cast-actions"><a id="sceneExportJson" href="#" hidden>Export JSON</a><a id="sceneExportCsv" href="#" hidden>Export CSV</a></div>
   <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. The scene as JSON includes each line’s voice and model settings.</div>
   <p class="meta" id="sceneShortcuts">Keyboard: Ctrl+Z undo · Ctrl+Y or Ctrl+Shift+Z redo · Ctrl+S save · Alt+↑ or Alt+↓ moves the line you are in. In a text box, Ctrl+Z is that box's own undo.</p>
   <label class="field">Scene name<input id="sceneName" type="text" maxlength="120" disabled></label>
@@ -411,15 +446,19 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <details id="sceneAdvanced"><summary>The scene as JSON (advanced)</summary><p class="meta">Edits here update the table. Voices, voice recordings, model settings and chosen takes are kept.</p><label class="field">The scene as JSON<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="Import a scene or start from the Perform line."></textarea></label></details>
   <div class="cast-actions"><button type="button" id="sceneLineAdd">Add a line</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="Undo the last script change (Ctrl+Z)">Undo</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="Redo the change you undid (Ctrl+Y or Ctrl+Shift+Z)">Redo</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">Save scene</button><button type="button" id="sceneSegments">Show the parts of long lines</button>
     <button type="button" id="scenePreview">Build the scene from the chosen takes</button></div>
-  <p id="sceneError" role="alert"></p><p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
+  <p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
+  <div id="sceneBatch" hidden>
   <div class="row"><label class="field compact">Batch<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh batch</button>
     <button type="button" id="scenePause">Pause</button><button type="button" id="sceneResume">Resume</button>
     <button type="button" id="sceneCancel">Cancel after this line</button><button type="button" id="sceneStopNow">Stop now</button><button type="button" id="sceneRetry">Try the failed lines again</button>
     <a id="sceneJobManifest" href="#" hidden>Batch record (JSON)</a></div>
   <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="Batch progress"></progress><details><summary>Takes from this batch</summary><div id="sceneJobRows" class="take"></div></details>
+  </div>
+  <div id="scenePlayers" hidden>
   <label class="field">Scene, exactly as rendered<audio id="scenePreviewPlayer" controls></audio></label>
   <label class="field">Scene, evened out in loudness<audio id="sceneMasteredPlayer" controls></audio></label>
   <p class="meta" id="scenePreviewMeta"></p>
+  </div>
   <details id="sceneDub" hidden>
     <summary>Dub media</summary>
     <p class="meta">Import subtitles or a Voice Slate timed transcript, then attach its local audio or video. Use the scene editor to set Cast voices, render and select takes.</p>
@@ -517,11 +556,12 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <pre id="exportLog" class="meta" style="white-space:pre-wrap"></pre>
     <div class="row"><label class="field compact">Existing packages<select id="exportSelect"></select></label><button type="button" id="exportRefresh">Refresh list</button><button type="button" id="exportVerify">Check the chosen package</button></div>
   </details>
+  </div>
 </section>
 
 <section class="card" id="studio">
   <h2>Model studio</h2><p class="meta">Explore a model, design a voice, or try a voice recording. Save the voice you like, then build its character in the Cast library.</p>
-  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><button type="button" id="firstRunSample" hidden>Open the sample scene</button><a href="#models" id="firstRunModels">Every model is in Models &amp; features →</a></div></div>
+  <div id="studioFirstRun"></div>
   <div class="workflow-note"><a href="#cast">Browse saved voices and listen to auditions →</a><p class="meta">Find named character voices, including blends of preset voices that need no voice recording.</p><p class="meta" id="studioVoiceSelection" role="status"></p></div>
   <label class="field">Text to speak
     <textarea id="text">Hey, you're back. I was hoping you'd stop by tonight. How was your day?</textarea>
