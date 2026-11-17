@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Find saved scenes and books in Projects and move portable copies between libraries. Share an approved voice as a
+  checked file, and review imported voices as candidates. Inspired by VoiceStudio’s library workflows.
+
 - Narrate a text or Markdown document with Cast voices. Edit and render chapters in Scenes, then export chapter files
   and a whole audiobook with chapter marks. Inspired by VoiceStudio’s long-form workflow.
 

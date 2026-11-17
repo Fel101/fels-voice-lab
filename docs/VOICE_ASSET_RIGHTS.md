@@ -98,3 +98,7 @@ consent evidence local.
 See also [responsible use](RESPONSIBLE_USE.md) and the
 [third-party notices](../THIRD_PARTY_NOTICES.md). This is a practical provenance
 review, not a guarantee about every jurisdiction or a disputed person's rights.
+
+**Portable voice files.** The file carries the source, allowed use, model pin and checksums. A cloned voice's file
+includes its approved recording only after explicit confirmation. Preset voice files carry their chosen voice names,
+settings and a rendered audition. Observe the model's and recording's terms when moving or sharing the file.

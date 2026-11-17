@@ -371,6 +371,25 @@ Inspired by VoiceStudio by **Palash Debnath (`debpalash`) and the VoiceStudio co
 [Stories and Audiobooks workflow](https://github.com/debpalash/VoiceStudio/blob/main/docs/electron-longform.md)
 
 
+### Move a project or share a voice
+
+Open **Projects** to find a scene, timed scene or audiobook by its title or words. To move a project to another Lab,
+choose **Export a project**, then download the file. In the second Lab open **Import a project or voice file**,
+check the file and choose an approved local voice for each source voice. Import makes a fresh copy. You can include
+the book cover or portable voice recordings when exporting.
+
+To share one voice, first make or choose a short take in **Perform lines**. On its approved Cast card, choose
+**Export this voice**. The file holds the character details, pronunciations, model settings, audition and approved
+voice recording when the voice uses one. Confirm that you have permission before you share a cloned voice. A preset
+voice file contains the model's voice names and settings. Install the model through **Models & features** if needed.
+
+Choose **Import a voice file** in Cast, then **Check archive**. Check who made the voice, the model, origin and
+allowed use. **Hear the voice** plays the included audition. Confirm the allowed use for included recordings and
+choose **Import as candidate**. Open the new voice in Cast to review and approve it when ready.
+
+These workflows are inspired by Palash Debnath (`debpalash`) and the VoiceStudio contributors.
+[VoiceStudio](https://github.com/debpalash/voicestudio)
+
 ## One thing at a time
 
 The model worker does one thing at a time: one load, clip, take, test or install. What you ask for while it is busy waits

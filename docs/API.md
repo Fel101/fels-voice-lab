@@ -1674,6 +1674,96 @@ Download a preview's WAV.
 
 **Answer:** `200`, `audio/wav`. The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.
 
+### Production
+
+Search saved projects and share local project or voice files.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | [`/api/projects`](#get-api-projects) | Search local books, timed scenes and scenes. |
+| POST | [`/api/portable/export`](#post-api-portable-export) | Create a portable archive. |
+| POST | [`/api/portable/preview`](#post-api-portable-preview) | Verify a portable ZIP without importing it. |
+| POST | [`/api/portable/voice-preview`](#post-api-portable-voice-preview) | Play a verified archive voice sample without importing. |
+| POST | [`/api/portable/import`](#post-api-portable-import) | Import the exact portable ZIP previewed locally. |
+| GET | [`/api/portable/{delivery_id}.zip`](#get-api-portable-delivery_id-zip) | Read a portable ZIP. |
+
+<a id="get-api-projects"></a>
+
+#### `GET /api/projects`
+
+Search local books, timed scenes and scenes.
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `kind` | string | `scene`, `dub` (timed scene), or `book`. |
+| `q` | string | Search titles and script. |
+
+**Answer:** `200`, JSON. Project IDs, title, type, voices, takes and job status.
+
+<a id="post-api-portable-export"></a>
+
+#### `POST /api/portable/export`
+
+Create a portable archive.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `kind` (required) | string | `persona` (a voice file), `scene`, `dub` (timed scene), or `book`. |
+| `id` | string | Project ID. |
+| `identity_id` | string | The Cast voice to export. |
+| `include_media` | boolean | Include the book cover. |
+| `include_voices` | boolean | Include approved project references. |
+| `author` | string | Optional name of the voice-file author. |
+| `permission` | boolean | Confirm permission to share a cloned voice and its recording. |
+
+**Answer:** `201`, JSON. An archive with a local ZIP download URL.
+
+<a id="post-api-portable-preview"></a>
+
+#### `POST /api/portable/preview`
+
+Verify a portable ZIP without importing it.
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `200`, JSON. Source voices, included assets, and archive SHA-256.
+
+<a id="post-api-portable-voice-preview"></a>
+
+#### `POST /api/portable/voice-preview`
+
+Play a verified archive voice sample without importing.
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `asset` (required) | string | Source voice sample asset. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `200`, `audio/wav`. The verified WAV in the supplied archive.
+
+<a id="post-api-portable-import"></a>
+
+#### `POST /api/portable/import`
+
+Import the exact portable ZIP previewed locally.
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. New project or candidate IDs. Send X-Reference-Metadata with base64url JSON containing archive_sha256, voices, permission and include_media.
+
+<a id="get-api-portable-delivery_id-zip"></a>
+
+#### `GET /api/portable/{delivery_id}.zip`
+
+Read a portable ZIP.
+
+| Path parameter | Meaning |
+|---|---|
+| `delivery_id` | A saved delivery or audition ID. |
+
+**Answer:** `200`, a file. The generated local archive.
+
 ### Books
 
 Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages.
@@ -2381,6 +2471,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_cast.js` | A page script. |
 | GET | `/voice_lab_scenes.js` | A page script. |
 | GET | `/voice_lab_books.js` | A page script. |
+| GET | `/voice_lab_projects.js` | A page script. |
 | GET | `/voice_lab_cast_bindings.js` | A page script. |
 | GET | `/voice_lab_take_edit.js` | A page script. |
 | GET | `/voice_lab_generate.js` | A page script. |

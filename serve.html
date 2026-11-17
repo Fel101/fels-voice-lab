@@ -181,7 +181,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -234,6 +234,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <p id="voiceLibraryStatus" class="meta" role="status" aria-live="polite"></p>
   <div class="workflow-note" id="castSampleNote" hidden><p>No characters yet. Open the sample scene for two characters with Kokoro’s preset voices and a short scene to render, or create your own below.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
   <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
+  <p><a href="#projects" id="castImportVoiceFile">Import a voice file</a></p>
   <details id="castEditor"><summary>Create or edit a character, its voices and its recordings</summary>
   <p class="meta">Build your cast and approve a voice recording for each character. Your recordings and every saved version stay on this PC.</p>
   <div class="cast-grid">
@@ -629,6 +630,36 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <div id="err" role="alert"></div>
   <audio id="player" controls></audio>
 </section>
+<section class="card" id="projects">
+  <h2>Projects</h2>
+  <div class="row">
+    <label class="field">Search titles or script<input id="projectsQuery" type="search" maxlength="120"></label>
+    <label class="field compact">Project type<select id="projectsKind"><option value="">All</option><option value="scene">Scenes</option><option value="dub">Timed scenes</option><option value="book">Books</option></select></label>
+    <button id="searchProjects" type="button">Search</button>
+  </div>
+  <ul id="projectRows"></ul>
+  <details><summary>Export a project</summary>
+    <label class="field">Project<select id="projectArchive"></select></label>
+    <label><input id="projectArchiveMedia" type="checkbox"> Include the book cover</label>
+    <label><input id="projectArchiveVoices" type="checkbox"> Include approved voice recordings</label>
+    <div class="row"><button id="exportProjectArchive" type="button">Export project ZIP</button></div>
+    <label><input id="archiveSharePermission" type="checkbox"> I have permission to share the included voice recordings</label>
+    <p><a id="projectDownload" download hidden>Download ZIP</a></p>
+  </details>
+  <details id="portableImportPanel"><summary>Import a project or voice file</summary>
+    <label class="field">Portable ZIP<input id="portableFile" type="file" accept=".zip,application/zip"></label>
+    <div class="row"><button id="previewPortable" type="button">Check archive</button></div>
+    <div id="portableReview" hidden>
+      <p id="portableTitle"></p>
+      <div id="portableMappings"></div>
+      <label><input id="portableMedia" type="checkbox"> Copy the included book cover</label>
+      <label><input id="portablePermission" type="checkbox"> I reviewed the included voice recording terms and may use it</label>
+      <div class="row"><button id="importPortable" type="button">Import reviewed archive</button></div>
+    </div>
+  </details>
+  <p id="projectsStatus" role="status"></p>
+</section>
+
 <section class="card" id="books">
   <h2>Stories &amp; audiobooks</h2>
   <details open>
@@ -786,6 +817,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <script src="/voice_lab_take_edit.js"></script>
 <script src="/voice_lab_scenes.js"></script>
 <script src="/voice_lab_books.js"></script>
+<script src="/voice_lab_projects.js"></script>
 <script src="/voice_lab_cast_bindings.js"></script>
 <script src="/voice_lab_generate.js"></script>
 <script src="/voice_lab_system.js"></script>

@@ -112,7 +112,7 @@ $('previewKokoroPhonemes').addEventListener('click',function(){
     .catch(function(error){$('kokoroPhonemes').textContent=error.message;});
 });
 function showWorkspace(){
-  var ids=['studio','cloning','cast','perform','scenes','books','conversion','library','models','system'];
+  var ids=['studio','cloning','cast','perform','scenes','books','projects','conversion','library','models','system'];
   var requested=location.hash.slice(1),active=ids.indexOf(requested)>=0?requested:'studio';
   ids.forEach(function(id){$(id).classList.add('workspace');$(id).hidden=id!==active;});
   document.querySelectorAll('.workspace-nav a[href^="#"]').forEach(function(link){
@@ -126,6 +126,7 @@ function showWorkspace(){
   if(active==='models')refreshEngineStatus();
   if(active==='system')refreshSystemPage();
   if(active==='books')refreshBooks().catch(bookError);
+  if(active==='projects')refreshProjects().catch(projectsError);
 }
 window.addEventListener('hashchange',showWorkspace);showWorkspace();
 fillCatalog().then(function () { refresh(); return loadReferences(); }).then(refreshLoadedQwenInfo).then(function(){return refreshCast();}).then(renderSceneForm).catch(function(e){$('err').textContent=e.message;});

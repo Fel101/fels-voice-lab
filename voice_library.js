@@ -128,7 +128,24 @@
       var studio=action(voice,'Use in Model studio','studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
       var perform=action(voice,'Perform lines','perform');
       studio._retired=perform._retired=!!voice.retired;studio.disabled=studio.disabled||!!voice.retired;perform.disabled=busyNavigation||!!voice.retired;
-      buttons.append(studio,perform,action(voice,'Edit voice','edit'));card.appendChild(buttons);
+      buttons.append(studio,perform,action(voice,'Edit voice','edit'));
+      if (!voice.retired && voice.identity_status === 'approved') {
+        var share=node('button','Export this voice');share.type='button';
+        share.addEventListener('click',async function(){
+          if(busyNavigation)return;
+          var recorded=voice.identity_kind==='reference'&&!String(voice.origin||'').startsWith('Original synthetic voice design via ');
+          if(recorded&&!global.confirm('This voice file includes the approved voice recording and its audition. Export only if you have permission to share this voice. Continue?'))return;
+          setNavigationBusy(true);status('Checking the voice file…');
+          try{
+            var result=await global.fetchJson('/api/portable/export',{kind:'persona',identity_id:voice.identity_id,permission:recorded});
+            var download=node('a','Download voice file');download.href=result.archive.download;
+            download.download=voice.character_name.replace(/[<>:"/\\|?*]/g,'-')+'.voice.zip';
+            status('Voice file ready. ');el('voiceLibraryStatus').appendChild(download);
+          }catch(error){status(error.message);}finally{setNavigationBusy(false);}
+        });
+        buttons.appendChild(share);
+      }
+      card.appendChild(buttons);
       if(voice.retired){card.classList.add('retired');card.appendChild(node('p',global.retirementLabel(voice)+' New use is blocked; listening stays available for review.','meta'));}
       var controls=node('div',undefined,'cast-actions');retirementControls(voice).forEach(function(button){controls.appendChild(button);});card.appendChild(controls);
       var details=node('details');details.appendChild(node('summary','Voice description and use notes'));

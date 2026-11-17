@@ -36,3 +36,7 @@ what applies where you are.
 This page identifies publishing risks and license obligations; it does not
 certify compliance with every jurisdiction, third-party claim, or future use.
 Obtain legal advice before a commercial hosted deployment or a disputed voice use.
+
+A portable voice file can contain a cloned voice's approved voice recording and a generated audition. Export only
+when the recorded permission covers sharing the file. Review the recorded source and allowed use before importing.
+Voice files arrive as candidates for your own review in Cast.

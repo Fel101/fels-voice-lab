@@ -42,6 +42,10 @@
       "description": "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in [scene-schema-v1.md](scenes/scene-schema-v1.md)."
     },
     {
+      "name": "Production",
+      "description": "Search saved projects and share local project or voice files."
+    },
+    {
       "name": "Books",
       "description": "Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages."
     },
@@ -4585,6 +4589,272 @@
         }
       }
     },
+    "/api/projects": {
+      "get": {
+        "operationId": "get_api_projects",
+        "summary": "Search local books, timed scenes and scenes.",
+        "tags": [
+          "Production"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "`scene`, `dub` (timed scene), or `book`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Search titles and script.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project IDs, title, type, voices, takes and job status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/portable/export": {
+      "post": {
+        "operationId": "post_api_portable_export",
+        "summary": "Create a portable archive.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "`persona` (a voice file), `scene`, `dub` (timed scene), or `book`."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Project ID."
+                  },
+                  "identity_id": {
+                    "type": "string",
+                    "description": "The Cast voice to export."
+                  },
+                  "include_media": {
+                    "type": "boolean",
+                    "description": "Include the book cover."
+                  },
+                  "include_voices": {
+                    "type": "boolean",
+                    "description": "Include approved project references."
+                  },
+                  "author": {
+                    "type": "string",
+                    "description": "Optional name of the voice-file author."
+                  },
+                  "permission": {
+                    "type": "boolean",
+                    "description": "Confirm permission to share a cloned voice and its recording."
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "An archive with a local ZIP download URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/portable/preview": {
+      "post": {
+        "operationId": "post_api_portable_preview",
+        "summary": "Verify a portable ZIP without importing it.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Source voices, included assets, and archive SHA-256.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/portable/voice-preview": {
+      "post": {
+        "operationId": "post_api_portable_voice_preview",
+        "summary": "Play a verified archive voice sample without importing.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "asset",
+            "in": "query",
+            "required": true,
+            "description": "Source voice sample asset.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The verified WAV in the supplied archive.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/portable/import": {
+      "post": {
+        "operationId": "post_api_portable_import",
+        "summary": "Import the exact portable ZIP previewed locally.",
+        "tags": [
+          "Production"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New project or candidate IDs. Send X-Reference-Metadata with base64url JSON containing archive_sha256, voices, permission and include_media.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/portable/{delivery_id}.zip": {
+      "get": {
+        "operationId": "get_api_portable_delivery_id_zip",
+        "summary": "Read a portable ZIP.",
+        "tags": [
+          "Production"
+        ],
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "description": "A saved delivery or audition ID.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The generated local archive.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/books": {
       "get": {
         "operationId": "get_api_books",
@@ -6780,6 +7050,7 @@
     "GET /voice_lab_cast_bindings.js",
     "GET /voice_lab_drama.js",
     "GET /voice_lab_generate.js",
+    "GET /voice_lab_projects.js",
     "GET /voice_lab_queue.js",
     "GET /voice_lab_scenes.js",
     "GET /voice_lab_studio.js",

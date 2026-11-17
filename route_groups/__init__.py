@@ -7,6 +7,6 @@ _stream_line and the body readers), and finds what the routes share in the Lab (
 the background task and the service log. serve.py's own names, such as LAB and OUT, it reads as serve.NAME when it runs,
 so that a test which points serve.LAB elsewhere moves the routes too."""
 
-from route_groups import books, cast, conversion, drama, engines, evaluation, pages, scenes, system, takes
+from route_groups import books, cast, conversion, drama, engines, evaluation, pages, projects, scenes, system, takes
 
-GROUPS = (pages, engines, conversion, cast, takes, scenes, books, evaluation, system, drama)
+GROUPS = (pages, engines, conversion, cast, takes, scenes, books, projects, evaluation, system, drama)
