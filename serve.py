@@ -75,7 +75,7 @@ def _page(name):
 PAGE = _page("serve.html")
 # Scripts that serve.html loads from this folder. Only these names are served, never arbitrary paths.
 PAGE_SCRIPTS = frozenset({"voice_lab_queue.js", "voice_lab_studio.js", "voice_lab_cast.js", "voice_lab_take_edit.js", "voice_lab_scenes.js",
-                          "voice_lab_books.js", "voice_lab_projects.js", "voice_lab_audio.js",
+                          "voice_lab_books.js", "voice_lab_projects.js", "voice_lab_audio.js", "voice_lab_automation.js",
                           "voice_lab_cast_bindings.js", "voice_lab_generate.js", "voice_lab_system.js", "voice_lab_app.js",
                           "voice_lab_drama.js"})
 # The folder that holds desktop.local.json, which tells the desktop app which library to open. The tests point it elsewhere.
@@ -393,6 +393,9 @@ class Lab:
         self.updater = self_update or SelfUpdate(APP_ROOT)
         self.scenes = scene_store or SceneStore(self.cast, engines.entries)
         self.batches = batch_runner or SceneBatchRunner(self.scenes, f"http://127.0.0.1:{port}")
+        from dub_queue import DubQueue
+
+        self.dub_jobs = DubQueue(self.scenes, self.batches)
         # Scenes and Comparisons default to the Cast store's own library, so a handler built on a temporary Cast store
         # cannot reach the real one.
         self.evaluations = evaluation_store or EvaluationStore(lab_root=self.library_root)
@@ -405,6 +408,15 @@ class Lab:
         self.in_address_file = False
         self._drama, self._drama_lock = [], threading.Lock()
         self._live, self._live_lock = None, threading.Lock()
+        self._automation, self._automation_lock = None, threading.Lock()
+
+    def automation(self):
+        with self._automation_lock:
+            if self._automation is None:
+                from automation_operations import create_runner
+
+                self._automation = create_runner(self)
+            return self._automation
 
     def live_sessions(self):
         with self._live_lock:
@@ -954,6 +966,10 @@ def main():
     if keys:
         threading.Thread(target=preload, args=(engines, keys), daemon=True).start()
     batch_runner.start()
+    server.RequestHandlerClass.lab.dub_jobs.start()
+    lab = server.RequestHandlerClass.lab
+    if (lab.library_root / "data" / "automation" / "jobs.sqlite3").is_file():
+        lab.automation().start()
     if args.desktop_session:
         from desktop_lifecycle import publish_session
         server.RequestHandlerClass.lab.updater.desktop_session = args.desktop_session
@@ -963,6 +979,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.RequestHandlerClass.lab.dub_jobs.close()
+        if lab._automation is not None:
+            lab._automation.close()
         batch_runner.close(timeout=0)
         server.RequestHandlerClass.close_installer()
         engines.close()

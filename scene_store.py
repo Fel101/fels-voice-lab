@@ -905,7 +905,7 @@ class SceneStore:
         return [{"line_id": line["line_id"], "segments": line["segments"]}
                 for line in scene["lines"] if line_id is None or line["line_id"] == line_id]
 
-    def create_job(self, scene_id, line_ids=None, segment_ids=None):
+    def create_job(self, scene_id, line_ids=None, segment_ids=None, *, persistent_id=None):
         scene = self.get_scene(scene_id)
         selected_segments = None
         if line_ids is not None:
@@ -932,7 +932,9 @@ class SceneStore:
             unknown_segments = selected_segments - valid_segments
             if unknown_segments:
                 raise ValueError("Unknown scene segment selectors: " + ", ".join(f"{line}/{segment}" for line, segment in sorted(unknown_segments)) + ".")
-        job_id, stamp = new_id(), utc_now()
+        if persistent_id is not None:
+            _validate_id(persistent_id, "batch job id")
+        job_id, stamp = persistent_id or new_id(), utc_now()
         checked_voices = set()
         for line in lines:
             voice = (line["identity_id"], line["reference_version_id"])

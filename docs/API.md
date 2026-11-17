@@ -1357,10 +1357,17 @@ Ordered scripts rendered line by line through the same performance call. The man
 | POST | [`/api/scenes/{scene_id}/choose-newest`](#post-api-scenes-scene_id-choose-newest) | Choose the newest take that fits for every segment without one. |
 | POST | [`/api/scenes/{scene_id}/preview`](#post-api-scenes-scene_id-preview) | Assemble the selected takes into one preview. |
 | GET | [`/api/scenes/{scene_id}/previews/{preview_file}.wav`](#get-api-scenes-scene_id-previews-preview_file-wav) | Download a preview's WAV. |
+| GET | [`/api/dub-queue`](#get-api-dub-queue) | Read durable dubbing jobs and watch folders. |
+| POST | [`/api/dub-queue`](#post-api-dub-queue) | Queue one or more dubbing deliveries. |
+| POST | [`/api/dub-queue/jobs/{job_id}/retry`](#post-api-dub-queue-jobs-job_id-retry) | Retry a terminal dubbing job. |
+| POST | [`/api/dub-queue/jobs/{job_id}/cancel`](#post-api-dub-queue-jobs-job_id-cancel) | Cancel a queued delivery or its pending render. |
+| POST | [`/api/dub-queue/watches`](#post-api-dub-queue-watches) | Watch a selected local folder for dubbing manifests. |
+| POST | [`/api/dub-queue/watches/{job_id}/disable`](#post-api-dub-queue-watches-job_id-disable) | Turn off a dubbing watch folder. |
 | GET | [`/api/scenes/{scene_id}/dub`](#get-api-scenes-scene_id-dub) | Read the source, background stem and most recent dubbing delivery. |
 | POST | [`/api/scenes/{scene_id}/dub/source`](#post-api-scenes-scene_id-dub-source) | Attach a local audio or video file to a timed scene. |
 | POST | [`/api/scenes/{scene_id}/dub/background`](#post-api-scenes-scene_id-dub-background) | Attach an aligned audio-only background stem. |
 | GET | [`/api/scenes/{scene_id}/dub/captions/{dub_file}`](#get-api-scenes-scene_id-dub-captions-dub_file) | Export review text or captions on the cue clock. |
+| POST | [`/api/scenes/{scene_id}/dub/translate`](#post-api-scenes-scene_id-dub-translate) | Draft one line using an approved provider. |
 | POST | [`/api/scenes/{scene_id}/dub/exports`](#post-api-scenes-scene_id-dub-exports) | Publish dubbed audio and optional video for selected takes. |
 | POST | [`/api/scenes/{scene_id}/dub/exports/{delivery_id}/verify`](#post-api-scenes-scene_id-dub-exports-delivery_id-verify) | Verify a delivery manifest and files. |
 | GET | [`/api/scenes/{scene_id}/dub/source/{dub_file}`](#get-api-scenes-scene_id-dub-source-dub_file) | Stream the source preview with byte ranges. |
@@ -1764,6 +1771,74 @@ Download a preview's WAV.
 
 **Answer:** `200`, `audio/wav`. The WAV named by a preview answer's `audio_url` or `mastered_audio_url`.
 
+<a id="get-api-dub-queue"></a>
+
+#### `GET /api/dub-queue`
+
+Read durable dubbing jobs and watch folders.
+
+**Answer:** `200`, JSON. The latest jobs and the configured local watch folders.
+
+<a id="post-api-dub-queue"></a>
+
+#### `POST /api/dub-queue`
+
+Queue one or more dubbing deliveries.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `items` (required) | object[] | Scene IDs, export options and optional render_missing flag. |
+
+**Answer:** `202`, JSON. The durable jobs and their current status.
+
+<a id="post-api-dub-queue-jobs-job_id-retry"></a>
+
+#### `POST /api/dub-queue/jobs/{job_id}/retry`
+
+Retry a terminal dubbing job.
+
+| Path parameter | Meaning |
+|---|---|
+| `job_id` | A job's id, from the call that started it. |
+
+**Answer:** `200`, JSON. The updated job.
+
+<a id="post-api-dub-queue-jobs-job_id-cancel"></a>
+
+#### `POST /api/dub-queue/jobs/{job_id}/cancel`
+
+Cancel a queued delivery or its pending render.
+
+| Path parameter | Meaning |
+|---|---|
+| `job_id` | A job's id, from the call that started it. |
+
+**Answer:** `200`, JSON. The cancelled job.
+
+<a id="post-api-dub-queue-watches"></a>
+
+#### `POST /api/dub-queue/watches`
+
+Watch a selected local folder for dubbing manifests.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `path` (required) | string | Existing local absolute folder for .dubjob.json manifests. |
+
+**Answer:** `201`, JSON. The watch.
+
+<a id="post-api-dub-queue-watches-job_id-disable"></a>
+
+#### `POST /api/dub-queue/watches/{job_id}/disable`
+
+Turn off a dubbing watch folder.
+
+| Path parameter | Meaning |
+|---|---|
+| `job_id` | A job's id, from the call that started it. |
+
+**Answer:** `200`, JSON. The disabled watch.
+
 <a id="get-api-scenes-scene_id-dub"></a>
 
 #### `GET /api/scenes/{scene_id}/dub`
@@ -1828,6 +1903,27 @@ Export review text or captions on the cue clock.
 | `dub_file` | A file name listed in the dubbing delivery, captions or source preview. |
 
 **Answer:** `200`, a file. Target TXT, source/target/bilingual SRT and VTT, or target/bilingual ASS.
+
+<a id="post-api-scenes-scene_id-dub-translate"></a>
+
+#### `POST /api/scenes/{scene_id}/dub/translate`
+
+Draft one line using an approved provider.
+
+| Path parameter | Meaning |
+|---|---|
+| `scene_id` | A scene's id, from `GET /api/scenes`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `expected_revision` (required) | integer | Saved scene revision. |
+| `line_id` (required) | string | The line to translate. |
+| `source_language` (required) | string | Source language code. |
+| `target_language` (required) | string | Target language code. |
+| `provider` (required) | string | Selected provider. |
+| `approve_provider_revision` (required) | string | Provider revision approved after showing the destination and fields. |
+
+**Answer:** `200`, JSON. A draft for review and the unchanged scene revision.
 
 <a id="post-api-scenes-scene_id-dub-exports"></a>
 
@@ -2026,6 +2122,171 @@ Stream reply audio from a local model.
 | `mode` | string | Native engine mode. |
 
 **Answer:** `200`, `application/x-ndjson`. Start, PCM audio and completion events.
+
+### Automation
+
+Saved local recipes, provider profiles and resumable runs.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | [`/api/automation/providers`](#get-api-automation-providers) | List versioned provider destinations and capabilities. |
+| POST | [`/api/automation/providers`](#post-api-automation-providers) | Save a provider profile on this computer. |
+| POST | [`/api/automation/providers/check`](#post-api-automation-providers-check) | Check the selected provider's models without sending media. |
+| GET | [`/api/automation/recipes`](#get-api-automation-recipes) | List the versioned recipes in this library. |
+| POST | [`/api/automation/recipes`](#post-api-automation-recipes) | Create or update a named recipe. |
+| POST | [`/api/automation/preview`](#post-api-automation-preview) | Check recipe inputs and preview providers and output destinations. |
+| POST | [`/api/automation/assets`](#post-api-automation-assets) | Upload a local audio asset for automation. |
+| GET | [`/api/automation/assets/{asset_sha}`](#get-api-automation-assets-asset_sha) | Read a saved automation file. |
+| GET | [`/api/automation/runs`](#get-api-automation-runs) | Read recent run statuses. |
+| POST | [`/api/automation/runs`](#post-api-automation-runs) | Queue a saved recipe on one or more inputs. |
+| GET | [`/api/automation/runs/{job_id}`](#get-api-automation-runs-job_id) | Read a recipe run. |
+| POST | [`/api/automation/runs/{job_id}/cancel`](#post-api-automation-runs-job_id-cancel) | Cancel unfinished work for a recipe run. |
+
+<a id="get-api-automation-providers"></a>
+
+#### `GET /api/automation/providers`
+
+List versioned provider destinations and capabilities.
+
+**Answer:** `200`, JSON. Public provider profiles with their revisions.
+
+<a id="post-api-automation-providers"></a>
+
+#### `POST /api/automation/providers`
+
+Save a provider profile on this computer.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `profile` (required) | object | The provider ID, base URL, model and capabilities. |
+| `key` | string | Optional key kept in memory until the Lab closes. |
+
+**Answer:** `201`, JSON. Public provider details with its current revision.
+
+<a id="post-api-automation-providers-check"></a>
+
+#### `POST /api/automation/providers/check`
+
+Check the selected provider's models without sending media.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `provider` (required) | string | Configured provider ID. |
+| `approve_provider_revision` | string | Explicitly approved revision for an external destination. |
+
+**Answer:** `200`, JSON. Connectivity and presence of the configured model.
+
+<a id="get-api-automation-recipes"></a>
+
+#### `GET /api/automation/recipes`
+
+List the versioned recipes in this library.
+
+**Answer:** `200`, JSON. Saved recipes.
+
+<a id="post-api-automation-recipes"></a>
+
+#### `POST /api/automation/recipes`
+
+Create or update a named recipe.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `schema_version` (required) | integer | Recipe schema version 1. |
+| `name` (required) | string | Recipe name. |
+| `input_kind` (required) | string | text, audio or scene. |
+| `steps` (required) | object[] | Ordered operations. |
+| `id` | string | Saved recipe ID when updating. |
+| `revision` | integer | Saved revision when updating. |
+
+**Answer:** `201`, JSON. Validated recipe with its ID and revision.
+
+<a id="post-api-automation-preview"></a>
+
+#### `POST /api/automation/preview`
+
+Check recipe inputs and preview providers and output destinations.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `recipe` | object | Unstored recipe schema. |
+| `recipe_id` | string | Saved recipe ID. |
+| `inputs` (required) | string[] | Text values, asset IDs or scene IDs. |
+
+**Answer:** `200`, JSON. Execution plan without starting model work.
+
+<a id="post-api-automation-assets"></a>
+
+#### `POST /api/automation/assets`
+
+Upload a local audio asset for automation.
+
+| Query parameter | Type | Meaning |
+|---|---|---|
+| `filename` (required) | string | File name with extension. |
+
+**Request:** file bytes (`application/octet-stream`).
+
+**Answer:** `201`, JSON. A content-addressed audio ID.
+
+<a id="get-api-automation-assets-asset_sha"></a>
+
+#### `GET /api/automation/assets/{asset_sha}`
+
+Read a saved automation file.
+
+| Path parameter | Meaning |
+|---|---|
+| `asset_sha` | An automation audio asset SHA-256. |
+
+**Answer:** `200`, audio. The local audio file.
+
+<a id="get-api-automation-runs"></a>
+
+#### `GET /api/automation/runs`
+
+Read recent run statuses.
+
+**Answer:** `200`, JSON. Recent runs with per-item progress.
+
+<a id="post-api-automation-runs"></a>
+
+#### `POST /api/automation/runs`
+
+Queue a saved recipe on one or more inputs.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `recipe_id` (required) | string | Saved recipe ID. |
+| `revision` | integer | Require this recipe revision. |
+| `approve_provider_revisions` | string[] | Externally routed revisions explicitly approved after preview. |
+| `inputs` (required) | string[] | Text, local audio asset IDs or saved scene IDs. |
+
+**Answer:** `202`, JSON. The queued run and its input statuses.
+
+<a id="get-api-automation-runs-job_id"></a>
+
+#### `GET /api/automation/runs/{job_id}`
+
+Read a recipe run.
+
+| Path parameter | Meaning |
+|---|---|
+| `job_id` | A job's id, from the call that started it. |
+
+**Answer:** `200`, JSON. A saved run and per-item status.
+
+<a id="post-api-automation-runs-job_id-cancel"></a>
+
+#### `POST /api/automation/runs/{job_id}/cancel`
+
+Cancel unfinished work for a recipe run.
+
+| Path parameter | Meaning |
+|---|---|
+| `job_id` | A job's id, from the call that started it. |
+
+**Answer:** `200`, JSON. The updated run status.
 
 ### Production
 
@@ -2906,6 +3167,7 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/voice_lab_books.js` | A page script. |
 | GET | `/voice_lab_projects.js` | A page script. |
 | GET | `/voice_lab_audio.js` | A page script. |
+| GET | `/voice_lab_automation.js` | A page script. |
 | GET | `/voice_lab_cast_bindings.js` | A page script. |
 | GET | `/voice_lab_take_edit.js` | A page script. |
 | GET | `/voice_lab_generate.js` | A page script. |

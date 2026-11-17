@@ -46,6 +46,10 @@
       "description": "Short-lived sessions with ordered local audio input and speech replies."
     },
     {
+      "name": "Automation",
+      "description": "Saved local recipes, provider profiles and resumable runs."
+    },
+    {
       "name": "Production",
       "description": "Search saved projects and share local project or voice files."
     },
@@ -4904,6 +4908,509 @@
         }
       }
     },
+    "/api/automation/providers": {
+      "get": {
+        "operationId": "get_api_automation_providers",
+        "summary": "List versioned provider destinations and capabilities.",
+        "tags": [
+          "Automation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Public provider profiles with their revisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_automation_providers",
+        "summary": "Save a provider profile on this computer.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "type": "object",
+                    "description": "The provider ID, base URL, model and capabilities."
+                  },
+                  "key": {
+                    "type": "string",
+                    "description": "Optional key kept in memory until the Lab closes."
+                  }
+                },
+                "required": [
+                  "profile"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Public provider details with its current revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/providers/check": {
+      "post": {
+        "operationId": "post_api_automation_providers_check",
+        "summary": "Check the selected provider's models without sending media.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "description": "Configured provider ID."
+                  },
+                  "approve_provider_revision": {
+                    "type": "string",
+                    "description": "Explicitly approved revision for an external destination."
+                  }
+                },
+                "required": [
+                  "provider"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connectivity and presence of the configured model.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/recipes": {
+      "get": {
+        "operationId": "get_api_automation_recipes",
+        "summary": "List the versioned recipes in this library.",
+        "tags": [
+          "Automation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved recipes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_automation_recipes",
+        "summary": "Create or update a named recipe.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "type": "integer",
+                    "description": "Recipe schema version 1."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Recipe name."
+                  },
+                  "input_kind": {
+                    "type": "string",
+                    "description": "text, audio or scene."
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Ordered operations."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Saved recipe ID when updating."
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "description": "Saved revision when updating."
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "name",
+                  "input_kind",
+                  "steps"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Validated recipe with its ID and revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/preview": {
+      "post": {
+        "operationId": "post_api_automation_preview",
+        "summary": "Check recipe inputs and preview providers and output destinations.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recipe": {
+                    "type": "object",
+                    "description": "Unstored recipe schema."
+                  },
+                  "recipe_id": {
+                    "type": "string",
+                    "description": "Saved recipe ID."
+                  },
+                  "inputs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Text values, asset IDs or scene IDs."
+                  }
+                },
+                "required": [
+                  "inputs"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Execution plan without starting model work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/assets": {
+      "post": {
+        "operationId": "post_api_automation_assets",
+        "summary": "Upload a local audio asset for automation.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "query",
+            "required": true,
+            "description": "File name with extension.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "A content-addressed audio ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/assets/{asset_sha}": {
+      "get": {
+        "operationId": "get_api_automation_assets_asset_sha",
+        "summary": "Read a saved automation file.",
+        "tags": [
+          "Automation"
+        ],
+        "parameters": [
+          {
+            "name": "asset_sha",
+            "in": "path",
+            "required": true,
+            "description": "An automation audio asset SHA-256.",
+            "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The local audio file.",
+            "content": {
+              "audio/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/runs": {
+      "get": {
+        "operationId": "get_api_automation_runs",
+        "summary": "Read recent run statuses.",
+        "tags": [
+          "Automation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent runs with per-item progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_automation_runs",
+        "summary": "Queue a saved recipe on one or more inputs.",
+        "tags": [
+          "Automation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recipe_id": {
+                    "type": "string",
+                    "description": "Saved recipe ID."
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "description": "Require this recipe revision."
+                  },
+                  "approve_provider_revisions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Externally routed revisions explicitly approved after preview."
+                  },
+                  "inputs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Text, local audio asset IDs or saved scene IDs."
+                  }
+                },
+                "required": [
+                  "recipe_id",
+                  "inputs"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The queued run and its input statuses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/runs/{job_id}": {
+      "get": {
+        "operationId": "get_api_automation_runs_job_id",
+        "summary": "Read a recipe run.",
+        "tags": [
+          "Automation"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A saved run and per-item status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/automation/runs/{job_id}/cancel": {
+      "post": {
+        "operationId": "post_api_automation_runs_job_id_cancel",
+        "summary": "Cancel unfinished work for a recipe run.",
+        "tags": [
+          "Automation"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated run status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/projects": {
       "get": {
         "operationId": "get_api_projects",
@@ -6469,6 +6976,228 @@
         }
       }
     },
+    "/api/dub-queue": {
+      "get": {
+        "operationId": "get_api_dub_queue",
+        "summary": "Read durable dubbing jobs and watch folders.",
+        "tags": [
+          "Scenes"
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest jobs and the configured local watch folders.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_dub_queue",
+        "summary": "Queue one or more dubbing deliveries.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Scene IDs, export options and optional render_missing flag."
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The durable jobs and their current status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dub-queue/jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "post_api_dub_queue_jobs_job_id_retry",
+        "summary": "Retry a terminal dubbing job.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dub-queue/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "post_api_dub_queue_jobs_job_id_cancel",
+        "summary": "Cancel a queued delivery or its pending render.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The cancelled job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dub-queue/watches": {
+      "post": {
+        "operationId": "post_api_dub_queue_watches",
+        "summary": "Watch a selected local folder for dubbing manifests.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Existing local absolute folder for .dubjob.json manifests."
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The watch.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/dub-queue/watches/{job_id}/disable": {
+      "post": {
+        "operationId": "post_api_dub_queue_watches_job_id_disable",
+        "summary": "Turn off a dubbing watch folder.",
+        "tags": [
+          "Scenes"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "A job's id, from the call that started it.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The disabled watch.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/scenes/{scene_id}/dub": {
       "get": {
         "operationId": "get_api_scenes_scene_id_dub",
@@ -6669,6 +7398,87 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/dub/translate": {
+      "post": {
+        "operationId": "post_api_scenes_scene_id_dub_translate",
+        "summary": "Draft one line using an approved provider.",
+        "tags": [
+          "Scenes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer",
+                    "description": "Saved scene revision."
+                  },
+                  "line_id": {
+                    "type": "string",
+                    "description": "The line to translate."
+                  },
+                  "source_language": {
+                    "type": "string",
+                    "description": "Source language code."
+                  },
+                  "target_language": {
+                    "type": "string",
+                    "description": "Target language code."
+                  },
+                  "provider": {
+                    "type": "string",
+                    "description": "Selected provider."
+                  },
+                  "approve_provider_revision": {
+                    "type": "string",
+                    "description": "Provider revision approved after showing the destination and fields."
+                  }
+                },
+                "required": [
+                  "expected_revision",
+                  "line_id",
+                  "source_language",
+                  "target_language",
+                  "provider",
+                  "approve_provider_revision"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "description": "A scene's id, from `GET /api/scenes`.",
+            "example": "0123456789abcdef0123456789abcdef",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A draft for review and the unchanged scene revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -8434,6 +9244,7 @@
     "GET /theme.js",
     "GET /voice_lab_app.js",
     "GET /voice_lab_audio.js",
+    "GET /voice_lab_automation.js",
     "GET /voice_lab_books.js",
     "GET /voice_lab_cast.js",
     "GET /voice_lab_cast_bindings.js",

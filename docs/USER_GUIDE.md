@@ -766,3 +766,8 @@ keeps the original source and leaves the other scene exports on their existing t
 
 Inspired by VoiceStudio by Palash Debnath and its contributors.
 [VoiceStudio dubbing](https://github.com/debpalash/VoiceStudio/blob/main/docs/electron-dubbing.md)
+
+Open **Batch jobs and watch folders** under **Dub media** to queue a saved scene. Choose whether to render missing
+takes. You can cancel before the delivery begins writing. For a watch folder, save a job file into a folder you
+choose and then enable that folder. Voice Lab waits for files to finish copying, and keeps each completed delivery
+available after restarting.

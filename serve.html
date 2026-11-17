@@ -181,7 +181,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
-<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#automation">Automation</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 <section class="card" id="cloning">
   <h2>Voice cloning</h2>
@@ -442,6 +442,17 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="row"><label class="field compact">Line<select id="dubCue"></select></label><button id="dubSeekCue" type="button">Seek to line</button></div>
     <label class="field">Original wording<textarea id="dubSourceText" rows="2"></textarea></label>
     <p class="meta">Enter the translated words, then save and render new takes. Choose Speed up to fit only if you want timing adjusted.</p>
+    <details id="dubProviderPanel">
+      <summary>Ask a provider for a draft</summary>
+      <div class="row">
+        <label class="field compact">Source language code<input id="dubFrom" placeholder="en" size="8"></label>
+        <label class="field compact">Provider<select id="dubProvider"></select></label>
+        <button type="button" id="dubRequestDraft">Draft this line</button>
+        <a href="#automation">Manage provider profiles</a>
+      </div>
+      <label class="field" id="dubDraftField" hidden>Draft wording<textarea id="dubProviderDraft" rows="2" readonly></textarea></label>
+      <button type="button" id="dubCopyDraft" hidden>Use draft in target text</button>
+    </details>
     <label class="field">Target text<textarea id="dubTargetText" rows="2"></textarea></label>
     <div class="row">
       <label class="field compact">Fit<select id="dubFit"><option value="natural">Keep natural timing</option><option value="fit">Speed up to fit (up to 1.35×)</option></select></label>
@@ -461,6 +472,20 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <button id="dubVerify" type="button" disabled>Verify delivery</button>
     </div>
     <label class="field compact">Alternate language deliveries<select id="dubAlternate" multiple size="3"></select></label>
+    <details id="dubQueue"><summary>Batch jobs and watch folders</summary>
+      <div class="row">
+        <label><input id="dubQueueRender" type="checkbox"> Render missing takes</label>
+        <button id="dubQueueAdd" type="button">Queue this delivery</button>
+        <button id="dubWatchTemplate" type="button">Save a job file…</button>
+      </div>
+      <div class="row">
+        <label class="field compact">Folder on this computer<input id="dubWatchPath" type="text"></label>
+        <button id="dubWatchAdd" type="button">Enable watch folder</button>
+      </div>
+      <ul class="meta" id="dubQueueRows"></ul>
+      <ul class="meta" id="dubWatchRows"></ul>
+      <p class="meta" id="dubQueueStatus" role="status"></p>
+    </details>
     <div class="row" id="dubDeliveryFiles"></div>
     <ul id="dubWarnings" class="meta"></ul>
     <p id="dubStatus" class="meta" role="status"></p>
@@ -696,6 +721,60 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <div id="err" role="alert"></div>
   <audio id="player" controls></audio>
 </section>
+<section class="card" id="automation">
+  <h2>Automation</h2>
+  <details id="automationProviderSettings">
+    <summary>Provider profiles</summary>
+    <p class="meta">Optional. Saving a profile keeps its settings on this computer. A key stays in memory until the Lab closes.</p>
+    <form id="automationProviderForm">
+      <div class="row">
+        <label class="field">Provider name<input id="automationProviderName" maxlength="40" required></label>
+        <label class="field">Base address<input id="automationProviderUrl" type="url" placeholder="https://provider.example/v1" required></label>
+        <label class="field">Model<input id="automationProviderModel" maxlength="120" required></label>
+        <label class="field">Key for this session<input id="automationProviderKey" type="password" autocomplete="off" maxlength="512"></label>
+      </div>
+      <label><input type="checkbox" id="automationProviderTranslate" checked> Translate text</label>
+      <label><input type="checkbox" id="automationProviderSpeak"> Speak text</label>
+      <button type="submit">Save profile</button>
+    </form>
+    <p id="automationProviderNote" class="meta" role="status"></p>
+  </details>
+  <label class="field">Saved recipe<select id="automationChoice"><option value="">New recipe</option></select></label>
+  <div class="row">
+    <label class="field">Name<input id="automationName" maxlength="100"></label>
+    <label class="field compact">Input type<select id="automationKind"><option value="text">Text</option><option value="audio">Audio files</option><option value="scene">Saved dub scene</option></select></label>
+  </div>
+  <div id="automationSteps"></div>
+  <div class="row">
+    <label class="field compact">Feed from<select id="automationSource"></select></label>
+    <label class="field compact">Next step<select id="automationOptions"></select></label>
+    <button id="automationAdd" type="button">Add step</button>
+    <button id="automationSave" type="button">Save recipe</button>
+  </div>
+  <label class="field" id="automationTextRow">Text inputs, one per line<textarea id="automationText" rows="4"></textarea></label>
+  <label class="field" id="automationFileRow" hidden>Local audio files<input type="file" id="automationFiles" accept="audio/*,.wav,.flac,.m4a,.mp4,.webm" multiple></label>
+  <label class="field" id="automationSceneRow" hidden>Timed dub<select id="automationScene"></select></label>
+  <div class="row"><button id="automationPreview" type="button">Preview operations</button><button class="go" id="automationRun" type="button">Run saved recipe</button></div>
+  <ol id="automationPlan" hidden></ol>
+  <p id="automationStatus" role="status"></p>
+  <h3>Recent runs</h3>
+  <button id="automationRefresh" type="button">Refresh runs</button>
+  <div id="automationRuns"></div>
+  <details>
+    <summary>Practice a local conversation</summary>
+    <label class="field">Recorded opening turn<input id="simulationFile" type="file" accept="audio/*,.wav,.flac,.m4a,.webm"></label>
+    <button type="button" id="simulationListen">Transcribe turn locally</button>
+    <p id="simulationWords" role="status"></p>
+    <label class="field">Draft a reply<textarea id="simulationReply" maxlength="500"></textarea></label>
+    <label class="field">Voice name<input id="simulationVoice" list="automationVoices"></label>
+    <datalist id="automationVoices"></datalist>
+    <button type="button" id="simulationPlay">Speak draft locally</button>
+    <p id="simulationStatus" role="status"></p>
+    <audio id="simulationPlayer" hidden controls></audio>
+  </details>
+</section>
+
+
 <section class="card" id="projects">
   <h2>Projects</h2>
   <div class="row">
@@ -912,6 +991,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <script src="/voice_lab_books.js"></script>
 <script src="/voice_lab_projects.js"></script>
 <script src="/voice_lab_audio.js"></script>
+<script src="/voice_lab_automation.js"></script>
 <script src="/voice_lab_cast_bindings.js"></script>
 <script src="/voice_lab_generate.js"></script>
 <script src="/voice_lab_system.js"></script>

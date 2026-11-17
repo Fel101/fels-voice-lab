@@ -2318,6 +2318,7 @@ $('sceneExport').addEventListener('toggle', function () {
 });
 
 var dubSceneId = null, dubState = null, dubPlayer = null, dubBusy = false, dubRefresh = 0;
+var dubProviders = [], dubProviderDraft = null;
 function dubUrl() {
   return '/api/scenes/' + dubSceneId + '/dub';
 }
@@ -2335,6 +2336,7 @@ function bindDubScene(scene) {
   if (next !== dubSceneId) {
     dubSceneId = next;
     dubState = null;
+    clearDubDraft();
     if (dubPlayer) {
       dubPlayer.removeAttribute('src');
       dubPlayer.load();
@@ -2509,7 +2511,52 @@ function dubSave() {
   return saveAndGetScene().then(function () { if (id === dubSceneId) dubNote('Line saved.'); });
 }
 $('sceneDub').addEventListener('toggle', function () { refreshDub().catch(dubMessage); });
-$('dubCue').addEventListener('change', function () { paintDubCue(sceneBody()); });
+$('dubCue').addEventListener('change', function () { clearDubDraft(); paintDubCue(sceneBody()); });
+function clearDubDraft() {
+  dubProviderDraft = null;
+  $('dubDraftField').hidden = $('dubCopyDraft').hidden = true;
+}
+$('dubProviderPanel').addEventListener('toggle', async function () {
+  if (!this.open) return;
+  try {
+    var result = await fetchJson('/api/automation/providers'), picker = $('dubProvider');
+    var prior = picker.value;
+    dubProviders = result.providers.filter(function (profile) { return profile.capabilities.includes('translate'); });
+    picker.replaceChildren();
+    option(picker, '', 'Choose a provider');
+    dubProviders.forEach(function (profile) { option(picker, profile.id, profile.destination + ' · ' + profile.model); });
+    if (dubProviders.some(function (profile) { return profile.id === prior; })) picker.value = prior;
+  } catch (error) {
+    dubMessage(error);
+  }
+});
+['dubProvider', 'dubFrom', 'dubTo', 'dubSourceText'].forEach(function (id) {
+  $(id).addEventListener('input', clearDubDraft);
+});
+$('dubRequestDraft').addEventListener('click', function () {
+  var scene = sceneBody(), line = dubSelectedLine(scene);
+  var selected = dubProviders.find(function (profile) { return profile.id === $('dubProvider').value; });
+  if (!selected || !line) return dubNote('Choose a provider and a line. Add a provider in Automation if needed.');
+  if (sceneDirty || $('dubSourceText').value.trim() !== dubOriginalText(line, scene).trim())
+    return dubNote('Save the original wording before asking for a draft.');
+  var source = $('dubFrom').value.trim(), target = $('dubTo').value.trim();
+  if (!source || !target) return dubNote('Enter the source and target language codes.');
+  if (!window.confirm('Send this line’s original wording, source language and target language to ' + selected.destination + '?')) return;
+  dubAction('Waiting for the approved provider…', async function (id) {
+    var result = await fetchJson(dubUrl() + '/translate', {expected_revision:scene.revision,
+      provider:selected.id,approve_provider_revision:selected.revision,line_id:line.line_id,
+      source_language:source,target_language:target});
+    if (id !== dubSceneId || sceneBody().revision !== result.revision || $('dubCue').value !== line.line_id ||
+        $('dubFrom').value.trim() !== source || $('dubTo').value.trim() !== target || $('dubProvider').value !== selected.id) return;
+    dubProviderDraft = result.draft;
+    $('dubProviderDraft').value = result.draft.text;
+    $('dubDraftField').hidden = $('dubCopyDraft').hidden = false;
+    dubNote('Draft ready. Check the words before saving the line.');
+  });
+});
+$('dubCopyDraft').addEventListener('click', function () {
+  if (dubProviderDraft) $('dubTargetText').value = dubProviderDraft.text;
+});
 $('dubSeekCue').addEventListener('click', function () {
   var line = dubSelectedLine(sceneBody());
   if (line) dubSeekTo(line.cue.start_ms / 1000);
@@ -2562,4 +2609,82 @@ $('dubVerify').addEventListener('click', function () {
     var result = await fetchJson(dubUrl() + '/exports/' + dubState.delivery.id + '/verify', {});
     if (id === dubSceneId) dubNote(result.files + ' delivery files verified.');
   });
+});
+
+var dubQueuePoll = null;
+function dubQueueAction(path, body) {
+  return fetchJson('/api/dub-queue' + path, body).then(function () {
+    $('dubQueueStatus').textContent = '';
+    return refreshDubQueue();
+  }).catch(function (error) {
+    $('dubQueueStatus').textContent = error.message;
+  });
+}
+function refreshDubQueue() {
+  window.clearTimeout(dubQueuePoll);
+  if (!$('dubQueue').open || !$('sceneDub').open || $('sceneDub').hidden) return Promise.resolve();
+  return fetchJson('/api/dub-queue').then(function (state) {
+    var jobs = $('dubQueueRows'), watches = $('dubWatchRows');
+    jobs.replaceChildren();
+    watches.replaceChildren();
+    state.jobs.forEach(function (job) {
+      var line = document.createElement('li');
+      line.textContent = job.scene + ' · ' + job.export.target_language + ' · ' + job.status.replaceAll('_', ' ')
+        + (job.error ? ' · ' + job.error : '') + ' ';
+      if (job.status === 'complete') {
+        var link = document.createElement('a');
+        link.href = '/api/scenes/' + job.scene_id + '/dub/exports/' + job.delivery_id + '/manifest.json';
+        link.textContent = 'Manifest';
+        line.appendChild(link);
+      }
+      var action = ['failed', 'cancelled'].includes(job.status) ? 'retry'
+        : ['queued', 'waiting_for_takes'].includes(job.status) ? 'cancel' : '';
+      if (action) line.appendChild(sceneButton(action === 'retry' ? 'Retry' : 'Cancel', action + ' dubbing job',
+        function () { dubQueueAction('/jobs/' + job.id + '/' + action, {}); }));
+      jobs.appendChild(line);
+    });
+    state.watches.filter(function (watch) { return watch.enabled; }).forEach(function (watch) {
+      var line = document.createElement('li');
+      line.textContent = watch.path + (watch.error ? ' · ' + watch.error : '') + ' ';
+      line.appendChild(sceneButton('Disable', 'Disable this watch folder',
+        function () { dubQueueAction('/watches/' + watch.id + '/disable', {}); }));
+      watches.appendChild(line);
+    });
+  }).catch(function (error) {
+    $('dubQueueStatus').textContent = error.message;
+  }).finally(function () {
+    window.clearTimeout(dubQueuePoll);
+    dubQueuePoll = window.setTimeout(refreshDubQueue, 2500);
+  });
+}
+function currentDubJob() {
+  var scene = sceneBody();
+  if (sceneDirty) throw new Error('Save the scene before queuing a delivery.');
+  var opts = dubExportOptions(scene);
+  if (!opts.target_language.trim()) throw new Error('Enter a target language code such as en or es.');
+  return {scene_id: scene.scene_id, export: opts, render_missing: $('dubQueueRender').checked};
+}
+$('dubQueue').addEventListener('toggle', function () { refreshDubQueue(); });
+$('sceneDub').addEventListener('toggle', function () { refreshDubQueue(); });
+$('dubQueueAdd').addEventListener('click', function () {
+  try {
+    dubQueueAction('', {items: [currentDubJob()]});
+  } catch (error) {
+    $('dubQueueStatus').textContent = error.message;
+  }
+});
+$('dubWatchAdd').addEventListener('click', function () {
+  dubQueueAction('/watches', {path: $('dubWatchPath').value.trim()});
+});
+$('dubWatchTemplate').addEventListener('click', function () {
+  try {
+    var job = currentDubJob(), link = document.createElement('a');
+    var url = URL.createObjectURL(new Blob([JSON.stringify(job, null, 2) + '\n'], {type: 'application/json'}));
+    link.href = url;
+    link.download = 'delivery.dubjob.json';
+    link.click();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  } catch (error) {
+    $('dubQueueStatus').textContent = error.message;
+  }
 });

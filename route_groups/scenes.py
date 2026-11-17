@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from book_store import Books
+import connector_profiles
+import dub_translation
 import dubbing
 import export_panel
 import sample_project
@@ -229,6 +231,26 @@ def register(router, lab):
         batches.wake()
         self._json(200, {"job": job})
 
+    @router.get("/api/dub-queue")
+    def dub_queue(self, parsed, req):
+        self._json(200, lab.dub_jobs.snapshot())
+
+    @router.post("/api/dub-queue")
+    def queue_dubs(self, parsed, req):
+        self._json(202, {"jobs": lab.dub_jobs.enqueue(req.get("items"))})
+
+    @router.post("/api/dub-queue/jobs/{job_id}/retry", "/api/dub-queue/jobs/{job_id}/cancel")
+    def dub_job_action(self, parsed, req, job_id):
+        self._json(200, {"job": lab.dub_jobs.action(job_id, parsed.path.rsplit("/", 1)[1])})
+
+    @router.post("/api/dub-queue/watches")
+    def add_dub_watch(self, parsed, req):
+        self._json(201, {"watch": lab.dub_jobs.add_watch(req.get("path"))})
+
+    @router.post("/api/dub-queue/watches/{job_id}/disable")
+    def disable_dub_watch(self, parsed, req, job_id):
+        self._json(200, {"watch": lab.dub_jobs.remove_watch(job_id)})
+
     @router.get("/api/scenes/{scene_id}/dub")
     def dub_status(self, parsed, req, scene_id):
         self._json(200, dubbing.status(scenes, scene_id))
@@ -264,6 +286,21 @@ def register(router, lab):
             dubbing.TYPES[dub_file.rsplit(".", 1)[1]],
             {"Content-Disposition": f'attachment; filename="{dub_file}"'},
         )
+
+    @router.post("/api/scenes/{scene_id}/dub/translate")
+    def dub_translate(self, parsed, req, scene_id):
+        folder, scene = dubbing._directory(scenes, scene_id)
+        if req.get("expected_revision") != scene["revision"]:
+            raise ValueError("Reload the saved scene before drafting a translation.")
+        ident = req.get("provider")
+        profile = connector_profiles.get(ident if isinstance(ident, str) else "", "translate")
+        if req.get("approve_provider_revision") != profile["revision"]:
+            raise ValueError("Review the destination and approve this translation request, then try again.")
+        line = next((line for line in scene["lines"] if line["line_id"] == req.get("line_id")), None)
+        if line is None:
+            raise ValueError("Choose a saved line to translate.")
+        draft = dub_translation.draft(folder, scene, line, req, profile)
+        self._json(200, {"draft": draft, "revision": scene["revision"]})
 
     @router.post("/api/scenes/{scene_id}/dub/exports")
     def dub_export(self, parsed, req, scene_id):

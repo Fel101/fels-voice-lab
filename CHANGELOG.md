@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Save recipes to repeat speech, transcription and dubbing tasks. Preview outside providers and approve
+  the destination and fields before running a recipe that uses one.
+
 - Dub local media using timed scenes and edited dialogue. Review the picture, fit lines when needed and
   verify the audio, video and caption delivery.
 

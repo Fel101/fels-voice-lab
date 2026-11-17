@@ -10,6 +10,7 @@ import wave
 from urllib.parse import parse_qs
 
 from local_speech_client import LocalClient
+import connector_profiles
 import engine_adapters
 import speech_input
 from live_speech import MAX_CHUNK
@@ -189,3 +190,81 @@ def register(router, lab):
         finally:
             with sessions.lock:
                 row.running = False
+
+    @router.get("/api/automation/providers")
+    def providers(self, parsed, req):
+        self._json(
+            200,
+            {
+                "schema_version": 1,
+                "providers": [connector_profiles.public(row) for row in connector_profiles.configured_profiles().values()],
+            },
+        )
+
+    @router.post("/api/automation/providers/check")
+    def check_provider(self, parsed, req):
+        name = req.get("provider")
+        if not isinstance(name, str):
+            raise ValueError("Choose a configured provider.")
+        profile = connector_profiles.get(name)
+        if req.get("approve_provider_revision") != profile["revision"]:
+            raise ValueError("Review and approve the provider before checking connectivity.")
+        report = json.loads(connector_profiles.exchange(profile, "/models", byte_limit=1_000_000))
+        models = report.get("data") if isinstance(report, dict) else None
+        if not isinstance(models, list):
+            raise ValueError("The provider did not return an OpenAI-compatible model list.")
+        self._json(
+            200,
+            {
+                "reachable": True,
+                "model_visible": any(isinstance(row, dict) and row.get("id") == profile["model"] for row in models),
+                "provider": connector_profiles.public(profile),
+            },
+        )
+
+    @router.post("/api/automation/providers")
+    def save_provider(self, parsed, req):
+        self._json(201, {"provider": connector_profiles.save(req.get("profile"), req.get("key", ""))})
+
+    @router.get("/api/automation/recipes")
+    def recipes(self, parsed, req):
+        self._json(200, {"recipes": lab.automation().store.recipes()})
+
+    @router.post("/api/automation/recipes")
+    def save_recipe(self, parsed, req):
+        self._json(201, {"recipe": lab.automation().store.save(req)})
+
+    @router.post("/api/automation/preview")
+    def preview_run(self, parsed, req):
+        self._json(200, {"plan": lab.automation().store.plan(req)})
+
+    @router.post("/api/automation/assets")
+    def upload(self, parsed, req):
+        data = self._read_body(speech_input.LIMIT)
+        suffix = speech_input.audio_suffix(_query(parsed, "filename"))
+        ident = lab.automation().store.put(data, suffix)
+        self._json(201, {"asset_id": ident})
+
+    @router.get("/api/automation/assets/{asset_sha}")
+    def asset(self, parsed, req, asset_sha):
+        path = lab.automation().store.asset(asset_sha)
+        self._send_path(path, "audio/wav" if path.suffix == ".wav" else "application/octet-stream")
+
+    @router.get("/api/automation/runs")
+    def runs(self, parsed, req):
+        self._json(200, {"runs": lab.automation().store.runs()})
+
+    @router.post("/api/automation/runs")
+    def run(self, parsed, req):
+        engine = lab.automation()
+        submitted = engine.store.submit(req)
+        engine.start()
+        self._json(202, {"run": submitted})
+
+    @router.get("/api/automation/runs/{job_id}")
+    def read_run(self, parsed, req, job_id):
+        self._json(200, {"run": lab.automation().store.get(job_id)})
+
+    @router.post("/api/automation/runs/{job_id}/cancel")
+    def cancel_run(self, parsed, req, job_id):
+        self._json(200, {"run": lab.automation().cancel(job_id)})
