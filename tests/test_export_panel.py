@@ -11,7 +11,6 @@ import time
 import unittest
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
@@ -116,7 +115,9 @@ class ExportPanelBase(unittest.TestCase):
         return scene["scene_id"]
 
     def start_server(self):
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
+        # The Lab's own server class, with its long listen queue: the browser tests open the page here, and with the default
+        # queue of 5 a busy computer refuses some of its scripts side by side (serve.LocalThreadingHTTPServer says more).
+        self.server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
         self.server.RequestHandlerClass = serve.make_handler(self.engines, self.server.server_address[1],
                                                               self.cast, self.scenes, None)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()

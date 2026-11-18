@@ -3,7 +3,7 @@ import json
 import threading
 import urllib.error
 import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
 import numpy as np
 
@@ -59,7 +59,9 @@ class Service:
     def __init__(self, case, engines=None, port=0):
         self.engines = engines or FakeEngines()
         self.cast = temp_cast(case)
-        self.server = ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)
+        # The Lab's own server class: the automation tests open the page here, and with the default listen queue of 5 a busy
+        # computer refuses some of its scripts side by side (serve.LocalThreadingHTTPServer says more).
+        self.server = serve.LocalThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)
         self.port = self.server.server_address[1]
         self.server.RequestHandlerClass = serve.make_handler(self.engines, self.port, self.cast)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
