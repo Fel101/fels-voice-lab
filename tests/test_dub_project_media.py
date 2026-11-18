@@ -2,11 +2,13 @@
 
 import base64
 import json
+import unittest
 
 from tests import test_dubbing
 
 
 class DubProjectMediaTests(test_dubbing.DubbingTests):
+    @unittest.skipUnless(test_dubbing.HAS_FFMPEG, "Requires FFmpeg and ffprobe")
     def test_dub_source_and_generated_background_are_opt_in_for_portable_projects(self):
         self.start_server()
         scene = self.scene()

@@ -73,6 +73,7 @@ class DubbingTests(ExportPanelBase):
             self.scenes.select_take(scene_id, row["line_id"], row["take_id"], row["segment_id"])
         return self.scenes.get_scene(scene_id), current
 
+    @unittest.skipUnless(HAS_FFMPEG, "Requires FFmpeg and ffprobe")
     def test_video_delivery_with_fit_captions_stems_ranges_and_failed_rerun(self):
         self.start_server()
         source = self.root / "fixture.mp4"
