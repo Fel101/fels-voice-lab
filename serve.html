@@ -398,130 +398,130 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="scenes">
-  <h2>Scenes &amp; batch</h2>
-  <div class="row" id="sceneSaved" hidden><label class="field compact">Saved scene<select id="sceneSelect"></select></label>
-    <button type="button" id="sceneRefresh">Refresh scenes</button></div>
-  <div class="cast-actions"><button type="button" id="sceneStarter">Start from the Perform line</button>
-    <a href="#books">Narrate a document</a></div>
+  <h2>{{ui:scenes.scenes_batch}}</h2>
+  <div class="row" id="sceneSaved" hidden><label class="field compact">{{ui:scenes.saved_scene}}<select id="sceneSelect"></select></label>
+    <button type="button" id="sceneRefresh">{{ui:scenes.refresh_scenes}}</button></div>
+  <div class="cast-actions"><button type="button" id="sceneStarter">{{ui:scenes.start_from_the_perform_line}}</button>
+    <a href="#books">{{ui:scenes.narrate_a_document}}</a></div>
   <p id="sceneError" role="alert"></p>
-  <div class="workflow-note" id="sampleNote" hidden><p id="sampleText"></p><div class="cast-actions"><button class="go" type="button" id="sampleOpen" hidden>Open the sample scene</button><button type="button" id="sampleRemove" hidden>Remove the sample…</button></div><p class="meta" id="sampleStatus" role="status"></p></div>
-  <details id="sceneScriptImport"><summary>Import a script</summary>
-    <p class="meta">Choose a local script or subtitle file, or paste text, subtitles or a Voice Slate timed transcript below.</p>
-    <div class="row"><label class="field compact">Script or subtitle file<input id="sceneImportFile" type="file" accept=".txt,.fountain,.spmd,.srt,.vtt,.json,.csv,text/plain,text/vtt,application/json,text/csv"></label>
-      <a href="/api/scenes/template.json">JSON template</a><a href="/api/scenes/template.csv">CSV template</a></div>
-    <details><summary>Draft subtitles from audio</summary>
+  <div class="workflow-note" id="sampleNote" hidden><p id="sampleText"></p><div class="cast-actions"><button class="go" type="button" id="sampleOpen" hidden>{{ui:scenes.open_the_sample_scene}}</button><button type="button" id="sampleRemove" hidden>{{ui:scenes.remove_the_sample}}</button></div><p class="meta" id="sampleStatus" role="status"></p></div>
+  <details id="sceneScriptImport"><summary>{{ui:scenes.import_a_script}}</summary>
+    <p class="meta">{{ui:scenes.choose_a_local_script_or}}</p>
+    <div class="row"><label class="field compact">{{ui:scenes.script_or_subtitle_file}}<input id="sceneImportFile" type="file" accept=".txt,.fountain,.spmd,.srt,.vtt,.json,.csv,text/plain,text/vtt,application/json,text/csv"></label>
+      <a href="/api/scenes/template.json">{{ui:scenes.json_template}}</a><a href="/api/scenes/template.csv">{{ui:scenes.csv_template}}</a></div>
+    <details><summary>{{ui:scenes.draft_subtitles_from_audio}}</summary>
     <div class="row">
-      <label class="field compact">Audio for a subtitle draft<input id="sceneSpeechFile" type="file" accept=".wav,.mp3,.mp4,.m4a,.aac,.ogg,.flac,.webm"></label>
-      <button type="button" id="sceneSpeechDraft">Draft subtitles</button>
-      <a href="#system">Speech recognition setup</a>
+      <label class="field compact">{{ui:scenes.audio_for_a_subtitle_draft}}<input id="sceneSpeechFile" type="file" accept=".wav,.mp3,.mp4,.m4a,.aac,.ogg,.flac,.webm"></label>
+      <button type="button" id="sceneSpeechDraft">{{ui:scenes.draft_subtitles}}</button>
+      <a href="#system">{{ui:scenes.speech_recognition_setup}}</a>
     </div>
-    <p class="meta" id="sceneSpeechNote" role="status">Process up to 10 minutes or 25 MB of audio on this computer and check the draft before importing.</p>
+    <p class="meta" id="sceneSpeechNote" role="status">{{ui:scenes.process_up_to_10_minutes}}</p>
     </details>
-    <p class="meta">Plain text has one speech per line, written <code>NAME: words</code>. A direction in brackets or parentheses at the start of the words becomes the line's acting direction. Fountain is the screenplay format, with each name in capitals above its lines. Choose a file above, or paste the script here, then read it and choose a voice for each speaker.</p>
-    <div class="row"><label class="field compact">Format<select id="sceneScriptFormat"><option value="text">Plain text (NAME: words)</option><option value="fountain">Fountain</option><option value="srt">SRT subtitles</option><option value="vtt">WebVTT subtitles</option><option value="transcript">Voice Slate timed transcript</option></select></label>
-      <button type="button" id="sceneScriptRead">Read the script</button></div>
-    <label class="field">Script<textarea id="sceneScriptText" rows="8" spellcheck="false" placeholder="MARA: I kept the light on.&#10;TOMAS: (quietly) I saw it from the boat."></textarea></label>
+    <p class="meta">{{ui:scenes.plain_text_has_one_speech}} <code>{{ui:scenes.name_words}}</code>{{ui:scenes.a_direction_in_brackets_or}}</p>
+    <div class="row"><label class="field compact">{{ui:scenes.format}}<select id="sceneScriptFormat"><option value="text">{{ui:scenes.plain_text_name_words}}</option><option value="fountain">{{ui:scenes.fountain}}</option><option value="srt">{{ui:scenes.srt_subtitles}}</option><option value="vtt">{{ui:scenes.webvtt_subtitles}}</option><option value="transcript">{{ui:scenes.voice_slate_timed_transcript}}</option></select></label>
+      <button type="button" id="sceneScriptRead">{{ui:scenes.read_the_script}}</button></div>
+    <label class="field">{{ui:scenes.script}}<textarea id="sceneScriptText" rows="8" spellcheck="false" placeholder="{{ui:scenes.mara_i_kept_the_light}}"></textarea></label>
     <div id="sceneScriptMatch" hidden>
       <p class="meta" id="sceneScriptSummary"></p>
-      <details id="sceneScriptUnreadBox" hidden><summary>Lines not understood</summary><ul class="meta" id="sceneScriptUnread"></ul></details>
-      <details id="sceneScriptCueBox" hidden><summary>Subtitle cues and timing warnings</summary><ul class="meta" id="sceneScriptCues"></ul></details>
-      <div class="scene-table-wrap"><table class="script-speakers"><thead><tr><th>Speaker</th><th>Lines</th><th>Voice</th></tr></thead><tbody id="sceneScriptSpeakers"></tbody></table></div>
-      <label class="field compact">Scene name<input id="sceneScriptName" type="text" maxlength="120" placeholder="Imported script"></label>
-      <div class="row"><button class="go" type="button" id="sceneScriptCreate" disabled>Create the scene</button><span class="meta" id="sceneScriptWaiting"></span></div>
+      <details id="sceneScriptUnreadBox" hidden><summary>{{ui:scenes.lines_not_understood}}</summary><ul class="meta" id="sceneScriptUnread"></ul></details>
+      <details id="sceneScriptCueBox" hidden><summary>{{ui:scenes.subtitle_cues_and_timing_warnings}}</summary><ul class="meta" id="sceneScriptCues"></ul></details>
+      <div class="scene-table-wrap"><table class="script-speakers"><thead><tr><th>{{ui:scenes.speaker}}</th><th>{{ui:scenes.lines}}</th><th>{{ui:scenes.voice}}</th></tr></thead><tbody id="sceneScriptSpeakers"></tbody></table></div>
+      <label class="field compact">{{ui:scenes.scene_name}}<input id="sceneScriptName" type="text" maxlength="120" placeholder="{{ui:scenes.imported_script}}"></label>
+      <div class="row"><button class="go" type="button" id="sceneScriptCreate" disabled>{{ui:scenes.create_the_scene}}</button><span class="meta" id="sceneScriptWaiting"></span></div>
     </div>
     <p class="meta" id="sceneScriptReport"></p>
   </details>
   <div id="sceneWork" hidden>
   <p class="meta" id="sceneTimelineNote" hidden></p>
-  <div class="cast-actions"><a id="sceneExportJson" href="#" hidden>Export JSON</a><a id="sceneExportCsv" href="#" hidden>Export CSV</a></div>
-  <div class="workflow-note meta">Edit the script below, save it, then render your takes. Use Perform lines to choose a character and voice for a new scene. The scene as JSON includes each line’s voice and model settings.</div>
-  <p class="meta" id="sceneShortcuts">Keyboard: Ctrl+Z undo · Ctrl+Y or Ctrl+Shift+Z redo · Ctrl+S save · Alt+↑ or Alt+↓ moves the line you are in. In a text box, Ctrl+Z is that box's own undo.</p>
-  <label class="field">Scene name<input id="sceneName" type="text" maxlength="120" disabled></label>
+  <div class="cast-actions"><a id="sceneExportJson" href="#" hidden>{{ui:scenes.export_json}}</a><a id="sceneExportCsv" href="#" hidden>{{ui:scenes.export_csv}}</a></div>
+  <div class="workflow-note meta">{{ui:scenes.edit_the_script_below_save}}</div>
+  <p class="meta" id="sceneShortcuts">{{ui:scenes.keyboard_ctrl_z_undo_ctrl}}</p>
+  <label class="field">{{ui:scenes.scene_name}}<input id="sceneName" type="text" maxlength="120" disabled></label>
   <div id="sceneTableTools" hidden>
-    <div class="row"><label><input type="checkbox" id="sceneTickAll"> Tick all shown</label>
-      <button type="button" id="sceneRenderTicked" disabled>Render ticked (0)</button><button class="go" type="button" id="sceneStart">Render all</button>
-      <button type="button" id="sceneRenderMissing">Render what is missing or out of date</button><button type="button" id="sceneChooseNewest">Use the newest take where none is chosen</button></div>
-    <div class="row"><label class="field compact">Character<select id="sceneFilterCharacter"><option value="">Everyone</option></select></label>
-      <label class="field compact">Status<select id="sceneFilterStatus"><option value="">Any status</option></select></label>
+    <div class="row"><label><input type="checkbox" id="sceneTickAll"> {{ui:scenes.tick_all_shown}}</label>
+      <button type="button" id="sceneRenderTicked" disabled>{{ui:scenes.render_ticked_0}}</button><button class="go" type="button" id="sceneStart">{{ui:scenes.render_all}}</button>
+      <button type="button" id="sceneRenderMissing">{{ui:scenes.render_what_is_missing_or}}</button><button type="button" id="sceneChooseNewest">{{ui:scenes.use_the_newest_take_where}}</button></div>
+    <div class="row"><label class="field compact">{{ui:scenes.character}}<select id="sceneFilterCharacter"><option value="">{{ui:scenes.everyone}}</option></select></label>
+      <label class="field compact">{{ui:scenes.status}}<select id="sceneFilterStatus"><option value="">{{ui:scenes.any_status}}</option></select></label>
       <p class="meta" id="sceneTableSummary"></p></div></div>
-  <div id="sceneLineEditor"><p class="meta">Open a scene or start one from the current performer.</p></div>
-  <details id="sceneAdvanced"><summary>The scene as JSON (advanced)</summary><p class="meta">Edits here update the table. Voices, voice recordings, model settings and chosen takes are kept.</p><label class="field">The scene as JSON<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="Import a scene or start from the Perform line."></textarea></label></details>
-  <div class="cast-actions"><button type="button" id="sceneLineAdd">Add a line</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="Undo the last script change (Ctrl+Z)">Undo</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="Redo the change you undid (Ctrl+Y or Ctrl+Shift+Z)">Redo</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">Save scene</button><button type="button" id="sceneSegments">Show the parts of long lines</button>
-    <button type="button" id="scenePreview">Build the scene from the chosen takes</button></div>
+  <div id="sceneLineEditor"><p class="meta">{{ui:scenes.open_a_scene_or_start}}</p></div>
+  <details id="sceneAdvanced"><summary>{{ui:scenes.the_scene_as_json_advanced}}</summary><p class="meta">{{ui:scenes.edits_here_update_the_table}}</p><label class="field">{{ui:scenes.the_scene_as_json}}<textarea id="sceneEditor" rows="16" spellcheck="false" placeholder="{{ui:scenes.import_a_scene_or_start}}"></textarea></label></details>
+  <div class="cast-actions"><button type="button" id="sceneLineAdd">{{ui:scenes.add_a_line}}</button><button type="button" id="sceneUndo" disabled aria-keyshortcuts="Control+Z" title="{{ui:scenes.undo_the_last_script_change}}">{{ui:scenes.undo}}</button><button type="button" id="sceneRedo" disabled aria-keyshortcuts="Control+Y Control+Shift+Z" title="{{ui:scenes.redo_the_change_you_undid}}">{{ui:scenes.redo}}</button><button type="button" id="sceneSave" aria-keyshortcuts="Control+S">{{ui:scenes.save_scene}}</button><button type="button" id="sceneSegments">{{ui:scenes.show_the_parts_of_long}}</button>
+    <button type="button" id="scenePreview">{{ui:scenes.build_the_scene_from_the}}</button></div>
   <p class="meta" id="sceneStatus"></p><div id="sceneSegmentPreview" class="meta"></div>
   <div id="sceneBatch" hidden>
-  <div class="row"><label class="field compact">Batch<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">Refresh batch</button>
-    <button type="button" id="scenePause">Pause</button><button type="button" id="sceneResume">Resume</button>
-    <button type="button" id="sceneCancel">Cancel after this line</button><button type="button" id="sceneStopNow">Stop now</button><button type="button" id="sceneRetry">Try the failed lines again</button>
-    <a id="sceneJobManifest" href="#" hidden>Batch record (JSON)</a></div>
-  <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="Batch progress"></progress><details><summary>Takes from this batch</summary><div id="sceneJobRows" class="take"></div></details>
+  <div class="row"><label class="field compact">{{ui:scenes.batch}}<select id="sceneJobSelect"></select></label><button type="button" id="sceneJobRefresh">{{ui:scenes.refresh_batch}}</button>
+    <button type="button" id="scenePause">{{ui:scenes.pause}}</button><button type="button" id="sceneResume">{{ui:scenes.resume}}</button>
+    <button type="button" id="sceneCancel">{{ui:scenes.cancel_after_this_line}}</button><button type="button" id="sceneStopNow">{{ui:scenes.stop_now}}</button><button type="button" id="sceneRetry">{{ui:scenes.try_the_failed_lines_again}}</button>
+    <a id="sceneJobManifest" href="#" hidden>{{ui:scenes.batch_record_json}}</a></div>
+  <progress id="sceneProgress" max="1" value="0" style="width:100%" aria-label="{{ui:scenes.batch_progress}}"></progress><details><summary>{{ui:scenes.takes_from_this_batch}}</summary><div id="sceneJobRows" class="take"></div></details>
   </div>
   <div id="scenePlayers" hidden>
-  <label class="field">Scene, exactly as rendered<audio id="scenePreviewPlayer" controls></audio></label>
-  <label class="field">Scene, evened out in loudness<audio id="sceneMasteredPlayer" controls></audio></label>
+  <label class="field">{{ui:scenes.scene_exactly_as_rendered}}<audio id="scenePreviewPlayer" controls></audio></label>
+  <label class="field">{{ui:scenes.scene_evened_out_in_loudness}}<audio id="sceneMasteredPlayer" controls></audio></label>
   <p class="meta" id="scenePreviewMeta"></p>
   </div>
   <details id="sceneDub" hidden>
-    <summary>Dub media</summary>
-    <p class="meta">Import subtitles or a Voice Slate timed transcript, then attach its local audio or video. Use the scene editor to set Cast voices, render and select takes.</p>
+    <summary>{{ui:scenes.dub_media}}</summary>
+    <p class="meta">{{ui:scenes.import_subtitles_or_a_voice}}</p>
     <div class="row">
-      <label class="field compact">Source media <span id="dubSourceOffset"></span><input id="dubSourceFile" type="file" accept=".mp4,.mov,.m4a,.mkv,.webm,.wav,.mp3,.flac,.ogg"></label>
-      <label class="field compact">Aligned background stem<input id="dubBedFile" type="file" accept=".m4a,.wav,.mp3,.flac,.ogg"></label>
-      <button id="dubOriginal" type="button" disabled>Original preview</button>
-      <button id="dubDubbed" type="button" disabled>Dubbed preview</button>
+      <label class="field compact">{{ui:scenes.source_media}} <span id="dubSourceOffset"></span><input id="dubSourceFile" type="file" accept=".mp4,.mov,.m4a,.mkv,.webm,.wav,.mp3,.flac,.ogg"></label>
+      <label class="field compact">{{ui:scenes.aligned_background_stem}}<input id="dubBedFile" type="file" accept=".m4a,.wav,.mp3,.flac,.ogg"></label>
+      <button id="dubOriginal" type="button" disabled>{{ui:scenes.original_preview}}</button>
+      <button id="dubDubbed" type="button" disabled>{{ui:scenes.dubbed_preview}}</button>
     </div>
     <p class="meta" id="dubAttachments"></p>
     <video id="dubVideo" controls preload="metadata" style="width:100%;max-height:40vh" hidden></video>
     <audio id="dubAudio" controls preload="metadata" hidden></audio>
     <div class="row">
-      <canvas id="dubWave" width="720" height="58" style="width:min(100%,720px);cursor:pointer" aria-label="Source audio waveform" hidden></canvas>
-      <label class="field compact" id="dubSeekLabel" hidden>Seek through media<input id="dubSeek" type="range" min="0" max="0" step="0.01" value="0"></label>
+      <canvas id="dubWave" width="720" height="58" style="width:min(100%,720px);cursor:pointer" aria-label="{{ui:scenes.source_audio_waveform}}" hidden></canvas>
+      <label class="field compact" id="dubSeekLabel" hidden>{{ui:scenes.seek_through_media}}<input id="dubSeek" type="range" min="0" max="0" step="0.01" value="0"></label>
     </div>
     <div class="row">
-      <label class="field compact">Target language<select id="dubTo"></select></label>
+      <label class="field compact">{{ui:scenes.target_language}}<select id="dubTo"></select></label>
     </div>
-    <div class="row"><label class="field compact">Line<select id="dubCue"></select></label><button id="dubSeekCue" type="button">Seek to line</button></div>
-    <label class="field">Original wording<textarea id="dubSourceText" rows="2"></textarea></label>
-    <p class="meta">Enter the translated words, then save and render new takes. Choose Speed up to fit only if you want timing adjusted.</p>
+    <div class="row"><label class="field compact">{{ui:scenes.line}}<select id="dubCue"></select></label><button id="dubSeekCue" type="button">{{ui:scenes.seek_to_line}}</button></div>
+    <label class="field">{{ui:scenes.original_wording}}<textarea id="dubSourceText" rows="2"></textarea></label>
+    <p class="meta">{{ui:scenes.enter_the_translated_words_then}}</p>
     <details id="dubProviderPanel">
-      <summary>Ask a provider for a draft</summary>
+      <summary>{{ui:scenes.ask_a_provider_for_a}}</summary>
       <div class="row">
-        <label class="field compact">Source language<select id="dubFrom"></select></label>
-        <label class="field compact">Provider<select id="dubProvider"></select></label>
-        <button type="button" id="dubRequestDraft">Draft this line</button>
-        <a href="#automation">Manage provider profiles</a>
+        <label class="field compact">{{ui:scenes.source_language}}<select id="dubFrom"></select></label>
+        <label class="field compact">{{ui:scenes.provider}}<select id="dubProvider"></select></label>
+        <button type="button" id="dubRequestDraft">{{ui:scenes.draft_this_line}}</button>
+        <a href="#automation">{{ui:scenes.manage_provider_profiles}}</a>
       </div>
-      <label class="field" id="dubDraftField" hidden>Draft wording<textarea id="dubProviderDraft" rows="2" readonly></textarea></label>
-      <button type="button" id="dubCopyDraft" hidden>Use draft in target text</button>
+      <label class="field" id="dubDraftField" hidden>{{ui:scenes.draft_wording}}<textarea id="dubProviderDraft" rows="2" readonly></textarea></label>
+      <button type="button" id="dubCopyDraft" hidden>{{ui:scenes.use_draft_in_target_text}}</button>
     </details>
-    <label class="field">Target text<textarea id="dubTargetText" rows="2"></textarea></label>
+    <label class="field">{{ui:scenes.target_text}}<textarea id="dubTargetText" rows="2"></textarea></label>
     <div class="row">
-      <label class="field compact">Fit<select id="dubFit"><option value="natural">Keep natural timing</option><option value="fit">Speed up to fit (up to 1.35×)</option></select></label>
-      <label class="field compact">Speed<input id="dubSpeed" type="number" value="1" min="0.8" max="1.35" step="0.01"></label>
-      <label class="field compact">Gain (dB)<input id="dubGain" type="number" value="0" min="-30" max="6" step="0.5"></label>
-      <label><input type="checkbox" id="dubMute"> Mute in dub</label>
-      <button id="dubSaveCue" type="button">Save cue edits</button>
+      <label class="field compact">{{ui:scenes.fit}}<select id="dubFit"><option value="natural">{{ui:scenes.keep_natural_timing}}</option><option value="fit">{{ui:scenes.speed_up_to_fit_up}}</option></select></label>
+      <label class="field compact">{{ui:scenes.speed}}<input id="dubSpeed" type="number" value="1" min="0.8" max="1.35" step="0.01"></label>
+      <label class="field compact">{{ui:scenes.gain_db}}<input id="dubGain" type="number" value="0" min="-30" max="6" step="0.5"></label>
+      <label><input type="checkbox" id="dubMute"> {{ui:scenes.mute_in_dub}}</label>
+      <button id="dubSaveCue" type="button">{{ui:scenes.save_cue_edits}}</button>
     </div>
     <div class="row" id="dubReviewFiles"></div>
     <div class="row">
-      <label><input type="checkbox" id="dubKeep"> Include original audio track</label>
-      <label><input type="checkbox" id="dubUseBed"> Mix background stem</label>
-      <label class="field compact">Background gain (dB)<input id="dubBedGain" type="number" min="-30" max="6" value="0" step="0.5"></label>
-      <label><input type="checkbox" id="dubDuck"> Duck background under speech</label>
-      <label class="field compact">Burn captions into picture<select id="dubBurn"><option value="">Off</option><option value="target">Target</option><option value="bilingual">Bilingual</option><option value="karaoke">Target word highlight</option></select></label>
-      <button id="dubExport" type="button">Export dub</button>
-      <button id="dubVerify" type="button" disabled>Verify delivery</button>
+      <label><input type="checkbox" id="dubKeep"> {{ui:scenes.include_original_audio_track}}</label>
+      <label><input type="checkbox" id="dubUseBed"> {{ui:scenes.mix_background_stem}}</label>
+      <label class="field compact">{{ui:scenes.background_gain_db}}<input id="dubBedGain" type="number" min="-30" max="6" value="0" step="0.5"></label>
+      <label><input type="checkbox" id="dubDuck"> {{ui:scenes.duck_background_under_speech}}</label>
+      <label class="field compact">{{ui:scenes.burn_captions_into_picture}}<select id="dubBurn"><option value="">{{ui:scenes.off}}</option><option value="target">{{ui:scenes.target}}</option><option value="bilingual">{{ui:scenes.bilingual}}</option><option value="karaoke">{{ui:scenes.target_word_highlight}}</option></select></label>
+      <button id="dubExport" type="button">{{ui:scenes.export_dub}}</button>
+      <button id="dubVerify" type="button" disabled>{{ui:scenes.verify_delivery}}</button>
     </div>
-    <label class="field compact">Alternate language deliveries<select id="dubAlternate" multiple size="3"></select></label>
-    <details id="dubQueue"><summary>Batch jobs and watch folders</summary>
+    <label class="field compact">{{ui:scenes.alternate_language_deliveries}}<select id="dubAlternate" multiple size="3"></select></label>
+    <details id="dubQueue"><summary>{{ui:scenes.batch_jobs_and_watch_folders}}</summary>
       <div class="row">
-        <label><input id="dubQueueRender" type="checkbox"> Render missing takes</label>
-        <button id="dubQueueAdd" type="button">Queue this delivery</button>
-        <button id="dubWatchTemplate" type="button">Save a job file…</button>
+        <label><input id="dubQueueRender" type="checkbox"> {{ui:scenes.render_missing_takes}}</label>
+        <button id="dubQueueAdd" type="button">{{ui:scenes.queue_this_delivery}}</button>
+        <button id="dubWatchTemplate" type="button">{{ui:scenes.save_a_job_file}}</button>
       </div>
       <div class="row">
-        <label class="field compact">Folder on this computer<input id="dubWatchPath" type="text"></label>
-        <button id="dubWatchAdd" type="button">Enable watch folder</button>
+        <label class="field compact">{{ui:scenes.folder_on_this_computer}}<input id="dubWatchPath" type="text"></label>
+        <button id="dubWatchAdd" type="button">{{ui:scenes.enable_watch_folder}}</button>
       </div>
       <ul class="meta" id="dubQueueRows"></ul>
       <ul class="meta" id="dubWatchRows"></ul>
@@ -531,32 +531,32 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <ul id="dubWarnings" class="meta"></ul>
     <p id="dubStatus" class="meta" role="status"></p>
   </details>
-  <details id="sceneExport"><summary>Export package</summary>
-    <p class="meta">Writes WAV, FLAC, Ogg, MP3 or AAC (M4A) line files, the raw scene mix, captions, a transcript and a checksummed manifest under <code>out/exports/</code>. FFmpeg writes the files. Original Cast takes are copied byte for byte. Save the scene before exporting.</p>
+  <details id="sceneExport"><summary>{{ui:scenes.export_package}}</summary>
+    <p class="meta">{{ui:scenes.writes_wav_flac_ogg_mp3}} <code>{{ui:scenes.out_exports}}</code>{{ui:scenes.ffmpeg_writes_the_files_original}}</p>
     <p class="meta" id="exportFfmpeg" role="status"></p>
     <p class="meta" id="exportFfmpegProgress" role="status" hidden></p>
-    <div class="cast-actions"><button type="button" id="exportFfmpegInstall" hidden>Install FFmpeg</button></div>
-    <div class="row"><fieldset class="field compact"><legend>Formats</legend>
-      <label><input type="checkbox" name="exportFormat" value="wav" checked> WAV</label>
-      <label><input type="checkbox" name="exportFormat" value="flac"> FLAC</label>
-      <label><input type="checkbox" name="exportFormat" value="ogg"> Ogg</label>
-      <label><input type="checkbox" name="exportFormat" value="mp3"> MP3</label>
-      <label><input type="checkbox" name="exportFormat" value="m4a"> AAC (M4A)</label></fieldset>
-      <label class="field compact">File names<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{character}__{line_id}"></label>
-      <label class="field compact">WAV precision<select id="exportWavPrecision"><option value="PCM_16">16-bit PCM</option>
-        <option value="PCM_24">24-bit PCM</option><option value="FLOAT">32-bit float</option></select></label>
-      <label class="field compact">Sample rate (blank keeps the take’s)<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
-    <div class="row"><label class="field compact">Trim start (s)<input id="exportTrimStart" type="number" min="0" step="0.01" value="0"></label>
-      <label class="field compact">Trim end (s)<input id="exportTrimEnd" type="number" min="0" step="0.01" value="0"></label>
-      <label class="field compact">Fade in (ms)<input id="exportFadeIn" type="number" min="0" step="1" value="0"></label>
-      <label class="field compact">Fade out (ms)<input id="exportFadeOut" type="number" min="0" step="1" value="0"></label></div>
-    <div class="row"><label class="field compact">Loudness target (LUFS, blank = off)<input id="exportLufs" type="number" min="-70" max="-5" step="0.1"></label>
-      <label class="field compact">True peak (dBTP)<input id="exportTruePeak" type="number" min="-9" max="0" step="0.1" value="-1"></label>
-      <label class="field compact">Limiter ceiling (dBFS, blank = off)<input id="exportLimiter" type="number" min="-24" max="0" step="0.1"></label></div>
-    <div class="cast-actions"><button type="button" id="exportPreview">Check what goes in</button><button class="go" type="button" id="exportCreate">Create package</button></div>
+    <div class="cast-actions"><button type="button" id="exportFfmpegInstall" hidden>{{ui:scenes.install_ffmpeg}}</button></div>
+    <div class="row"><fieldset class="field compact"><legend>{{ui:scenes.formats}}</legend>
+      <label><input type="checkbox" name="exportFormat" value="wav" checked> {{ui:scenes.wav}}</label>
+      <label><input type="checkbox" name="exportFormat" value="flac"> {{ui:scenes.flac}}</label>
+      <label><input type="checkbox" name="exportFormat" value="ogg"> {{ui:scenes.ogg}}</label>
+      <label><input type="checkbox" name="exportFormat" value="mp3"> {{ui:scenes.mp3}}</label>
+      <label><input type="checkbox" name="exportFormat" value="m4a"> {{ui:scenes.aac_m4a}}</label></fieldset>
+      <label class="field compact">{{ui:scenes.file_names}}<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{{ui:scenes.character_line_id}}"></label>
+      <label class="field compact">{{ui:scenes.wav_precision}}<select id="exportWavPrecision"><option value="PCM_16">{{ui:scenes.16_bit_pcm}}</option>
+        <option value="PCM_24">{{ui:scenes.24_bit_pcm}}</option><option value="FLOAT">{{ui:scenes.32_bit_float}}</option></select></label>
+      <label class="field compact">{{ui:scenes.sample_rate_blank_keeps_the}}<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
+    <div class="row"><label class="field compact">{{ui:scenes.trim_start_s}}<input id="exportTrimStart" type="number" min="0" step="0.01" value="0"></label>
+      <label class="field compact">{{ui:scenes.trim_end_s}}<input id="exportTrimEnd" type="number" min="0" step="0.01" value="0"></label>
+      <label class="field compact">{{ui:scenes.fade_in_ms}}<input id="exportFadeIn" type="number" min="0" step="1" value="0"></label>
+      <label class="field compact">{{ui:scenes.fade_out_ms}}<input id="exportFadeOut" type="number" min="0" step="1" value="0"></label></div>
+    <div class="row"><label class="field compact">{{ui:scenes.loudness_target_lufs_blank_off}}<input id="exportLufs" type="number" min="-70" max="-5" step="0.1"></label>
+      <label class="field compact">{{ui:scenes.true_peak_dbtp}}<input id="exportTruePeak" type="number" min="-9" max="0" step="0.1" value="-1"></label>
+      <label class="field compact">{{ui:scenes.limiter_ceiling_dbfs_blank_off}}<input id="exportLimiter" type="number" min="-24" max="0" step="0.1"></label></div>
+    <div class="cast-actions"><button type="button" id="exportPreview">{{ui:scenes.check_what_goes_in}}</button><button class="go" type="button" id="exportCreate">{{ui:scenes.create_package}}</button></div>
     <p id="exportError" role="alert"></p><p class="meta" id="exportStatus"></p>
     <pre id="exportLog" class="meta" style="white-space:pre-wrap"></pre>
-    <div class="row"><label class="field compact">Existing packages<select id="exportSelect"></select></label><button type="button" id="exportRefresh">Refresh list</button><button type="button" id="exportVerify">Check the chosen package</button></div>
+    <div class="row"><label class="field compact">{{ui:scenes.existing_packages}}<select id="exportSelect"></select></label><button type="button" id="exportRefresh">{{ui:scenes.refresh_list}}</button><button type="button" id="exportVerify">{{ui:scenes.check_the_chosen_package}}</button></div>
   </details>
   </div>
 </section>

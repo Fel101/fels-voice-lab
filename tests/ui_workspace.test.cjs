@@ -228,9 +228,9 @@ test('saved takes expose effective settings and identity provenance', () => {
   assert.ok(source.includes('voice_identity:take.model.voice_identity||null'));
 });
 test('scene editor explains blank, empty, and invalid script states', () => {
-  assert.ok(source.includes('Open a scene or start one from the current performer.'));
-  assert.ok(source.includes('This script has no dialogue lines. Add a line to continue.'));
-  assert.ok(source.includes('Fix the advanced JSON to use the script form.'));
+  assert.equal(labText.t('scenes.open_a_scene_or_start'), 'Open a scene or start one from the current performer.');
+  assert.equal(labText.t('scenes.this_script_has_no_dialogue'), 'This script has no dialogue lines. Add a line to continue.');
+  assert.equal(labText.t('scenes.fix_the_advanced_json_to'), 'Fix the advanced JSON to use the script form.');
   assert.ok(compact.includes("$('sceneError').textContent='';"));
 });
 test('failed generation retains failure status and reenables controls', async () => {

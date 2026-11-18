@@ -20,7 +20,7 @@ function parseSceneCueTime(value) {
   if (clock) seconds = Number(clock[1]) * 60 + Number(clock[2]);
   else if (/^\d+(?:\.\d{1,3})?$/.test(text)) seconds = Number(text);
   if (seconds === undefined || seconds > sceneTimelineMaxMs / 1000)
-    throw new Error('Enter a time such as 00:03.500 or 3.5 seconds, up to 30 minutes.');
+    throw new Error(LabText.t('scenes.enter_a_time_such_as'));
   return Math.round(seconds * 1000);
 }
 function showSceneError(error) {
@@ -28,7 +28,7 @@ function showSceneError(error) {
   try {
     var scene = sceneBody();
     if (scene.timeline) scene.lines.forEach(function (line, index) {
-      if (line.cue) message = message.replaceAll(line.line_id, 'line ' + (index + 1) + ' (' + sceneCueTime(line.cue.start_ms) + ')');
+      if (line.cue) message = message.replaceAll(line.line_id, LabText.t('scenes.line_2', {number: index + 1, sceneCueTime: sceneCueTime(line.cue.start_ms)}));
     });
   } catch (_) {
     // The editor can contain unfinished JSON.
@@ -40,15 +40,15 @@ function sceneBody() {
   try {
     value = JSON.parse($('sceneEditor').value);
   } catch (error) {
-    throw new Error('Scene JSON could not be parsed: ' + error.message);
+    throw new Error(LabText.t('scenes.scene_json_could_not_be', {message: error.message}));
   }
-  if (!value || !Array.isArray(value.lines)) throw new Error('Scene manifest needs a lines array.');
+  if (!value || !Array.isArray(value.lines)) throw new Error(LabText.t('scenes.scene_manifest_needs_a_lines'));
   return value;
 }
 function markSceneDirty() {
   sceneDirty = true;
   $('sceneError').textContent = '';
-  $('sceneStatus').textContent = 'Unsaved script changes. Save before rendering or assembling selected takes.';
+  $('sceneStatus').textContent = LabText.t('scenes.unsaved_script_changes_save_before');
 }
 // Scene undo keeps the script text that each change replaced. Keystrokes in one field, less than a second apart, are one step.
 var sceneUndo = [],
@@ -104,8 +104,8 @@ function restoreSceneText(text) {
   renderSceneForm();
   $('sceneError').textContent = '';
   $('sceneStatus').textContent = sceneDirty
-    ? 'Unsaved script changes. Save before rendering or assembling selected takes.'
-    : 'Back to the saved script.';
+    ? LabText.t('scenes.unsaved_script_changes_save_before')
+    : LabText.t('scenes.back_to_the_saved_script');
   sceneHistoryState();
 }
 function undoScene() {
@@ -120,14 +120,14 @@ function redoScene() {
 }
 function editSceneField(scene, index, key, value) {
   if (index === null) {
-    if (key !== 'name') throw new Error('Unknown scene field.');
+    if (key !== 'name') throw new Error(LabText.t('scenes.unknown_scene_field'));
     scene.name = value;
     return scene;
   }
-  if (!scene.lines[index]) throw new Error('Scene line no longer exists.');
+  if (!scene.lines[index]) throw new Error(LabText.t('scenes.scene_line_no_longer_exists'));
   if (key === 'cue.start_ms' || key === 'cue.end_ms') {
     var line = scene.lines[index];
-    if (!line.cue) throw new Error('Open a timed line before changing its cue time.');
+    if (!line.cue) throw new Error(LabText.t('scenes.open_a_timed_line_before'));
     var milliseconds = parseSceneCueTime(value);
     line.cue[key === 'cue.start_ms' ? 'start_ms' : 'end_ms'] = milliseconds;
     line.target_duration_ms = line.cue.end_ms - line.cue.start_ms;
@@ -149,7 +149,7 @@ function editSceneField(scene, index, key, value) {
       'reference_version_id',
     ].indexOf(key) < 0
   )
-    throw new Error('Unknown line field.');
+    throw new Error(LabText.t('scenes.unknown_line_field'));
   if (['pause_before_ms', 'pause_after_ms', 'take_count', 'target_duration_ms'].indexOf(key) >= 0) {
     if (key === 'target_duration_ms' && value === '') {
       scene.lines[index][key] = null;
@@ -158,7 +158,7 @@ function editSceneField(scene, index, key, value) {
     var min = key === 'take_count' || key === 'target_duration_ms' ? 1 : 0,
       max = key === 'take_count' ? 10 : key === 'target_duration_ms' ? 120000 : 10000;
     if (value === '' || !Number.isInteger(Number(value)) || Number(value) < min || Number(value) > max)
-      throw new Error('Enter a whole number from ' + min + ' to ' + max + '.');
+      throw new Error(LabText.t('scenes.enter_a_whole_number_from', {min: min, max: max}));
     value = Number(value);
   }
   scene.lines[index][key] = value;
@@ -170,14 +170,14 @@ function editSceneSetting(scene, index, key, value) {
   var control = (schema.controls || []).find(function (item) {
     return item.id === key;
   });
-  if (!control) throw new Error('This checkpoint does not support the ' + key + ' setting.');
+  if (!control) throw new Error(LabText.t('scenes.this_checkpoint_does_not_support', {key: key}));
   if (control.type === 'select') {
-    if ((control.choices || []).indexOf(value) < 0) throw new Error('Choose a supported ' + control.label + '.');
+    if ((control.choices || []).indexOf(value) < 0) throw new Error(LabText.t('scenes.choose_a_supported', {label: control.label}));
   } else {
     value = Number(value);
     if (!Number.isFinite(value) || value < control.minimum || value > control.maximum)
-      throw new Error(control.label + ' must be between ' + control.minimum + ' and ' + control.maximum + '.');
-    if (control.step === 1 && !Number.isInteger(value)) throw new Error(control.label + ' must be a whole number.');
+      throw new Error(LabText.t('scenes.must_be_between_and', {label: control.label, minimum: control.minimum, maximum: control.maximum}));
+    if (control.step === 1 && !Number.isInteger(value)) throw new Error(LabText.t('scenes.must_be_a_whole_number', {label: control.label}));
   }
   line.settings = Object.assign({}, line.settings || {});
   line.settings[key] = value;
@@ -245,7 +245,7 @@ function sceneDefaultLine(character, identity, lineId) {
       identity.kind === 'reference'
         ? identity.approved_reference_id || ((identity.references || [])[0] || {}).id || null
         : null,
-    text: 'New dialogue line.',
+    text: LabText.t('scenes.new_dialogue_line'),
     language: identity.kind === 'preset_voice' ? options.language : 'English',
     direction: options.default_direction || '',
     pause_before_ms: 0,
@@ -261,9 +261,9 @@ function sceneDefaultLine(character, identity, lineId) {
 function changeSceneIdentity(index, identityId) {
   var scene = sceneBody(),
     found = sceneIdentityById(identityId);
-  if (!found) throw new Error('Choose a voice from the chosen character.');
+  if (!found) throw new Error(LabText.t('scenes.choose_a_voice_from_the'));
   var old = scene.lines[index];
-  if (!old) throw new Error('Scene line no longer exists.');
+  if (!old) throw new Error(LabText.t('scenes.scene_line_no_longer_exists'));
   if (old.identity_id === identityId) return;
   var identity = found.identity,
     schema = performanceCapabilitiesByEngine[identity.engine_id] || { controls: [], direction: { status: 'unsupported' } };
@@ -290,7 +290,7 @@ function changeSceneIdentity(index, identityId) {
   if (!language) resets.push('language');
   if (['supported', 'worker_verified', 'experimental'].indexOf((schema.direction || {}).status) < 0) {
     next.direction = '';
-    if (old.direction) resets.push('acting direction');
+    if (old.direction) resets.push(LabText.t('scenes.acting_direction'));
   }
   var oldSettings = old.settings || {};
   (schema.controls || []).forEach(function (control) {
@@ -313,12 +313,12 @@ function changeSceneIdentity(index, identityId) {
   updateSceneEditor(scene);
   renderSceneForm();
   if (scene.timeline && $('sceneDub').open) paintDubLanguages(scene);
-  if (resets.length) $('sceneStatus').textContent += ' Voice change reset unsupported values: ' + resets.join(', ') + '.';
+  if (resets.length) $('sceneStatus').textContent += LabText.t('scenes.voice_change_reset_unsupported_values', {join: resets.join(', ')});
 }
 function mutateSceneLine(index, action) {
   var scene = sceneBody(),
     line = scene.lines[index];
-  if (!line) throw new Error('Scene line no longer exists.');
+  if (!line) throw new Error(LabText.t('scenes.scene_line_no_longer_exists'));
   if (action === 'duplicate') {
     var copy = JSON.parse(JSON.stringify(line));
     copy.line_id = line.cue ? 'cue-' + crypto.randomUUID() : stableSceneLineId(scene.lines);
@@ -328,14 +328,14 @@ function mutateSceneLine(index, action) {
     copy.selected_takes = {};
     scene.lines.splice(index + 1, 0, copy);
   } else if (action === 'remove') {
-    if (scene.lines.length <= 1) throw new Error('A scene must keep at least one dialogue line.');
+    if (scene.lines.length <= 1) throw new Error(LabText.t('scenes.a_scene_must_keep_at'));
     scene.lines.splice(index, 1);
   } else if (action === 'up' || action === 'down') {
     var target = index + (action === 'up' ? -1 : 1);
     if (target < 0 || target >= scene.lines.length) return scene;
     scene.lines.splice(index, 1);
     scene.lines.splice(target, 0, line);
-  } else throw new Error('Unknown scene-line action.');
+  } else throw new Error(LabText.t('scenes.unknown_scene_line_action'));
   updateSceneEditor(scene);
   renderSceneForm();
   return scene;
@@ -344,17 +344,17 @@ function replaceTimedCue(scene, index, splitMs, offset) {
   var first = scene.lines[index],
     next = scene.lines[index + 1],
     merge = splitMs === null;
-  if (!first || !first.cue) throw new Error('Open a timed cue to edit it.');
+  if (!first || !first.cue) throw new Error(LabText.t('scenes.open_a_timed_cue_to'));
   if (merge) {
     if (!next || !next.cue || next.cue.start_ms < first.cue.start_ms)
-      throw new Error('Choose a cue followed by another cue in time order.');
+      throw new Error(LabText.t('scenes.choose_a_cue_followed_by'));
     var controls = ['identity_id', 'reference_version_id', 'language', 'direction', 'use_pronunciations', 'line_type', 'settings'];
     if (controls.some(function (key) { return JSON.stringify(first[key]) !== JSON.stringify(next[key]); }))
-      throw new Error('Match the next cue’s voice, language and delivery settings before merging.');
+      throw new Error(LabText.t('scenes.match_the_next_cue_s'));
   } else if (!Number.isInteger(splitMs) || splitMs <= first.cue.start_ms || splitMs >= first.cue.end_ms) {
-    throw new Error('Choose a split time between the cue start and end.');
+    throw new Error(LabText.t('scenes.choose_a_split_time_between'));
   } else if (scene.lines.length >= 500) {
-    throw new Error('A scene can contain up to 500 cues.');
+    throw new Error(LabText.t('scenes.a_scene_can_contain_up'));
   }
   var originals = merge ? [first, next] : [first],
     replacements = new Set(),
@@ -365,7 +365,7 @@ function replaceTimedCue(scene, index, splitMs, offset) {
   });
   function lineFor(text, start, end) {
     text = text.trim();
-    if (!text || text.length > 10000) throw new Error('Each new cue needs 1–10,000 characters of speech.');
+    if (!text || text.length > 10000) throw new Error(LabText.t('scenes.each_new_cue_needs_1'));
     var line = Object.assign({}, first, {
       line_id: 'cue-' + crypto.randomUUID(),
       text: text,
@@ -394,13 +394,13 @@ function addSceneLine() {
     });
     identity = character && character.identities[0];
   }
-  if (!character || !identity) throw new Error('Create a character voice in Cast before adding dialogue.');
+  if (!character || !identity) throw new Error(LabText.t('scenes.create_a_character_voice_in'));
   var lineId = stableSceneLineId(scene.lines);
   var line = sceneDefaultLine(character, identity, lineId);
   if (scene.timeline) {
     line.line_id = lineId = 'cue-' + crypto.randomUUID();
     var start = scene.lines.reduce(function (latest, other) { return Math.max(latest, other.cue.end_ms); }, 0);
-    if (start >= sceneTimelineMaxMs) throw new Error('Edit the last cue to leave room for another one.');
+    if (start >= sceneTimelineMaxMs) throw new Error(LabText.t('scenes.edit_the_last_cue_to'));
     line.cue = { start_ms: start, end_ms: Math.min(start + 2000, sceneTimelineMaxMs) };
     line.pause_after_ms = 0;
     line.target_duration_ms = line.cue.end_ms - line.cue.start_ms;
@@ -433,7 +433,7 @@ function renderSceneLineEditor(line, index, article) {
   text.required = true;
   text.value = line.manuscript_spoken === line.text && line.manuscript_text !== undefined ? line.manuscript_text : line.text || '';
   text.setAttribute('data-scene-field', 'text');
-  text.setAttribute('aria-label', 'Dialogue — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
+  text.setAttribute('aria-label', LabText.t('scenes.dialogue', {value: line.cue ? 'line ' + (index + 1) : line.line_id}));
   text.addEventListener('input', function () {
     try {
       changeSceneField(index, 'text', this.value);
@@ -443,7 +443,7 @@ function renderSceneLineEditor(line, index, article) {
       showSceneError(error);
     }
   });
-  sceneLabel('Dialogue', text, article, false);
+  sceneLabel(LabText.t('scenes.dialogue_2'), text, article, false);
   var assignment = document.createElement('div');
   assignment.className = 'cast-grid';
   var chars = document.createElement('select');
@@ -451,14 +451,14 @@ function renderSceneLineEditor(line, index, article) {
     option(chars, item.id, item.name);
   });
   chars.value = character || '';
-  sceneLabel('Character', chars, assignment, true);
+  sceneLabel(LabText.t('scenes.character'), chars, assignment, true);
   chars.addEventListener('change', function () {
     var selected = castCharacters.find(function (item) {
         return item.id === this.value;
       }, this),
       next = selected && (selected.identities || [])[0];
     if (!next) {
-      showSceneError(new Error('Add a voice to this character before giving it a line.'));
+      showSceneError(new Error(LabText.t('scenes.add_a_voice_to_this')));
       return;
     }
     changeSceneIdentity(index, next.id);
@@ -466,11 +466,11 @@ function renderSceneLineEditor(line, index, article) {
   var voices = document.createElement('select');
   if (identityInfo) {
     (identityInfo.character.identities || []).forEach(function (item) {
-      option(voices, item.id, item.engine_id + ' / ' + item.label + ' — ' + item.status + (item.retired ? ' — retired' : ''));
+      option(voices, item.id, item.engine_id + ' / ' + item.label + ' — ' + item.status + (item.retired ? LabText.t('scenes.retired') : ''));
     });
   }
   voices.value = line.identity_id || '';
-  sceneLabel('Voice', voices, assignment, true);
+  sceneLabel(LabText.t('scenes.voice'), voices, assignment, true);
   voices.addEventListener('change', function () {
     try {
       changeSceneIdentity(index, this.value);
@@ -491,18 +491,13 @@ function renderSceneLineEditor(line, index, article) {
         option(
           references,
           ref.id,
-          'v' +
-            ref.version +
-            (ref.id === identity.approved_reference_id ? ' — approved' : ' — candidate') +
-            ' / ' +
-            ref.duration_seconds.toFixed(2) +
-            ' s',
+          LabText.t('scenes.v_s', {version: ref.version, value: ref.id === identity.approved_reference_id ? ' — approved' : ' — candidate', toFixed: ref.duration_seconds.toFixed(2)}),
         );
       });
-    if (!references.options.length) option(references, '', 'No saved voice recording', true);
+    if (!references.options.length) option(references, '', LabText.t('scenes.no_saved_voice_recording'), true);
     references.value =
       line.reference_version_id || identity.approved_reference_id || ((identity.references || [])[0] || {}).id || '';
-    sceneLabel('Voice recording', references, assignment, true);
+    sceneLabel(LabText.t('scenes.voice_recording'), references, assignment, true);
     references.addEventListener('change', function () {
       changeSceneField(index, 'reference_version_id', this.value || null);
     });
@@ -520,19 +515,19 @@ function renderSceneLineEditor(line, index, article) {
       : identity && identity.kind === 'preset_voice'
         ? identity.engine_options.language
         : validLanguages[0] || 'English';
-  sceneLabel('Language', language, controls, true);
+  sceneLabel(LabText.t('scenes.language'), language, controls, true);
   language.addEventListener('change', function () {
     changeSceneField(index, 'language', this.value);
   });
   var lineType = document.createElement('select');
   [
-    ['dialogue', 'Dialogue'],
-    ['narration', 'Narration'],
+    ['dialogue', LabText.t('scenes.dialogue_2')],
+    ['narration', LabText.t('scenes.narration')],
   ].forEach(function (item) {
     option(lineType, item[0], item[1]);
   });
   lineType.value = line.line_type || 'dialogue';
-  sceneLabel('Line type', lineType, controls, true);
+  sceneLabel(LabText.t('scenes.line_type'), lineType, controls, true);
   lineType.addEventListener('change', function () {
     changeSceneField(index, 'line_type', this.value);
   });
@@ -544,8 +539,8 @@ function renderSceneLineEditor(line, index, article) {
       input.required = true;
       input.value = sceneCueTime(line.cue[key]);
       input.placeholder = '00:03.500';
-      var label = key === 'start_ms' ? 'Cue start' : 'Cue end';
-      input.setAttribute('aria-label', label + ' for line ' + (index + 1));
+      var label = key === 'start_ms' ? LabText.t('scenes.cue_start') : LabText.t('scenes.cue_end');
+      input.setAttribute('aria-label', LabText.t('scenes.for_line', {label: label, number: index + 1}));
       sceneLabel(label, input, controls, true);
       input.addEventListener('input', function () {
         try {
@@ -567,7 +562,7 @@ function renderSceneLineEditor(line, index, article) {
       var note = document.createElement('p');
       note.className = 'meta';
       var videoStart = sceneBody().timeline.source_offset_ms || 0;
-      note.textContent = 'Original subtitle ' + sceneCueRange(source, videoStart) + ' · ' + source.text;
+      note.textContent = LabText.t('scenes.original_subtitle', {sceneCueRange: sceneCueRange(source, videoStart), text: source.text});
       article.appendChild(note);
     });
     var cueTools = document.createElement('div');
@@ -575,7 +570,7 @@ function renderSceneLineEditor(line, index, article) {
     var splitTime = document.createElement('input');
     splitTime.type = 'text';
     splitTime.value = sceneCueTime(Math.floor((line.cue.start_ms + line.cue.end_ms) / 2));
-    sceneLabel('Split at', splitTime, cueTools, true);
+    sceneLabel(LabText.t('scenes.split_at'), splitTime, cueTools, true);
     function applyCueEdit(splitMs, offset) {
       try {
         var scene = sceneBody();
@@ -586,14 +581,14 @@ function renderSceneLineEditor(line, index, article) {
         showSceneError(error);
       }
     }
-    cueTools.appendChild(sceneButton('Split at text cursor', 'Split cue at text cursor', function () {
+    cueTools.appendChild(sceneButton(LabText.t('scenes.split_at_text_cursor'), LabText.t('scenes.split_cue_at_text_cursor'), function () {
       try {
         applyCueEdit(parseSceneCueTime(splitTime.value), text.selectionStart);
       } catch (error) {
         showSceneError(error);
       }
     }));
-    var merge = sceneButton('Merge with next cue', 'Merge with next cue', function () { applyCueEdit(null, 0); });
+    var merge = sceneButton(LabText.t('scenes.merge_with_next_cue'), LabText.t('scenes.merge_with_next_cue'), function () { applyCueEdit(null, 0); });
     merge.disabled = index + 1 >= sceneBody().lines.length;
     cueTools.appendChild(merge);
     article.appendChild(cueTools);
@@ -607,10 +602,10 @@ function renderSceneLineEditor(line, index, article) {
     input.max = key === 'take_count' ? '10' : key === 'target_duration_ms' ? '120000' : '10000';
     input.required = key !== 'target_duration_ms';
     var labelText = {
-      pause_before_ms: 'Pause before (ms)',
-      pause_after_ms: 'Pause after (ms)',
-      take_count: 'Takes per line',
-      target_duration_ms: 'Target duration (ms, optional)',
+      pause_before_ms: LabText.t('scenes.pause_before_ms'),
+      pause_after_ms: LabText.t('scenes.pause_after_ms'),
+      take_count: LabText.t('scenes.takes_per_line'),
+      target_duration_ms: LabText.t('scenes.target_duration_ms_optional'),
     }[key];
     sceneLabel(labelText, input, controls, true);
     input.addEventListener('input', function () {
@@ -631,7 +626,7 @@ function renderSceneLineEditor(line, index, article) {
   });
   var pronLabel = document.createElement('label');
   pronLabel.appendChild(pronunciation);
-  pronLabel.appendChild(document.createTextNode(' Apply this character’s pronunciation dictionary'));
+  pronLabel.appendChild(document.createTextNode(LabText.t('scenes.apply_this_character_s_pronunciation')));
   controls.appendChild(pronLabel);
   article.appendChild(controls);
   var schema = performanceCapabilitiesByEngine[line.engine_id] || { controls: [], direction: { status: 'unsupported' } };
@@ -640,8 +635,8 @@ function renderSceneLineEditor(line, index, article) {
     var direction = document.createElement('textarea');
     direction.maxLength = 1000;
     direction.value = line.direction || '';
-    direction.setAttribute('aria-label', 'Acting direction — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
-    sceneLabel('Acting direction' + (directionStatus === 'experimental' ? ' (experimental)' : ''), direction, article, false);
+    direction.setAttribute('aria-label', LabText.t('scenes.acting_direction_2', {value: line.cue ? 'line ' + (index + 1) : line.line_id}));
+    sceneLabel(LabText.t('scenes.acting_direction_3', {value: directionStatus === 'experimental' ? ' (experimental)' : ''}), direction, article, false);
     direction.addEventListener('input', function () {
       try {
         changeSceneField(index, 'direction', this.value);
@@ -654,7 +649,7 @@ function renderSceneLineEditor(line, index, article) {
   }
   var settings = document.createElement('details'),
     settingsTitle = document.createElement('summary');
-  settingsTitle.textContent = 'Per-line model settings';
+  settingsTitle.textContent = LabText.t('scenes.per_line_model_settings');
   settings.appendChild(settingsTitle);
   if (!(line.settings && typeof line.settings === 'object')) line.settings = {};
   (schema.controls || []).forEach(function (control) {
@@ -674,7 +669,7 @@ function renderSceneLineEditor(line, index, article) {
       input.required = true;
       input.value = line.settings[control.id] === undefined ? control.default : line.settings[control.id];
     }
-    var labelText = control.label + (control.status === 'experimental' ? ' (experimental)' : '');
+    var labelText = control.label + (control.status === 'experimental' ? LabText.t('scenes.experimental') : '');
     input.setAttribute('aria-label', labelText + ' — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
     sceneLabel(labelText, input, settings, true);
     input.addEventListener('input', function () {
@@ -689,16 +684,16 @@ function renderSceneLineEditor(line, index, article) {
   });
   var settingsHelp = document.createElement('p');
   settingsHelp.className = 'meta';
-  settingsHelp.textContent = 'Each take keeps the values the model used. Settings this model does not have are not shown.';
+  settingsHelp.textContent = LabText.t('scenes.each_take_keeps_the_values');
   settings.appendChild(settingsHelp);
   article.appendChild(settings);
   var actions = document.createElement('div');
   actions.className = 'cast-actions';
   [
-    ['up', 'Move up'],
-    ['down', 'Move down'],
-    ['duplicate', 'Duplicate line'],
-    ['remove', 'Remove line'],
+    ['up', LabText.t('scenes.move_up')],
+    ['down', LabText.t('scenes.move_down')],
+    ['duplicate', LabText.t('scenes.duplicate_line')],
+    ['remove', LabText.t('scenes.remove_line')],
   ].forEach(function (item) {
     var button = document.createElement('button');
     button.type = 'button';
@@ -721,8 +716,8 @@ function renderSceneLineEditor(line, index, article) {
   var lineId = document.createElement('p');
   lineId.className = 'meta';
   lineId.textContent = line.cue
-    ? 'Line ' + (index + 1) + ' · ' + sceneCueRange(line.cue)
-    : 'Line name: ' + line.line_id + '. Exports and the API name the line by it.';
+    ? LabText.t('scenes.line_3', {number: index + 1, sceneCueRange: sceneCueRange(line.cue)})
+    : LabText.t('scenes.line_name_exports_and_the', {line_id: line.line_id});
   article.appendChild(lineId);
 }
 // The scenes table: one row per line, its status from GET /api/scenes/{id}/lines (one answer for the whole scene). A row's
@@ -735,27 +730,27 @@ var sceneLineStates = {},
   scenePlayer = null,
   scenePlayerButton = null;
 var sceneStatusWords = {
-  unsaved: 'Not saved yet',
-  not_rendered: 'Not rendered',
-  waiting: 'Waiting',
-  rendering: 'Rendering',
-  failed: 'Failed',
-  out_of_date: 'Out of date',
-  choose_take: 'Choose a take',
-  done: 'Done',
+  unsaved: LabText.t('scenes.not_saved_yet'),
+  not_rendered: LabText.t('scenes.not_rendered'),
+  waiting: LabText.t('scenes.waiting'),
+  rendering: LabText.t('scenes.rendering'),
+  failed: LabText.t('scenes.failed'),
+  out_of_date: LabText.t('scenes.out_of_date'),
+  choose_take: LabText.t('scenes.choose_a_take'),
+  done: LabText.t('scenes.done'),
 };
 var sceneNeedsRender = ['not_rendered', 'out_of_date', 'failed'];
 function sceneModelName(engineId) {
   var entry = ((catalog && catalog.engines) || []).find(function (item) {
     return item.id === engineId;
   });
-  return entry ? entry.name : engineId || 'No model';
+  return entry ? entry.name : engineId || LabText.t('scenes.no_model');
 }
 function sceneShortText(text) {
   var value = String(text || '')
     .replace(/\s+/g, ' ')
     .trim();
-  return value.length > 90 ? value.slice(0, 89) + '…' : value || 'Empty line';
+  return value.length > 90 ? value.slice(0, 89) + '…' : value || LabText.t('scenes.empty_line');
 }
 function sceneRowState(line) {
   var server = sceneLineStates[line.line_id] || null;
@@ -790,14 +785,14 @@ function renderSceneForm() {
   $('sceneWork').hidden = !$('sceneEditor').value.trim();
   if ($('sceneWork').hidden) {
     $('sceneName').value = '';
-    container.textContent = 'Open a scene or start one from the current performer.';
+    container.textContent = LabText.t('scenes.open_a_scene_or_start');
     return;
   }
   var scene;
   try {
     scene = sceneBody();
   } catch (error) {
-    container.textContent = 'Fix the advanced JSON to use the script form.';
+    container.textContent = LabText.t('scenes.fix_the_advanced_json_to');
     showSceneError(error);
     return;
   }
@@ -806,7 +801,7 @@ function renderSceneForm() {
   $('sceneLineAdd').disabled = false;
   $('sceneError').textContent = '';
   if (!scene.lines.length) {
-    container.textContent = 'This script has no dialogue lines. Add a line to continue.';
+    container.textContent = LabText.t('scenes.this_script_has_no_dialogue');
     return;
   }
   var wrap = document.createElement('div'),
@@ -815,13 +810,13 @@ function renderSceneForm() {
   wrap.className = 'scene-table-wrap';
   table.className = 'scene-table';
   [
-    ['tick', 'Ticked'],
+    ['tick', LabText.t('scenes.ticked')],
     ['number', '#'],
-    ['character', 'Character'],
-    ['line', 'Line'],
-    ['voice', 'Voice'],
-    ['status', 'Status'],
-    ['actions', 'Actions'],
+    ['character', LabText.t('scenes.character')],
+    ['line', LabText.t('scenes.line')],
+    ['voice', LabText.t('scenes.voice')],
+    ['status', LabText.t('scenes.status')],
+    ['actions', LabText.t('scenes.actions')],
   ].forEach(function (column) {
     var cell = document.createElement('th'),
       name = column[1];
@@ -855,7 +850,7 @@ function buildSceneRow(line, index) {
   var tick = document.createElement('input');
   tick.type = 'checkbox';
   tick.checked = sceneTicked.has(line.line_id);
-  tick.setAttribute('aria-label', 'Tick line ' + number);
+  tick.setAttribute('aria-label', LabText.t('scenes.tick_line', {number: number}));
   tick.addEventListener('change', function () {
     if (this.checked) sceneTicked.add(line.line_id);
     else sceneTicked.delete(line.line_id);
@@ -873,7 +868,7 @@ function buildSceneRow(line, index) {
     words = main.insertCell(),
     voice = main.insertCell();
   who.className = 'scene-character';
-  who.textContent = character ? character.name : 'No character';
+  who.textContent = character ? character.name : LabText.t('scenes.no_character');
   who.title = who.textContent;
   voice.className = 'meta scene-voice';
   voice.textContent =
@@ -885,13 +880,13 @@ function buildSceneRow(line, index) {
   words.className = 'scene-text';
   status.className = 'scene-status';
   actions.className = 'scene-actions';
-  var play = sceneButton('Play', 'Play line ' + number, function () {
+  var play = sceneButton(LabText.t('scenes.play'), LabText.t('scenes.play_line', {number: number}), function () {
       playSceneLine(line.line_id, play, number);
     }),
-    render = sceneButton('Render', 'Render line ' + number, function () {
+    render = sceneButton(LabText.t('scenes.render'), LabText.t('scenes.render_line', {number: number}), function () {
       startSceneBatch({ line_ids: [line.line_id] }).catch(showSceneError);
     }),
-    open = sceneButton('Open', 'Line ' + number + ' details', function () {
+    open = sceneButton(LabText.t('scenes.open'), LabText.t('scenes.line_details', {number: number}), function () {
       setOpen(detail.hidden);
     });
   play.className = 'scene-play';
@@ -919,7 +914,7 @@ function buildSceneRow(line, index) {
   };
   function setOpen(value) {
     detail.hidden = !value;
-    open.textContent = value ? 'Close' : 'Open';
+    open.textContent = value ? LabText.t('scenes.close') : LabText.t('scenes.open');
     open.setAttribute('aria-expanded', String(value));
     if (value) sceneOpenLines.add(line.line_id);
     else sceneOpenLines.delete(line.line_id);
@@ -949,11 +944,11 @@ function paintSceneRow(line) {
   row.status.textContent = '';
   var word = document.createElement('span');
   word.className = 'scene-status-word';
-  word.textContent = sceneStatusWords[state.status] || 'Checking…';
+  word.textContent = sceneStatusWords[state.status] || LabText.t('scenes.checking');
   row.status.appendChild(word);
   if (segments.length > 1 && state.status !== 'done' && state.status !== 'unsaved')
     row.status.appendChild(
-      document.createTextNode(' (' + state.server.segments_done + ' of ' + segments.length + ' parts done)'),
+      document.createTextNode(LabText.t('scenes.of_parts_done', {segments_done: state.server.segments_done, length: segments.length})),
     );
   if (state.reason) {
     var why = document.createElement('span');
@@ -970,8 +965,8 @@ function paintSceneRow(line) {
     if (overrun >= 0.001) {
       var warning = document.createElement('span');
       warning.className = 'meta scene-reason';
-      var excess = overrun >= 0.05 ? overrun.toFixed(1) + ' s' : 'less than 0.1 s';
-      warning.textContent = 'Too long by ' + excess + '. Render again, raise the speed if your model supports it, or adjust this cue and the following times.';
+      var excess = overrun >= 0.05 ? overrun.toFixed(1) + ' s' : LabText.t('scenes.less_than_0_1_s');
+      warning.textContent = LabText.t('scenes.too_long_by_render_again', {excess: excess});
       row.status.appendChild(warning);
     }
   }
@@ -997,17 +992,17 @@ function paintSceneRows() {
 }
 function sceneTakeTime(value) {
   var date = new Date(value);
-  return isNaN(date.getTime()) ? String(value || '') : date.toLocaleString();
+  return isNaN(date.getTime()) ? String(value || '') : date.toLocaleString(LabText.language);
 }
 function renderSceneTakes(container, line, state) {
   container.textContent = '';
   var heading = document.createElement('h3');
-  heading.textContent = 'Takes';
+  heading.textContent = LabText.t('scenes.takes');
   container.appendChild(heading);
   if (!state.server) {
     var none = document.createElement('p');
     none.className = 'meta';
-    none.textContent = state.status === 'unsaved' ? 'Save the scene to see this line’s takes.' : 'Checking…';
+    none.textContent = state.status === 'unsaved' ? LabText.t('scenes.save_the_scene_to_see') : LabText.t('scenes.checking');
     container.appendChild(none);
     return;
   }
@@ -1021,17 +1016,10 @@ function renderSceneTakes(container, line, state) {
         }),
         title = document.createElement('p');
       title.textContent =
-        'Part ' +
-        (part + 1) +
-        ' of ' +
-        segments.length +
-        ': ' +
-        (sceneStatusWords[segment.status] || segment.status) +
-        (segment.reason ? '. ' + segment.reason : '') +
-        (source ? ' “' + sceneShortText(source.text) + '”' : '');
+        LabText.t('scenes.part_of', {number: part + 1, length: segments.length, value: sceneStatusWords[segment.status] || segment.status, value2: segment.reason ? '. ' + segment.reason : '', value3: source ? ' “' + sceneShortText(source.text) + '”' : ''});
       block.appendChild(title);
       block.appendChild(
-        sceneButton('Render this part', 'Render part ' + (part + 1) + ' of line ' + (line.line_id || ''), function () {
+        sceneButton(LabText.t('scenes.render_this_part'), LabText.t('scenes.render_part_of_line', {number: part + 1, value: line.line_id || ''}), function () {
           startSceneBatch({ segment_ids: [line.line_id + '/' + segment.segment_id] }).catch(showSceneError);
         }),
       );
@@ -1039,7 +1027,7 @@ function renderSceneTakes(container, line, state) {
     if (!segment.takes.length) {
       var empty = document.createElement('p');
       empty.className = 'meta';
-      empty.textContent = 'No takes yet. Render makes one.';
+      empty.textContent = LabText.t('scenes.no_takes_yet_render_makes');
       block.appendChild(empty);
     }
     segment.takes.forEach(function (take) {
@@ -1053,18 +1041,12 @@ function renderSceneTakes(container, line, state) {
       item.appendChild(audio);
       about.className = 'meta';
       about.textContent =
-        (take.chosen ? 'Chosen. ' : '') +
-        'Made ' +
-        sceneTakeTime(take.created_at) +
-        ', ' +
-        Number(take.duration_seconds).toFixed(1) +
-        ' s.' +
-        (take.reason ? ' ' + take.reason : '');
+        LabText.t('scenes.made_s', {value: take.chosen ? 'Chosen. ' : '', sceneTakeTime: sceneTakeTime(take.created_at), toFixed: Number(take.duration_seconds).toFixed(1), value2: take.reason ? ' ' + take.reason : ''});
       item.appendChild(about);
       if (take.waveform_checks && (take.waveform_checks.flags || []).length) appendTakeChecks(item, take.waveform_checks);
       if (take.fits && !take.chosen)
         item.appendChild(
-          sceneButton('Use this take', '', function () {
+          sceneButton(LabText.t('scenes.use_this_take'), '', function () {
             useSceneTake(line.line_id, segment.segment_id, take.id);
           }),
         );
@@ -1075,13 +1057,13 @@ function renderSceneTakes(container, line, state) {
 }
 function useSceneTake(lineId, segmentId, takeId) {
   if (sceneDirty) {
-    showSceneError(new Error('Save or discard unsaved script edits before choosing a take.'));
+    showSceneError(new Error(LabText.t('scenes.save_or_discard_unsaved_script')));
     return;
   }
   fetchJson('/api/scenes/' + activeSceneId + '/select', { line_id: lineId, segment_id: segmentId, take_id: takeId })
     .then(function (value) {
       return renderScene(value.scene).then(function () {
-        $('sceneStatus').textContent = 'Take chosen. The scene is saved at revision ' + value.scene.revision + '.';
+        $('sceneStatus').textContent = LabText.t('scenes.take_chosen_the_scene_is', {revision: value.scene.revision});
       });
     })
     .catch(showSceneError);
@@ -1089,8 +1071,8 @@ function useSceneTake(lineId, segmentId, takeId) {
 function stopScenePlayer() {
   if (scenePlayer) scenePlayer.pause();
   if (scenePlayerButton) {
-    scenePlayerButton.textContent = 'Play';
-    scenePlayerButton.setAttribute('aria-label', scenePlayerButton.getAttribute('aria-label').replace(/^Stop/, 'Play'));
+    scenePlayerButton.textContent = LabText.t('scenes.play');
+    scenePlayerButton.setAttribute('aria-label', scenePlayerButton.getAttribute('aria-label').replace(/^Stop/, LabText.t('scenes.play')));
   }
   scenePlayer = null;
   scenePlayerButton = null;
@@ -1111,8 +1093,8 @@ function playSceneLine(lineId, button, number) {
     at = 0;
   scenePlayer = audio;
   scenePlayerButton = button;
-  button.textContent = 'Stop';
-  button.setAttribute('aria-label', 'Stop line ' + number);
+  button.textContent = LabText.t('scenes.stop');
+  button.setAttribute('aria-label', LabText.t('scenes.stop_line', {number: number}));
   audio.addEventListener('ended', function () {
     if (scenePlayer !== audio) return;
     at += 1;
@@ -1134,14 +1116,14 @@ function fillSceneCharacterFilter(scene) {
     keep = select.value,
     seen = {};
   select.textContent = '';
-  option(select, '', 'Everyone');
+  option(select, '', LabText.t('scenes.everyone'));
   scene.lines.forEach(function (line) {
     if (!line.character_id || seen[line.character_id]) return;
     seen[line.character_id] = true;
     var character = castCharacters.find(function (item) {
       return item.id === line.character_id;
     });
-    option(select, line.character_id, character ? character.name : 'Character ' + line.character_id.slice(0, 8));
+    option(select, line.character_id, character ? character.name : LabText.t('scenes.character_2', {slice: line.character_id.slice(0, 8)}));
   });
   select.value = seen[keep] ? keep : '';
 }
@@ -1165,10 +1147,10 @@ function applySceneFilters() {
     });
   $('sceneTableSummary').textContent =
     rows.length +
-    (rows.length === 1 ? ' line' : ' lines') +
+    (rows.length === 1 ? LabText.t('scenes.line_4') : LabText.t('scenes.lines_2')) +
     (parts.length ? ': ' + parts.join(', ') : '') +
     '.' +
-    (shown < rows.length ? ' Showing ' + shown + '.' : '');
+    (shown < rows.length ? LabText.t('scenes.showing', {shown: shown}) : '');
   updateSceneTools();
 }
 function updateSceneTools() {
@@ -1185,12 +1167,12 @@ function updateSceneTools() {
     choose = rows.filter(function (row) {
       return row.state === 'choose_take';
     }).length;
-  $('sceneRenderTicked').textContent = 'Render ticked (' + ticked.length + ')';
+  $('sceneRenderTicked').textContent = LabText.t('scenes.render_ticked', {length: ticked.length});
   $('sceneRenderTicked').disabled = !ticked.length;
   $('sceneTickAll').checked = !!shown.length && ticked.length === shown.length;
   $('sceneTickAll').indeterminate = !!ticked.length && ticked.length < shown.length;
-  $('sceneRenderMissing').textContent = 'Render what is missing or out of date' + (missing ? ' (' + missing + ')' : '');
-  $('sceneChooseNewest').textContent = 'Use the newest take where none is chosen' + (choose ? ' (' + choose + ')' : '');
+  $('sceneRenderMissing').textContent = LabText.t('scenes.render_what_is_missing_or_2', {value: missing ? ' (' + missing + ')' : ''});
+  $('sceneChooseNewest').textContent = LabText.t('scenes.use_the_newest_take_where_2', {value: choose ? ' (' + choose + ')' : ''});
 }
 function refreshSceneLineStates() {
   if (!activeSceneId) {
@@ -1220,7 +1202,7 @@ $('sceneEditor').addEventListener('input', function () {
   sceneLiveText = this.value;
   sceneDirty = true;
   renderSceneForm();
-  $('sceneStatus').textContent = 'Unsaved scene JSON changes.';
+  $('sceneStatus').textContent = LabText.t('scenes.unsaved_scene_json_changes');
   sceneHistoryState();
 });
 function sceneJobLabel(job) {
@@ -1262,14 +1244,14 @@ function renderScene(scene) {
   $('sceneError').textContent = '';
   renderSceneForm();
   $('sceneStatus').textContent =
-    scene.name + ' / revision ' + scene.revision + ' / ' + scene.lines.length + ' ordered lines / SHA-256 ' + scene.checksum;
+    LabText.t('scenes.revision_ordered_lines_sha_256', {name: scene.name, revision: scene.revision, length: scene.lines.length, checksum: scene.checksum});
   $('sceneExportJson').href = '/api/scenes/' + scene.scene_id + '/export.json';
   $('sceneExportCsv').href = '/api/scenes/' + scene.scene_id + '/export.csv';
   bindDubScene(scene);
   var videoStart = scene.timeline && scene.timeline.source_offset_ms;
   $('sceneTimelineNote').hidden = videoStart === undefined;
   $('sceneTimelineNote').textContent = videoStart === undefined ? '' :
-    'This section starts at ' + sceneCueTime(videoStart) + ' in the original video.';
+    LabText.t('scenes.this_section_starts_at_in', {sceneCueTime: sceneCueTime(videoStart)});
   $('sceneExportJson').hidden = false;
   $('sceneExportCsv').hidden = false;
   var jobs = fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
@@ -1319,7 +1301,7 @@ function refreshSceneList(preferred) {
     scenePickerOrder(result.scenes || [], books).forEach(function (scene) {
       var book = books[scene.scene_id];
       var name = book ? book.title + ' · ' + scene.name : scene.name;
-      option(select, scene.scene_id, name + ' / r' + scene.revision);
+      option(select, scene.scene_id, LabText.t('scenes.r', {name: name, revision: scene.revision}));
     });
     if (
       keep &&
@@ -1374,10 +1356,8 @@ function renderSampleNotes() {
   $('sampleOpen').hidden = onSample;
   $('sampleRemove').hidden = !onSample;
   $('sampleText').textContent = onSample
-    ? 'This is the sample scene, made by the Lab with two of Kokoro’s preset voices. To hear it: press Render all, and when ' +
-      'the batch has finished, Use the newest take where none is chosen, then Build the scene from the chosen takes.'
-    : 'No scene yet. Open the sample scene: two characters with Kokoro’s preset voices and nine lines, ready to render. ' +
-      'One button removes it again.';
+    ? LabText.t('scenes.this_is_the_sample_scene')
+    : LabText.t('scenes.no_scene_yet_open_the');
   $('castSampleNote').hidden = !(castLoaded && castCharacters.length === 0 && sampleOffered());
   $('firstRunSample').hidden = !(firstRun.ready && !$('firstRun').hidden && sampleOffered());
 }
@@ -1388,9 +1368,9 @@ function sampleButtons(disabled) {
 }
 function openSample() {
   var onHome = !$('home').hidden;
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and open the sample scene?')) return Promise.resolve(null);
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and'))) return Promise.resolve(null);
   sampleButtons(true);
-  $('sampleStatus').textContent = 'Opening the sample scene…';
+  $('sampleStatus').textContent = LabText.t('scenes.opening_the_sample_scene');
   if (onHome) $('homeSampleStatus').textContent = $('sampleStatus').textContent;
   return fetchJson('/api/sample', {})
     .then(function (result) {
@@ -1398,8 +1378,8 @@ function openSample() {
       location.hash = '#scenes';
       $('homeSampleStatus').textContent = '';
       $('sampleStatus').textContent = result.made
-        ? 'Made the sample scene and its two characters, Edie and Tomas.'
-        : 'Opened the sample scene.';
+        ? LabText.t('scenes.made_the_sample_scene_and')
+        : LabText.t('scenes.opened_the_sample_scene');
       return refreshCast().then(function () {
         return refreshSceneList(result.sample.scene_id);
       });
@@ -1419,16 +1399,15 @@ function removeSample() {
     .then(function (preview) {
       if (preview.used_elsewhere.length) {
         $('sampleStatus').textContent =
-          'A sample character speaks in another scene: ' + preview.used_elsewhere.join(', ') + '. Give those lines another voice first.';
+          LabText.t('scenes.a_sample_character_speaks_in', {join: preview.used_elsewhere.join(', ')});
         return null;
       }
       var gone = preview.would_remove,
-        parts = [gone.character + ' characters and their voices', gone.take + (gone.take === 1 ? ' take' : ' takes')];
-      if (gone.reference) parts.push(gone.reference + (gone.reference === 1 ? ' recording' : ' recordings'));
+        parts = [gone.character + LabText.t('scenes.characters_and_their_voices'), gone.take + (gone.take === 1 ? LabText.t('scenes.take') : LabText.t('scenes.takes_2'))];
+      if (gone.reference) parts.push(gone.reference + (gone.reference === 1 ? LabText.t('scenes.recording') : LabText.t('scenes.recordings')));
       if (
         !window.confirm(
-          'Remove the sample? This deletes the scene “' + (preview.scene ? preview.scene.name : 'Sample') + '” with its batches and ' +
-            'built previews, ' + parts.join(', ') + '. Your own characters and scenes are not touched. It cannot be undone.'
+          LabText.t('scenes.remove_the_sample_this_deletes', {value: preview.scene ? preview.scene.name : 'Sample', join: parts.join(', ')})
         )
       )
         return null;
@@ -1440,8 +1419,7 @@ function removeSample() {
       sceneDirty = false;
       return Promise.all([refreshCast(), refreshSceneList()]).then(function () {
         $('sampleStatus').textContent =
-          'Removed the sample scene, its characters and ' + report.removed.take + (report.removed.take === 1 ? ' take.' : ' takes.') +
-          (copies ? ' Copies in export packages stay where they are (' + copies + (copies === 1 ? ' file).' : ' files).') : '');
+          LabText.t('scenes.removed_the_sample_scene_its', {take: report.removed.take, value: report.removed.take === 1 ? ' take.' : ' takes.', value2: copies ? ' Copies in export packages stay where they are (' + copies + (copies === 1 ? ' file).' : ' files).') : ''});
       });
     })
     .catch(function (error) {
@@ -1454,13 +1432,13 @@ function removeSample() {
 function startSceneFromPerformer() {
   var character = performanceCharacter(),
     identity = performanceIdentity();
-  if (!character || !identity) throw new Error('Choose a character and voice in Perform first.');
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and start a new script from Perform?')) return;
+  if (!character || !identity) throw new Error(LabText.t('scenes.choose_a_character_and_voice'));
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_2'))) return;
   var seed = Number($('performSeed').value);
   if (!Number.isFinite(seed)) seed = 42;
   var payload = {
     schema_version: 1,
-    name: character.name + ' scene',
+    name: character.name + LabText.t('scenes.scene'),
     lines: [
       {
         line_id: 'line-001',
@@ -1494,10 +1472,10 @@ function startSceneFromPerformer() {
   $('sceneEditor').value = JSON.stringify(payload, null, 2);
   resetSceneHistory(null);
   renderSceneForm();
-  $('sceneStatus').textContent = 'Starter scene is ready; validate and save it before rendering.';
+  $('sceneStatus').textContent = LabText.t('scenes.starter_scene_is_ready_validate');
 }
 function importSceneFile(file) {
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and import this script?')) return Promise.resolve(null);
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_3'))) return Promise.resolve(null);
   var format = file.name.toLowerCase().endsWith('.csv') ? 'csv' : 'json';
   return file
     .text()
@@ -1512,9 +1490,6 @@ function importSceneFile(file) {
 // scene. Create the scene stays off while a speaker has no voice and is not left out, and the server refuses that too.
 var sceneScript = null,
   sceneScriptFile = '';
-function sceneCount(count, one, many) {
-  return count + ' ' + (count === 1 ? one : many);
-}
 function sceneScriptFormatOf(name) {
   var lower = String(name).toLowerCase();
   if (/\.(fountain|spmd)$/.test(lower)) return 'fountain';
@@ -1550,9 +1525,9 @@ function sceneScriptGuess(name) {
 function sceneScriptPicker(name, narration, timed) {
   var select = document.createElement('select');
   select.dataset.speaker = narration ? '' : name;
-  select.setAttribute('aria-label', narration ? 'Voice for the lines with no speaker' : 'Voice for ' + name);
-  option(select, '', 'Choose a voice…');
-  option(select, '-', 'Leave these lines out');
+  select.setAttribute('aria-label', narration ? LabText.t('scenes.voice_for_the_lines_with') : LabText.t('scenes.voice_for', {name: name}));
+  option(select, '', LabText.t('scenes.choose_a_voice'));
+  option(select, '-', LabText.t('scenes.leave_these_lines_out'));
   sceneScriptVoices().forEach(function (group) {
     var choices = document.createElement('optgroup');
     choices.label = group.character.name;
@@ -1586,12 +1561,12 @@ function sceneScriptReady() {
   $('sceneScriptSpeakers')
     .querySelectorAll('select')
     .forEach(function (select) {
-      if (!select.value) waiting.push(select.dataset.speaker || 'the lines with no speaker');
+      if (!select.value) waiting.push(select.dataset.speaker || LabText.t('scenes.the_lines_with_no_speaker'));
     });
   var invalidTimed = sceneScript && sceneScript.duration_ms !== undefined && sceneScript.unread.length > 0;
   $('sceneScriptCreate').disabled = !sceneScript || !sceneScript.lines.length || !!invalidTimed || waiting.length > 0;
-  $('sceneScriptWaiting').textContent = invalidTimed ? 'Fix the subtitle errors and read the file again.' : waiting.length
-    ? 'Choose a voice for ' + waiting.join(', ') + ', or leave their lines out.'
+  $('sceneScriptWaiting').textContent = invalidTimed ? LabText.t('scenes.fix_the_subtitle_errors_and') : waiting.length
+    ? LabText.t('scenes.choose_a_voice_for_or', {join: waiting.join(', ')})
     : '';
 }
 function clearSceneScript() {
@@ -1605,25 +1580,20 @@ function renderSceneScript() {
   var script = sceneScript,
     fountain = script.format === 'fountain',
     timed = script.duration_ms !== undefined,
-    parts = [sceneCount(script.lines.length, timed ? 'cue' : 'line', timed ? 'cues' : 'lines'),
-      sceneCount(script.speakers.length, 'speaker', 'speakers')];
+    parts = [timed ? LabText.plural('scenes.cue_count', script.lines.length) : LabText.plural('scenes.line_count', script.lines.length),
+      LabText.plural('scenes.speaker_count', script.speakers.length)];
   if (script.narration)
-    parts.push(
-      sceneCount(
-        script.narration,
-        fountain ? 'line of action' : 'line with no name',
-        fountain ? 'lines of action' : 'lines with no name',
-      ),
-    );
+    parts.push(fountain ? LabText.plural('scenes.line_of_action_count', script.narration)
+      : LabText.plural('scenes.line_with_no_name_count', script.narration));
   if (timed && script.sections && script.sections.length > 1)
-    parts.push(sceneCount(script.sections.length, 'scene section', 'scene sections'));
-  parts.push(sceneCount(script.unread.length, 'line not understood', 'lines not understood'));
+    parts.push(LabText.plural('scenes.scene_section_count', script.sections.length));
+  parts.push(LabText.plural('scenes.line_not_understood_count', script.unread.length));
   $('sceneScriptSummary').textContent = parts.join(', ') + '.';
   var unread = $('sceneScriptUnread');
   unread.textContent = '';
   script.unread.forEach(function (item) {
     var entry = document.createElement('li');
-    entry.textContent = 'Line ' + item.number + ': ' + item.text + ' (' + item.reason + ')';
+    entry.textContent = LabText.t('scenes.line_5', {number: item.number, text: item.text, reason: item.reason});
     unread.appendChild(entry);
   });
   $('sceneScriptUnreadBox').hidden = !script.unread.length;
@@ -1639,7 +1609,7 @@ function renderSceneScript() {
     });
     script.lines.forEach(function (line) {
       var item = document.createElement('li');
-      item.textContent = sceneCueRange(line.cue) + ' · ' + (line.speaker || 'No speaker') + ' · ' + line.text;
+      item.textContent = sceneCueRange(line.cue) + ' · ' + (line.speaker || LabText.t('scenes.no_speaker')) + ' · ' + line.text;
       cues.appendChild(item);
     });
   }
@@ -1651,7 +1621,7 @@ function renderSceneScript() {
   if (script.narration)
     body.appendChild(
       sceneScriptRow(
-        timed ? 'Cues with no speaker label' : fountain ? 'Action, read by a narrator' : 'Lines with no name, read by a narrator',
+        timed ? LabText.t('scenes.cues_with_no_speaker_label') : fountain ? LabText.t('scenes.action_read_by_a_narrator') : LabText.t('scenes.lines_with_no_name_read'),
         script.narration,
         sceneScriptPicker('', true, timed),
       ),
@@ -1667,7 +1637,7 @@ function readSceneScript() {
   $('sceneScriptReport').textContent = '';
   clearSceneScript();
   var version = sceneScriptReadVersion;
-  if (!content.trim()) return Promise.reject(new Error('Paste a script, or choose a file.'));
+  if (!content.trim()) return Promise.reject(new Error(LabText.t('scenes.paste_a_script_or_choose')));
   return fetchJson('/api/scenes/import/preview', { format: $('sceneScriptFormat').value, content: content }).then(
     function (result) {
       if (version !== sceneScriptReadVersion) return;
@@ -1680,13 +1650,13 @@ function draftSceneSubtitles() {
   var button = $('sceneSpeechDraft'), note = $('sceneSpeechNote');
   var file = $('sceneSpeechFile').files[0];
   if (!file) {
-    note.textContent = 'Choose the audio file to transcribe.';
+    note.textContent = LabText.t('scenes.choose_the_audio_file_to');
     return;
   }
   var oldText = $('sceneScriptText').value;
-  if (oldText.trim() && !window.confirm('Replace the text in the import box with a subtitle draft?')) return;
+  if (oldText.trim() && !window.confirm(LabText.t('scenes.replace_the_text_in_the'))) return;
   button.disabled = true;
-  note.textContent = 'Listening to the file. This can take several minutes.';
+  note.textContent = LabText.t('scenes.listening_to_the_file_this');
   var form = new FormData();
   form.set('file', file);
   form.set('model', 'whisper-1');
@@ -1694,17 +1664,17 @@ function draftSceneSubtitles() {
   fetch('/v1/audio/transcriptions', {method:'POST', body:form}).then(async function(response) {
     if (!response.ok) {
       var failed = await response.json();
-      throw new Error(failed.error?.message || 'Could not draft subtitles. Check the file and try again.');
+      throw new Error(failed.error?.message || LabText.t('scenes.could_not_draft_subtitles_check'));
     }
     var text = await response.text();
-    if (!text.trim()) throw new Error('No words were heard. Choose a recording with clear speech and try again.');
+    if (!text.trim()) throw new Error(LabText.t('scenes.no_words_were_heard_choose'));
     if ($('sceneScriptText').value !== oldText) {
-      if (!window.confirm('Replace your new edits in the import box with the finished draft?')) return;
+      if (!window.confirm(LabText.t('scenes.replace_your_new_edits_in'))) return;
     }
     $('sceneScriptFormat').value = 'srt';
     $('sceneScriptText').value = text;
     await readSceneScript();
-    note.textContent = 'Draft ready. Check the words and times before creating a scene.';
+    note.textContent = LabText.t('scenes.draft_ready_check_the_words');
   }).catch(function(error) {
     note.textContent = error.message;
   }).finally(function() {
@@ -1724,30 +1694,30 @@ function loadSceneScriptFile(file) {
 }
 function sceneScriptReportText(scene, report) {
   var rows = [scene.length > 1
-    ? 'Created ' + scene.length + ' scene sections. Choose any section from Saved scene.'
-    : 'Created “' + scene[0].name + '” with ' + sceneCount(report.lines, 'line', 'lines') + '.'];
+    ? LabText.t('scenes.created_scene_sections_choose_any', {length: scene.length})
+    : LabText.t('scenes.created_with', {name: scene[0].name, sceneCount: LabText.plural('scenes.line_count', report.lines)})];
   function note(title, items, describe) {
     if (!items.length) return;
     rows.push(title + ':');
     items.slice(0, 12).forEach(function (item) {
-      rows.push('• Line ' + item.number + (item.speaker ? ' (' + item.speaker + ')' : '') + ': ' + describe(item));
+      rows.push(LabText.t('scenes.line_6', {number: item.number, value: item.speaker ? ' (' + item.speaker + ')' : '', describe: describe(item)}));
     });
-    if (items.length > 12) rows.push('• and ' + (items.length - 12) + ' more.');
+    if (items.length > 12) rows.push(LabText.t('scenes.and_more', {value: items.length - 12}));
   }
-  note('Left out', report.left_out, function (item) {
+  note(LabText.t('scenes.left_out'), report.left_out, function (item) {
     return item.reason + '. “' + sceneShortText(item.text) + '”';
   });
-  note('Acting directions left out, because the voice’s model takes none', report.directions_left_out, function (item) {
+  note(LabText.t('scenes.acting_directions_left_out_because'), report.directions_left_out, function (item) {
     return '(' + item.direction + ')';
   });
-  note('Not understood', report.unread, function (item) {
+  note(LabText.t('scenes.not_understood'), report.unread, function (item) {
     return item.reason + '. “' + item.text + '”';
   });
   return rows.join('\n');
 }
 function createSceneFromScript() {
   if (!sceneScript) return Promise.resolve(null);
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and import this script?')) return Promise.resolve(null);
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_3'))) return Promise.resolve(null);
   var speakers = Object.create(null),
     narrator = null;
   $('sceneScriptSpeakers')
@@ -1782,11 +1752,11 @@ function batchOrderText(job) {
     return false;
   });
   if (current < 0) return '';
-  var text = parts[current].name + ': ' + parts[current].done + ' of ' + parts[current].total;
+  var text = parts[current].name + ': ' + parts[current].done + LabText.t('scenes.of') + parts[current].total;
   parts.slice(current + 1).forEach(function (part) {
-    text += ', then ' + part.name + ': ' + part.total;
+    text += LabText.t('scenes.then', {name: part.name, total: part.total});
   });
-  return (parts.length > 1 ? 'Rendering one model at a time: ' : 'Rendering with ') + text + '. ';
+  return (parts.length > 1 ? LabText.t('scenes.rendering_one_model_at_a') : LabText.t('scenes.rendering_with')) + text + '. ';
 }
 function refreshSceneJob() {
   if (!activeSceneJobId) return Promise.resolve();
@@ -1794,19 +1764,8 @@ function refreshSceneJob() {
     var job = result.job;
     $('sceneProgress').value = job.progress;
     $('sceneStatus').textContent =
-      (['queued', 'running'].indexOf(job.status) >= 0 ? batchOrderText(job) : '') +
-      job.status +
-      ' / ' +
-      job.completed +
-      ' completed / ' +
-      job.failed +
-      ' failed / ' +
-      job.queued +
-      ' queued / ' +
-      job.total +
-      ' total / ' +
-      Math.round(job.progress * 100) +
-      '%';
+      LabText.t('scenes.completed_failed_queued_total', {value: (['queued', 'running'].indexOf(job.status) >= 0 ? batchOrderText(job) : '') +
+      job.status, completed: job.completed, failed: job.failed, queued: job.queued, total: job.total, round: Math.round(job.progress * 100)});
     Array.prototype.forEach.call($('sceneJobSelect').options, function (item) {
       if (item.value === job.id) item.textContent = sceneJobLabel(job);
     });
@@ -1819,20 +1778,8 @@ function refreshSceneJob() {
         title = document.createElement('strong');
       var cue = job.scene_snapshot?.lines[row.scene_order]?.cue;
       title.textContent = cue
-        ? 'Line ' + (row.scene_order + 1) + ' (' + sceneCueTime(cue.start_ms) + ') / part ' + (row.segment_index + 1)
-          + ' / take ' + row.take_index + ' / ' + row.status
-        : 'Render ' +
-        (row.ordinal + 1) +
-        ' / scene ' +
-        (row.scene_order + 1) +
-        ' — ' +
-        row.line_id +
-        ' / ' +
-        row.segment_id +
-        ' / take ' +
-        row.take_index +
-        ' / ' +
-        row.status;
+        ? LabText.t('scenes.line_part_take', {value: row.scene_order + 1, sceneCueTime: sceneCueTime(cue.start_ms), value2: row.segment_index + 1, take_index: row.take_index, status: row.status})
+        : LabText.t('scenes.render_scene_take', {value: row.ordinal + 1, value2: row.scene_order + 1, line_id: row.line_id, segment_id: row.segment_id, take_index: row.take_index, status: row.status});
       article.appendChild(title);
       if (row.error) {
         var failure = document.createElement('p');
@@ -1843,7 +1790,7 @@ function refreshSceneJob() {
       if (row.purged) {
         var gone = document.createElement('p');
         gone.className = 'meta';
-        gone.textContent = 'This take was deleted from Cast for good. The row stays as a record.';
+        gone.textContent = LabText.t('scenes.this_take_was_deleted_from');
         article.appendChild(gone);
       }
       if (row.take_id && !row.purged) {
@@ -1863,11 +1810,11 @@ function refreshSceneJob() {
         );
         var choose = document.createElement('button');
         choose.type = 'button';
-        choose.textContent = 'Use this take';
+        choose.textContent = LabText.t('scenes.use_this_take');
         choose.disabled = !!row.retirement;
         choose.addEventListener('click', function () {
           if (sceneDirty) {
-            showSceneError(new Error('Save or discard unsaved script edits before selecting a take.'));
+            showSceneError(new Error(LabText.t('scenes.save_or_discard_unsaved_script_2')));
             return;
           }
           fetchJson('/api/scenes/' + activeSceneId + '/select', {
@@ -1876,7 +1823,7 @@ function refreshSceneJob() {
             take_id: row.take_id,
           })
             .then(function (value) {
-              $('sceneStatus').textContent = 'Selected take saved in scene revision ' + value.scene.revision + '.';
+              $('sceneStatus').textContent = LabText.t('scenes.selected_take_saved_in_scene', {revision: value.scene.revision});
               return renderScene(value.scene);
             })
             .catch(showSceneError);
@@ -1901,7 +1848,7 @@ function saveAndGetScene() {
   });
   if (invalid) {
     invalid.reportValidity();
-    return Promise.reject(new Error('Correct the highlighted script field before saving.'));
+    return Promise.reject(new Error(LabText.t('scenes.correct_the_highlighted_script_field')));
   }
   var body;
   try {
@@ -1960,7 +1907,7 @@ function missingSceneLines() {
       return row.line.line_id;
     });
   if (ids.length) return { line_ids: ids };
-  $('sceneStatus').textContent = 'Nothing is missing or out of date: every line has a take that fits.';
+  $('sceneStatus').textContent = LabText.t('scenes.nothing_is_missing_or_out');
   return null;
 }
 function chooseNewestSceneTakes() {
@@ -1971,13 +1918,13 @@ function chooseNewestSceneTakes() {
     .then(function (result) {
       return refreshSceneList(result.scene.scene_id).then(function () {
         $('sceneStatus').textContent = result.lines
-          ? 'Chose the newest take for ' + result.lines + (result.lines === 1 ? ' line.' : ' lines.')
-          : 'No line was waiting for a take: each one has a take chosen, or no take that fits.';
+          ? LabText.t('scenes.chose_the_newest_take_for', {lines: result.lines, value: result.lines === 1 ? ' line.' : ' lines.'})
+          : LabText.t('scenes.no_line_was_waiting_for');
       });
     });
 }
 function sceneAction(action) {
-  if (!activeSceneJobId) throw new Error('Choose a batch job first.');
+  if (!activeSceneJobId) throw new Error(LabText.t('scenes.choose_a_batch_job_first'));
   // Stop now cancels the batch and also stops the line it is rendering, where Cancel lets that line finish.
   var stopNow = action === 'stopNow';
   var path = '/api/scenes/jobs/' + activeSceneJobId + '/' + (stopNow ? 'cancel' : action);
@@ -1986,11 +1933,11 @@ function sceneAction(action) {
   });
 }
 function previewScene() {
-  if (!activeSceneId) throw new Error('Save a scene before assembly.');
+  if (!activeSceneId) throw new Error(LabText.t('scenes.save_a_scene_before_assembly'));
   var save = sceneDirty ? saveAndGetScene() : Promise.resolve({ scene_id: activeSceneId });
   var read = ++scenePreviewRead, button = $('scenePreview');
   button.disabled = true;
-  $('sceneStatus').textContent = 'Building the scene from the chosen takes…';
+  $('sceneStatus').textContent = LabText.t('scenes.building_the_scene_from_the');
   return save
     .then(function (scene) {
       return fetchJson('/api/scenes/' + scene.scene_id + '/preview', {});
@@ -1998,7 +1945,7 @@ function previewScene() {
     .then(function (result) {
       if (read !== scenePreviewRead) return;
       showScenePreview(result.preview);
-      $('sceneStatus').textContent = 'Scene built. Listen below.';
+      $('sceneStatus').textContent = LabText.t('scenes.scene_built_listen_below');
     })
     .catch(function (error) {
       if (read !== scenePreviewRead) return;
@@ -2013,27 +1960,19 @@ function showScenePreview(preview) {
   $('scenePlayers').hidden = false;
   var mastering = preview.mastering || {};
   $('scenePreviewMeta').textContent =
-    (preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence') + ' / ' +
-    preview.duration_seconds.toFixed(2) +
-    ' s / ' +
-    preview.sample_rate +
-    ' Hz / mastered ' +
-    Number(mastering.target_lufs).toFixed(0) +
-    ' LUFS target, ' +
-    Number(mastering.peak_ceiling_dbfs).toFixed(0) +
-    ' dBFS sample-peak ceiling / no compression or crossfades.';
+    LabText.t('scenes.s_hz_mastered_lufs_target', {value: preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence', toFixed: preview.duration_seconds.toFixed(2), sample_rate: preview.sample_rate, toFixed2: Number(mastering.target_lufs).toFixed(0), toFixed3: Number(mastering.peak_ceiling_dbfs).toFixed(0)});
   if (preview.timing && preview.timing.warnings.length)
     $('scenePreviewMeta').textContent += ' ' + preview.timing.warnings.map(function (warning) {
       return warning.message;
     }).join(' ');
 }
 $('sceneRefresh').addEventListener('click', function () {
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and reload the saved scene?')) return;
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_4'))) return;
   refreshSceneList().catch(showSceneError);
 });
 $('sceneSelect').addEventListener('change', function () {
   var target = this.value;
-  if (sceneDirty && !window.confirm('Discard unsaved scene edits and open another scene?')) {
+  if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_5'))) {
     this.value = activeSceneId || '';
     return;
   }
@@ -2149,7 +2088,7 @@ $('sceneSegments').addEventListener('click', function () {
   try {
     sceneBody();
     if (!activeSceneId || sceneDirty) {
-      $('sceneSegmentPreview').textContent = 'Save the scene before showing how its long lines split into parts.';
+      $('sceneSegmentPreview').textContent = LabText.t('scenes.save_the_scene_before_showing');
       return;
     }
     fetchJson('/api/scenes/' + activeSceneId + '/segments')
@@ -2161,10 +2100,10 @@ $('sceneSegments').addEventListener('click', function () {
               (cue ? 'Line ' + (index + 1) + ' (' + sceneCueTime(cue.start_ms) + ')' : line.line_id) +
               ': ' +
               line.segments.length +
-              ' part(s) — ' +
+              LabText.t('scenes.part_s') +
               line.segments
                 .map(function (segment) {
-                  return segment.id + ' (' + segment.text.length + ' chars)';
+                  return segment.id + ' (' + segment.text.length + LabText.t('scenes.chars');
                 })
                 .join(', ')
             );
@@ -2239,32 +2178,32 @@ function exportNumber(id, label) {
     text = field.value.trim();
   if (text === '') return null;
   var value = Number(text);
-  if (!isFinite(value)) throw new Error(label + ' must be a number.');
-  if (field.min !== '' && value < Number(field.min)) throw new Error(label + ' must be ' + field.min + ' or more.');
-  if (field.max !== '' && value > Number(field.max)) throw new Error(label + ' must be ' + field.max + ' or less.');
+  if (!isFinite(value)) throw new Error(LabText.t('scenes.must_be_a_number', {label: label}));
+  if (field.min !== '' && value < Number(field.min)) throw new Error(LabText.t('scenes.must_be_or_more', {label: label, min: field.min}));
+  if (field.max !== '' && value > Number(field.max)) throw new Error(LabText.t('scenes.must_be_or_less', {label: label, max: field.max}));
   return value;
 }
 function exportRequest() {
-  if (!activeSceneId) throw new Error('Save a scene before exporting it.');
-  if (sceneDirty) throw new Error('Save or discard unsaved scene edits before exporting.');
+  if (!activeSceneId) throw new Error(LabText.t('scenes.save_a_scene_before_exporting'));
+  if (sceneDirty) throw new Error(LabText.t('scenes.save_or_discard_unsaved_scene'));
   var formats = [].slice.call(document.querySelectorAll('input[name=exportFormat]:checked')).map(function (box) {
     return box.value;
   });
-  if (!formats.length) throw new Error('Choose at least one format.');
-  var lufs = exportNumber('exportLufs', 'Loudness target');
+  if (!formats.length) throw new Error(LabText.t('scenes.choose_at_least_one_format'));
+  var lufs = exportNumber('exportLufs', LabText.t('scenes.loudness_target'));
   return {
     scene_id: activeSceneId,
     formats: formats,
     filename_template: $('exportTemplate').value,
     wav_precision: $('exportWavPrecision').value,
-    output_rate: exportNumber('exportRate', 'Sample rate'),
-    trim_start_seconds: exportNumber('exportTrimStart', 'Trim start') || 0,
-    trim_end_seconds: exportNumber('exportTrimEnd', 'Trim end') || 0,
-    fade_in_ms: exportNumber('exportFadeIn', 'Fade in') || 0,
-    fade_out_ms: exportNumber('exportFadeOut', 'Fade out') || 0,
+    output_rate: exportNumber('exportRate', LabText.t('scenes.sample_rate')),
+    trim_start_seconds: exportNumber('exportTrimStart', LabText.t('scenes.trim_start')) || 0,
+    trim_end_seconds: exportNumber('exportTrimEnd', LabText.t('scenes.trim_end')) || 0,
+    fade_in_ms: exportNumber('exportFadeIn', LabText.t('scenes.fade_in')) || 0,
+    fade_out_ms: exportNumber('exportFadeOut', LabText.t('scenes.fade_out')) || 0,
     loudness_lufs: lufs,
-    loudness_true_peak: lufs === null ? null : exportNumber('exportTruePeak', 'True peak'),
-    limiter_dbfs: exportNumber('exportLimiter', 'Limiter ceiling'),
+    loudness_true_peak: lufs === null ? null : exportNumber('exportTruePeak', LabText.t('scenes.true_peak')),
+    limiter_dbfs: exportNumber('exportLimiter', LabText.t('scenes.limiter_ceiling')),
   };
 }
 function showExportError(error) {
@@ -2285,8 +2224,8 @@ function applyExportFfmpeg(report) {
     boxes = [].slice.call(document.querySelectorAll('input[name=exportFormat]'));
   note.className = ready && !report.message ? 'meta' : 'meta take-checks flagged';
   note.textContent = ready
-    ? report.message || 'FFmpeg ' + (report.version || '') + ' found; every format is available.'
-    : report.message + ' Refresh list checks again.';
+    ? report.message || LabText.t('scenes.ffmpeg_found_every_format_is', {value: report.version || ''})
+    : LabText.t('scenes.refresh_list_checks_again', {message: report.message});
   ['exportPreview', 'exportCreate', 'exportVerify'].forEach(function (id) {
     $(id).disabled = !ready;
   });
@@ -2330,10 +2269,10 @@ $('exportPreview').addEventListener('click', function () {
     return;
   }
   $('exportError').textContent = '';
-  $('exportStatus').textContent = 'Checking provenance and settings…';
+  $('exportStatus').textContent = LabText.t('scenes.checking_provenance_and_settings');
   fetchJson('/api/exports/preview', body)
     .then(function (result) {
-      $('exportStatus').textContent = 'Dry run only; no files were written.';
+      $('exportStatus').textContent = LabText.t('scenes.dry_run_only_no_files');
       showExportLog(result.log);
     })
     .catch(function (error) {
@@ -2353,10 +2292,10 @@ $('exportCreate').addEventListener('click', function () {
   button.disabled = true;
   $('exportError').textContent = '';
   showExportLog('');
-  $('exportStatus').textContent = 'Writing the package. Large scenes can take a minute or more.';
+  $('exportStatus').textContent = LabText.t('scenes.writing_the_package_large_scenes');
   fetchJson('/api/exports', body)
     .then(function (result) {
-      $('exportStatus').textContent = 'Package written to ' + result.export.path + '. Verify it before sharing.';
+      $('exportStatus').textContent = LabText.t('scenes.package_written_to_verify_it', {path: result.export.path});
       showExportLog(result.log);
       return refreshExports(result.export.name);
     })
@@ -2371,14 +2310,14 @@ $('exportCreate').addEventListener('click', function () {
 $('exportVerify').addEventListener('click', function () {
   var name = $('exportSelect').value;
   if (!name) {
-    showExportError(new Error('Choose a package to verify.'));
+    showExportError(new Error(LabText.t('scenes.choose_a_package_to_verify')));
     return;
   }
   $('exportError').textContent = '';
-  $('exportStatus').textContent = 'Verifying ' + name + '…';
+  $('exportStatus').textContent = LabText.t('scenes.verifying', {name: name});
   fetchJson('/api/exports/' + encodeURIComponent(name) + '/verify', {})
     .then(function (result) {
-      $('exportStatus').textContent = 'Verification passed for ' + name + '.';
+      $('exportStatus').textContent = LabText.t('scenes.verification_passed_for', {name: name});
       showExportLog(result.log);
     })
     .catch(function (error) {
@@ -2408,7 +2347,7 @@ function bindDubScene(scene) {
   var next = scene && scene.timeline ? scene.scene_id : null;
   $('sceneDub').hidden = !next;
   var offset = next && scene.timeline.source_offset_ms;
-  $('dubSourceOffset').textContent = offset ? '(use a clip beginning at ' + sceneCueTime(offset) + ' in the original)' : '';
+  $('dubSourceOffset').textContent = offset ? LabText.t('scenes.use_a_clip_beginning_at', {sceneCueTime: sceneCueTime(offset)}) : '';
   if (next !== dubSceneId) {
     dubSceneId = next;
     dubState = null;
@@ -2483,9 +2422,9 @@ function paintDubWave() {
 function paintDubAssets() {
   var source = dubState && dubState.source, bed = dubState && dubState.background, output = dubState && dubState.delivery;
   $('dubAttachments').textContent = [
-    source ? source.name + ' · ' + sceneCueTime(source.duration_ms) + (source.transcript_source_verified ? ' · source hash matched' : '') : '',
-    bed ? 'Background: ' + bed.name : '',
-    output ? 'Last delivery: revision ' + output.scene_revision + (dubState.scene_revision !== output.scene_revision ? ' · older than the saved scene' : '') : ''
+    source ? source.name + ' · ' + sceneCueTime(source.duration_ms) + (source.transcript_source_verified ? LabText.t('scenes.source_hash_matched') : '') : '',
+    bed ? LabText.t('scenes.background', {name: bed.name}) : '',
+    output ? LabText.t('scenes.last_delivery_revision', {scene_revision: output.scene_revision, value: dubState.scene_revision !== output.scene_revision ? ' · older than the saved scene' : ''}) : ''
   ].filter(Boolean).join(' / ');
   $('dubSourceFile').disabled = dubBusy || !!source;
   $('dubBedFile').disabled = dubBusy || !!bed;
@@ -2564,7 +2503,7 @@ function dubPlayUrl(url, file) {
     $('dubSeek').value = this.currentTime;
     paintDubWave();
   };
-  dubPlayer.onerror = function () { dubNote('This browser could not play the preview. Download it to open in a media player.'); };
+  dubPlayer.onerror = function () { dubNote(LabText.t('scenes.this_browser_could_not_play')); };
   dubPlayer.src = url;
   paintDubWave();
 }
@@ -2610,6 +2549,14 @@ function dubLineLanguages(line) {
     return voice.voice_languages.includes(name);
   }) : modelLanguages;
 }
+function dubLanguageLabel(tag) {
+  if (LabText.language === 'en') return dubLanguageName(tag);
+  try {
+    return new Intl.DisplayNames([LabText.language], {type: 'language', fallback: 'none'}).of(tag) || dubLanguageName(tag);
+  } catch (_) {
+    return dubLanguageName(tag);
+  }
+}
 function paintDubLanguages(scene) {
   var distinctVoices = new Map(scene.lines.map(function (line) {return [line.identity_id, line];}));
   var supported = Array.from(distinctVoices.values()).flatMap(dubLineLanguages);
@@ -2619,26 +2566,26 @@ function paintDubLanguages(scene) {
     var selected = select.value || String(fallback || '').toLowerCase();
     var tags = Array.from(new Set(dubLanguageChoices.concat(selected || [])));
     var rows = tags.map(function (tag) {
-      return {tag: tag, name: dubLanguageName(tag) || 'Saved language', preferred: !!dubVoiceLanguage(tag, supported)};
+      return {tag: tag, name: dubLanguageLabel(tag) || LabText.t('scenes.saved_language'), preferred: !!dubVoiceLanguage(tag, supported)};
     });
-    rows.sort(function (a, b) {return Number(b.preferred) - Number(a.preferred) || a.name.localeCompare(b.name);});
+    rows.sort(function (a, b) {return Number(b.preferred) - Number(a.preferred) || a.name.localeCompare(b.name, LabText.language);});
     select.replaceChildren();
-    option(select, '', 'Choose a language');
+    option(select, '', LabText.t('scenes.choose_a_language'));
     rows.forEach(function (row) {option(select, row.tag, row.name);});
     select.value = selected;
   });
 }
 function dubSpokenLanguage(line, tag) {
   var match = dubVoiceLanguage(tag, dubLineLanguages(line), line.language);
-  if (!match) throw new Error('Choose a Cast voice that can speak ' + (dubLanguageName(tag) || 'the selected language') + ', then save again.');
+  if (!match) throw new Error(LabText.t('scenes.choose_a_cast_voice_that', {value: dubLanguageLabel(tag) || LabText.t('scenes.selected_language')}));
   return match;
 }
 function dubSave() {
   var scene = sceneBody(), line = dubSelectedLine(scene), id = dubSceneId;
-  if (!line || scene.scene_id !== id) throw new Error('Open a timed cue.');
-  if (!$('dubSpeed').checkValidity() || !$('dubGain').checkValidity()) throw new Error('Enter a valid speed and gain.');
+  if (!line || scene.scene_id !== id) throw new Error(LabText.t('scenes.open_a_timed_cue'));
+  if (!$('dubSpeed').checkValidity() || !$('dubGain').checkValidity()) throw new Error(LabText.t('scenes.enter_a_valid_speed_and'));
   var source = $('dubSourceText').value.trim(), target = $('dubTargetText').value.trim();
-  if (!target) throw new Error('Enter the target wording.');
+  if (!target) throw new Error(LabText.t('scenes.enter_the_target_wording'));
   if (source !== dubOriginalText(line, scene)) line.dub_source_text = source;
   line.text = target;
   line.dub = {fit: $('dubFit').value, speed: Number($('dubSpeed').value),
@@ -2650,7 +2597,7 @@ function dubSave() {
   }
   updateSceneEditor(scene, null);
   renderSceneForm();
-  return saveAndGetScene().then(function () { if (id === dubSceneId) dubNote('Line saved.'); });
+  return saveAndGetScene().then(function () { if (id === dubSceneId) dubNote(LabText.t('scenes.line_saved')); });
 }
 $('sceneDub').addEventListener('toggle', function () { refreshDub().catch(dubMessage); });
 $('dubCue').addEventListener('change', function () { clearDubDraft(); paintDubCue(sceneBody()); });
@@ -2665,7 +2612,7 @@ $('dubProviderPanel').addEventListener('toggle', async function () {
     var prior = picker.value;
     dubProviders = result.providers.filter(function (profile) { return profile.capabilities.includes('translate'); });
     picker.replaceChildren();
-    option(picker, '', 'Choose a provider');
+    option(picker, '', LabText.t('scenes.choose_a_provider'));
     dubProviders.forEach(function (profile) { option(picker, profile.id, profile.destination + ' · ' + profile.model); });
     if (dubProviders.some(function (profile) { return profile.id === prior; })) picker.value = prior;
   } catch (error) {
@@ -2678,13 +2625,13 @@ $('dubProviderPanel').addEventListener('toggle', async function () {
 $('dubRequestDraft').addEventListener('click', function () {
   var scene = sceneBody(), line = dubSelectedLine(scene);
   var selected = dubProviders.find(function (profile) { return profile.id === $('dubProvider').value; });
-  if (!selected || !line) return dubNote('Choose a provider and a line. Add a provider in Automation if needed.');
+  if (!selected || !line) return dubNote(LabText.t('scenes.choose_a_provider_and_a'));
   if (sceneDirty || $('dubSourceText').value.trim() !== dubOriginalText(line, scene).trim())
-    return dubNote('Save the original wording before asking for a draft.');
+    return dubNote(LabText.t('scenes.save_the_original_wording_before'));
   var source = $('dubFrom').value.trim(), target = $('dubTo').value.trim();
-  if (!source || !target) return dubNote('Choose the source and target languages.');
-  if (!window.confirm('Send this line’s original wording, source language and target language to ' + selected.destination + '?')) return;
-  dubAction('Waiting for the approved provider…', async function (id) {
+  if (!source || !target) return dubNote(LabText.t('scenes.choose_the_source_and_target'));
+  if (!window.confirm(LabText.t('scenes.send_this_line_s_original', {destination: selected.destination}))) return;
+  dubAction(LabText.t('scenes.waiting_for_the_approved_provider'), async function (id) {
     var result = await fetchJson(dubUrl() + '/translate', {expected_revision:scene.revision,
       provider:selected.id,approve_provider_revision:selected.revision,line_id:line.line_id,
       source_language:source,target_language:target});
@@ -2693,7 +2640,7 @@ $('dubRequestDraft').addEventListener('click', function () {
     dubProviderDraft = result.draft;
     $('dubProviderDraft').value = result.draft.text;
     $('dubDraftField').hidden = $('dubCopyDraft').hidden = false;
-    dubNote('Draft ready. Check the words before saving the line.');
+    dubNote(LabText.t('scenes.draft_ready_check_the_words_2'));
   });
 });
 $('dubCopyDraft').addEventListener('click', function () {
@@ -2711,21 +2658,21 @@ $('dubWave').addEventListener('click', function (event) {
 });
 $('dubOriginal').addEventListener('click', function () { dubPlay(false); });
 $('dubDubbed').addEventListener('click', function () { dubPlay(true); });
-$('dubSaveCue').addEventListener('click', function () { dubAction('Saving cue…', function () { return dubSave(); }); });
+$('dubSaveCue').addEventListener('click', function () { dubAction(LabText.t('scenes.saving_cue'), function () { return dubSave(); }); });
 ['dubSourceFile', 'dubBedFile'].forEach(function (control) {
   $(control).addEventListener('change', function () {
     var file = this.files && this.files[0];
     this.value = '';
     if (!file) return;
-    dubAction('Preparing the local media…', async function (id) {
+    dubAction(LabText.t('scenes.preparing_the_local_media'), async function (id) {
       var role = control === 'dubBedFile' ? 'background' : 'source';
       var response = await fetch(dubUrl() + '/' + role + '?name=' + encodeURIComponent(file.name),
         {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file});
       var result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Media preparation failed.');
+      if (!response.ok) throw new Error(result.error || LabText.t('scenes.media_preparation_failed'));
       if (id !== dubSceneId) return;
       await refreshDub();
-      if (id === dubSceneId) dubNote('Media attached.');
+      if (id === dubSceneId) dubNote(LabText.t('scenes.media_attached'));
     });
   });
 });
@@ -2738,18 +2685,18 @@ function dubExportOptions(scene) {
     burn: $('dubBurn').disabled ? null : $('dubBurn').value || null};
 }
 $('dubExport').addEventListener('click', function () {
-  dubAction('Verifying takes and writing the dub…', async function (id) {
-    if (sceneDirty) throw new Error('Save the scene and select its rendered takes before exporting.');
+  dubAction(LabText.t('scenes.verifying_takes_and_writing_the'), async function (id) {
+    if (sceneDirty) throw new Error(LabText.t('scenes.save_the_scene_and_select'));
     await fetchJson(dubUrl() + '/exports', dubExportOptions(sceneBody()));
     if (id !== dubSceneId) return;
     await refreshDub();
-    if (id === dubSceneId) dubNote('Dub delivery ready.');
+    if (id === dubSceneId) dubNote(LabText.t('scenes.dub_delivery_ready'));
   });
 });
 $('dubVerify').addEventListener('click', function () {
-  dubAction('Checking delivery hashes…', async function (id) {
+  dubAction(LabText.t('scenes.checking_delivery_hashes'), async function (id) {
     var result = await fetchJson(dubUrl() + '/exports/' + dubState.delivery.id + '/verify', {});
-    if (id === dubSceneId) dubNote(result.files + ' delivery files verified.');
+    if (id === dubSceneId) dubNote(LabText.t('scenes.delivery_files_verified', {files: result.files}));
   });
 });
 
@@ -2776,19 +2723,19 @@ function refreshDubQueue() {
       if (job.status === 'complete') {
         var link = document.createElement('a');
         link.href = '/api/scenes/' + job.scene_id + '/dub/exports/' + job.delivery_id + '/manifest.json';
-        link.textContent = 'Manifest';
+        link.textContent = LabText.t('scenes.manifest');
         line.appendChild(link);
       }
       var action = ['failed', 'cancelled'].includes(job.status) ? 'retry'
         : ['queued', 'waiting_for_takes'].includes(job.status) ? 'cancel' : '';
-      if (action) line.appendChild(sceneButton(action === 'retry' ? 'Retry' : 'Cancel', action + ' dubbing job',
+      if (action) line.appendChild(sceneButton(action === 'retry' ? LabText.t('scenes.retry') : LabText.t('scenes.cancel'), action + LabText.t('scenes.dubbing_job'),
         function () { dubQueueAction('/jobs/' + job.id + '/' + action, {}); }));
       jobs.appendChild(line);
     });
     state.watches.filter(function (watch) { return watch.enabled; }).forEach(function (watch) {
       var line = document.createElement('li');
       line.textContent = watch.path + (watch.error ? ' · ' + watch.error : '') + ' ';
-      line.appendChild(sceneButton('Disable', 'Disable this watch folder',
+      line.appendChild(sceneButton(LabText.t('scenes.disable'), LabText.t('scenes.disable_this_watch_folder'),
         function () { dubQueueAction('/watches/' + watch.id + '/disable', {}); }));
       watches.appendChild(line);
     });
@@ -2801,9 +2748,9 @@ function refreshDubQueue() {
 }
 function currentDubJob() {
   var scene = sceneBody();
-  if (sceneDirty) throw new Error('Save the scene before queuing a delivery.');
+  if (sceneDirty) throw new Error(LabText.t('scenes.save_the_scene_before_queuing'));
   var opts = dubExportOptions(scene);
-  if (!opts.target_language.trim()) throw new Error('Enter a target language code such as en or es.');
+  if (!opts.target_language.trim()) throw new Error(LabText.t('scenes.enter_a_target_language_code'));
   return {scene_id: scene.scene_id, export: opts, render_missing: $('dubQueueRender').checked};
 }
 $('dubQueue').addEventListener('toggle', function () { refreshDubQueue(); });

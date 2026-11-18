@@ -77,8 +77,8 @@ class PageText:
 
         def text(key):
             value = messages.get(key, self.english[key])
-            if not isinstance(value, str) or VALUE.search(value):
-                raise ValueError(f"Static page word {key} needs text without value places")
+            if not isinstance(value, str):
+                raise ValueError(f"Static page word {key} needs text")
             return value
 
         def option(code, catalog):
