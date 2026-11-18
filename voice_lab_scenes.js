@@ -1002,7 +1002,7 @@ function paintSceneRows() {
 }
 function sceneTakeTime(value) {
   var date = new Date(value);
-  return isNaN(date.getTime()) ? String(value || '') : date.toLocaleString(LabText.language);
+  return isNaN(date.getTime()) ? String(value || '') : LabText.dateTime(date);
 }
 function renderSceneTakes(container, line, state) {
   container.textContent = '';
@@ -1155,12 +1155,10 @@ function applySceneFilters() {
     .map(function (key) {
       return sceneStatusCounts[key](counts[key]);
     });
-  $('sceneTableSummary').textContent =
-    rows.length +
-    (rows.length === 1 ? LabText.t('scenes.line_4') : LabText.t('scenes.lines_2')) +
-    (parts.length ? ': ' + parts.join(', ') : '') +
-    '.' +
-    (shown < rows.length ? LabText.t('scenes.showing', {shown: shown}) : '');
+  var summary = parts.length
+    ? LabText.plural('scenes.line_status_summary', rows.length, {status: parts.join(', ')})
+    : LabText.plural('scenes.line_count_summary', rows.length);
+  $('sceneTableSummary').textContent = shown < rows.length ? summary + ' ' + LabText.t('scenes.showing', {shown: shown}) : summary;
   updateSceneTools();
 }
 function updateSceneTools() {
@@ -1413,8 +1411,8 @@ function removeSample() {
         return null;
       }
       var gone = preview.would_remove,
-        parts = [gone.character + LabText.t('scenes.characters_and_their_voices'), gone.take + (gone.take === 1 ? LabText.t('scenes.take') : LabText.t('scenes.takes_2'))];
-      if (gone.reference) parts.push(gone.reference + (gone.reference === 1 ? LabText.t('scenes.recording') : LabText.t('scenes.recordings')));
+        parts = [LabText.plural('scenes.sample_character_count', gone.character), LabText.plural('scenes.sample_take_count', gone.take)];
+      if (gone.reference) parts.push(LabText.plural('scenes.sample_recording_count', gone.reference));
       if (
         !window.confirm(
           LabText.t('scenes.remove_sample_confirm', {scene: preview.scene ? preview.scene.name : LabText.t('scenes.sample_name'), contents: parts.join(', ')})
@@ -1766,7 +1764,7 @@ function batchOrderText(job) {
   parts.slice(current + 1).forEach(function (part) {
     text += LabText.t('scenes.then', {name: part.name, total: part.total});
   });
-  return (parts.length > 1 ? LabText.t('scenes.rendering_one_model_at_a') : LabText.t('scenes.rendering_with')) + text + '. ';
+  return parts.length > 1 ? LabText.t('scenes.rendering_in_model_order', {models: text}) : LabText.t('scenes.rendering_one_model', {models: text});
 }
 function refreshSceneJob() {
   if (!activeSceneJobId) return Promise.resolve();
@@ -2106,17 +2104,11 @@ $('sceneSegments').addEventListener('click', function () {
         $('sceneSegmentPreview').textContent = (result.segments || [])
           .map(function (line, index) {
             var cue = sceneBody().lines[index]?.cue;
-            return (
-              (cue ? 'Line ' + (index + 1) + ' (' + sceneCueTime(cue.start_ms) + ')' : line.line_id) +
-              ': ' +
-              line.segments.length +
-              LabText.t('scenes.part_s') +
-              line.segments
-                .map(function (segment) {
-                  return segment.id + ' (' + segment.text.length + LabText.t('scenes.chars');
-                })
-                .join(', ')
-            );
+            var label = cue ? LabText.t('scenes.segment_cue', {number: index + 1, time: sceneCueTime(cue.start_ms)}) : line.line_id;
+            var segments = line.segments.map(function (segment) {
+              return LabText.plural('scenes.segment_characters', segment.text.length, {segment_id: segment.id});
+            });
+            return LabText.plural('scenes.segment_summary', line.segments.length, {line: label, segments: segments.join(', ')});
           })
           .join('\n');
       })
@@ -2560,12 +2552,7 @@ function dubLineLanguages(line) {
   }) : modelLanguages;
 }
 function dubLanguageLabel(tag) {
-  if (LabText.language === 'en') return dubLanguageName(tag);
-  try {
-    return new Intl.DisplayNames([LabText.language], {type: 'language', fallback: 'none'}).of(tag) || dubLanguageName(tag);
-  } catch (_) {
-    return dubLanguageName(tag);
-  }
+  return LabText.languageName(dubLanguageName(tag), tag);
 }
 function paintDubLanguages(scene) {
   var distinctVoices = new Map(scene.lines.map(function (line) {return [line.identity_id, line];}));
@@ -2738,7 +2725,7 @@ function refreshDubQueue() {
       }
       var action = ['failed', 'cancelled'].includes(job.status) ? 'retry'
         : ['queued', 'waiting_for_takes'].includes(job.status) ? 'cancel' : '';
-      if (action) line.appendChild(sceneButton(action === 'retry' ? LabText.t('scenes.retry') : LabText.t('scenes.cancel'), action + LabText.t('scenes.dubbing_job'),
+      if (action) line.appendChild(sceneButton(action === 'retry' ? LabText.t('scenes.retry') : LabText.t('scenes.cancel'), action === 'retry' ? LabText.t('scenes.retry_dubbing_job') : LabText.t('scenes.cancel_dubbing_job'),
         function () { dubQueueAction('/jobs/' + job.id + '/' + action, {}); }));
       jobs.appendChild(line);
     });

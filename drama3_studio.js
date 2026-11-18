@@ -54,7 +54,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
   const allow=el('input',null,{type:'checkbox'}),listen=el('input',null,{type:'checkbox'});listen.checked=true;
   const allowLabel=label(LabText.t('studio.allow_model_selected_voices_for'),allow);allowLabel.className='ds-check';
   const listenLabel=label(LabText.t('studio.play_audio_as_it_arrives'),listen);listenLabel.className='ds-check';
-  const language=select(info.languages.map(l=>[l.code,l.label]));language.setAttribute('aria-label',LabText.t('studio.script_language'));
+  const language=select(info.languages.map(l=>[l.code,LabText.languageName(l.label,l.code)]));language.setAttribute('aria-label',LabText.t('studio.script_language'));
   const description=el('input',null,{maxlength:'1000','aria-label':LabText.t('studio.global_voice_description'),placeholder:LabText.t('studio.optional_voice_description_for_generated')});
   const direction=el('input',null,{maxlength:'1000','aria-label':LabText.t('studio.acting_direction_for_the_whole'),placeholder:LabText.t('studio.optional_direction_for_the_whole')});
   const controls=el('div',null,{class:'ds-grid'}),settings={};
@@ -74,7 +74,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
     source.start(nextTime);nextTime+=samples.duration;nodes.push(source);source.onended=()=>{nodes=nodes.filter(n=>n!==source);};
   }
   const outputs=el('div'),actions=el('div',null,{class:'ds-row'}),history=select([['',LabText.t('studio.recent_takes')]]);history.setAttribute('aria-label',LabText.t('studio.recent_drama_takes'));
-  function paintHistory(jobs){history.replaceChildren(el('option',LabText.t('studio.recent_takes'),{value:''}),...jobs.map(j=>el('option',new Date(j.created*1000).toLocaleString(LabText.language)+' · '+j.status,{value:j.id})));}
+  function paintHistory(jobs){history.replaceChildren(el('option',LabText.t('studio.recent_takes'),{value:''}),...jobs.map(j=>el('option',LabText.dateTime(new Date(j.created*1000))+' · '+j.status,{value:j.id})));}
   paintHistory(info.jobs);
   function completed(row){outputs.replaceChildren();if(row.status!=='complete')return;
     outputs.append(el('audio',null,{controls:'',preload:'none',src:base+'/jobs/'+row.id+'/audio','aria-label':LabText.t('studio.completed_drama_take')}));

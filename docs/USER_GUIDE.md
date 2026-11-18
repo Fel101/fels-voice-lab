@@ -6,7 +6,9 @@ packages and pinned assets have been installed. The version you are running is
 at the foot of every page and in `/api/health`; `python serve.py --version` prints it.
 
 Choose **Page language** beside Theme on the main page or Compare. Save your work first because changing the
-page language reloads the page. Spanish is a draft awaiting review by a speaker.
+page language reloads the page. Spanish is a draft awaiting review by a speaker. In 0.4.0, model card facts,
+voice descriptions, service messages outside the common error codes, and diagnostics use English. Native file
+and audio controls follow the browser's language.
 
 ## What do you want to do?
 

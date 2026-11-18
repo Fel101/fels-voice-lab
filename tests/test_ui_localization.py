@@ -22,7 +22,7 @@ CODE_VALUE = re.compile(
     r"(?:value\d*|toFixed\d*|get\d*|join|slice|size|length\d*|textContent|formatBytes|plural\d*|round|whenText|"
     r"ffmpegMegabytes\d*|bookCount\d*|bookDuration|replaceAll|sceneCueTime|sceneCueRange|sceneTakeTime|sceneCount|"
     r"deviceLabel|elapsedText|utcStamp|installSizeText|referenceQualityText|retirementLabel|takeEditSigned|engineName|"
-    r"trim|plainScript|segment\d*|describe)"
+    r"trim|plainScript|segment\d*|describe|gigabytes2|cacheHit|savedAsset|expectedSequence|gapCount)"
 )
 JS_TEXT_TOKEN = re.compile(r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|[()]""")
 UI_PROSE = re.compile(r"^[a-z]{2,}$|[A-Za-z]{2,}(?:[ ,.:;!?…]+[A-Za-z])|^[A-Z][a-z]{2,}[. :!?…]*$|[A-Za-z]{3,}[:,] $")
@@ -40,9 +40,7 @@ SHARED_NAMES = {
     "cloning.mozilla_common_voice",
     "compare.fel_s_voice_lab",
     "compare.http",
-    "models.align_takes_py",
     "scenes.aac_m4a",
-    "scenes.character_line_id",
     "scenes.flac",
     "scenes.fountain",
     "scenes.mp3",
@@ -50,7 +48,6 @@ SHARED_NAMES = {
     "scenes.wav",
     "shell.fel_s_voice_lab",
     "shell.fel_s_voice_lab_2",
-    "shell.s",
     "shell.v",
     "studio.breeze_tts_2",
     "studio.eager",
@@ -62,8 +59,6 @@ SHARED_NAMES = {
     "studio.top_p",
     "studio.voxcpm2",
     "system.ffmpeg",
-    "system.update_bat",
-    "system.venv_scripts_python_exe_serve",
 }
 
 
@@ -96,7 +91,9 @@ class PageTextTests(unittest.TestCase):
             body = source.read_text(encoding="utf-8")
             for key in TOKEN.findall(body):
                 with self.subTest(source=source.name, key=key):
-                    self.assertIsInstance(PAGE_TEXT.english[key], str)
+                    message = PAGE_TEXT.english[key]
+                    self.assertIsInstance(message, str)
+                    self.assertIsNone(VALUE.search(message), "HTML tokens have no values to substitute")
             for call, key in CALL.findall(body):
                 with self.subTest(source=source.name, key=key):
                     self.assertIsInstance(PAGE_TEXT.english[key], dict if call == "plural" else str)
@@ -180,6 +177,7 @@ class PageTextTests(unittest.TestCase):
             "Español",
             {
                 "language.label": "Idioma",
+                "language.draft": "borrador, sin revisar por un hablante",
                 "projects.heading": "Proyectos",
                 "projects.kind.scene": "Escena",
                 "projects.voice_count": {
@@ -216,10 +214,8 @@ class PageTextTests(unittest.TestCase):
             )
             self.assertEqual(page.evaluate("location.hash"), "#projects")
             self.assertTrue(page.evaluate("document.querySelector('label[for=languageChoice]').innerText.startsWith('Idioma')"))
-            self.assertIn(
-                "draft, not yet checked by a speaker",
-                page.evaluate("$('languageChoice').selectedOptions[0].textContent"),
-            )
+            names = ["English", "Español (borrador, sin revisar por un hablante)"]
+            self.assertEqual(page.evaluate("Array.from($('languageChoice').options, option => option.textContent)"), names)
             page.wait_until("document.querySelector('#projectRows li')?.textContent.includes('1 voz')")
             self.assertIn(
                 "Porch light · Escena · 1 línea · 1 voz · 0 selected takes",
@@ -235,6 +231,7 @@ class PageTextTests(unittest.TestCase):
             )
             page.open(server.base + "/compare")
             self.assertEqual(page.evaluate("document.documentElement.lang"), "es")
+            self.assertEqual(page.evaluate("Array.from($('languageChoice').options, option => option.textContent)"), names)
             self.assertTrue(page.evaluate("document.querySelector('label[for=languageChoice]').innerText.startsWith('Idioma')"))
             self.assertEqual(
                 page.evaluate("document.querySelector('h1').textContent"),
@@ -243,6 +240,7 @@ class PageTextTests(unittest.TestCase):
             page.set_value("#languageChoice", "en")
             page.wait_until("document.documentElement.lang === 'en' && document.readyState === 'complete'")
             self.assertEqual(UiPreferences(self.root / "library", page_text).get()["language"], "en")
+            self.assertEqual(page.evaluate("Array.from($('languageChoice').options, option => option.textContent)"), names)
             self.assertEqual(page.problems, [])
         finally:
             if page is not None:
@@ -313,24 +311,43 @@ class PageTextTests(unittest.TestCase):
     def test_page_markup_text_and_labels_use_the_catalog(self):
         class PageMarkup(HTMLParser):
             in_code = False
+            code_example = False
+            fixed_examples = {
+                "(laugh)",
+                "(sigh)",
+                "align_takes.py",
+                "out/exports/",
+                "restored",
+                "tools/dataset_workbench.py",
+                "update.bat",
+                "update.bat --undo",
+            }
 
             def handle_data(self, data):
                 if not self.in_code:
                     word = data.strip()
+                    if self.code_example and word in self.fixed_examples:
+                        return
                     literal = TOKEN.sub("", word).replace("__APP_VERSION__", "").replace("__PAGE_LANGUAGE_OPTIONS__", "")
-                    if re.search(r"[a-zA-Z]", literal) and literal not in {"(laugh)", "(sigh)"}:
+                    if re.search(r"[a-zA-Z]", literal):
                         self.check(word)
 
             def handle_starttag(self, tag, attributes):
                 if tag in {"style", "script"}:
                     self.in_code = True
+                if tag == "code":
+                    self.code_example = True
                 for name, value in attributes:
                     if name in {"title", "aria-label", "placeholder", "alt"} and value:
+                        if name == "placeholder" and value == "{character}__{line_id}":
+                            continue
                         self.check(value)
 
             def handle_endtag(self, tag):
                 if tag in {"style", "script"}:
                     self.in_code = False
+                if tag == "code":
+                    self.code_example = False
 
         for file in ("serve.html", "compare.html"):
             with self.subTest(file=file):

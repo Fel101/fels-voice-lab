@@ -7,7 +7,7 @@ function formatBytes(count){
   while(size>=1024&&index<units.length-1){size/=1024;index++;}
   return (index===0?String(Math.round(size)):size.toFixed(1))+' '+units[index];
 }
-function whenText(iso){var date=new Date(iso);return isNaN(date.getTime())?String(iso||LabText.t('system.an_unknown_time')):date.toLocaleString(LabText.language);}
+function whenText(iso){var date=new Date(iso);return isNaN(date.getTime())?String(iso||LabText.t('system.an_unknown_time')):LabText.dateTime(date);}
 function systemFacts(report){
   var schemas=report.library.schemas,counts=report.library.counts,schemaText=Object.keys(schemas).map(function(key){return key+' '+(schemas[key]===null?LabText.t('system.unreadable'):schemas[key]);}).join(', ');
   var countText=[
@@ -24,7 +24,7 @@ function systemFacts(report){
   ].filter(Boolean).join(', ');
   var source=report.system.python_source,python=report.system.python+(source==="the Lab's own"?LabText.t('system.the_lab_s_own_2'):source?LabText.t('system.from', {source: source}):'');
   var rows=[[LabText.t('system.version'),report.app.name+' '+report.app.version],[LabText.t('system.python_and_system'),python+', '+report.system.platform],
-    [LabText.t('system.device'),report.system.device+', '+report.system.free_ram_gb+LabText.t('system.gb_of_memory_free')],[LabText.t('system.library_folder'),report.library.path],
+    [LabText.t('system.device'),LabText.t('system.free_memory', {device:report.system.device, free_gb:report.system.free_ram_gb})],[LabText.t('system.library_folder'),report.library.path],
     [LabText.t('system.database_schemas'),schemaText||LabText.t('system.no_databases_yet')],[LabText.t('system.library_contents'),countText||LabText.t('system.nothing_yet')]];
   if(report.log&&report.log.file)rows.push([LabText.t('system.service_log'),report.log.file]);
   return rows;
@@ -35,13 +35,14 @@ function ffmpegSummary(ffmpeg){
   return {ok:!!ffmpeg.ready&&!ffmpeg.message,text:((!ffmpeg.ready ? LabText.t('system.ffmpeg_without_probe', {version: ffmpeg.version||'', formats: formats}) : LabText.t('system.ffmpeg_found_can_write', {version: ffmpeg.version||'', formats: formats})) + (ffmpeg.message?' '+ffmpeg.message:''))};
 }
 function diskSummary(label,row){
-  if(!row)return {low:false,text:label+LabText.t('system.the_free_space_could_not')};
-  return {low:!!row.low,text:label+': '+formatBytes(row.free_bytes)+LabText.t('system.free_of')+formatBytes(row.total_bytes)+(row.low?LabText.t('system.that_is_low_a_backup'):'.')};
+  if(!row)return {low:false,text:LabText.t('system.the_free_space_could_not', {drive: label})};
+  var capacity = {drive: label, free: formatBytes(row.free_bytes), total: formatBytes(row.total_bytes)};
+  return {low: !!row.low, text: row.low ? LabText.t('system.disk_space_low', capacity) : LabText.t('system.disk_space_available', capacity)};
 }
 function modelsSummary(engines){
   var words={usable:LabText.t('system.usable'),not_checked:LabText.t('system.installed_but_not_tested'),check_outdated:LabText.t('system.test_out_of_date'),check_failed:LabText.t('system.test_failed'),not_installed:LabText.t('system.not_installed'),conversion_task:LabText.t('system.conversion_tools')};
   var parts=Object.keys(engines.counts).filter(function(key){return engines.counts[key];}).map(function(key){return engines.counts[key]+' '+(words[key]||key);});
-  return (parts.length?parts.join(', '):LabText.t('system.no_models_are_integrated'))+LabText.t('system.device_2')+engines.device+').';
+  return parts.length ? LabText.t('system.model_summary', {models: parts.join(', '), device: engines.device}) : LabText.t('system.no_models_are_integrated', {device: engines.device});
 }
 function systemNote(id,text,flagged){var node=$(id);node.textContent=text;node.className=flagged?'meta take-checks flagged':'meta';}
 function renderSystem(report){
@@ -107,12 +108,17 @@ function taskMessage(task){
   var result=task.result||{},warnings=result.warnings&&result.warnings.length?' '+result.warnings.join(' '):'';
   if(task.status==='running'){
     var percent=taskPercent(task)||0;
-    return task.label+': '+percent+'% ('+task.files_done+LabText.t('system.of')+task.files_total+LabText.t('system.files')+formatBytes(task.bytes_done)+' of '+formatBytes(task.bytes_total)+').';
+    return LabText.t('system.task_progress', {
+      task: task.label, percent: percent, files_done: task.files_done, files_total: task.files_total,
+      bytes_done: formatBytes(task.bytes_done), bytes_total: formatBytes(task.bytes_total)
+    });
   }
   if(task.status==='failed')return task.error;
   if(task.status!=='done')return '';
   if(task.kind==='backup')return LabText.t('system.backup_saved_as_it_was', {name: result.name, bytes: formatBytes(result.bytes), files: LabText.plural('system.file_count', result.files), warnings: warnings});
-  if(task.kind==='check')return result.ok?result.name+LabText.t('system.passed_every_file_matches_its'):result.name+LabText.t('system.did_not_pass')+result.problems.join(' ');
+  if(task.kind==='check')return result.ok
+    ? LabText.t('system.passed_every_file_matches_its', {name: result.name})
+    : LabText.t('system.did_not_pass', {name: result.name, problems: result.problems.join(' ')});
   if(task.kind==='restore')return LabText.t('system.restored_to_every_file_matched', {state_root: result.state_root, files: LabText.plural('system.file_count', result.files), takes: LabText.plural('system.take_count', result.counts.takes), warnings: warnings});
   return '';
 }
@@ -170,7 +176,7 @@ function renderTask(task){
   ['backupCreate','restoreGo'].forEach(function(id){$(id).disabled=busy;});
   var restored=task.status==='done'&&task.kind==='restore';
   $('restoreUse').hidden=!restored;$('restoreHint').hidden=!restored;
-  if(restored){$('restoreUse').dataset.folder=task.result.folder;$('restoreCommand').textContent=LabText.t('system.venv_scripts_python_exe_serve', {state_root: task.result.state_root});}
+  if(restored){$('restoreUse').dataset.folder=task.result.folder;$('restoreCommand').textContent='.venv\\Scripts\\python.exe serve.py --state-root "'+task.result.state_root+'"';}
 }
 // The full list (and the library walk behind its sizes) is read when the page opens and when a job ends; while one runs only its small status is polled.
 function refreshBackups(){
@@ -406,7 +412,7 @@ var CONNECT_COPIES={
   url:function(info){return [info.url,LabText.t('system.copied', {url: info.url})];},
   test:function(info){return [info.test,LabText.t('system.copied_the_test_command_paste')];},
   mcp:function(info){return [info.mcp.claude_code,LabText.t('system.copied_the_claude_code_line')];},
-  openai:function(info){return [info.openai_base,'Copied '+info.openai_base+LabText.t('system.in_the_app_choose_openai')];},
+  openai:function(info){return [info.openai_base,LabText.t('system.copied_openai_address', {address: info.openai_base})];},
   settings:function(info){return [info.mcp.settings,LabText.t('system.copied_the_settings_paste_them')];}
 };
 function copyConnect(which){

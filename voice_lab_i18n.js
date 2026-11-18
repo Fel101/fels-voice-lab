@@ -5,6 +5,40 @@ var LabText = (function () {
   var language = config.language, english = config.english, messages = config.messages;
   var rules = new Intl.PluralRules(language), englishRules = new Intl.PluralRules('en');
 
+  // Language labels are display text. The original engine values still go to the API.
+  var languageTags = {
+    'american english': 'en-US', 'british english': 'en-GB', english: 'en',
+    spanish: 'es', french: 'fr', hindi: 'hi', italian: 'it', japanese: 'ja',
+    portuguese: 'pt', 'brazilian portuguese': 'pt-BR', chinese: 'zh', 'mandarin chinese': 'zh',
+    german: 'de', korean: 'ko', russian: 'ru', arabic: 'ar', dutch: 'nl',
+    polish: 'pl', turkish: 'tr', swedish: 'sv', danish: 'da', finnish: 'fi',
+    norwegian: 'no', hebrew: 'he', greek: 'el', czech: 'cs', romanian: 'ro',
+    ukrainian: 'uk', indonesian: 'id', malay: 'ms', vietnamese: 'vi', thai: 'th',
+    hungarian: 'hu', persian: 'fa', catalan: 'ca', cantonese: 'yue',
+  };
+  var languageNames = new Intl.DisplayNames(language, {type: 'language', fallback: 'none'});
+  var pageLocale = language.toLowerCase();
+  var regionalLocale = (globalThis.navigator?.languages || []).find(function (locale) {
+    var tag = locale.toLowerCase();
+    return tag === pageLocale || tag.startsWith(pageLocale + '-');
+  }) || language;
+
+  function languageName(label, tag) {
+    if (language === 'en' || !label) return label;
+    if (label.toLowerCase() === 'auto' || tag === 'auto') return t('language.automatic');
+    var code = tag || languageTags[label.toLowerCase()];
+    if (!code) return label;
+    try {
+      return languageNames.of(code) || label;
+    } catch (_) {
+      return label;
+    }
+  }
+
+  function dateTime(date) {
+    return date.toLocaleString(regionalLocale);
+  }
+
   function format(template, values) {
     return template.replace(/\{([a-z][a-zA-Z0-9_]*)\}/g, function (placeholder, name) {
       return values && Object.hasOwn(values, name) ? String(values[name]) : placeholder;
@@ -64,5 +98,5 @@ var LabText = (function () {
     });
   });
 
-  return {t: t, plural: plural, error: error, language: language};
+  return {t: t, plural: plural, error: error, language: language, languageName: languageName, dateTime: dateTime};
 }());

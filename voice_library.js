@@ -121,8 +121,8 @@
         audio.setAttribute('aria-label',LabText.t('cast.listen_to', {character_name: voice.character_name}));
         audio.addEventListener('play',function(){gallery.querySelectorAll('audio').forEach(function(other){if(other!==audio)other.pause();});});card.appendChild(audio);
       }else card.appendChild(node('p',LabText.t('cast.no_saved_audition_yet_generate'),'meta'));
-      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p',(blend.length>1?LabText.t('cast.saved_kokoro_blend'):LabText.t('cast.kokoro_preset_voice'))+blend.join(',')+LabText.t('cast.no_voice_recording_needed'),'meta'));
-      else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+LabText.t('cast.saved_recording')+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?LabText.t('cast.ready_to_use'):LabText.t('cast.voice_recording_unavailable')),'meta'));
+      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p',blend.length>1 ? LabText.t('cast.kokoro_blend_info', {voices: blend.join(',')}) : LabText.t('cast.kokoro_preset_info', {voice: blend.join(',')}),'meta'));
+      else if(voice.identity_kind==='reference')card.appendChild(node('p',LabText.plural('cast.recording_versions_available', voice.reference_count)+' '+(voice.preferred_reference_available?LabText.t('cast.ready_to_use'):LabText.t('cast.voice_recording_unavailable')),'meta'));
       var buttons=node('div',undefined,'cast-actions');
       var studio=action(voice,LabText.t('cast.use_in_model_studio'),'studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
       var perform=action(voice,LabText.t('cast.perform_lines'),'perform');

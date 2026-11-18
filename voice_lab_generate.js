@@ -137,9 +137,9 @@ function requestSpeech() {
     var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += LabText.t('studio.effective_sampling', {sampling: sampling}); }
     var language = r.headers.get('X-Voice-Language'); if (language) { meta += ' / ' + language; }
     var speaker = r.headers.get('X-Voice-Speaker'); if (speaker) { meta += ' / ' + speaker; }
-    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += LabText.t('studio.voice_recording_cached', {cacheHit: cacheHit}); }
+    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += LabText.t('studio.voice_recording_cached', {cache_hit: cacheHit}); }
     var savedAsset = r.headers.get('X-Voice-Asset-Path');
-    if (savedAsset) { meta += LabText.t('studio.saved_voice_recording_2', {savedAsset: savedAsset}); }
+    if (savedAsset) { meta += LabText.t('studio.saved_voice_recording_2', {recording_path: savedAsset}); }
     return r.blob().then(function (blob) { return {blob:blob, meta:meta, savedAsset:savedAsset}; });
   }).then(function (result) {
     clearInterval(ticker);
@@ -252,7 +252,7 @@ function streamGenerate() {
       }
       state.nextStart=startAt+count/event.sample_rate;
       state.pcmParts.push(bytes); state.sampleCount+=count; state.expectedSequence++;
-      $('status').textContent=LabText.t('studio.native_qwen_streaming_chunks_s', {expectedSequence: state.expectedSequence, audio_seconds: (state.sampleCount/state.sampleRate).toFixed(2), gapCount: state.gapCount});
+      $('status').textContent=LabText.t('studio.native_qwen_streaming_chunks_s', {chunks: state.expectedSequence, audio_seconds: (state.sampleCount/state.sampleRate).toFixed(2), gaps: state.gapCount});
     });
   }
   function drainLines(text, final) {
@@ -279,7 +279,7 @@ function streamGenerate() {
     while(!state.cancelled&&state.audioContext.currentTime<state.nextStart){await new Promise(function(resolve){setTimeout(resolve,25);});}
     if(state.cancelled){return;}
     var wav=new Blob([wavHeader(state.sampleRate,state.sampleCount)].concat(state.pcmParts),{type:'audio/wav'});
-    var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {first_chunk_seconds: Number(completion.generator_first_chunk_s).toFixed(2), first_byte_seconds: Number(completion.service_first_byte_s).toFixed(2), first_audio_seconds: Number(completion.service_first_audio_s).toFixed(2), playback_seconds: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gapCount: state.gapCount, gap_seconds: state.gapSeconds.toFixed(2), audio_seconds: Number(completion.audio_seconds).toFixed(2), generation_seconds: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
+    var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {first_chunk_seconds: Number(completion.generator_first_chunk_s).toFixed(2), first_byte_seconds: Number(completion.service_first_byte_s).toFixed(2), first_audio_seconds: Number(completion.service_first_audio_s).toFixed(2), playback_seconds: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gaps: state.gapCount, gap_seconds: state.gapSeconds.toFixed(2), audio_seconds: Number(completion.audio_seconds).toFixed(2), generation_seconds: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
     if(completion.backend){meta+=' / '+completion.backend;}
     if(completion.checkpoint){meta+=' / '+completion.checkpoint;}
     if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / voice recording cached: '+completion.reference_cache_hit;}

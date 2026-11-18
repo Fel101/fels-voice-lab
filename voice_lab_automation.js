@@ -234,7 +234,7 @@ $('automationRun').addEventListener('click',function(){
     var body={recipe_id:automationRecipe.id,revision:automationRecipe.revision,inputs:inputs};
     var preview=await fetchJson('/api/automation/preview',body), approved=[];
     if(preview.plan.provider_approvals.length) {
-      var list=preview.plan.provider_approvals.map(function(row){return row.destination+LabText.t('automation.will_receive')+row.data;});
+      var list=preview.plan.provider_approvals.map(function(row){return LabText.t('automation.will_receive', {destination: row.destination, data: row.data});});
       if(!window.confirm(LabText.t('automation.run_this_recipe_with_the', {destinations: list.join('\n')}))) return;
       approved=preview.plan.provider_approvals.map(function(row){return row.revision;});
     }

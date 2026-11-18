@@ -355,7 +355,7 @@ var takeCheckLabels={silent_audio:LabText.t('cast.silent'),clipping:LabText.t('c
 function appendTakeChecks(parent,checks){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!checks||checks.status==='not_recorded'){note.textContent=LabText.t('cast.waveform_checks_were_not_recorded');}
-  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {error: checks.error||LabText.t('cast.error_not_known')});}
+  else if(checks.status==='unavailable'){note.className+=' flagged';note.textContent=LabText.t('cast.waveform_checks_could_not_run', {error: checks.error||LabText.t('cast.error_not_known')});}
   else if(!checks.flags.length){note.textContent=LabText.t('cast.automatic_waveform_checks_found_no');}
   else{note.className+=' flagged';note.textContent=LabText.t('cast.automatic_waveform_checks_flagged_listen', {flags: checks.flags.map(function(flag){
     return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')});}

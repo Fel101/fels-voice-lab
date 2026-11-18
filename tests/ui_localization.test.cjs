@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.resolve(__dirname, '../voice_lab_i18n.js'), 'utf8');
-function helper(language, messages) {
+function helper(language, messages, languages) {
   const english = {
     greeting: 'Welcome, {name}',
     stock: {one: '{count} voice for {play}', other: '{count} voices for {play}'},
@@ -15,6 +15,7 @@ function helper(language, messages) {
   };
   const config = {language, english, messages};
   const context = vm.createContext({
+    navigator: {languages},
     document: {
       getElementById: () => ({textContent: JSON.stringify(config)}),
       addEventListener() {},
@@ -49,4 +50,20 @@ test('translated common errors keep an actionable sentence and use service text 
   assert.equal(helper('es', {}).error(error, 503), error.error);
   assert.equal(helper('es', {'error.model_not_installed': 'Instala el modelo.'}).error(error, 503), 'Instala el modelo.');
   assert.equal(helper('es', {}).error({}, 500), 500);
+});
+
+test('dates use a matching browser region and otherwise follow the page language', () => {
+  const date = new Date(2026, 10, 17, 14, 32, 17);
+  assert.equal(helper('en', {}, ['fr-FR', 'en-GB']).dateTime(date), date.toLocaleString('en-GB'));
+  assert.equal(helper('es', {}, ['en-GB', 'es-MX']).dateTime(date), date.toLocaleString('es-MX'));
+  assert.equal(helper('es', {}, ['en-GB']).dateTime(date), date.toLocaleString('es'));
+});
+
+test('known language names follow the page while engine labels remain available as fallbacks', () => {
+  const words = helper('es', {'language.automatic': 'Automático'});
+  assert.equal(words.languageName('American English'), new Intl.DisplayNames('es', {type: 'language'}).of('en-US'));
+  assert.equal(words.languageName('Korean'), 'coreano');
+  assert.equal(words.languageName('Auto'), 'Automático');
+  assert.equal(words.languageName('Unknown dialect'), 'Unknown dialect');
+  assert.equal(helper('en', {}).languageName('American English'), 'American English');
 });

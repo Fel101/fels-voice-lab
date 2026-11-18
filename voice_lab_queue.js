@@ -55,7 +55,7 @@
   function doing(running) {
     if (running.priority === 'low') return LabText.t('shell.a_scene_batch_is_rendering');
     if (running.detail) return running.detail; // an install: "Kokoro 82M is being installed"
-    return DOING[running.what] || running.what + LabText.t('shell.is_running');
+    return DOING[running.what] || LabText.t('shell.is_running', {request: running.what});
   }
   function modelName(engine) {
     var entry = ((global.catalog && global.catalog.engines) || []).find(function (item) { return item.id === engine; });
@@ -79,7 +79,7 @@
       lines.push({id:item.id, action:'cancel', text:ahead === 0 ? LabText.t('shell.waiting_next_in_line')
         : LabText.t('shell.waiting_ahead_of_you', {ahead: ahead, current_request: running ? ' (' + doing(running) + ')' : ''})});
     });
-    if (others) lines.push({id:'others', action:null, text:others + (others === 1 ? LabText.t('shell.more_request_waits') : LabText.t('shell.more_requests_wait'))});
+    if (others) lines.push({id:'others', action:null, text:LabText.plural('shell.other_requests_wait', others)});
     return lines;
   }
   var BUTTONS = {stop:[LabText.t('shell.stop'), LabText.t('shell.stopping')], cancel:[LabText.t('shell.cancel'), LabText.t('shell.cancelling')]};

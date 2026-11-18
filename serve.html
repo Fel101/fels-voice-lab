@@ -168,6 +168,10 @@ pre { white-space:pre-wrap; }
 @media(max-width:700px){.facts{grid-template-columns:1fr;gap:0}.facts dd{margin-bottom:8px}}
 .speed-table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .speed-table th, .speed-table td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+@media(max-width:500px) {
+  .speed-table { table-layout:fixed; }
+  .speed-table th, .speed-table td { padding-inline:4px; overflow-wrap:anywhere; }
+}
 .workflow-note { background:var(--soft); border-radius:10px; padding:16px 18px; margin:20px 0; }
 .update-notice { margin:12px 0 0; }
 .update-advice { margin:8px 0; padding-left:20px; }
@@ -537,7 +541,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <p id="dubStatus" class="meta" role="status"></p>
   </details>
   <details id="sceneExport"><summary>{{ui:scenes.export_package}}</summary>
-    <p class="meta">{{ui:scenes.writes_wav_flac_ogg_mp3}} <code>{{ui:scenes.out_exports}}</code>. {{ui:scenes.ffmpeg_writes_the_files_original}}</p>
+    <p class="meta">{{ui:scenes.writes_wav_flac_ogg_mp3}} <code>out/exports/</code>. {{ui:scenes.ffmpeg_writes_the_files_original}}</p>
     <p class="meta" id="exportFfmpeg" role="status"></p>
     <p class="meta" id="exportFfmpegProgress" role="status" hidden></p>
     <div class="cast-actions"><button type="button" id="exportFfmpegInstall" hidden>{{ui:scenes.install_ffmpeg}}</button></div>
@@ -547,7 +551,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label><input type="checkbox" name="exportFormat" value="ogg"> {{ui:scenes.ogg}}</label>
       <label><input type="checkbox" name="exportFormat" value="mp3"> {{ui:scenes.mp3}}</label>
       <label><input type="checkbox" name="exportFormat" value="m4a"> {{ui:scenes.aac_m4a}}</label></fieldset>
-      <label class="field compact">{{ui:scenes.file_names}}<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{{ui:scenes.character_line_id}}"></label>
+      <label class="field compact">{{ui:scenes.file_names}}<input id="exportTemplate" type="text" value="{line_id}" maxlength="120" placeholder="{character}__{line_id}"></label>
       <label class="field compact">{{ui:scenes.wav_precision}}<select id="exportWavPrecision"><option value="PCM_16">{{ui:scenes.16_bit_pcm}}</option>
         <option value="PCM_24">{{ui:scenes.24_bit_pcm}}</option><option value="FLOAT">{{ui:scenes.32_bit_float}}</option></select></label>
       <label class="field compact">{{ui:scenes.sample_rate_blank_keeps_the}}<input id="exportRate" type="number" min="8000" max="192000" step="1"></label></div>
@@ -958,7 +962,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <h3>{{ui:models.measured_speed_on_this_computer}}</h3><p class="meta">{{ui:models.time_per_second_of_speech}}</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">{{ui:models.model}}</th><th scope="col">{{ui:models.runs_on}}</th><th scope="col">{{ui:models.clips}}</th><th scope="col">{{ui:models.typical_time_per_second_of}}</th><th scope="col">{{ui:models.last_clip}}</th></tr></thead><tbody id="speedRows"></tbody></table></div>
 <div class="workflow-note"><strong>{{ui:models.production_workflow}}</strong><p>{{ui:models.design_or_clone_in_model}}</p><p class="meta">{{ui:models.qwen_customvoice_preset_voices_and}}</p></div>
-<h3>{{ui:models.available_outside_the_lab_s}}</h3><p class="meta">{{ui:models.dataset_preparation}} <code>{{ui:models.tools_dataset_workbench_py}}</code>. {{ui:models.and_word_times_for_captions}} <code>{{ui:models.align_takes_py}}</code>. {{ui:models.run_from_a_terminal_the}}</p>
+<h3>{{ui:models.available_outside_the_lab_s}}</h3><p class="meta">{{ui:models.dataset_preparation}} <code>tools/dataset_workbench.py</code>. {{ui:models.and_word_times_for_captions}} <code>align_takes.py</code>. {{ui:models.run_from_a_terminal_the}}</p>
 <details><summary>{{ui:models.current_limits}}</summary><p class="meta">{{ui:models.only_the_qwen_engines_stream}}</p></details></section>
 <section class="card" id="system"><h2>{{ui:system.system_backups}}</h2>
 <p class="meta">{{ui:system.what_this_pc_is_running}}</p>
@@ -990,7 +994,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <p class="meta" id="updateStatus" role="status">{{ui:system.this_is_version}} __APP_VERSION__.</p>
 <div class="cast-actions"><button type="button" id="updateCheck">{{ui:system.check_for_updates}}</button><button type="button" class="go" id="updateNow" hidden>{{ui:system.update_now}}</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>{{ui:system.what_s_new_in_it}}</a></div>
 <label class="meta"><input id="updateAuto" type="checkbox"> {{ui:system.check_when_the_lab_opens}}</label>
-<p class="meta" id="updateHow">{{ui:system.a_check_asks_github_which}} <strong>{{ui:system.update_now}}</strong> {{ui:system.shows_what_the_update_will}} <code>{{ui:system.update_bat_undo}}</code> {{ui:system.in_the_lab_s_folder}} <code>{{ui:system.update_bat}}</code> {{ui:system.does_the_same_update_with}}</p>
+<p class="meta" id="updateHow">{{ui:system.a_check_asks_github_which}} <strong>{{ui:system.update_now}}</strong> {{ui:system.shows_what_the_update_will}} <code>update.bat --undo</code> {{ui:system.in_the_lab_s_folder}} <code>update.bat</code> {{ui:system.does_the_same_update_with}}</p>
 <h3>{{ui:system.speech_recognition}}</h3>
 <p class="meta" id="systemAsrState" role="status"></p>
 <button type="button" id="systemAsrInstall">{{ui:system.install_speech_recognition}}</button>
@@ -1018,7 +1022,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <div id="backupList" class="take"></div>
 <div id="restoreBox" class="workflow-note" hidden>
   <strong>{{ui:system.restore}} <span id="restoreName"></span></strong>
-  <p class="meta">{{ui:system.a_restore_never_changes_your}} <code>{{ui:system.restored}}</code> {{ui:system.and_keeps_it_only_when}}</p>
+  <p class="meta">{{ui:system.a_restore_never_changes_your}} <code>restored</code> {{ui:system.and_keeps_it_only_when}}</p>
   <div class="row"><label class="field compact">{{ui:system.new_folder_name}}<input id="restoreFolder" type="text" maxlength="60" autocomplete="off"></label>
     <button class="go" type="button" id="restoreGo">{{ui:system.restore}}</button><button type="button" id="restoreCancel">{{ui:system.cancel}}</button></div>
 </div>

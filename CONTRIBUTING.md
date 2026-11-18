@@ -85,7 +85,12 @@ third-party licenses for borrowed code and document its source and modifications
 Use `locales/en.json` as the source. Copy it to `locales/<language-tag>.json`
 and give the language its name as speakers write it. Keep `"draft": true` until
 a speaker has checked the translation in the running Lab. A missing message uses
-English.
+English. Keep model syntax such as `[laugh]`, `[voice:Mira]` and `<|speaker:0|>`
+as written.
+
+In 0.4.0, model card facts, voice descriptions, service messages outside the
+common error codes, and diagnostics use English. Native file and audio controls
+follow the browser's language.
 
 Keep message keys and named values such as `{count}` and `{title}`. Move the values
 where the sentence needs them. For a plural message, supply `other` and any forms

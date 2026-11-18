@@ -109,7 +109,10 @@ function loadReferences(choosePath) {
   }).catch(function (e) { $('err').textContent = LabText.t('studio.could_not_list_the_saved', {message: e.message}); });
 }
 function unscreenedLanguages(engine) { return performanceUnscreenedByEngine[engine] || []; }
-function languageOptionLabel(engine, language) { return unscreenedLanguages(engine).indexOf(language) >= 0 ? language + LabText.t('studio.unscreened') : language; }
+function languageOptionLabel(engine, language) {
+  var name = LabText.languageName(language);
+  return unscreenedLanguages(engine).indexOf(language) >= 0 ? name + LabText.t('studio.unscreened') : name;
+}
 function applyQwenCapabilities(info, engine) {
   if (!info) { return; }
   var languages = info.supported_languages || [];
@@ -136,13 +139,25 @@ function refreshLoadedQwenInfo() {
   }).catch(function () {});
 }
 function phononVoiceLabel(voice) {
-  var detail = voice.character ? 'character' : [voice.gender, voice.age].filter(Boolean).join(', ').toLowerCase();
+  var gender = String(voice.gender || '').toLowerCase(), age = String(voice.age || '').toLowerCase();
+  var genders = {female: LabText.t('studio.phonon_female'), male: LabText.t('studio.phonon_male')};
+  var ages = {
+    young: LabText.t('studio.phonon_young'), 'middle-age': LabText.t('studio.phonon_middle_age'),
+    adult: LabText.t('studio.phonon_adult'), senior: LabText.t('studio.phonon_senior'),
+    child: LabText.t('studio.phonon_child'), old: LabText.t('studio.phonon_old'),
+    'young adult': LabText.t('studio.phonon_young_adult'),
+  };
+  var detail = voice.character ? LabText.t('studio.phonon_character')
+    : [genders[gender] || gender, ages[age] || age].filter(Boolean).join(', ');
   return voice.name + (detail ? ' (' + detail + ')' : '');
+}
+function phononGroupLabel(group) {
+  return group === 'Characters' ? LabText.t('studio.phonon_characters') : LabText.languageName(group);
 }
 function showPhononVoiceInfo() {
   [['phononVoice', 'phononVoiceInfo'], ['phononIdentityVoice', 'phononIdentityInfo']].forEach(function (pair) {
     var voice = phononVoices.find(function (item) { return item.name === $(pair[0]).value; });
-    $(pair[1]).textContent = voice ? voice.group + ': ' + voice.description
+    $(pair[1]).textContent = voice ? phononGroupLabel(voice.group) + ': ' + voice.description
       : LabText.t('studio.no_phonon_voices_are_installed');
   });
 }
@@ -155,7 +170,7 @@ function fillPhononVoices(voices) {
     select.textContent = '';
     phononVoices.forEach(function (voice) {
       if (!groups[voice.group]) {
-        groups[voice.group] = document.createElement('optgroup'); groups[voice.group].label = voice.group; select.appendChild(groups[voice.group]);
+        groups[voice.group] = document.createElement('optgroup'); groups[voice.group].label = phononGroupLabel(voice.group); select.appendChild(groups[voice.group]);
       }
       var item = document.createElement('option'); item.value = voice.name; item.textContent = phononVoiceLabel(voice); item.title = voice.description || '';
       groups[voice.group].appendChild(item);
@@ -269,7 +284,7 @@ function engineDetailText(row,device,job){
   if(row.state==='not_installed'){
     var size=row.install_size;
     if(job&&job.state==='failed'){return LabText.t('studio.the_install_stopped_after_show', {elapsed: elapsedText(job.seconds)});}
-    if(install.installer){return size?LabText.t('studio.install_downloads_about_and_uses', {gigabytes: gigabytes(size.download_bytes), gigabytes2: gigabytes(size.disk_bytes)}):LabText.t('studio.install_shows_what_it_will');}
+    if(install.installer){return size?LabText.t('studio.install_downloads_about_and_uses', {download_size: gigabytes(size.download_bytes), installed_size: gigabytes(size.disk_bytes)}):LabText.t('studio.install_shows_what_it_will');}
     if((row.gpu||{}).cpu&&!(row.gpu||{}).choosable){return LabText.t('studio.the_app_cannot_install_it');}
     return LabText.t('studio.the_app_cannot_install_this');
   }
@@ -278,12 +293,14 @@ function engineDetailText(row,device,job){
   if(!check){return LabText.t('studio.press_test_to_load_the');}
   if(row.state==='check_outdated'){return LabText.t('studio.the_last_test_was_made', {test_date: utcStamp(check.checked_at)});}
   if(check.status==='passed'){
-    var where='';
-    // On the CPU though the graphics card was asked for: a CPU build of PyTorch, or (with a GPU build) a card PyTorch could not
-    // find when the model loaded, as when a laptop's power-saving mode has switched its NVIDIA card off.
-    var fellBack=(row.gpu||{}).build==='cpu'?LabText.t('studio.on_the_cpu_this_model'):LabText.t('studio.on_the_cpu_the_graphics');
-    if(check.ran_on&&check.ran_on!==device){where=check.ran_on==='cpu'&&device==='cuda'?fellBack:LabText.t('studio.on', {ran_on: check.ran_on});}
-    return LabText.t('studio.tested_s_to_make_s', {test_date: utcStamp(check.checked_at), total_s: check.total_s, audio_seconds: check.audio_seconds, where: where});
+    var timing={test_date: utcStamp(check.checked_at), total_s: check.total_s, audio_seconds: check.audio_seconds};
+    if(!check.ran_on||check.ran_on===device){return LabText.t('studio.tested_s_to_make_s', timing);}
+    if(check.ran_on==='cpu'&&device==='cuda'){
+      return (row.gpu||{}).build==='cpu'
+        ? LabText.t('studio.on_the_cpu_this_model', timing)
+        : LabText.t('studio.on_the_cpu_the_graphics', timing);
+    }
+    return LabText.t('studio.tested_on_device', {...timing, device: check.ran_on});
   }
   return LabText.t('studio.failed', {test_date: utcStamp(check.checked_at), reason: check.reason});
 }
@@ -314,8 +331,8 @@ function ramText(row,ram){
   var need=row.min_free_ram_gb;
   if(typeof need!=='number'){return {text:'',short:false};}
   var text=LabText.t('studio.needs_gb_of_free_ram', {need: need});
-  if(ram&&ram.total_gb<need){return {text:text+LabText.t('studio.this_computer_has_only')+ram.total_gb+LabText.t('studio.gb_of_ram_so_it'),short:true};}
-  if(ram&&ram.free_gb<need){return {text:text+LabText.t('studio.only')+ram.free_gb+LabText.t('studio.gb_is_free_right_now'),short:true};}
+  if(ram&&ram.total_gb<need){return {text:text+' '+LabText.t('studio.model_exceeds_total_memory', {total_gb: ram.total_gb}),short:true};}
+  if(ram&&ram.free_gb<need){return {text:text+' '+LabText.t('studio.model_needs_more_free_memory', {free_gb: ram.free_gb}),short:true};}
   return {text:text,short:false};
 }
 var engineRows={};
@@ -345,7 +362,7 @@ var firstRun={engine:null,action:null,ready:null},firstRunWired=false;
 function gigabytes(bytes){return (bytes/1e9).toFixed(1)+' GB';}
 function installSizeText(row){
   var size=row.install_size;
-  return size?LabText.t('studio.it_downloads_about_and_uses', {gigabytes: gigabytes(size.download_bytes), gigabytes2: gigabytes(size.disk_bytes)}):'';
+  return size?LabText.t('studio.it_downloads_about_and_uses', {download_size: gigabytes(size.download_bytes), installed_size: gigabytes(size.disk_bytes)}):'';
 }
 function wireFirstRun(){
   if(firstRunWired){return;}
@@ -495,7 +512,7 @@ function renderModelFilter(result){
     var label=cardNode('label'),input=cardNode('input');
     input.type='radio';input.name='modelLanguage';input.value=value;input.checked=value===modelFilter.language;
     input.addEventListener('change',function(){if(input.checked){chooseFilterLanguage(value);}});
-    label.appendChild(input);label.appendChild(cardNode('span','',value||LabText.t('studio.any')));label.className=input.checked?'on':'';
+    label.appendChild(input);label.appendChild(cardNode('span','',LabText.languageName(value)||LabText.t('studio.any')));label.className=input.checked?'on':'';
     box.appendChild(label);
   });
   // With no facts to answer from (a catalog without them), no question is asked, so no card is hidden.
@@ -519,7 +536,7 @@ function applyModelFilter(){
   var line=$('modelFilterMatch');
   line.hidden=!asked;
   line.textContent=!asked?'':!fits.length?LabText.t('studio.no_model_fits_all_of')
-    :(fits.length===1?LabText.t('studio.1_model_fits'):fits.length+LabText.t('studio.models_fit'))+wordList(fits)+'.';
+    :LabText.plural('studio.models_fit', fits.length, {models: wordList(fits)});
 }
 var installRunning=false,installTimer=null;
 function refreshEngineStatus(){
@@ -628,7 +645,7 @@ function closeInstallDialog(){
 }
 function planInstall(engineId,nvidia){
   var view=modelCards[engineId];if(!view){return;}
-  var parts=openInstallDialog(engineId,nvidia,'plan',(nvidia?LabText.t('studio.install_the_gpu_build_of'):LabText.t('studio.install_3'))+view.name);
+  var parts=openInstallDialog(engineId,nvidia,'plan',nvidia ? LabText.t('studio.install_gpu_model', {model: view.name}) : LabText.t('studio.install_model', {model: view.name}));
   parts.state.textContent=LabText.t('studio.reading_what_the_installer_will');
   return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{dry_run:true,nvidia:!!nvidia}).then(function(result){
     if(installDialog.engine!==engineId||installDialog.mode!=='plan'){return;}
@@ -645,7 +662,7 @@ function startInstall(){
   parts.go.disabled=true;
   return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{nvidia:nvidia}).then(function(){
     var view=modelCards[engineId];
-    openInstallDialog(engineId,nvidia,'progress',(nvidia?LabText.t('studio.installing_the_gpu_build_of'):LabText.t('studio.installing_3'))+(view?view.name:engineId)).state.textContent=LabText.t('studio.starting');
+    openInstallDialog(engineId,nvidia,'progress',nvidia ? LabText.t('studio.installing_gpu_model', {model: view ? view.name : engineId}) : LabText.t('studio.installing_4', {name: view ? view.name : engineId})).state.textContent=LabText.t('studio.starting');
   }).catch(function(e){parts.state.textContent=LabText.t('studio.the_install_did_not_start', {message: e.message});parts.go.hidden=true;parts.close.textContent=LabText.t('studio.close');}).then(function(){parts.go.disabled=false;return refreshEngineStatus();});
 }
 function showProgress(engineId){
@@ -726,7 +743,7 @@ function renderSpeedRows(status){
   rows.forEach(function(row){
     var tr=document.createElement('tr');
     var name=modelCards[row.engine]?modelCards[row.engine].name:row.engine;
-    var cells=[name,deviceLabel(row.device),String(row.clips),row.median_real_time_factor==null?'—':row.median_real_time_factor.toFixed(2)+' s',row.last_total_s.toFixed(2)+LabText.t('studio.s_for')+row.last_audio_seconds.toFixed(2)+' s of audio'];
+    var cells=[name,deviceLabel(row.device),String(row.clips),row.median_real_time_factor==null?'—':row.median_real_time_factor.toFixed(2)+' s',LabText.t('studio.last_clip_seconds', {total_seconds: row.last_total_s.toFixed(2), audio_seconds: row.last_audio_seconds.toFixed(2)})];
     cells.forEach(function(text){var td=document.createElement('td');td.textContent=text;tr.appendChild(td);});
     body.appendChild(tr);
   });

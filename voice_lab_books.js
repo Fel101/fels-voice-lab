@@ -249,7 +249,7 @@ function renderBook(fields) {
     var running = ['queued', 'running', 'pausing', 'cancelling'].includes(chapter.status);
     if (!running) {
       var renderLabel = chapter.status === 'paused' ? LabText.t('books.resume') : LabText.t('books.render_missing');
-      actions.appendChild(sceneButton(renderLabel, renderLabel + LabText.t('books.for') + chapter.title,
+      actions.appendChild(sceneButton(renderLabel, (chapter.status === 'paused' ? LabText.t('books.resume_chapter', {chapter: chapter.title}) : LabText.t('books.render_chapter_missing', {chapter: chapter.title})),
         function () { queueBook([chapter.id], false); }));
       if (chapter.status === 'review_takes' || chapter.status === 'ready') {
         actions.appendChild(sceneButton(LabText.t('books.use_newest_takes'), LabText.t('books.use_newest_takes_for', {title: chapter.title}), function () {

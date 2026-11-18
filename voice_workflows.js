@@ -222,8 +222,8 @@
     if (engine !== 'voxcpm2' && !transcript)
       throw new Error(LabText.t('studio.add_the_exact_words_spoken'));
     if (sourceTerms) {
-      if (allowedUse.indexOf(sourceTerms.allowed_use) < 0) allowedUse += LabText.t('studio.inherited', {allowed_use: sourceTerms.allowed_use});
-      if (origin.indexOf(sourceTerms.origin) < 0) origin += '; source: ' + sourceTerms.origin;
+      if (allowedUse.indexOf(sourceTerms.allowed_use) < 0) allowedUse = LabText.t('studio.inherited', {allowed_use: allowedUse, inherited_use: sourceTerms.allowed_use});
+      if (origin.indexOf(sourceTerms.origin) < 0) origin = LabText.t('studio.with_recording_source', {origin: origin, source: sourceTerms.origin});
     }
     var file = sourceFile;
     if (!file && row) {
@@ -231,8 +231,8 @@
       if (!response.ok) throw new Error(LabText.t('studio.could_not_read_the_chosen'));
       file = new File([await response.blob()], row.name || 'reference.wav', {type:'audio/wav'});
       // Existing restrictions cannot be silently dropped while copying a library reference.
-      if (row.allowed_use && allowedUse.indexOf(row.allowed_use) < 0) allowedUse += '; inherited: ' + row.allowed_use;
-      if (row.origin && origin.indexOf(row.origin) < 0) origin += '; source: ' + row.origin;
+      if (row.allowed_use && allowedUse.indexOf(row.allowed_use) < 0) allowedUse = LabText.t('studio.inherited', {allowed_use: allowedUse, inherited_use: row.allowed_use});
+      if (row.origin && origin.indexOf(row.origin) < 0) origin = LabText.t('studio.with_recording_source', {origin: origin, source: row.origin});
     }
     if (!file) throw new Error(LabText.t('studio.upload_record_or_choose_a'));
     if (file.size > 32 * 1024 * 1024) throw new Error(LabText.t('studio.the_recording_is_larger_than'));

@@ -36,7 +36,7 @@ fetch('/api/info').then(function(r){return r.json();}).then(function(i){
   fillFixedVoices();
   fillPhononVoices(i.phonon_voices);
   $('kokoroLanguage').textContent=''; (i.kokoro_languages||[]).filter(function(item){return item.available;})
-    .forEach(function(item){option($('kokoroLanguage'),item.name,item.name+' ('+item.code+')');});
+    .forEach(function(item){option($('kokoroLanguage'),item.name,LabText.languageName(item.name)+' ('+item.code+')');});
   $('kokoroLanguage').value='American English';
   if(activeIdentity()&&activeIdentity().kind==='fixed_voice'){renderActiveIdentity();}
   $('status').textContent=LabText.t('shell.device_free_ram_gb', {device: i.device, free_ram_gb: i.free_ram_gb});
@@ -87,7 +87,9 @@ function uploadConversionFile(role,input){
     .then(function(result){input.value='';return result;});
 }
 function conversionLabel(item){
-  return (item.original_name?item.original_name+LabText.t('shell.from_this_computer'):item.relative_path+' (')+item.duration_seconds+LabText.t('shell.s');
+  return item.original_name
+    ? LabText.t('shell.local_recording_label', {name: item.original_name, seconds: item.duration_seconds})
+    : LabText.t('shell.saved_recording_label', {path: item.relative_path, seconds: item.duration_seconds});
 }
 function refreshConversionAssets(){
 var previousSource=$('conversionSource').value,previousTarget=$('conversionTarget').value;
