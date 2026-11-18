@@ -54,9 +54,9 @@ function bookImportReady() {
       + (line.pause_after_ms == null ? paragraphGap : line.pause_after_ms / 1000);
     if (measured) renderSeconds += speechSeconds * bookModelSpeed[models[line.speaker]];
   });
-  $('bookImportSummary').textContent = LabText.t('books.about_of_audio', {bookCount: LabText.plural('books.chapter_count', bookPreview.chapters.length), bookCount2: LabText.plural('books.passage_count', passages.length), bookDuration: bookDuration(listeningSeconds), value: measured ? LabText.t('books.time_to_render', {duration: bookDuration(renderSeconds)})
+  $('bookImportSummary').textContent = (LabText.t('books.about_of_audio', {chapters: LabText.plural('books.chapter_count', bookPreview.chapters.length), passages: LabText.plural('books.passage_count', passages.length), audio_duration: bookDuration(listeningSeconds)}) + (measured ? LabText.t('books.time_to_render', {duration: bookDuration(renderSeconds)})
       : mapped ? LabText.t('books.test_for_render_time', {models: untested.map(sceneModelName).join(', ')})
-        : LabText.t('books.choose_to_estimate_render_time')});
+        : LabText.t('books.choose_to_estimate_render_time')));
 }
 function bookCastPicker(name) {
   var select = document.createElement('select'), defaultId = sceneScriptGuess(name);
@@ -211,7 +211,7 @@ function renderBookExportTiming() {
   var seconds = 3 + 0.15 * activeBook.chapters.length + pace * activeBook.estimated_seconds;
   $('bookExport').disabled = !formats.length;
   $('bookExportTiming').textContent = formats.length
-    ? LabText.t('books.allow_about_for_export_the', {bookDuration: bookDuration(seconds)})
+    ? LabText.t('books.allow_about_for_export_the', {duration: bookDuration(seconds)})
     : LabText.t('books.choose_at_least_one_audio');
 }
 function renderBook(fields) {
@@ -230,7 +230,7 @@ function renderBook(fields) {
     $('bookGap').value = activeBook.gap_ms;
     $('bookPronounce').value = activeBook.pronunciations.map(function (row) { return row.source + ' = ' + row.replacement; }).join('\n');
   }
-  $('bookEstimate').textContent = LabText.t('books.estimated_listening_time_about', {bookDuration: bookDuration(activeBook.estimated_seconds)});
+  $('bookEstimate').textContent = LabText.t('books.estimated_listening_time_about', {duration: bookDuration(activeBook.estimated_seconds)});
   renderBookExportTiming();
   var table = $('bookChapters');
   table.replaceChildren();
@@ -240,7 +240,7 @@ function renderBook(fields) {
     title.scope = 'row';
     title.textContent = (index + 1) + '. ' + chapter.title;
     var state = document.createElement('td'), actions = document.createElement('td');
-    state.textContent = LabText.t('books.selected_about', {selected: chapter.selected, segments: chapter.segments, replaceAll: chapter.status.replaceAll('_', ' '), bookDuration: bookDuration(chapter.estimated_seconds)});
+    state.textContent = LabText.t('books.selected_about', {selected: chapter.selected, segments: chapter.segments, status: chapter.status.replaceAll('_', ' '), duration: bookDuration(chapter.estimated_seconds)});
     actions.appendChild(sceneButton(LabText.t('books.edit'), LabText.t('books.edit_chapter', {title: chapter.title}), function () {
       if (sceneDirty && !window.confirm(LabText.t('books.discard_unsaved_edits_to_the'))) return;
       location.hash = '#scenes';
@@ -300,7 +300,9 @@ function paintBookDelivery() {
     return;
   }
   var levels = data.loudness;
-  $('bookDeliverySummary').textContent = LabText.t('books.last_export', {bookDuration: bookDuration(data.duration_seconds), value: levels.integrated_lufs == null ? '' : ' · ' + levels.integrated_lufs + ' LUFS', value2: levels.true_peak_dbtp == null ? '' : ' · ' + levels.true_peak_dbtp + ' dBTP'});
+  $('bookDeliverySummary').textContent = [LabText.t('books.export_duration', {duration: bookDuration(data.duration_seconds)}),
+    levels.integrated_lufs == null ? '' : levels.integrated_lufs + ' LUFS',
+    levels.true_peak_dbtp == null ? '' : levels.true_peak_dbtp + ' dBTP'].filter(Boolean).join(' · ');
   var downloads = $('bookDownloads');
   downloads.replaceChildren();
   Object.keys(data.files).concat('manifest.json').forEach(function (name) {
@@ -373,7 +375,7 @@ $('bookVerify').addEventListener('click', function () {
   if (!bookDelivery) return;
   bookAction(LabText.t('books.checking_audiobook_files'), async function () {
     var result = await fetchJson(bookUrl() + '/exports/' + bookDelivery.id + '/verify', {});
-    bookNote(LabText.t('books.and_verified', {bookCount: LabText.plural('books.file_count', result.files), bookCount2: LabText.plural('books.chapter_count', result.chapters)}));
+    bookNote(LabText.t('books.and_verified', {files: LabText.plural('books.file_count', result.files), chapters: LabText.plural('books.chapter_count', result.chapters)}));
   });
 });
 

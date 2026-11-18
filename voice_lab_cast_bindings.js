@@ -62,7 +62,7 @@ $('performCharacter').addEventListener('change',function(){renderPerformanceChar
 $('performIdentity').addEventListener('change',function(){renderPerformanceIdentity();loadCurrentTakes();});
 $('performReference').addEventListener('change',loadCurrentTakes);$('lineId').addEventListener('change',loadCurrentTakes);
 $('performLanguage').addEventListener('change',function(){var identity=performanceIdentity();if(identity&&identity.kind==='preset_voice'){
-  $('performSupport').textContent=LabText.t('cast.checkpoint_preset_no_voice_recording', {speaker: identity.engine_options.speaker, value: this.value});
+  $('performSupport').textContent=LabText.t('cast.checkpoint_preset_no_voice_recording', {speaker: identity.engine_options.speaker, language: this.value});
 }});
 $('performGenerate').addEventListener('click',generatePerformanceSet);$('performStop').addEventListener('click',stopPerformanceSet);
 $('refreshTakes').addEventListener('click',loadCurrentTakes);

@@ -73,7 +73,7 @@ function makeHistory(blob, body, meta) {
   var h = $('hist'); if (!h.querySelector('article')) { h.textContent = ''; }
   var url = URL.createObjectURL(blob), row = document.createElement('article'), title = document.createElement('div'); title.className = 'title';
   row.dataset.audioUrl=url;
-  var desc = document.createElement('span'); desc.textContent = LabText.t('studio.seed_2', {value: body.engine + (body.mode ? ' / ' + body.mode : ''), value2: body.seed === undefined ? '—' : body.seed, slice: body.text.slice(0,70)});
+  var desc = document.createElement('span'); desc.textContent = LabText.t('studio.seed_2', {model: body.engine + (body.mode ? ' / ' + body.mode : ''), seed: body.seed === undefined ? '—' : body.seed, dialogue: body.text.slice(0,70)});
   var download = document.createElement('a'); download.href = url; download.download = body.engine + '-' + (body.mode || 'speech') + '-seed-' + (body.seed === undefined ? Date.now() : body.seed) + '.wav'; download.textContent = LabText.t('studio.save_wav');
   title.appendChild(desc); title.appendChild(download); row.appendChild(title);
   var audio = document.createElement('audio'); audio.controls = true; audio.src = url; row.appendChild(audio);
@@ -118,16 +118,18 @@ function requestSpeech() {
   var started = performance.now(), request = {controller:new AbortController(), stopped:false};
   activeRequest = request;
   function waiting() {
-    $('status').textContent = LabText.t('studio.generating_s_the_first_request', {round: Math.round((performance.now() - started) / 1000)});
+    $('status').textContent = LabText.t('studio.generating_s_the_first_request', {seconds: Math.round((performance.now() - started) / 1000)});
   }
   waiting();
   var ticker = setInterval(waiting, 500);
   fetch('/api/speak', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
     signal:request.controller.signal}).then(function (r) {
     if (!r.ok) { return r.json().then(function (j) { throw new Error(j.error || r.status); }); }
-    var meta = r.headers.get('X-Audio-Seconds') + LabText.t('studio.s_audio') + r.headers.get('X-Gen-Seconds') + LabText.t('studio.s_generation');
+    var meta = LabText.t('studio.generation_timing', {
+      audio_seconds: r.headers.get('X-Audio-Seconds'), generation_seconds: r.headers.get('X-Gen-Seconds')
+    });
     var actual = r.headers.get('X-Decode-Profile-Effective');
-    if (actual) { meta += ' / ' + (r.headers.get('X-Decode-Profile') || '') + LabText.t('studio.requested') + actual + LabText.t('studio.effective'); }
+    if (actual) { meta += ' / ' + LabText.t('studio.decode_profiles', {requested: r.headers.get('X-Decode-Profile') || '', effective: actual}); }
     var mode = r.headers.get('X-Generation-Mode'); if (mode) { meta += ' / ' + mode; }
     var backend = r.headers.get('X-Voice-Backend'); if (backend) { meta += ' / ' + backend; }
     var checkpoint = r.headers.get('X-Model-Checkpoint'); if (checkpoint) { meta += ' / ' + checkpoint; }
@@ -142,7 +144,7 @@ function requestSpeech() {
   }).then(function (result) {
     clearInterval(ticker);
     makeHistory(result.blob, historyBody, result.meta);
-    $('status').textContent = LabText.t('studio.round_trip_s', {meta: result.meta, toFixed: ((performance.now()-started)/1000).toFixed(1)});
+    $('status').textContent = LabText.t('studio.round_trip_s', {meta: result.meta, seconds: ((performance.now()-started)/1000).toFixed(1)});
     var historySaved = persistHistory(result.blob, historyBody, result.meta).catch(function (error) {
       $('status').textContent += LabText.t('studio.local_history_was_not_saved', {message: error.message});
     });
@@ -159,7 +161,7 @@ function requestSpeech() {
   }).catch(function (e) {
     clearInterval(ticker);
     if (request.stopped) {
-      $('status').textContent = LabText.t('studio.stopped_waiting_if_the_model', {value: body.save_voice_as ? LabText.t('studio.reusable_voice_still_saved') : ''});
+      $('status').textContent = LabText.t('studio.stopped_waiting_if_the_model', {saved_voice_notice: body.save_voice_as ? LabText.t('studio.reusable_voice_still_saved') : ''});
     } else { $('err').textContent = e.message; $('status').textContent = ''; }
   }).then(function () {
     clearInterval(ticker);
@@ -220,7 +222,7 @@ function streamGenerate() {
   function handleEvent(event) {
     if (event.type === 'start') {
       state.startEvent=event; state.sampleRate=event.sample_rate;
-      $('status').textContent=LabText.t('studio.native_qwen_generator_ready_service', {toFixed: Number(event.service_first_byte_s).toFixed(2)});
+      $('status').textContent=LabText.t('studio.native_qwen_generator_ready_service', {first_byte_seconds: Number(event.service_first_byte_s).toFixed(2)});
       return Promise.resolve();
     }
     if (event.type === 'error') { throw new Error(event.error || LabText.t('studio.streaming_generation_failed')); }
@@ -250,7 +252,7 @@ function streamGenerate() {
       }
       state.nextStart=startAt+count/event.sample_rate;
       state.pcmParts.push(bytes); state.sampleCount+=count; state.expectedSequence++;
-      $('status').textContent=LabText.t('studio.native_qwen_streaming_chunks_s', {expectedSequence: state.expectedSequence, toFixed: (state.sampleCount/state.sampleRate).toFixed(2), gapCount: state.gapCount});
+      $('status').textContent=LabText.t('studio.native_qwen_streaming_chunks_s', {expectedSequence: state.expectedSequence, audio_seconds: (state.sampleCount/state.sampleRate).toFixed(2), gapCount: state.gapCount});
     });
   }
   function drainLines(text, final) {
@@ -277,7 +279,7 @@ function streamGenerate() {
     while(!state.cancelled&&state.audioContext.currentTime<state.nextStart){await new Promise(function(resolve){setTimeout(resolve,25);});}
     if(state.cancelled){return;}
     var wav=new Blob([wavHeader(state.sampleRate,state.sampleCount)].concat(state.pcmParts),{type:'audio/wav'});
-    var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {toFixed: Number(completion.generator_first_chunk_s).toFixed(2), toFixed2: Number(completion.service_first_byte_s).toFixed(2), toFixed3: Number(completion.service_first_audio_s).toFixed(2), toFixed4: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gapCount: state.gapCount, toFixed5: state.gapSeconds.toFixed(2), toFixed6: Number(completion.audio_seconds).toFixed(2), toFixed7: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
+    var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {first_chunk_seconds: Number(completion.generator_first_chunk_s).toFixed(2), first_byte_seconds: Number(completion.service_first_byte_s).toFixed(2), first_audio_seconds: Number(completion.service_first_audio_s).toFixed(2), playback_seconds: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gapCount: state.gapCount, gap_seconds: state.gapSeconds.toFixed(2), audio_seconds: Number(completion.audio_seconds).toFixed(2), generation_seconds: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
     if(completion.backend){meta+=' / '+completion.backend;}
     if(completion.checkpoint){meta+=' / '+completion.checkpoint;}
     if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / voice recording cached: '+completion.reference_cache_hit;}

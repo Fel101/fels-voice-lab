@@ -22,7 +22,9 @@ $('reroll').addEventListener('click', function () { var seed = Number($('seed').
 $('load').addEventListener('click', function () {
   var body = {engine:$('engine').value}; if (body.engine === 'breeze-tts-2') { body.profile = $('profile').value; }
   $('load').disabled = true; $('err').textContent = ''; $('status').textContent = LabText.t('shell.loading_and_warming_model');
-  fetchJson('/api/load',body).then(function (r) { applyQwenCapabilities(r, r.engine); if(r.engine==='qwen3-tts-1.7b-custom-voice')applyCustomVoiceIdentityOptions(r); $('status').textContent = LabText.t('shell.ready', {engine: r.engine, value: r.profile ? ' / ' + r.profile : '', value2: r.backend ? ' / ' + r.backend : '', value3: r.load_seconds ? ' / ' + r.load_seconds + ' s load' : '', value4: r.supported_speakers && r.supported_speakers.length ? ' / ' + r.supported_speakers.length + ' model speakers' : ''}); })
+  fetchJson('/api/load',body).then(function (r) { applyQwenCapabilities(r, r.engine); if(r.engine==='qwen3-tts-1.7b-custom-voice')applyCustomVoiceIdentityOptions(r); $('status').textContent = [LabText.t('shell.model_ready', {engine: r.engine}), r.profile, r.backend,
+    r.load_seconds ? LabText.t('shell.model_load_time', {seconds: r.load_seconds}) : '',
+    r.supported_speakers?.length ? LabText.plural('shell.model_speakers', r.supported_speakers.length) : ''].filter(Boolean).join(' / '); })
     .catch(function (e) { $('err').textContent=e.message; $('status').textContent=''; }).then(function () { $('load').disabled=false; });
 });
 $('unload').addEventListener('click', function () { fetchJson('/api/unload',{}).then(function () { $('status').textContent=LabText.t('shell.models_unloaded'); }).catch(function(e){$('err').textContent=e.message;}); });
@@ -48,7 +50,7 @@ $('convertVoice').addEventListener('click',function(){
   fetchJson('/api/convert',{source_path:source.value,target_reference_path:target.value,
     target_reference_id:target.dataset.referenceId||null})
     .then(function(result){var conversion=result.conversion;$('conversionPlayer').src=conversion.audio_url;
-      $('conversionStatus').textContent=LabText.t('shell.conversion_saved_s_perth_watermark', {audio_path: conversion.audio_path, toFixed: conversion.manifest.output.duration_seconds.toFixed(2)});
+      $('conversionStatus').textContent=LabText.t('shell.conversion_saved_s_perth_watermark', {audio_path: conversion.audio_path, seconds: conversion.manifest.output.duration_seconds.toFixed(2)});
       var link=document.createElement('a');link.href=conversion.audio_url.replace(/converted\.wav$/,'manifest.json');link.textContent=LabText.t('shell.open_provenance_manifest');
       $('conversionManifest').textContent='';$('conversionManifest').appendChild(link);})
     .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';})
@@ -79,7 +81,7 @@ function uploadConversionFile(role,input){
     .then(function(upload){return refreshConversionAssets().then(function(){
       list.value=upload.path;
       if(role==='target'){$('conversionTargetPermission').checked=false;}
-      $('conversionStatus').textContent=LabText.t('shell.added_s_as_the', {original_name: upload.original_name, duration_seconds: upload.duration_seconds, value: role==='target'?'target voice.':'source performance.'});
+      $('conversionStatus').textContent=(role==='target' ? LabText.t('shell.added_target_voice', {original_name: upload.original_name, duration_seconds: upload.duration_seconds}) : LabText.t('shell.added_source_performance', {original_name: upload.original_name, duration_seconds: upload.duration_seconds}));
       return upload;});})
     .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';return null;})
     .then(function(result){input.value='';return result;});
@@ -118,7 +120,7 @@ function showWorkspace(){
     if(link.getAttribute('href')==='#'+active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
   document.documentElement.classList.add('workspace-ready');
-  document.title=LabText.t('shell.fel_s_voice_lab_2', {textContent: $(active).querySelector('h2').textContent});
+  document.title=LabText.t('shell.fel_s_voice_lab_2', {workspace: $(active).querySelector('h2').textContent});
   window.scrollTo(0,0);
   placeFirstRun(active);
   if(active==='home')refreshHome();

@@ -112,7 +112,7 @@ function previewReferenceClip() {
       .then(function(response){if(!response.ok){return response.json().then(function(result){throw new Error(result.error||response.status);});}return response.blob().then(function(blob){return {blob:blob,headers:response.headers};});})
       .then(function(result){if(revision!==referenceLoadRevision||previewRevision!==referencePreviewRevision)return;setReferencePlayer(result.blob);
         drawReferenceWave(referenceBuffer,range.start,range.end);
-        var details=LabText.t('cast.preview_s_mono_hz_rms', {get: result.headers.get('X-Reference-Duration'), get2: result.headers.get('X-Reference-Sample-Rate'), get3: result.headers.get('X-Reference-RMS')});details+=referenceQualityText(decodeReferenceQuality(result.headers.get('X-Reference-Quality')));
+        var details=LabText.t('cast.preview_s_mono_hz_rms', {seconds: result.headers.get('X-Reference-Duration'), sample_rate: result.headers.get('X-Reference-Sample-Rate'), rms: result.headers.get('X-Reference-RMS')});details+=referenceQualityText(decodeReferenceQuality(result.headers.get('X-Reference-Quality')));
         if($('noiseReductionEnabled').checked){details+=LabText.t('cast.steady_noise_reduction_is_active');}
         $('referenceAnalysis').textContent=details;$('referenceStatus').textContent=LabText.t('cast.preview_ready_listen_before_saving');})
       .catch(function(error){if(revision===referenceLoadRevision&&previewRevision===referencePreviewRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_create_processed_preview', {message: error.message});});
@@ -131,7 +131,7 @@ function loadReferenceSource(blob, file, revision) {
     if(file) {
       $('noiseReductionEnabled').checked=false;$('noiseProfileStart').value='0';$('noiseProfileEnd').value=Math.min(0.30,buffer.duration).toFixed(2);syncNoiseReductionFields();
       setReferencePlayer(file);
-      var stats=bufferAnalysis(buffer); $('referenceAnalysis').textContent=LabText.t('cast.loaded_s_hz_channel_s', {name: file.name, toFixed: buffer.duration.toFixed(2), sampleRate: buffer.sampleRate, numberOfChannels: buffer.numberOfChannels, value: stats.clipped?' / clipped samples '+stats.clipped:''});
+      var stats=bufferAnalysis(buffer); $('referenceAnalysis').textContent=(stats.clipped ? LabText.t('cast.file_loaded_clipped', {name: file.name, seconds: buffer.duration.toFixed(2), sample_rate: buffer.sampleRate, channels: buffer.numberOfChannels, clipped: stats.clipped}) : LabText.t('cast.file_loaded', {name: file.name, seconds: buffer.duration.toFixed(2), sample_rate: buffer.sampleRate, channels: buffer.numberOfChannels}));
     }
     drawReferenceWave(buffer,0,buffer.duration); return buffer;
   }).finally(function(){if(token===referenceLoadRevision){referenceDecodePending=false;$('saveReference').disabled=false;$('saveReferenceVersion').disabled=false;$('previewReference').disabled=false;}});
@@ -154,7 +154,7 @@ function applyCustomVoiceIdentityOptions(info) {
   speakers.forEach(function(value){option($('presetSpeaker'),value,value);});
   languages.forEach(function(value){option($('presetLanguage'),value,languageOptionLabel('qwen3-tts-1.7b-custom-voice',value));});
   if(!speakers.length||!languages.length){$('customVoiceIdentityStatus').textContent=LabText.t('cast.the_loaded_checkpoint_reported_no');return;}
-  $('customVoiceIdentityStatus').textContent=LabText.t('cast.loaded_revision_speakers_languages', {value: info.checkpoint||'CustomVoice', value2: info.checkpoint_revision||'not reported', length: speakers.length, length2: languages.length});
+  $('customVoiceIdentityStatus').textContent=LabText.t('cast.checkpoint_summary', {checkpoint: info.checkpoint||'CustomVoice', revision: info.checkpoint_revision||LabText.t('cast.revision_unavailable'), speakers: speakers.length, languages: languages.length});
 }
 function loadCustomVoiceIdentityOptions() {
   $('loadCustomVoiceIdentity').disabled=true;$('customVoiceIdentityStatus').textContent=LabText.t('cast.loading_the_pinned_local_customvoice');
@@ -206,7 +206,7 @@ function renderActiveIdentity() {
   }
   $('referenceVersion').textContent=''; $('approveReference').textContent='';
   if(identity&&identity.kind==='reference') {
-    identity.references.forEach(function(ref){option($('referenceVersion'),ref.id,LabText.t('cast.v_s', {version: ref.version, toFixed: ref.duration_seconds.toFixed(2), slice: ref.transcript.slice(0,60), value: ref.retired?' — retired':''}));if(!ref.retired)option($('approveReference'),ref.id,LabText.t('cast.v', {version: ref.version, slice: ref.transcript.slice(0,60)}));});
+    identity.references.forEach(function(ref){option($('referenceVersion'),ref.id,(ref.retired ? LabText.t('cast.retired_version', {version: ref.version, seconds: ref.duration_seconds.toFixed(2), transcript: ref.transcript.slice(0,60)}) : LabText.t('cast.v_s', {version: ref.version, seconds: ref.duration_seconds.toFixed(2), transcript: ref.transcript.slice(0,60)})));if(!ref.retired)option($('approveReference'),ref.id,LabText.t('cast.v', {version: ref.version, transcript: ref.transcript.slice(0,60)}));});
     if(identity.references.length){$('referenceVersion').value=identity.references[0].id;$('approveReference').value=identity.approved_reference_id||(identity.references.find(function(ref){return !ref.retired;})||{}).id||'';loadSavedReference(identity.references[0]);}
     else { $('referenceAnalysis').textContent=LabText.t('cast.no_version_saved_yet'); }
     $('saveReference').hidden=false;$('saveReferenceVersion').hidden=!identity.references.length;
@@ -226,7 +226,7 @@ function loadSavedReference(reference) {
   $('noiseReductionStrength').value=noise.strength===undefined?0.75:noise.strength;syncNoiseReductionFields();
   fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_load_audio', {message: error.message});});
   fetch('/api/references/'+reference.id+'/source').then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){return loadReferenceSource(blob,null,revision);})
-    .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent=LabText.t('cast.v_s_hz_mono_channel', {version: reference.version, toFixed: reference.duration_seconds.toFixed(2), sample_rate: reference.sample_rate, channels: reference.channels, slice: reference.audio_sha256.slice(0,16), value: reference.warnings.length?' / '+reference.warnings.join(' '):''});})
+    .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent=(LabText.t('cast.v_s_hz_mono_channel', {version: reference.version, seconds: reference.duration_seconds.toFixed(2), sample_rate: reference.sample_rate, channels: reference.channels, checksum: reference.audio_sha256.slice(0,16)}) + (reference.warnings.length?' / '+reference.warnings.join(' '):''));})
     .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_preview_the_saved', {message: error.message});});
 }
 function renderPerformanceCharacter() {
@@ -243,7 +243,7 @@ function renderPerformanceIdentity() {
   var options=identity.engine_options||{}, isPreset=identity.kind==='preset_voice';
   $('performReference').parentElement.hidden=identity.kind!=='reference';
   if(identity.kind==='reference'){
-    (identity.references||[]).filter(function(ref){return !ref.retired;}).forEach(function(ref){option($('performReference'),ref.id,LabText.t('cast.v_s_2', {version: ref.version, value: ref.id===identity.approved_reference_id?' — approved':' — candidate', toFixed: ref.duration_seconds.toFixed(2)}));});
+    (identity.references||[]).filter(function(ref){return !ref.retired;}).forEach(function(ref){option($('performReference'),ref.id,(ref.id === identity.approved_reference_id ? LabText.t('cast.approved_version', {version: ref.version, seconds: ref.duration_seconds.toFixed(2)}) : LabText.t('cast.candidate_version', {version: ref.version, seconds: ref.duration_seconds.toFixed(2)})));});
     if(identity.approved_reference_id){$('performReference').value=identity.approved_reference_id;} else if(identity.references&&identity.references.length){$('performReference').value=identity.references[0].id;}
   }
   var schema=performanceCapabilitiesByEngine[identity.engine_id]||{controls:[],direction:{status:'unsupported'}};
@@ -259,7 +259,7 @@ function renderPerformanceIdentity() {
   $('performSeed').parentElement.hidden=!seeded;$('variantCount').parentElement.hidden=!seeded;
   $('performDirectionWrap').hidden=!directionSupported;$('actingPreset').parentElement.hidden=!directionSupported;
   $('performSupport').textContent=directionStatus==='experimental'?LabText.t('cast.acting_direction_is_experimental_with'):
-    isPreset?LabText.t('cast.checkpoint_preset_no_voice_recording', {speaker: options.speaker, value: $('performLanguage').value}):
+    isPreset?LabText.t('cast.checkpoint_preset_no_voice_recording', {speaker: options.speaker, language: $('performLanguage').value}):
     identity.engine_id==='turbo'?LabText.t('cast.voice_recordings_must_be_longer'):
     directionSupported?LabText.t('cast.this_model_takes_an_acting'):
     identity.engine_id==='orig'?LabText.t('cast.text_direction_is_unsupported_for'):
@@ -312,7 +312,7 @@ function saveUploadedReference(){
   var encoded=encodeReferenceMetadata(metadata);
   fetch('/api/identities/'+identity.id+'/references',{method:'POST',headers:{'Content-Type':referenceSourceFile.type||'application/octet-stream','X-Reference-Metadata':encoded},body:referenceSourceFile})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||r.status);return j.reference;});})
-    .then(function(ref){$('referenceStatus').textContent=LabText.t('cast.saved_immutable_v_s_hz', {version: ref.version, toFixed: ref.duration_seconds.toFixed(2), sample_rate: ref.sample_rate, toFixed2: ref.rms_dbfs.toFixed(1), value: ref.warnings.length?' / '+ref.warnings.join(' '):'', referenceQualityText: referenceQualityText(ref.quality)});referenceSourceFile=null;return refreshCast(identity.character_id,identity.id);})
+    .then(function(ref){$('referenceStatus').textContent=(LabText.t('cast.saved_immutable_v_s_hz', {version: ref.version, seconds: ref.duration_seconds.toFixed(2), sample_rate: ref.sample_rate, rms: ref.rms_dbfs.toFixed(1)}) + (ref.warnings.length?' / '+ref.warnings.join(' '):'') + referenceQualityText(ref.quality));referenceSourceFile=null;return refreshCast(identity.character_id,identity.id);})
     .catch(function(error){$('referenceStatus').textContent=error.message;}).then(function(){$('saveReference').disabled=false;});
 }
 function saveEditedReferenceVersion(){
@@ -355,9 +355,9 @@ var takeCheckLabels={silent_audio:LabText.t('cast.silent'),clipping:LabText.t('c
 function appendTakeChecks(parent,checks){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!checks||checks.status==='not_recorded'){note.textContent=LabText.t('cast.waveform_checks_were_not_recorded');}
-  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {value: checks.error||LabText.t('cast.error_not_known')});}
+  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {error: checks.error||LabText.t('cast.error_not_known')});}
   else if(!checks.flags.length){note.textContent=LabText.t('cast.automatic_waveform_checks_found_no');}
-  else{note.className+=' flagged';note.textContent=LabText.t('cast.automatic_waveform_checks_flagged_listen', {join: checks.flags.map(function(flag){
+  else{note.className+=' flagged';note.textContent=LabText.t('cast.automatic_waveform_checks_flagged_listen', {flags: checks.flags.map(function(flag){
     return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')});}
   parent.appendChild(note);
 }
@@ -365,11 +365,11 @@ var loudnessNotes={silent:LabText.t('cast.no_loudness_reading_the_take'),too_sho
 function appendTakeLoudness(parent,loudness){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!loudness||loudness.status==='not_measured'){note.textContent=LabText.t('cast.loudness_has_not_been_measured');}
-  else if(loudness.status==='unavailable'){note.textContent=LabText.t('cast.loudness_could_not_be_measured', {value: loudness.reason||LabText.t('cast.error_not_known')});}
+  else if(loudness.status==='unavailable'){note.textContent=LabText.t('cast.loudness_could_not_be_measured', {reason: loudness.reason||LabText.t('cast.error_not_known')});}
   else{
-    var parts=[loudness.integrated_lufs===null?(loudnessNotes[loudness.note]||LabText.t('cast.no_loudness_reading')):LabText.t('cast.loudness_lufs', {toFixed: loudness.integrated_lufs.toFixed(1)})];
-    if(loudness.sample_peak_dbfs!==null)parts.push(LabText.t('cast.sample_peak_dbfs', {toFixed: loudness.sample_peak_dbfs.toFixed(1)}));
-    if(loudness.true_peak_dbtp!==null)parts.push(LabText.t('cast.true_peak_dbtp', {toFixed: loudness.true_peak_dbtp.toFixed(1)}));
+    var parts=[loudness.integrated_lufs===null?(loudnessNotes[loudness.note]||LabText.t('cast.no_loudness_reading')):LabText.t('cast.loudness_lufs', {lufs: loudness.integrated_lufs.toFixed(1)})];
+    if(loudness.sample_peak_dbfs!==null)parts.push(LabText.t('cast.sample_peak_dbfs', {peak: loudness.sample_peak_dbfs.toFixed(1)}));
+    if(loudness.true_peak_dbtp!==null)parts.push(LabText.t('cast.true_peak_dbtp', {true_peak: loudness.true_peak_dbtp.toFixed(1)}));
     note.textContent=parts.join(' · ')+'.';
     if(loudness.true_peak_dbtp!==null&&loudness.true_peak_dbtp>-1)note.textContent+=LabText.t('cast.the_true_peak_is_above');
   }
@@ -386,7 +386,7 @@ function retireAction(kind,id,label){
     var parts=[];
     if(result.affected.reference)parts.push(result.affected.reference+LabText.t('cast.recording_version_s'));
     if(result.affected.take)parts.push(result.affected.take+LabText.t('cast.take_s'));
-    return LabText.t('cast.retired_blocked_with_it_listening', {label: label, value: parts.join(', ')||LabText.t('cast.nothing_else')});
+    return LabText.t('cast.retired_blocked_with_it_listening', {label: label, affected_items: parts.join(', ')||LabText.t('cast.nothing_else')});
   });
 }
 function restoreAction(kind,id,label){
@@ -396,10 +396,10 @@ function purgeAction(kind,id,label){
   return fetchJson('/api/purges/preview?kind='+encodeURIComponent(kind)+'&id='+encodeURIComponent(id)).then(function(preview){
     var counts=preview.would_purge,parts=[];
     [['identity','voice','voices'],['reference',LabText.t('cast.voice_recording'),LabText.t('cast.voice_recordings')],['take','take','takes']].forEach(function(kind){var count=counts[kind[0]];if(count)parts.push(count+' '+(count===1?kind[1]:kind[2]));});
-    if(!window.confirm(LabText.t('cast.permanently_delete_this_removes_and', {label: label, join: parts.join(', ')})))return null;
+    if(!window.confirm(LabText.t('cast.permanently_delete_this_removes_and', {label: label, affected_items: parts.join(', ')})))return null;
     return fetchJson('/api/purges',{kind:kind,id:id,confirm:true}).then(function(report){
-      var text=LabText.t('cast.deleted_for_good', {join: parts.join(', ')});
-      if(report.external_copies.length)text+=LabText.t('cast.copies_outside_cast_still_hold', {join: report.external_copies.join(', '), value: report.external_copies_truncated?' (list truncated)':''});
+      var text=LabText.t('cast.deleted_for_good', {deleted_items: parts.join(', ')});
+      if(report.external_copies.length)text+=(report.external_copies_truncated ? LabText.t('cast.external_copies_truncated', {paths: report.external_copies.join(', ')}) : LabText.t('cast.external_copies', {paths: report.external_copies.join(', ')}));
       return text;
     });
   });
@@ -420,7 +420,7 @@ function appendTakeRetirement(article,take,after,show){
   var row=document.createElement('div');row.className='cast-actions';
   var note=document.createElement('p');note.className='meta take-checks';
   if(take.retired){
-    note.className+=' flagged';note.textContent=LabText.t('cast.new_use_is_blocked_listening', {retirementLabel: retirementLabel(take)});
+    note.className+=' flagged';note.textContent=LabText.t('cast.new_use_is_blocked_listening', {retirement: retirementLabel(take)});
     if(!take.retirement.inherited)row.appendChild(retirementButton(LabText.t('cast.restore_take'),function(){return restoreAction('take',take.id,LabText.t('cast.this_take'));},after,show));
     row.appendChild(retirementButton(LabText.t('cast.delete_this_take_for_good'),function(){return purgeAction('take',take.id,'this take');},after,show));
   }else row.appendChild(retirementButton(LabText.t('cast.retire_take'),function(){return retireAction('take',take.id,'this take');},after,show));
@@ -439,16 +439,16 @@ function updateReferenceRetirement(){
 }
 function renderTakes(takes){
   var container=$('takeList');container.textContent='';if(!takes.length){container.textContent=LabText.t('cast.no_saved_takes_for_this');return;}
-  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: take.status, toFixed: take.duration_seconds.toFixed(2)});article.appendChild(title);
+  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: take.status, seconds: take.duration_seconds.toFixed(2)});article.appendChild(title);
     var player=document.createElement('audio');player.controls=true;player.src=take.audio_url;article.appendChild(player);
-    var detail=document.createElement('p');detail.className='meta';detail.textContent=LabText.t('cast.text_sent_revision', {spoken_text: take.spoken_text, backend: take.model.backend, checkpoint: take.model.checkpoint, checkpoint_revision: take.model.checkpoint_revision, value: take.model.mode||'', value2: take.edit?'\n'+takeEditNote(take):''});article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
+    var detail=document.createElement('p');detail.className='meta';detail.textContent=(LabText.t('cast.text_sent_revision', {spoken_text: take.spoken_text, backend: take.model.backend, checkpoint: take.model.checkpoint, checkpoint_revision: take.model.checkpoint_revision, mode: take.model.mode||''}) + (take.edit?'\n'+takeEditNote(take):''));article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
     var provenance=document.createElement('details'),provenanceTitle=document.createElement('summary'),provenanceBody=document.createElement('pre');
     provenanceTitle.textContent=LabText.t('cast.effective_settings_and_provenance');provenanceBody.className='meta';
     provenanceBody.textContent=JSON.stringify({effective_settings:take.model.effective_settings||{},voice_identity:take.model.voice_identity||null,
       reference_version_id:take.reference_version_id||null,provenance:take.provenance||{}},null,2);
     provenance.appendChild(provenanceTitle);provenance.appendChild(provenanceBody);article.appendChild(provenance);
     var actions=document.createElement('div');actions.className='cast-actions';[['selected',LabText.t('cast.select')],['candidate',LabText.t('cast.keep_as_candidate')],['rejected',LabText.t('cast.reject')]].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
-    var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {toFixed: m.score.toFixed(2), value: {likely_same:LabText.t('cast.similar_to_recording'),uncertain:'uncertain',likely_different:LabText.t('cast.different_from_recording')}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
+    var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {score: m.score.toFixed(2), assessment: {likely_same:LabText.t('cast.similar_to_recording'),uncertain:LabText.t('cast.match_uncertain'),likely_different:LabText.t('cast.different_from_recording')}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
 }
 var takeLoadRevision=0;
 function loadCurrentTakes(){
@@ -499,7 +499,7 @@ function generatePerformanceSet(){
 }
 var performRun=null;
 function performStatusText(run){
-  return LabText.t('cast.making_take_of_s', {index: run.index, count: run.count, value: run.count>1?LabText.t('cast.performance_in_sequence'):'', round: Math.round((performance.now()-run.started)/1000), value2: run.stopRequested?LabText.t('cast.stopping_after_current_take'):''});
+  return ((run.count > 1 ? LabText.t('cast.making_take_in_sequence', {index: run.index, count: run.count, seconds: Math.round((performance.now()-run.started)/1000)}) : LabText.t('cast.making_take_of_s', {index: run.index, count: run.count, seconds: Math.round((performance.now()-run.started)/1000)})) + (run.stopRequested?LabText.t('cast.stopping_after_current_take'):''));
 }
 function stopPerformanceSet(){
   if(performRun&&!performRun.stopRequested){performRun.stopRequested=true;$('performStatus').textContent=performStatusText(performRun);}
@@ -571,7 +571,7 @@ $('slateImportForm').addEventListener('submit', function (event) {
     $('slateBundle').value = '';
     $('slateImportForm').hidden = true;
     $('slateImportStatus').textContent =
-      LabText.t('cast.review_the_recording_and_approve', {value: result.status === 'already_registered' ? LabText.t('cast.slate_clip_registered') : LabText.t('cast.slate_clip_imported')});
+      LabText.t('cast.review_the_recording_and_approve', {import_status: result.status === 'already_registered' ? LabText.t('cast.slate_clip_registered') : LabText.t('cast.slate_clip_imported')});
     $('castEditor').open = true;
     return refreshCast(result.character_id, result.identity_id);
   }).catch(function (error) {

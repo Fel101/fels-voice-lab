@@ -32,7 +32,7 @@ function systemFacts(report){
 function ffmpegSummary(ffmpeg){
   if(!ffmpeg||!ffmpeg.found)return {ok:false,text:(ffmpeg&&ffmpeg.message)||LabText.t('system.ffmpeg_was_not_found_on')};
   var names={wav:'WAV',flac:'FLAC',ogg:'Ogg',mp3:'MP3',m4a:'AAC'},formats=Object.keys(names).map(function(key){return names[key]+' '+(ffmpeg.formats&&ffmpeg.formats[key]?LabText.t('system.yes'):LabText.t('system.no'));}).join(', ');
-  return {ok:!!ffmpeg.ready&&!ffmpeg.message,text:LabText.t('system.ffmpeg_found_can_write', {value: ffmpeg.version||'', value2: ffmpeg.ready?'':LabText.t('system.ffprobe_missing'), formats: formats, value3: ffmpeg.message?' '+ffmpeg.message:''})};
+  return {ok:!!ffmpeg.ready&&!ffmpeg.message,text:((!ffmpeg.ready ? LabText.t('system.ffmpeg_without_probe', {version: ffmpeg.version||'', formats: formats}) : LabText.t('system.ffmpeg_found_can_write', {version: ffmpeg.version||'', formats: formats})) + (ffmpeg.message?' '+ffmpeg.message:''))};
 }
 function diskSummary(label,row){
   if(!row)return {low:false,text:label+LabText.t('system.the_free_space_could_not')};
@@ -79,7 +79,7 @@ function cleanupText(cleanup){
     counts.log?.count ? LabText.plural('system.old_service_log_count', counts.log.count) : '',
     counts.spoken?.count ? LabText.plural('system.folder_of_old_clips_for_other_apps_count', counts.spoken.count) : ''
   ].filter(Boolean);
-  return LabText.t('system.cleanup_would_remove_it_never', {join: parts.join(', '), formatBytes: formatBytes(cleanup.bytes)});
+  return LabText.t('system.cleanup_would_remove_it_never', {cleanup_items: parts.join(', '), bytes: formatBytes(cleanup.bytes)});
 }
 function renderStorage(storage){
   var body=$('systemStorage');body.textContent='';
@@ -98,7 +98,7 @@ function runCleanup(){
   if(!window.confirm(LabText.t('system.remove_the_stopped_worker_folders')))return Promise.resolve();
   $('systemClean').disabled=true;$('systemError').textContent='';
   return fetchJson('/api/system/cleanup',{}).then(function(result){
-    var message=LabText.t('system.removed', {plural: LabText.plural('system.item_count', result.removed), formatBytes: formatBytes(result.bytes), value: result.errors.length?LabText.t('system.cleanup_unremoved', {count: result.errors.length}):'.'});
+    var message=LabText.t('system.removed', {items: LabText.plural('system.item_count', result.removed), bytes: formatBytes(result.bytes), failures: result.errors.length?LabText.t('system.cleanup_unremoved', {count: result.errors.length}):'.'});
     return measureStorage().then(function(){$('systemStatus').textContent=message;});
   }).catch(function(e){$('systemError').textContent=LabText.t('system.cleanup_did_not_finish', {message: e.message});});
 }
@@ -111,9 +111,9 @@ function taskMessage(task){
   }
   if(task.status==='failed')return task.error;
   if(task.status!=='done')return '';
-  if(task.kind==='backup')return LabText.t('system.backup_saved_as_it_was', {name: result.name, formatBytes: formatBytes(result.bytes), plural: LabText.plural('system.file_count', result.files), warnings: warnings});
+  if(task.kind==='backup')return LabText.t('system.backup_saved_as_it_was', {name: result.name, bytes: formatBytes(result.bytes), files: LabText.plural('system.file_count', result.files), warnings: warnings});
   if(task.kind==='check')return result.ok?result.name+LabText.t('system.passed_every_file_matches_its'):result.name+LabText.t('system.did_not_pass')+result.problems.join(' ');
-  if(task.kind==='restore')return LabText.t('system.restored_to_every_file_matched', {state_root: result.state_root, plural: LabText.plural('system.file_count', result.files), plural2: LabText.plural('system.take_count', result.counts.takes), warnings: warnings});
+  if(task.kind==='restore')return LabText.t('system.restored_to_every_file_matched', {state_root: result.state_root, files: LabText.plural('system.file_count', result.files), takes: LabText.plural('system.take_count', result.counts.takes), warnings: warnings});
   return '';
 }
 function backupSections(plan){
@@ -129,17 +129,19 @@ function showBackupEstimate(){
   if(!backupPlan)return;
   var chosen=chosenBackupSections(),total=0;
   backupPlan.sections.forEach(function(row){if(!row.optional||chosen.indexOf(row.key)>=0)total+=row.bytes;});
-  $('backupSize').textContent=LabText.t('system.what_is_ticked_holds_about', {formatBytes: formatBytes(total)});
+  $('backupSize').textContent=LabText.t('system.what_is_ticked_holds_about', {bytes: formatBytes(total)});
 }
 function backupRow(backup,busy){
   var article=document.createElement('article'),title=document.createElement('strong'),detail=document.createElement('p'),row=document.createElement('div');
   title.textContent=backup.name;article.appendChild(title);detail.className='meta';
   if(backup.problem){detail.textContent=LabText.t('system.this_file_does_not_read', {problem: backup.problem});article.appendChild(detail);}
   else{
-    detail.textContent=LabText.t('system.made_by_version', {formatBytes: formatBytes(backup.bytes), plural: LabText.plural('system.file_count', backup.files), whenText: whenText(backup.created_at), value: backup.app_version||'unknown', value2: backup.skipped?'; '+LabText.plural('system.item_count', backup.skipped)+' left out':'', value3: backup.missing_media?LabText.plural('system.media_missing_count', backup.missing_media):''});
+    detail.textContent=(LabText.t('system.backup_summary', {backup_size: formatBytes(backup.bytes), files: LabText.plural('system.file_count', backup.files), date: whenText(backup.created_at), version: backup.app_version||LabText.t('system.version_unknown')})
+      + (backup.skipped ? LabText.plural('system.backup_excluded', backup.skipped) : '')
+      + (backup.missing_media ? LabText.plural('system.media_missing_count', backup.missing_media) : '') + '.');
     article.appendChild(detail);
     var holds=document.createElement('p');holds.className='meta';
-    holds.textContent=LabText.t('system.holds', {join: Object.keys(backup.sections||{}).map(function(key){return backup.sections[key].label;}).join(', ')});article.appendChild(holds);
+    holds.textContent=LabText.t('system.holds', {sections: Object.keys(backup.sections||{}).map(function(key){return backup.sections[key].label;}).join(', ')});article.appendChild(holds);
   }
   row.className='row';
   var check=document.createElement('button');check.type='button';check.textContent=LabText.t('system.check');check.disabled=!!busy;
@@ -199,14 +201,14 @@ function startRestore(){
 function useRestoredLibrary(){
   if(!window.confirm(LabText.t('system.open_this_restored_library_the')))return Promise.resolve();
   return fetchJson('/api/system/use-library',{folder:$('restoreUse').dataset.folder}).then(function(result){
-    $('backupStatus').textContent=LabText.t('system.next_start_the_desktop_app', {state_root: result.state_root, settings_file: result.settings_file, value: result.previous?' to '+result.previous:' to "."'});
+    $('backupStatus').textContent=LabText.t('system.restore_next_start', {state_root: result.state_root, settings_file: result.settings_file, previous: result.previous || '"."'});
   }).catch(function(e){$('systemError').textContent=e.message;});
 }
 // Updates: the service asks GitHub only when Check for updates is pressed, or once a day when the page opens if that is on.
 // A newer release shows here and in the header, each with Update now.
 function updateMessage(result){
   if(result.error)return LabText.t('system.the_last_check_failed', {error: result.error});
-  return result.message+(result.checked_at?LabText.t('system.checked', {whenText: whenText(result.checked_at)}):'');
+  return result.message+(result.checked_at?LabText.t('system.checked', {date: whenText(result.checked_at)}):'');
 }
 function renderUpdate(result){
   var newer=!!(result.newer&&result.release&&!result.error),link=$('updateRelease'),badge=$('updateBadge');
@@ -280,7 +282,7 @@ function renderUpdateNotice(notice){
     title.textContent=LabText.t('system.nothing_to_update');text.textContent=notice.message||LabText.t('system.this_is_the_newest_version');
   }else{
     title.textContent=LabText.t('system.the_update_did_not_finish');
-    text.textContent=LabText.t('system.this_is_still_version', {value: notice.message||'', from: notice.from});
+    text.textContent=LabText.t('system.this_is_still_version', {release_note: notice.message||'', from: notice.from});
   }
   (notice.problems||[]).forEach(function(problem){var item=document.createElement('li');item.className='warn';item.textContent=problem;list.appendChild(item);});
   advice.forEach(function(entry){
@@ -330,14 +332,14 @@ var FFMPEG_VIEWS={system:['systemFfmpegInstall','systemFfmpegProgress'],export:[
 // In megabytes of a million bytes, as the installer's own progress lines count them, so the offer and the download agree.
 function ffmpegMegabytes(bytes){ return Math.round(bytes/1e6)+' MB'; }
 function ffmpegOfferText(offer){
-  return LabText.t('system.install_ffmpeg_puts_ffmpeg_in', {version: offer.version, builder: offer.builder, license: offer.license, ffmpegMegabytes: ffmpegMegabytes(offer.download_bytes), ffmpegMegabytes2: ffmpegMegabytes(offer.disk_bytes)});
+  return LabText.t('system.install_ffmpeg_puts_ffmpeg_in', {version: offer.version, builder: offer.builder, license: offer.license, download_size: ffmpegMegabytes(offer.download_bytes), installed_size: ffmpegMegabytes(offer.disk_bytes)});
 }
 function ffmpegJobText(job){
   var lines=(job.lines||[]).map(function(line){return line.trim();}).filter(Boolean);
-  if(job.state==='running')return LabText.t('system.installing_ffmpeg_it_cannot_be', {value: lines.slice(-1)[0]||'Starting.'});
+  if(job.state==='running')return LabText.t('system.installing_ffmpeg_it_cannot_be', {progress: lines.at(-1)||LabText.t('system.install_starting')});
   if(job.state==='finished')return LabText.t('system.ffmpeg_is_installed');
   var errors=lines.filter(function(line){return /^error:/.test(line);}).map(function(line){return line.replace(/^error:\s*/,'');});
-  return LabText.t('system.ffmpeg_was_not_installed_press', {value: errors.join(' ')||lines.slice(-1)[0]||LabText.t('system.install_stopped_without_reason')});
+  return LabText.t('system.ffmpeg_was_not_installed_press', {error: errors.join(' ')||lines.slice(-1)[0]||LabText.t('system.install_stopped_without_reason')});
 }
 function renderFfmpegOffer(where,report){
   if(report!==undefined)ffmpegOffers[where]=report&&report.offer||null;
@@ -425,7 +427,7 @@ function saveConnectPort(){
   var text=$('connectPort').value.trim(),port=Number(text);
   if(!text||!Number.isInteger(port)){systemNote('connectPortStatus',LabText.t('system.type_a_whole_number_0'),true);return Promise.resolve();}
   return fetchJson('/api/system/connect/port',{port:port}).then(function(result){
-    systemNote('connectPortStatus',LabText.t('system.the_next_time_it_opens', {value: result.window_port===0?LabText.t('system.saved_free_port'):LabText.t('system.saved_specific_port', {port: result.window_port})}),false);
+    systemNote('connectPortStatus',(result.window_port===0 ? LabText.t('system.window_free_port') : LabText.t('system.window_specific_port', {port: result.window_port})),false);
   }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
 }
 // Install speech recognition.

@@ -63,7 +63,7 @@
     var filters=document.createElement('div');filters.className='reference-filters';
     /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([[LabText.t('studio.all_recording_versions'),function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
       var wrap=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=item[1]();
-      input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',LabText.t('studio.for', {value: item[0], id: select.id}));
+      input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',LabText.t('studio.for', {label: item[0], id: select.id}));
       input.addEventListener('change',function(){item[2](input.checked);
         /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('[data-reference-filter="'+index+'"]')).forEach(function(other){other.checked=input.checked;});render(rows);});
       wrap.append(input,document.createTextNode(' '+item[0]));filters.appendChild(wrap);
@@ -94,7 +94,7 @@
   function addReferenceTools(select) {
     var tools = document.createElement('div'); tools.className = 'reference-tools';
     var audio = document.createElement('audio'); audio.id = select.id + 'Audio'; audio.controls = true;
-    audio.preload = 'none'; audio.setAttribute('aria-label', LabText.t('studio.preview', {trim: select.parentElement.firstChild.textContent.trim()}));
+    audio.preload = 'none'; audio.setAttribute('aria-label', LabText.t('studio.preview', {recording_label: select.parentElement.firstChild.textContent.trim()}));
     var disclosure=document.createElement('details'),summary=document.createElement('summary');summary.textContent=LabText.t('studio.source_use_notes_and_recording');
     var details = document.createElement('p'); details.id = select.id + 'Details'; details.className = 'meta reference-details';disclosure.append(summary,details);
     var button = document.createElement('button'); button.type = 'button'; button.textContent = LabText.t('studio.upload_record_a_new_voice');
@@ -167,7 +167,7 @@
     sourceFile = file; sourceTerms = null; sourceUrl = URL.createObjectURL(file);
     el('cloneSourcePlayer').src = sourceUrl;
     el('cloneReference').value = '';
-    el('cloneSourceInfo').textContent = LabText.t('studio.kb_listen_and_enter_its', {name: file.name, round: Math.round(file.size / 1024)});
+    el('cloneSourceInfo').textContent = LabText.t('studio.kb_listen_and_enter_its', {name: file.name, kilobytes: Math.round(file.size / 1024)});
     el('cloneTranscript').value = ''; el('cloneOrigin').value = ''; el('cloneAllowedUse').value = '';
     el('clonePermission').checked = false;
   }
@@ -191,7 +191,7 @@
     el('cloneTranscript').value = body.text || '';
     var parent = body._reference_provenance;
     if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:LabText.t('studio.where_this_recording_came_from'),allowed_use:LabText.t('studio.who_may_use_the_recording')};
-    el('cloneOrigin').value = LabText.t('studio.generated_locally_with', {engine: body.engine, value: parent && parent.origin ? '; source: ' + parent.origin : ''});
+    el('cloneOrigin').value = (parent && parent.origin ? LabText.t('studio.generated_with_source', {engine: body.engine, origin: parent.origin}) : LabText.t('studio.generated_locally', {engine: body.engine}));
     el('cloneAllowedUse').value = (parent && parent.allowed_use ? parent.allowed_use + '; ' : '') +
       (body.engine === 'breeze-tts-2' ? LabText.t('studio.non_commercial_only_breeze_model') :
         body.engine === 'drama-3' ? LabText.t('studio.subject_to_fish_audio_community') : LabText.t('studio.subject_to_the_source_model'));

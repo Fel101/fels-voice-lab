@@ -29,7 +29,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
   const script=el('textarea',null,{'aria-label':LabText.t('studio.drama_script'),maxlength:String(info.max_text),placeholder:LabText.t('studio.drama_example_script')});
   const cueBar=el('div',null,{class:'ds-row','aria-label':LabText.t('studio.inline_acting_cues')});
   const preview=el('p','',{'class':'ds-status','aria-label':LabText.t('studio.spoken_words_preview')});
-  function updatePlain(){preview.textContent=LabText.t('studio.words_for_captions_checks', {plainScript: plainScript(script.value)});}
+  function updatePlain(){preview.textContent=LabText.t('studio.words_for_captions_checks', {words: plainScript(script.value)});}
   script.oninput=updatePlain;
   function insert(token){const r=insertCue(script.value,script.selectionStart,script.selectionEnd,token);script.value=r.text;
     script.focus();script.setSelectionRange(r.cursor,r.cursor);updatePlain();}
@@ -81,7 +81,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
     const links=el('div',null,{class:'ds-row'});
     for(const [kind,title] of [['audio',LabText.t('studio.download_wav')],['metadata',LabText.t('studio.model_cast_receipt')],['package',LabText.t('studio.download_take_zip')]])links.append(el('a',title,{href:base+'/jobs/'+row.id+'/'+kind,download:''}));
     outputs.append(links,el('p',LabText.t('studio.mixed_cast_audio_individual_speaker')));
-    if(row.quality?.flags?.length)outputs.append(el('p',LabText.t('studio.review_flags', {join: row.quality.flags.join(', ')}),{role:'alert'}));
+    if(row.quality?.flags?.length)outputs.append(el('p',LabText.t('studio.review_flags', {flags: row.quality.flags.join(', ')}),{role:'alert'}));
   }
   function restoreRequest(row) {
     if(!row.request)return;
@@ -99,7 +99,7 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
         current=data.job;offset=data.offset;
         if(restore){restoreRequest(current);restore=false;}
         if(!['cancelled','cancelling','failed','interrupted'].includes(current.status))play(data.pcm);
-        status.textContent=LabText.t('studio.s_of_preview_received', {value: current.status+(current.error?' — '+current.error:''), toFixed: (data.available_bytes/88200).toFixed(1)});
+        status.textContent=LabText.t('studio.s_of_preview_received', {progress: current.status+(current.error?' — '+current.error:''), seconds: (data.available_bytes/88200).toFixed(1)});
         if(current.first_audio_seconds!=null)status.textContent+=LabText.t('studio.first_audio_s', {first_audio_seconds: current.first_audio_seconds});
         if(terminal(current.status)&&offset>=data.available_bytes){start.disabled=false;stop.disabled=true;completed(current);return;}
         await new Promise(resolve=>setTimeout(resolve,500));
@@ -125,6 +125,6 @@ export async function mountDramaStudio(root, {base='/api/drama3'}={}) {
     el('p',LabText.t('studio.insert_an_acting_direction_or')),
     label(LabText.t('studio.dialogue_or_narration'),script),preview,controls,listenLabel,actions,status,outputs,
     el('p',LabText.t('studio.jobs_and_scripts_are_retained')));
-  status.textContent=LabText.t('studio.approved_voices_with_a_voice', {length: info.sources.length});
+  status.textContent=LabText.t('studio.approved_voices_with_a_voice', {voices: info.sources.length});
   return {stopListening(){listen.checked=false;stopListening();}};
 }

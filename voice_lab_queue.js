@@ -68,13 +68,16 @@
     var running = state.running, waiting = state.waiting || [], lines = [], others = 0;
     if (running) {
       lines.push({id:running.id, action:running.can_stop ? 'stop' : null,
-        text:LabText.t('shell.now_s', {what: running.what, value: running.engine ? ' · ' + modelName(running.engine) : '', round: Math.round(running.seconds), value2: own[running.id] ? ' (yours)' : ''})});
+        text:((running.engine
+          ? LabText.t('shell.worker_now_with_model', {operation: running.what, model: modelName(running.engine), seconds: Math.round(running.seconds)})
+          : LabText.t('shell.worker_now', {operation: running.what, seconds: Math.round(running.seconds)}))
+          + (own[running.id] ? LabText.t('shell.request_owner') : ''))});
     }
     waiting.forEach(function (item, index) {
       if (!own[item.id]) { others += 1; return; }
       var ahead = index + (running ? 1 : 0);
       lines.push({id:item.id, action:'cancel', text:ahead === 0 ? LabText.t('shell.waiting_next_in_line')
-        : LabText.t('shell.waiting_ahead_of_you', {ahead: ahead, value: running ? ' (' + doing(running) + ')' : ''})});
+        : LabText.t('shell.waiting_ahead_of_you', {ahead: ahead, current_request: running ? ' (' + doing(running) + ')' : ''})});
     });
     if (others) lines.push({id:'others', action:null, text:others + (others === 1 ? LabText.t('shell.more_request_waits') : LabText.t('shell.more_requests_wait'))});
     return lines;

@@ -28,7 +28,7 @@ function showSceneError(error) {
   try {
     var scene = sceneBody();
     if (scene.timeline) scene.lines.forEach(function (line, index) {
-      if (line.cue) message = message.replaceAll(line.line_id, LabText.t('scenes.line_2', {number: index + 1, sceneCueTime: sceneCueTime(line.cue.start_ms)}));
+      if (line.cue) message = message.replaceAll(line.line_id, LabText.t('scenes.line_2', {number: index + 1, timestamp: sceneCueTime(line.cue.start_ms)}));
     });
   } catch (_) {
     // The editor can contain unfinished JSON.
@@ -313,7 +313,7 @@ function changeSceneIdentity(index, identityId) {
   updateSceneEditor(scene);
   renderSceneForm();
   if (scene.timeline && $('sceneDub').open) paintDubLanguages(scene);
-  if (resets.length) $('sceneStatus').textContent += LabText.t('scenes.voice_change_reset_unsupported_values', {join: resets.join(', ')});
+  if (resets.length) $('sceneStatus').textContent += LabText.t('scenes.voice_change_reset_unsupported_values', {settings: resets.join(', ')});
 }
 function mutateSceneLine(index, action) {
   var scene = sceneBody(),
@@ -433,7 +433,7 @@ function renderSceneLineEditor(line, index, article) {
   text.required = true;
   text.value = line.manuscript_spoken === line.text && line.manuscript_text !== undefined ? line.manuscript_text : line.text || '';
   text.setAttribute('data-scene-field', 'text');
-  text.setAttribute('aria-label', LabText.t('scenes.dialogue', {value: line.cue ? 'line ' + (index + 1) : line.line_id}));
+  text.setAttribute('aria-label', LabText.t('scenes.dialogue', {line_label: line.cue ? LabText.t('scenes.numbered_line', {number: index+1}) : line.line_id}));
   text.addEventListener('input', function () {
     try {
       changeSceneField(index, 'text', this.value);
@@ -491,7 +491,7 @@ function renderSceneLineEditor(line, index, article) {
         option(
           references,
           ref.id,
-          LabText.t('scenes.v_s', {version: ref.version, value: ref.id === identity.approved_reference_id ? ' — approved' : ' — candidate', toFixed: ref.duration_seconds.toFixed(2)}),
+          (ref.id === identity.approved_reference_id ? LabText.t('scenes.approved_version', {version: ref.version, seconds: ref.duration_seconds.toFixed(2)}) : LabText.t('scenes.candidate_version', {version: ref.version, seconds: ref.duration_seconds.toFixed(2)})),
         );
       });
     if (!references.options.length) option(references, '', LabText.t('scenes.no_saved_voice_recording'), true);
@@ -562,7 +562,7 @@ function renderSceneLineEditor(line, index, article) {
       var note = document.createElement('p');
       note.className = 'meta';
       var videoStart = sceneBody().timeline.source_offset_ms || 0;
-      note.textContent = LabText.t('scenes.original_subtitle', {sceneCueRange: sceneCueRange(source, videoStart), text: source.text});
+      note.textContent = LabText.t('scenes.original_subtitle', {cue_range: sceneCueRange(source, videoStart), text: source.text});
       article.appendChild(note);
     });
     var cueTools = document.createElement('div');
@@ -635,8 +635,8 @@ function renderSceneLineEditor(line, index, article) {
     var direction = document.createElement('textarea');
     direction.maxLength = 1000;
     direction.value = line.direction || '';
-    direction.setAttribute('aria-label', LabText.t('scenes.acting_direction_2', {value: line.cue ? 'line ' + (index + 1) : line.line_id}));
-    sceneLabel(LabText.t('scenes.acting_direction_3', {value: directionStatus === 'experimental' ? ' (experimental)' : ''}), direction, article, false);
+    direction.setAttribute('aria-label', LabText.t('scenes.acting_direction_2', {line_label: line.cue ? LabText.t('scenes.numbered_line', {number: index+1}) : line.line_id}));
+    sceneLabel((directionStatus === 'experimental' ? LabText.t('scenes.experimental_direction') : LabText.t('scenes.acting_direction_3')), direction, article, false);
     direction.addEventListener('input', function () {
       try {
         changeSceneField(index, 'direction', this.value);
@@ -716,7 +716,7 @@ function renderSceneLineEditor(line, index, article) {
   var lineId = document.createElement('p');
   lineId.className = 'meta';
   lineId.textContent = line.cue
-    ? LabText.t('scenes.line_3', {number: index + 1, sceneCueRange: sceneCueRange(line.cue)})
+    ? LabText.t('scenes.line_3', {number: index + 1, cue_range: sceneCueRange(line.cue)})
     : LabText.t('scenes.line_name_exports_and_the', {line_id: line.line_id});
   article.appendChild(lineId);
 }
@@ -738,6 +738,16 @@ var sceneStatusWords = {
   out_of_date: LabText.t('scenes.out_of_date'),
   choose_take: LabText.t('scenes.choose_a_take'),
   done: LabText.t('scenes.done'),
+};
+var sceneStatusCounts = {
+  unsaved: function (count) { return LabText.plural('scenes.unsaved_lines', count); },
+  not_rendered: function (count) { return LabText.plural('scenes.not_rendered_lines', count); },
+  waiting: function (count) { return LabText.plural('scenes.waiting_lines', count); },
+  rendering: function (count) { return LabText.plural('scenes.rendering_lines', count); },
+  failed: function (count) { return LabText.plural('scenes.failed_lines', count); },
+  out_of_date: function (count) { return LabText.plural('scenes.out_of_date_lines', count); },
+  choose_take: function (count) { return LabText.plural('scenes.choose_take_lines', count); },
+  done: function (count) { return LabText.plural('scenes.done_lines', count); },
 };
 var sceneNeedsRender = ['not_rendered', 'out_of_date', 'failed'];
 function sceneModelName(engineId) {
@@ -948,7 +958,7 @@ function paintSceneRow(line) {
   row.status.appendChild(word);
   if (segments.length > 1 && state.status !== 'done' && state.status !== 'unsaved')
     row.status.appendChild(
-      document.createTextNode(LabText.t('scenes.of_parts_done', {segments_done: state.server.segments_done, length: segments.length})),
+      document.createTextNode(LabText.t('scenes.of_parts_done', {segments_done: state.server.segments_done, parts: segments.length})),
     );
   if (state.reason) {
     var why = document.createElement('span');
@@ -1016,10 +1026,10 @@ function renderSceneTakes(container, line, state) {
         }),
         title = document.createElement('p');
       title.textContent =
-        LabText.t('scenes.part_of', {number: part + 1, length: segments.length, value: sceneStatusWords[segment.status] || segment.status, value2: segment.reason ? '. ' + segment.reason : '', value3: source ? ' “' + sceneShortText(source.text) + '”' : ''});
+        (LabText.t('scenes.part_of', {number: part + 1, parts: segments.length, status: sceneStatusWords[segment.status] || segment.status}) + (segment.reason ? '. ' + segment.reason : '') + (source ? ' “' + sceneShortText(source.text) + '”' : ''));
       block.appendChild(title);
       block.appendChild(
-        sceneButton(LabText.t('scenes.render_this_part'), LabText.t('scenes.render_part_of_line', {number: part + 1, value: line.line_id || ''}), function () {
+        sceneButton(LabText.t('scenes.render_this_part'), LabText.t('scenes.render_part_of_line', {number: part + 1, line_id: line.line_id || ''}), function () {
           startSceneBatch({ segment_ids: [line.line_id + '/' + segment.segment_id] }).catch(showSceneError);
         }),
       );
@@ -1041,7 +1051,7 @@ function renderSceneTakes(container, line, state) {
       item.appendChild(audio);
       about.className = 'meta';
       about.textContent =
-        LabText.t('scenes.made_s', {value: take.chosen ? 'Chosen. ' : '', sceneTakeTime: sceneTakeTime(take.created_at), toFixed: Number(take.duration_seconds).toFixed(1), value2: take.reason ? ' ' + take.reason : ''});
+        ((take.chosen ? LabText.t('scenes.chosen_take_made', {date: sceneTakeTime(take.created_at), seconds: Number(take.duration_seconds).toFixed(1)}) : LabText.t('scenes.take_made', {date: sceneTakeTime(take.created_at), seconds: Number(take.duration_seconds).toFixed(1)})) + (take.reason ? ' ' + take.reason : ''));
       item.appendChild(about);
       if (take.waveform_checks && (take.waveform_checks.flags || []).length) appendTakeChecks(item, take.waveform_checks);
       if (take.fits && !take.chosen)
@@ -1123,7 +1133,7 @@ function fillSceneCharacterFilter(scene) {
     var character = castCharacters.find(function (item) {
       return item.id === line.character_id;
     });
-    option(select, line.character_id, character ? character.name : LabText.t('scenes.character_2', {slice: line.character_id.slice(0, 8)}));
+    option(select, line.character_id, character ? character.name : LabText.t('scenes.character_2', {character_id: line.character_id.slice(0, 8)}));
   });
   select.value = seen[keep] ? keep : '';
 }
@@ -1143,7 +1153,7 @@ function applySceneFilters() {
       return counts[key];
     })
     .map(function (key) {
-      return counts[key] + ' ' + sceneStatusWords[key].toLowerCase();
+      return sceneStatusCounts[key](counts[key]);
     });
   $('sceneTableSummary').textContent =
     rows.length +
@@ -1167,12 +1177,12 @@ function updateSceneTools() {
     choose = rows.filter(function (row) {
       return row.state === 'choose_take';
     }).length;
-  $('sceneRenderTicked').textContent = LabText.t('scenes.render_ticked', {length: ticked.length});
+  $('sceneRenderTicked').textContent = LabText.t('scenes.render_ticked', {marked_lines: ticked.length});
   $('sceneRenderTicked').disabled = !ticked.length;
   $('sceneTickAll').checked = !!shown.length && ticked.length === shown.length;
   $('sceneTickAll').indeterminate = !!ticked.length && ticked.length < shown.length;
-  $('sceneRenderMissing').textContent = LabText.t('scenes.render_what_is_missing_or_2', {value: missing ? ' (' + missing + ')' : ''});
-  $('sceneChooseNewest').textContent = LabText.t('scenes.use_the_newest_take_where_2', {value: choose ? ' (' + choose + ')' : ''});
+  $('sceneRenderMissing').textContent = LabText.t('scenes.render_what_is_missing_or_2', {missing_lines: missing ? ' (' + missing + ')' : ''});
+  $('sceneChooseNewest').textContent = LabText.t('scenes.use_the_newest_take_where_2', {eligible_lines: choose ? ' (' + choose + ')' : ''});
 }
 function refreshSceneLineStates() {
   if (!activeSceneId) {
@@ -1244,14 +1254,14 @@ function renderScene(scene) {
   $('sceneError').textContent = '';
   renderSceneForm();
   $('sceneStatus').textContent =
-    LabText.t('scenes.revision_ordered_lines_sha_256', {name: scene.name, revision: scene.revision, length: scene.lines.length, checksum: scene.checksum});
+    LabText.t('scenes.revision_ordered_lines_sha_256', {name: scene.name, revision: scene.revision, lines: scene.lines.length, checksum: scene.checksum});
   $('sceneExportJson').href = '/api/scenes/' + scene.scene_id + '/export.json';
   $('sceneExportCsv').href = '/api/scenes/' + scene.scene_id + '/export.csv';
   bindDubScene(scene);
   var videoStart = scene.timeline && scene.timeline.source_offset_ms;
   $('sceneTimelineNote').hidden = videoStart === undefined;
   $('sceneTimelineNote').textContent = videoStart === undefined ? '' :
-    LabText.t('scenes.this_section_starts_at_in', {sceneCueTime: sceneCueTime(videoStart)});
+    LabText.t('scenes.this_section_starts_at_in', {timestamp: sceneCueTime(videoStart)});
   $('sceneExportJson').hidden = false;
   $('sceneExportCsv').hidden = false;
   var jobs = fetchJson('/api/scenes/' + scene.scene_id + '/jobs').then(function (result) {
@@ -1399,7 +1409,7 @@ function removeSample() {
     .then(function (preview) {
       if (preview.used_elsewhere.length) {
         $('sampleStatus').textContent =
-          LabText.t('scenes.a_sample_character_speaks_in', {join: preview.used_elsewhere.join(', ')});
+          LabText.t('scenes.a_sample_character_speaks_in', {scenes: preview.used_elsewhere.join(', ')});
         return null;
       }
       var gone = preview.would_remove,
@@ -1407,7 +1417,7 @@ function removeSample() {
       if (gone.reference) parts.push(gone.reference + (gone.reference === 1 ? LabText.t('scenes.recording') : LabText.t('scenes.recordings')));
       if (
         !window.confirm(
-          LabText.t('scenes.remove_the_sample_this_deletes', {value: preview.scene ? preview.scene.name : 'Sample', join: parts.join(', ')})
+          LabText.t('scenes.remove_sample_confirm', {scene: preview.scene ? preview.scene.name : LabText.t('scenes.sample_name'), contents: parts.join(', ')})
         )
       )
         return null;
@@ -1566,7 +1576,7 @@ function sceneScriptReady() {
   var invalidTimed = sceneScript && sceneScript.duration_ms !== undefined && sceneScript.unread.length > 0;
   $('sceneScriptCreate').disabled = !sceneScript || !sceneScript.lines.length || !!invalidTimed || waiting.length > 0;
   $('sceneScriptWaiting').textContent = invalidTimed ? LabText.t('scenes.fix_the_subtitle_errors_and') : waiting.length
-    ? LabText.t('scenes.choose_a_voice_for_or', {join: waiting.join(', ')})
+    ? LabText.t('scenes.choose_a_voice_for_or', {speakers: waiting.join(', ')})
     : '';
 }
 function clearSceneScript() {
@@ -1694,15 +1704,15 @@ function loadSceneScriptFile(file) {
 }
 function sceneScriptReportText(scene, report) {
   var rows = [scene.length > 1
-    ? LabText.t('scenes.created_scene_sections_choose_any', {length: scene.length})
-    : LabText.t('scenes.created_with', {name: scene[0].name, sceneCount: LabText.plural('scenes.line_count', report.lines)})];
+    ? LabText.t('scenes.created_scene_sections_choose_any', {sections: scene.length})
+    : LabText.t('scenes.created_with', {name: scene[0].name, lines: LabText.plural('scenes.line_count', report.lines)})];
   function note(title, items, describe) {
     if (!items.length) return;
     rows.push(title + ':');
     items.slice(0, 12).forEach(function (item) {
-      rows.push(LabText.t('scenes.line_6', {number: item.number, value: item.speaker ? ' (' + item.speaker + ')' : '', describe: describe(item)}));
+      rows.push((item.speaker ? LabText.t('scenes.speaker_line_note', {number: item.number, speaker: item.speaker, note: describe(item)}) : LabText.t('scenes.line_6', {number: item.number, note: describe(item)})));
     });
-    if (items.length > 12) rows.push(LabText.t('scenes.and_more', {value: items.length - 12}));
+    if (items.length > 12) rows.push(LabText.t('scenes.and_more', {remaining_lines: items.length - 12}));
   }
   note(LabText.t('scenes.left_out'), report.left_out, function (item) {
     return item.reason + '. “' + sceneShortText(item.text) + '”';
@@ -1763,9 +1773,9 @@ function refreshSceneJob() {
   return fetchJson('/api/scenes/jobs/' + activeSceneJobId).then(function (result) {
     var job = result.job;
     $('sceneProgress').value = job.progress;
+    var progress = (['queued', 'running'].indexOf(job.status) >= 0 ? batchOrderText(job) : '') + job.status;
     $('sceneStatus').textContent =
-      LabText.t('scenes.completed_failed_queued_total', {value: (['queued', 'running'].indexOf(job.status) >= 0 ? batchOrderText(job) : '') +
-      job.status, completed: job.completed, failed: job.failed, queued: job.queued, total: job.total, round: Math.round(job.progress * 100)});
+      LabText.t('scenes.completed_failed_queued_total', {progress: progress, completed: job.completed, failed: job.failed, queued: job.queued, total: job.total, percent: Math.round(job.progress * 100)});
     Array.prototype.forEach.call($('sceneJobSelect').options, function (item) {
       if (item.value === job.id) item.textContent = sceneJobLabel(job);
     });
@@ -1778,8 +1788,8 @@ function refreshSceneJob() {
         title = document.createElement('strong');
       var cue = job.scene_snapshot?.lines[row.scene_order]?.cue;
       title.textContent = cue
-        ? LabText.t('scenes.line_part_take', {value: row.scene_order + 1, sceneCueTime: sceneCueTime(cue.start_ms), value2: row.segment_index + 1, take_index: row.take_index, status: row.status})
-        : LabText.t('scenes.render_scene_take', {value: row.ordinal + 1, value2: row.scene_order + 1, line_id: row.line_id, segment_id: row.segment_id, take_index: row.take_index, status: row.status});
+        ? LabText.t('scenes.line_part_take', {line_number: row.scene_order + 1, timestamp: sceneCueTime(cue.start_ms), part: row.segment_index + 1, take_index: row.take_index, status: row.status})
+        : LabText.t('scenes.render_scene_take', {render_number: row.ordinal + 1, scene_number: row.scene_order + 1, line_id: row.line_id, segment_id: row.segment_id, take_index: row.take_index, status: row.status});
       article.appendChild(title);
       if (row.error) {
         var failure = document.createElement('p');
@@ -1918,7 +1928,7 @@ function chooseNewestSceneTakes() {
     .then(function (result) {
       return refreshSceneList(result.scene.scene_id).then(function () {
         $('sceneStatus').textContent = result.lines
-          ? LabText.t('scenes.chose_the_newest_take_for', {lines: result.lines, value: result.lines === 1 ? ' line.' : ' lines.'})
+          ? LabText.plural('scenes.newest_take_chosen', result.lines)
           : LabText.t('scenes.no_line_was_waiting_for');
       });
     });
@@ -1960,7 +1970,7 @@ function showScenePreview(preview) {
   $('scenePlayers').hidden = false;
   var mastering = preview.mastering || {};
   $('scenePreviewMeta').textContent =
-    LabText.t('scenes.s_hz_mastered_lufs_target', {value: preview.timing ? LabText.t('scenes.timed_cue_mix') : LabText.t('scenes.separate_calls'), toFixed: preview.duration_seconds.toFixed(2), sample_rate: preview.sample_rate, toFixed2: Number(mastering.target_lufs).toFixed(0), toFixed3: Number(mastering.peak_ceiling_dbfs).toFixed(0)});
+    LabText.t('scenes.s_hz_mastered_lufs_target', {mix_mode: preview.timing ? LabText.t('scenes.timed_cue_mix') : LabText.t('scenes.separate_calls'), seconds: preview.duration_seconds.toFixed(2), sample_rate: preview.sample_rate, target_lufs: Number(mastering.target_lufs).toFixed(0), peak_ceiling: Number(mastering.peak_ceiling_dbfs).toFixed(0)});
   if (preview.timing && preview.timing.warnings.length)
     $('scenePreviewMeta').textContent += ' ' + preview.timing.warnings.map(function (warning) {
       return warning.message;
@@ -2224,7 +2234,7 @@ function applyExportFfmpeg(report) {
     boxes = [].slice.call(document.querySelectorAll('input[name=exportFormat]'));
   note.className = ready && !report.message ? 'meta' : 'meta take-checks flagged';
   note.textContent = ready
-    ? report.message || LabText.t('scenes.ffmpeg_found_every_format_is', {value: report.version || ''})
+    ? report.message || LabText.t('scenes.ffmpeg_found_every_format_is', {version: report.version || ''})
     : LabText.t('scenes.refresh_list_checks_again', {message: report.message});
   ['exportPreview', 'exportCreate', 'exportVerify'].forEach(function (id) {
     $(id).disabled = !ready;
@@ -2347,7 +2357,7 @@ function bindDubScene(scene) {
   var next = scene && scene.timeline ? scene.scene_id : null;
   $('sceneDub').hidden = !next;
   var offset = next && scene.timeline.source_offset_ms;
-  $('dubSourceOffset').textContent = offset ? LabText.t('scenes.use_a_clip_beginning_at', {sceneCueTime: sceneCueTime(offset)}) : '';
+  $('dubSourceOffset').textContent = offset ? LabText.t('scenes.use_a_clip_beginning_at', {timestamp: sceneCueTime(offset)}) : '';
   if (next !== dubSceneId) {
     dubSceneId = next;
     dubState = null;
@@ -2424,7 +2434,7 @@ function paintDubAssets() {
   $('dubAttachments').textContent = [
     source ? source.name + ' · ' + sceneCueTime(source.duration_ms) + (source.transcript_source_verified ? LabText.t('scenes.source_hash_matched') : '') : '',
     bed ? LabText.t('scenes.background', {name: bed.name}) : '',
-    output ? LabText.t('scenes.last_delivery_revision', {scene_revision: output.scene_revision, value: dubState.scene_revision !== output.scene_revision ? LabText.t('scenes.older_than_saved') : ''}) : ''
+    output ? (dubState.scene_revision !== output.scene_revision ? LabText.t('scenes.delivery_previous_revision', {revision: output.scene_revision}) : LabText.t('scenes.delivery_revision', {revision: output.scene_revision})) : ''
   ].filter(Boolean).join(' / ');
   $('dubSourceFile').disabled = dubBusy || !!source;
   $('dubBedFile').disabled = dubBusy || !!bed;
@@ -2577,7 +2587,7 @@ function paintDubLanguages(scene) {
 }
 function dubSpokenLanguage(line, tag) {
   var match = dubVoiceLanguage(tag, dubLineLanguages(line), line.language);
-  if (!match) throw new Error(LabText.t('scenes.choose_a_cast_voice_that', {value: dubLanguageLabel(tag) || LabText.t('scenes.selected_language')}));
+  if (!match) throw new Error(LabText.t('scenes.choose_a_cast_voice_that', {language: dubLanguageLabel(tag) || LabText.t('scenes.selected_language')}));
   return match;
 }
 function dubSave() {

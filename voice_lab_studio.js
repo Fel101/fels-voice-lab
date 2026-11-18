@@ -254,10 +254,10 @@ function engineStateText(row,device,job){
   if(job&&job.state==='running'){return job.nvidia?LabText.t('studio.installing_the_gpu_build'):LabText.t('studio.installing');}
   // A model that could not use the graphics card when it loaded ran on the CPU: say so rather than the service's device.
   var ran=row.check&&row.check.ran_on==='cpu'?'cpu':device;
-  if(row.state==='usable'){return LabText.t('studio.speaks_now_on', {deviceLabel: deviceLabel(ran)});}
-  if(row.state==='check_failed'){return LabText.t('studio.test_failed_on', {deviceLabel: deviceLabel(ran)});}
-  if(row.state==='not_checked'){return LabText.t('studio.installed_not_tested_on', {deviceLabel: deviceLabel(device)});}
-  if(row.state==='check_outdated'){return LabText.t('studio.installed_test_out_of_date', {deviceLabel: deviceLabel(device)});}
+  if(row.state==='usable'){return LabText.t('studio.speaks_now_on', {device: deviceLabel(ran)});}
+  if(row.state==='check_failed'){return LabText.t('studio.test_failed_on', {device: deviceLabel(ran)});}
+  if(row.state==='not_checked'){return LabText.t('studio.installed_not_tested_on', {device: deviceLabel(device)});}
+  if(row.state==='check_outdated'){return LabText.t('studio.installed_test_out_of_date', {device: deviceLabel(device)});}
   return engineStateNames[row.state]||row.state;
 }
 function utcStamp(value){return String(value||'').replace('T',' ').slice(0,16)+' UTC';}
@@ -268,7 +268,7 @@ function engineDetailText(row,device,job){
   // A model that is not installed says what Install will fetch; the files it lacks and any log are under the card's Details.
   if(row.state==='not_installed'){
     var size=row.install_size;
-    if(job&&job.state==='failed'){return LabText.t('studio.the_install_stopped_after_show', {elapsedText: elapsedText(job.seconds)});}
+    if(job&&job.state==='failed'){return LabText.t('studio.the_install_stopped_after_show', {elapsed: elapsedText(job.seconds)});}
     if(install.installer){return size?LabText.t('studio.install_downloads_about_and_uses', {gigabytes: gigabytes(size.download_bytes), gigabytes2: gigabytes(size.disk_bytes)}):LabText.t('studio.install_shows_what_it_will');}
     if((row.gpu||{}).cpu&&!(row.gpu||{}).choosable){return LabText.t('studio.the_app_cannot_install_it');}
     return LabText.t('studio.the_app_cannot_install_this');
@@ -276,23 +276,23 @@ function engineDetailText(row,device,job){
   if(row.state==='conversion_task'){return LabText.t('studio.tested_from_voice_conversion_because');}
   if(row.state==='not_integrated'){return LabText.t('studio.this_build_does_not_offer');}
   if(!check){return LabText.t('studio.press_test_to_load_the');}
-  if(row.state==='check_outdated'){return LabText.t('studio.the_last_test_was_made', {utcStamp: utcStamp(check.checked_at)});}
+  if(row.state==='check_outdated'){return LabText.t('studio.the_last_test_was_made', {test_date: utcStamp(check.checked_at)});}
   if(check.status==='passed'){
     var where='';
     // On the CPU though the graphics card was asked for: a CPU build of PyTorch, or (with a GPU build) a card PyTorch could not
     // find when the model loaded, as when a laptop's power-saving mode has switched its NVIDIA card off.
     var fellBack=(row.gpu||{}).build==='cpu'?LabText.t('studio.on_the_cpu_this_model'):LabText.t('studio.on_the_cpu_the_graphics');
     if(check.ran_on&&check.ran_on!==device){where=check.ran_on==='cpu'&&device==='cuda'?fellBack:LabText.t('studio.on', {ran_on: check.ran_on});}
-    return LabText.t('studio.tested_s_to_make_s', {utcStamp: utcStamp(check.checked_at), total_s: check.total_s, audio_seconds: check.audio_seconds, where: where});
+    return LabText.t('studio.tested_s_to_make_s', {test_date: utcStamp(check.checked_at), total_s: check.total_s, audio_seconds: check.audio_seconds, where: where});
   }
-  return LabText.t('studio.failed', {utcStamp: utcStamp(check.checked_at), reason: check.reason});
+  return LabText.t('studio.failed', {test_date: utcStamp(check.checked_at), reason: check.reason});
 }
 // What a card keeps under Details, '' for nothing: the files a model lacks, how it is installed, and where a failed install's
 // output went. Paths stay here, so the card itself reads as plain words.
 function engineMoreText(row,job){
   var install=row.installation||{},parts=[];
   if(row.state==='not_installed'){
-    if((install.missing||[]).length){parts.push(LabText.t('studio.missing', {join: install.missing.join('; ')}));}
+    if((install.missing||[]).length){parts.push(LabText.t('studio.missing', {missing_files: install.missing.join('; ')}));}
     parts.push(install.installer?LabText.t('studio.install_adds_it_to_this', {installer: install.installer}):LabText.t('studio.docs_setup_md_model_runtimes'));
   }
   if(job&&job.state==='failed'){parts.push(LabText.t('studio.the_last_install_stopped_with', {exit_code: job.exit_code, log: job.log}));}
@@ -398,7 +398,7 @@ function renderFirstRun(status){
   if(running){
     firstRun.action={kind:'progress',engine:job.engine};
     $('firstRunTitle').textContent=LabText.t('studio.installing_2', {name: job.name});
-    $('firstRunText').textContent=LabText.t('studio.running_for_nothing_can_speak', {elapsedText: elapsedText(job.seconds)});
+    $('firstRunText').textContent=LabText.t('studio.running_for_nothing_can_speak', {elapsed: elapsedText(job.seconds)});
     button.textContent=LabText.t('studio.show_progress');button.disabled=false;
     return;
   }
@@ -406,8 +406,8 @@ function renderFirstRun(status){
   var failed=job&&job.state==='failed'&&job.engine===offer.id;
   $('firstRunTitle').textContent=failed?LabText.t('studio.did_not_install', {name: offer.name}):LabText.t('studio.no_voice_model_is_installed');
   $('firstRunText').textContent=failed
-    ?LabText.t('studio.the_install_stopped_exit_code', {exit_code: job.exit_code, elapsedText: elapsedText(job.seconds), log: job.log})
-    :LabText.t('studio.install_to_hear_the_lab', {name: offer.name, installSizeText: installSizeText(offer)});
+    ?LabText.t('studio.the_install_stopped_exit_code', {exit_code: job.exit_code, elapsed: elapsedText(job.seconds), log: job.log})
+    :LabText.t('studio.install_to_hear_the_lab', {name: offer.name, download_details: installSizeText(offer)});
   button.textContent=LabText.t('studio.install', {name: offer.name});button.disabled=!!status.busy;
 }
 function placeCards(status){
@@ -514,7 +514,7 @@ function applyModelFilter(){
     if(fit){fits.push(view.name);if(view.card.parentNode===more){apart+=1;}}
   });
   $('modelsMoreBox').hidden=!apart;
-  $('modelsMoreSummary').textContent=LabText.t('studio.manual_setup', {value: apart+(apart===1?' more model needs':' more models need')});
+  $('modelsMoreSummary').textContent=LabText.plural('studio.models_manual_setup', apart);
   if(asked&&apart){$('modelsMoreBox').open=true;}
   var line=$('modelFilterMatch');
   line.hidden=!asked;
@@ -678,11 +678,11 @@ function startUninstall(){
   uninstallState.busy=true;parts.go.disabled=true;parts.close.disabled=true;
   parts.state.textContent=LabText.t('studio.uninstalling_deleting_its_files_can', {name: name});
   return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/uninstall',{}).then(function(result){
-    var done=result.uninstall||{},failed=done.failed||[],removed=done.removed||[],freed=done.freed?LabText.t('studio.freed', {freed_text: done.freed_text}):removed.length?LabText.t('studio.removed', {join: removed.join(', ')}):'';
+    var done=result.uninstall||{},failed=done.failed||[],removed=done.removed||[],freed=done.freed?LabText.t('studio.freed', {freed_text: done.freed_text}):removed.length?LabText.t('studio.removed', {removed_files: removed.join(', ')}):'';
     parts.plan.textContent='';parts.go.hidden=true;
     if(failed.length){
       parts.title.textContent=LabText.t('studio.was_not_fully_uninstalled', {name: name});
-      parts.state.textContent=LabText.t('studio.these_could_not_be_deleted', {freed: freed, join: failed.map(function(item){return item.path+' ('+item.reason+')';}).join('; ')});
+      parts.state.textContent=LabText.t('studio.these_could_not_be_deleted', {freed: freed, files_with_errors: failed.map(function(item){return item.path+' ('+item.reason+')';}).join('; ')});
     }else{
       parts.title.textContent=LabText.t('studio.is_uninstalled', {name: name});
       parts.state.textContent=LabText.t('studio.install_on_its_card_puts', {freed: freed});
@@ -702,15 +702,15 @@ function renderInstallDialog(job){
   var parts=dialogParts(),name=job.name+(job.nvidia?LabText.t('studio.gpu_build'):'');
   if(job.state==='running'){
     parts.title.textContent=LabText.t('studio.installing_4', {name: name});
-    parts.state.textContent=LabText.t('studio.running_for_downloads_and_packages', {elapsedText: elapsedText(job.seconds)});
+    parts.state.textContent=LabText.t('studio.running_for_downloads_and_packages', {elapsed: elapsedText(job.seconds)});
     parts.close.textContent=LabText.t('studio.hide');
   }else if(job.state==='finished'){
     parts.title.textContent=LabText.t('studio.is_installed_2', {name: name});
-    parts.state.textContent=LabText.t('studio.it_finished_in_press_test', {elapsedText: elapsedText(job.seconds)});
+    parts.state.textContent=LabText.t('studio.it_finished_in_press_test', {elapsed: elapsedText(job.seconds)});
     parts.close.textContent=LabText.t('studio.close');
   }else{
     parts.title.textContent=LabText.t('studio.did_not_install', {name: name});
-    parts.state.textContent=LabText.t('studio.the_install_stopped_exit_code_2', {exit_code: job.exit_code, elapsedText: elapsedText(job.seconds), log: job.log});
+    parts.state.textContent=LabText.t('studio.the_install_stopped_exit_code_2', {exit_code: job.exit_code, elapsed: elapsedText(job.seconds), log: job.log});
     parts.close.textContent=LabText.t('studio.close');
   }
   showInstallLog(parts.log,job.lines||[]);

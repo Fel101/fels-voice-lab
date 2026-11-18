@@ -44,15 +44,15 @@ function takeEditNote(take) {
   if (!edit) { return ''; }
   var request = edit.request || {}, result = edit.result || {}, parts = [];
   if (result.start_seconds > 0 || result.end_seconds < edit.parent_duration_seconds - 0.0005) {
-    parts.push(LabText.t('cast.kept_to_s_of_the', {toFixed: result.start_seconds.toFixed(2), toFixed2: result.end_seconds.toFixed(2), toFixed3: edit.parent_duration_seconds.toFixed(2)}));
+    parts.push(LabText.t('cast.kept_to_s_of_the', {start_seconds: result.start_seconds.toFixed(2), end_seconds: result.end_seconds.toFixed(2), original_seconds: edit.parent_duration_seconds.toFixed(2)}));
   }
   if (request.auto_trim) {
     parts.push(LabText.t('cast.silence_quieter_than_db_cut', {silence_threshold_db: request.silence_threshold_db, keep_silence_ms: request.keep_silence_ms}));
   }
   if (request.fade_in_ms) { parts.push(LabText.t('cast.fade_in_ms_2', {fade_in_ms: request.fade_in_ms})); }
   if (request.fade_out_ms) { parts.push(LabText.t('cast.fade_out_ms_2', {fade_out_ms: request.fade_out_ms})); }
-  if (request.gain_db) { parts.push(LabText.t('cast.gain_db_2', {takeEditSigned: takeEditSigned(request.gain_db)})); }
-  return LabText.t('cast.edited_from_take', {slice: String(take.parent_take_id).slice(0, 8), value: parts.length ? ': ' + parts.join(', ') : ''});
+  if (request.gain_db) { parts.push(LabText.t('cast.gain_db_2', {decibels: takeEditSigned(request.gain_db)})); }
+  return (parts.length ? LabText.t('cast.edited_take_details', {take_id: String(take.parent_take_id).slice(0, 8), details: parts.join(', ')}) : LabText.t('cast.edited_from_take', {take_id: String(take.parent_take_id).slice(0, 8)}));
 }
 function drawTakeWave(canvas, wave, kept) {
   var ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height, style = getComputedStyle(document.body);
@@ -196,7 +196,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
         clearPreview(); state.previewUrl = URL.createObjectURL(result.blob); player.src = state.previewUrl; player.hidden = false;
         var playing = player.play();
         if (playing && playing.catch) { playing.catch(function () {}); }
-        say(LabText.t('cast.the_edited_clip_is_s', {seconds: result.seconds, value: result.peak ? ', peaking at ' + result.peak + ' dBFS.' : ' and silent.'}));
+        say((result.peak ? LabText.t('cast.edited_clip_peak', {seconds: result.seconds, peak: result.peak}) : LabText.t('cast.edited_clip_silent', {seconds: result.seconds})));
       })
       .catch(function (error) { if (!stale(revision)) { say(''); fail(error); } });
   });
@@ -208,7 +208,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
     fetchJson('/api/takes/' + take.id + '/edit', request).then(function (result) {
       state.key = takeEditKey();
       show(result.replayed ? LabText.t('cast.that_edit_was_already_saved')
-        : LabText.t('cast.saved_as_a_new_take', {toFixed: result.take.duration_seconds.toFixed(2)}));
+        : LabText.t('cast.saved_as_a_new_take', {seconds: result.take.duration_seconds.toFixed(2)}));
       return Promise.resolve(after()).catch(function (error) { show(error.message); });  // the save worked; only the refresh failed
     }, function (error) {
       if (root.isConnected) { say(''); fail(error); } else { show(error.message); }
@@ -226,7 +226,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
   fetchJson('/api/takes/' + take.id + '/waveform?points=' + TAKE_EDIT_POINTS).then(function (wave) {
     if (!root.isConnected) { return; }
     state.wave = wave; hear.disabled = save.disabled = false; redraw();
-    speech.textContent = wave.speech ? LabText.t('cast.speech_from_to_s_louder', {toFixed: wave.speech.start_seconds.toFixed(2), toFixed2: wave.speech.end_seconds.toFixed(2), threshold_db: wave.speech.threshold_db}) : LabText.t('cast.no_speech_found_this_take');
+    speech.textContent = wave.speech ? LabText.t('cast.speech_from_to_s_louder', {start_seconds: wave.speech.start_seconds.toFixed(2), end_seconds: wave.speech.end_seconds.toFixed(2), threshold_db: wave.speech.threshold_db}) : LabText.t('cast.no_speech_found_this_take');
   }).catch(function (error) { speech.textContent = ''; fail(error); });
   return {close:closeEditor};
 }

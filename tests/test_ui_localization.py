@@ -18,6 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 CALL = re.compile(r"""\bLabText\.(t|plural)\(\s*['"]([a-z][a-zA-Z0-9_.-]+)['"]""")
 
 MODEL_TAG = re.compile(r"\[[^\[\]\r\n]+\]|<\|[^|\r\n]+\|>")
+CODE_VALUE = re.compile(
+    r"(?:value\d*|toFixed\d*|get\d*|join|slice|size|length\d*|textContent|formatBytes|plural\d*|round|whenText|"
+    r"ffmpegMegabytes\d*|bookCount\d*|bookDuration|replaceAll|sceneCueTime|sceneCueRange|sceneTakeTime|sceneCount|"
+    r"deviceLabel|elapsedText|utcStamp|installSizeText|referenceQualityText|retirementLabel|takeEditSigned|engineName|"
+    r"trim|plainScript|segment\d*|describe)"
+)
+JS_TEXT_TOKEN = re.compile(r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|[()]""")
+UI_PROSE = re.compile(r"^[a-z]{2,}$|[A-Za-z]{2,}(?:[ ,.:;!?…]+[A-Za-z])|^[A-Z][a-z]{2,}[. :!?…]*$|[A-Za-z]{3,}[:,] $")
+NESTED_KEY = re.compile(r"LabText\.(?:t|plural)\(\s*$")
 SHARED_NAMES = {
     "automation.https_provider_example_v1",
     "automation.whisper_1",
@@ -274,6 +283,32 @@ class PageTextTests(unittest.TestCase):
                         self.assertCountEqual(MODEL_TAG.findall(before), MODEL_TAG.findall(after))
                         if key not in SHARED_NAMES:
                             self.assertNotEqual(before, after)
+
+    def test_catalog_value_names_describe_the_data(self):
+        for key, message in PAGE_TEXT.english.items():
+            forms = message.values() if isinstance(message, dict) else [message]
+            for line in forms:
+                with self.subTest(key=key):
+                    self.assertFalse([name for name in VALUE.findall(line) if CODE_VALUE.fullmatch(name)])
+
+    def test_page_scripts_pass_data_instead_of_prose_to_messages(self):
+        for source in (*ROOT.glob("*.js"), ROOT / "compare.html"):
+            body = source.read_text(encoding="utf-8")
+            for call in CALL.finditer(body):
+                depth = 1
+                for token in JS_TEXT_TOKEN.finditer(body, call.end()):
+                    part = token[0]
+                    if part == "(":
+                        depth += 1
+                    elif part == ")":
+                        depth -= 1
+                        if not depth:
+                            break
+                    elif not NESTED_KEY.search(body[call.end() : token.start()]):
+                        words = part[1:-1]
+                        if UI_PROSE.search(words) and not words.startswith(("/api/", "#", ".", "X-")):
+                            line = body.count("\n", 0, token.start()) + 1
+                            self.fail(f"{source.name}:{line} passes raw page text into a message: {words!r}")
 
     def test_page_markup_text_and_labels_use_the_catalog(self):
         class PageMarkup(HTMLParser):

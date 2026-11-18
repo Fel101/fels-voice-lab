@@ -350,7 +350,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <section class="card" id="perform">
   <h2>{{ui:perform.perform_lines}}</h2>
   <p class="meta">{{ui:perform.choose_a_character_voice_direct}}</p>
-  <p class="workflow-note" id="performEmpty" hidden>{{ui:perform.no_characters_yet}} <a href="#cast">{{ui:perform.add_a_character_and_voice}}</a>{{ui:perform.then_come_back_to_make}}</p>
+  <p class="workflow-note" id="performEmpty" hidden>{{ui:perform.no_characters_yet}} <a href="#cast">{{ui:perform.add_a_character_and_voice}}</a> {{ui:perform.then_come_back_to_make}}</p>
   <div id="performEditor" hidden>
   <div class="cast-grid"><label class="field">{{ui:perform.character}}<select id="performCharacter"></select></label>
     <label class="field">{{ui:perform.voice}}<select id="performIdentity"></select></label></div>
@@ -422,7 +422,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     </div>
     <p class="meta" id="sceneSpeechNote" role="status">{{ui:scenes.process_up_to_10_minutes}}</p>
     </details>
-    <p class="meta">{{ui:scenes.plain_text_has_one_speech}} <code>{{ui:scenes.name_words}}</code>{{ui:scenes.a_direction_in_brackets_or}}</p>
+    <p class="meta">{{ui:scenes.plain_text_has_one_speech}} <code>{{ui:scenes.name_words}}</code>. {{ui:scenes.a_direction_in_brackets_or}}</p>
     <div class="row"><label class="field compact">{{ui:scenes.format}}<select id="sceneScriptFormat"><option value="text">{{ui:scenes.plain_text_name_words}}</option><option value="fountain">{{ui:scenes.fountain}}</option><option value="srt">{{ui:scenes.srt_subtitles}}</option><option value="vtt">{{ui:scenes.webvtt_subtitles}}</option><option value="transcript">{{ui:scenes.voice_slate_timed_transcript}}</option></select></label>
       <button type="button" id="sceneScriptRead">{{ui:scenes.read_the_script}}</button></div>
     <label class="field">{{ui:scenes.script}}<textarea id="sceneScriptText" rows="8" spellcheck="false" placeholder="{{ui:scenes.mara_i_kept_the_light}}"></textarea></label>
@@ -537,7 +537,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <p id="dubStatus" class="meta" role="status"></p>
   </details>
   <details id="sceneExport"><summary>{{ui:scenes.export_package}}</summary>
-    <p class="meta">{{ui:scenes.writes_wav_flac_ogg_mp3}} <code>{{ui:scenes.out_exports}}</code>{{ui:scenes.ffmpeg_writes_the_files_original}}</p>
+    <p class="meta">{{ui:scenes.writes_wav_flac_ogg_mp3}} <code>{{ui:scenes.out_exports}}</code>. {{ui:scenes.ffmpeg_writes_the_files_original}}</p>
     <p class="meta" id="exportFfmpeg" role="status"></p>
     <p class="meta" id="exportFfmpegProgress" role="status" hidden></p>
     <div class="cast-actions"><button type="button" id="exportFfmpegInstall" hidden>{{ui:scenes.install_ffmpeg}}</button></div>
@@ -632,7 +632,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       </div>
       <label class="field">{{ui:studio.acting_direction}}<textarea id="direction" placeholder="{{ui:studio.describe_the_acting_not_the}}"></textarea></label>
     </div>
-    <p class="meta">{{ui:studio.breeze_vocal_event_examples}} <code>(laugh)</code>, <code>(sigh)</code>{{ui:studio.keep_the_tags_in_the}}</p>
+    <p class="meta">{{ui:studio.breeze_vocal_event_examples}} <code>(laugh)</code>, <code>(sigh)</code>. {{ui:studio.keep_the_tags_in_the}}</p>
     <details><summary>{{ui:studio.sampling_controls}}</summary>
       <div class="row">
         <label class="field compact" id="cfgWrap">{{ui:studio.guidance_scale}} <input id="cfgScale" type="range" min="0" max="10" step="0.1" value="4"><span id="cfgScaleV" class="meta">4.0</span></label>
@@ -667,7 +667,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <label class="field">{{ui:studio.exact_words_in_the_recording}}<textarea id="dramaTranscript" maxlength="1200"></textarea></label>
     </div>
     <label class="field">{{ui:studio.acting_direction_optional}}<input id="dramaDirection" maxlength="1000" placeholder="{{ui:studio.quietly_with_concern}}"></label>
-    <p class="meta">{{ui:studio.use_laughs_sighs_or_whispers}} <a href="https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE" target="_blank" rel="noopener">{{ui:studio.fish_audio_license_conditions}}</a> {{ui:studio.apply}}</p>
+    <p class="meta">{{ui:studio.use_laughs_sighs_or_whispers}} <a href="https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE" target="_blank" rel="noopener">{{ui:studio.fish_audio_terms_apply}}</a></p>
   </div>
   <div id="qwenPanel" hidden>
     <h2>{{ui:studio.qwen3_tts}}</h2>
@@ -937,7 +937,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
       <button id="bookPlayM4b" type="button" disabled>{{ui:books.play_m4b}}</button>
       <button id="bookVerify" type="button" disabled>{{ui:books.verify_export}}</button>
     </div>
-    <p class="meta">{{ui:books.for_audiobook_files_and_covers}} <a href="#system">{{ui:books.install_ffmpeg_in_system_backups}}</a> {{ui:books.if_you_need_it}}</p>
+    <p class="meta"><a href="#system">{{ui:books.install_ffmpeg_for_delivery}}</a></p>
     <p id="bookExportTiming" class="meta" aria-live="polite"></p>
     <p id="bookDeliverySummary" class="meta"></p>
     <div class="row" id="bookDownloads"></div>
@@ -958,7 +958,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <h3>{{ui:models.measured_speed_on_this_computer}}</h3><p class="meta">{{ui:models.time_per_second_of_speech}}</p>
 <div class="table-wrap"><table class="speed-table"><thead><tr><th scope="col">{{ui:models.model}}</th><th scope="col">{{ui:models.runs_on}}</th><th scope="col">{{ui:models.clips}}</th><th scope="col">{{ui:models.typical_time_per_second_of}}</th><th scope="col">{{ui:models.last_clip}}</th></tr></thead><tbody id="speedRows"></tbody></table></div>
 <div class="workflow-note"><strong>{{ui:models.production_workflow}}</strong><p>{{ui:models.design_or_clone_in_model}}</p><p class="meta">{{ui:models.qwen_customvoice_preset_voices_and}}</p></div>
-<h3>{{ui:models.available_outside_the_lab_s}}</h3><p class="meta">{{ui:models.dataset_preparation}}<code>{{ui:models.tools_dataset_workbench_py}}</code>{{ui:models.and_word_times_for_captions}}<code>{{ui:models.align_takes_py}}</code>{{ui:models.run_from_a_terminal_the}}</p>
+<h3>{{ui:models.available_outside_the_lab_s}}</h3><p class="meta">{{ui:models.dataset_preparation}} <code>{{ui:models.tools_dataset_workbench_py}}</code>. {{ui:models.and_word_times_for_captions}} <code>{{ui:models.align_takes_py}}</code>. {{ui:models.run_from_a_terminal_the}}</p>
 <details><summary>{{ui:models.current_limits}}</summary><p class="meta">{{ui:models.only_the_qwen_engines_stream}}</p></details></section>
 <section class="card" id="system"><h2>{{ui:system.system_backups}}</h2>
 <p class="meta">{{ui:system.what_this_pc_is_running}}</p>
@@ -1009,7 +1009,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <div class="table-wrap"><table class="speed-table storage-table"><thead><tr><th scope="col">{{ui:system.folder}}</th><th scope="col">{{ui:system.size}}</th><th scope="col">{{ui:system.in_a_backup}}</th></tr></thead><tbody id="systemStorage"></tbody></table></div>
 <p class="meta" id="systemCleanup"></p>
 <h3>{{ui:system.library_backup}}</h3>
-<p class="meta">{{ui:system.one_zip_of_your_cast}} <code id="backupFolder"></code>{{ui:system.every_file_is_read_back}}</p>
+<p class="meta">{{ui:system.one_zip_of_your_cast}} <code id="backupFolder"></code>. {{ui:system.every_file_is_read_back}}</p>
 <fieldset class="field" id="backupSections"></fieldset>
 <p class="meta" id="backupSize"></p>
 <div class="cast-actions"><button class="go" type="button" id="backupCreate">{{ui:system.back_up_now}}</button></div>

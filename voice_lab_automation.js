@@ -32,12 +32,12 @@ function automationForm() {
   automationRecipe.steps.forEach(function(row,index) {
     var desc = automationOperations[row.operation];
     var fieldset = document.createElement('fieldset'), title = document.createElement('legend');
-    title.textContent = LabText.t('automation.step', {number: index+1, value: desc[2]}); fieldset.append(title);
+    title.textContent = LabText.t('automation.step', {number: index+1, operation: desc[2]}); fieldset.append(title);
     var edge = document.createElement('p');
     edge.className='meta';
     edge.textContent = sources[row.source_step ?? index].label+' → '+desc[2];
     fieldset.append(edge);
-    sources.push({label:LabText.t('automation.step', {number: index+1, value: desc[2]}),kind:desc[1],index:index+1});
+    sources.push({label:LabText.t('automation.step', {number: index+1, operation: desc[2]}),kind:desc[1],index:index+1});
     Object.entries(desc[3]).forEach(function([name, details]) {
       var label = document.createElement('label'); label.className = 'field'; label.textContent = details[0];
       if (Array.isArray(details[2])) {
@@ -149,7 +149,7 @@ async function refreshAutomationRuns() {
     }
     run.items.forEach(function(row){
       var li=document.createElement('li');
-      li.textContent=LabText.t('automation.item', {value: row.ordinal+1, state: row.state, value2: row.error?' · '+row.error:''});
+      li.textContent=(LabText.t('automation.item', {ordinal: row.ordinal+1, state: row.state}) + (row.error ? ' · ' + row.error : ''));
       row.steps.forEach(function(step){
         if(step.kind==='audio') {
           var link=document.createElement('a'); link.href='/api/automation/assets/'+step.value;
@@ -158,7 +158,7 @@ async function refreshAutomationRuns() {
         }
         if(step.kind==='error'||step.kind==='blocked') li.append(LabText.t('automation.step_2', {sequence: step.sequence, error: step.error}));
         if(step.kind==='text') li.append(' · '+step.value);
-        if(step.kind==='dub_job') li.append(LabText.t('automation.dub_job', {value: step.value}));
+        if(step.kind==='dub_job') li.append(LabText.t('automation.dub_job', {job: step.value}));
       });
       list.append(li);
     });
@@ -220,10 +220,10 @@ $('automationPreview').addEventListener('click',function(){
     var list=$('automationPlan'); list.hidden=false; list.textContent='';
     result.plan.recipe.steps.forEach(function(step,index) {
       var li=document.createElement('li');
-      li.textContent=LabText.t('automation.step_3', {value: step.source_step ? LabText.t('automation.source_step', {number: step.source_step}) : LabText.t('automation.original_input'), number: index+1, value2: automationOperations[step.operation][2], provider: step.provider, destination: step.destination, value3: step.transfer?LabText.t('automation.sends_to', {transfer: step.transfer, destination: step.connector.destination}):''});
+      li.textContent=(LabText.t('automation.step_3', {source: step.source_step ? LabText.t('automation.source_step', {number: step.source_step}) : LabText.t('automation.original_input'), number: index+1, operation: automationOperations[step.operation][2], provider: step.provider, destination: step.destination}) + (step.transfer ? ' · ' + LabText.t('automation.sends_to', {transfer:step.transfer,destination:step.connector.destination}) : ''));
       list.append(li);
     });
-    $('automationStatus').textContent=LabText.t('automation.inputs', {length: result.plan.inputs.length, value: result.plan.external_transfer?
+    $('automationStatus').textContent=LabText.t('automation.inputs', {inputs: result.plan.inputs.length, transfer_note: result.plan.external_transfer?
       LabText.t('automation.review_external_destinations'):LabText.t('automation.keeps_processing_local')});
   });
 });
@@ -235,7 +235,7 @@ $('automationRun').addEventListener('click',function(){
     var preview=await fetchJson('/api/automation/preview',body), approved=[];
     if(preview.plan.provider_approvals.length) {
       var list=preview.plan.provider_approvals.map(function(row){return row.destination+LabText.t('automation.will_receive')+row.data;});
-      if(!window.confirm(LabText.t('automation.run_this_recipe_with_the', {join: list.join('\n')}))) return;
+      if(!window.confirm(LabText.t('automation.run_this_recipe_with_the', {destinations: list.join('\n')}))) return;
       approved=preview.plan.provider_approvals.map(function(row){return row.revision;});
     }
     await fetchJson('/api/automation/runs',{...body,approve_provider_revisions:approved});
