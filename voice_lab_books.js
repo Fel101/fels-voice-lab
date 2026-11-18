@@ -28,7 +28,7 @@ function bookAction(message, work) {
 async function bookUpload(url, raw) {
   var response = await fetch(url, {method: 'POST', body: raw, headers: {'Content-Type': 'application/octet-stream'}});
   var result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'The file could not be read.');
+  if (!response.ok) throw new Error(result.error || LabText.t('books.the_file_could_not_be'));
   return result;
 }
 function bookImportReady() {
@@ -54,17 +54,14 @@ function bookImportReady() {
       + (line.pause_after_ms == null ? paragraphGap : line.pause_after_ms / 1000);
     if (measured) renderSeconds += speechSeconds * bookModelSpeed[models[line.speaker]];
   });
-  $('bookImportSummary').textContent = bookCount(bookPreview.chapters.length, 'chapter') + ' · '
-    + bookCount(passages.length, 'passage') + ' · About ' + bookDuration(listeningSeconds) + ' of audio'
-    + (measured ? ' · About ' + bookDuration(renderSeconds) + ' to render here.'
-      : mapped ? ' · Test ' + untested.map(sceneModelName).join(', ')
-        + ' on Models & features, then preview again to see how long rendering takes here.'
-        : ' · Choose voices to estimate render time.');
+  $('bookImportSummary').textContent = LabText.t('books.about_of_audio', {bookCount: LabText.plural('books.chapter_count', bookPreview.chapters.length), bookCount2: LabText.plural('books.passage_count', passages.length), bookDuration: bookDuration(listeningSeconds), value: measured ? LabText.t('books.time_to_render', {duration: bookDuration(renderSeconds)})
+      : mapped ? LabText.t('books.test_for_render_time', {models: untested.map(sceneModelName).join(', ')})
+        : LabText.t('books.choose_to_estimate_render_time')});
 }
 function bookCastPicker(name) {
   var select = document.createElement('select'), defaultId = sceneScriptGuess(name);
   select.dataset.speaker = name;
-  option(select, '', 'Choose an approved Cast voice…');
+  option(select, '', LabText.t('books.choose_an_approved_cast_voice'));
   sceneScriptVoices().forEach(function (group) {
     var choices = document.createElement('optgroup');
     choices.label = group.character.name;
@@ -86,9 +83,9 @@ function paintBookPreview() {
   voices.replaceChildren();
   chapters.replaceChildren();
   $('bookImportWarnings').replaceChildren();
-  bookPreview.chapters.forEach(function (chapter, index) { option(chapters, index, chapter.title + ' · ' + bookCount(chapter.lines.length, 'passage')); });
+  bookPreview.chapters.forEach(function (chapter, index) { option(chapters, index, chapter.title + ' · ' + LabText.plural('books.passage_count', chapter.lines.length)); });
   var roles = (bookPreview.narration ? [''] : []).concat(bookPreview.speakers);
-  roles.forEach(function (role) { sceneLabel(role || 'Default narrator', bookCastPicker(role), voices, true); });
+  roles.forEach(function (role) { sceneLabel(role || LabText.t('books.default_narrator'), bookCastPicker(role), voices, true); });
   bookPreview.warnings.forEach(function (warning) {
     var item = document.createElement('li');
     item.textContent = warning;
@@ -112,26 +109,26 @@ function bookPreviewInput(file, name) {
       bookPreview = result.manuscript;
       bookModelSpeed = result.model_speed || {};
       paintBookPreview();
-      bookNote('Review the extraction and assign your Cast voices.');
+      bookNote(LabText.t('books.review_the_extraction_and_assign'));
     });
   });
 }
 $('bookPreviewFile').addEventListener('click', function () {
   var file = $('bookFile').files[0];
-  if (!file) return bookNote('Choose a manuscript file first.');
-  bookAction('Extracting manuscript…', function () { return bookPreviewInput(file, file.name); });
+  if (!file) return bookNote(LabText.t('books.choose_a_manuscript_file_first'));
+  bookAction(LabText.t('books.extracting_manuscript'), function () { return bookPreviewInput(file, file.name); });
 });
 $('bookPreviewPaste').addEventListener('click', function () {
   var text = $('bookPaste').value.trim();
-  if (!text) return bookNote('Paste a manuscript first.');
-  bookAction('Reading manuscript…', function () { return bookPreviewInput(new Blob([text]), 'Untitled manuscript.md'); });
+  if (!text) return bookNote(LabText.t('books.paste_a_manuscript_first'));
+  bookAction(LabText.t('books.reading_manuscript'), function () { return bookPreviewInput(new Blob([text]), 'Untitled manuscript.md'); });
 });
 ['bookParagraphPause', 'bookImportGap'].forEach(function (id) {
   $(id).addEventListener('input', bookImportReady);
 });
 $('bookReviewChapter').addEventListener('change', showBookReviewChapter);
 $('bookCreate').addEventListener('click', function () {
-  bookAction('Creating chapter scenes…', async function () {
+  bookAction(LabText.t('books.creating_chapter_scenes'), async function () {
     var voices = Object.fromEntries(Array.from($('bookVoiceMap').querySelectorAll('select'), function (select) {
       return [select.dataset.speaker, select.value];
     }));
@@ -142,7 +139,7 @@ $('bookCreate').addEventListener('click', function () {
     bookPreview = null;
     $('bookReview').hidden = true;
     await refreshBooks(result.book.id);
-    bookNote(result.warnings.join(' ') || 'Book saved.');
+    bookNote(result.warnings.join(' ') || LabText.t('books.book_saved'));
   });
 });
 
@@ -157,8 +154,8 @@ function refreshBooks(preferred) {
   return fetchJson('/api/books').then(function (result) {
     var select = $('bookSelect'), current = preferred || (activeBook && activeBook.id);
     select.replaceChildren();
-    option(select, '', 'Choose a saved book…');
-    result.books.forEach(function (book) { option(select, book.id, book.title + ' · ' + bookCount(book.chapters, 'chapter')); });
+    option(select, '', LabText.t('books.choose_a_saved_book'));
+    result.books.forEach(function (book) { option(select, book.id, book.title + ' · ' + LabText.plural('books.chapter_count', book.chapters)); });
     if (result.books.some(function (book) { return book.id === current; })) select.value = current;
     else if (result.books.length) select.value = result.books[0].id;
     return openBook(select.value, true);
@@ -192,15 +189,12 @@ function openBook(id, useFields) {
     }
   });
 }
-function bookCount(count, unit) {
-  return count + ' ' + unit + (count === 1 ? '' : 's');
-}
 function bookDuration(seconds) {
-  if (seconds < 60) return bookCount(Math.max(1, Math.round(seconds)), 'second');
+  if (seconds < 60) return LabText.plural('books.second_count', Math.max(1, Math.round(seconds)));
   var minutes = Math.ceil(seconds / 60);
-  if (minutes < 60) return bookCount(minutes, 'minute');
-  var hours = bookCount(Math.floor(minutes / 60), 'hour');
-  return minutes % 60 ? hours + ' ' + bookCount(minutes % 60, 'minute') : hours;
+  if (minutes < 60) return LabText.plural('books.minute_count', minutes);
+  var hours = LabText.plural('books.hour_count', Math.floor(minutes / 60));
+  return minutes % 60 ? hours + ' ' + LabText.plural('books.minute_count', minutes % 60) : hours;
 }
 var bookFormats = ['wav', 'flac', 'mp3', 'm4b'];
 function selectedBookFormats() {
@@ -217,9 +211,8 @@ function renderBookExportTiming() {
   var seconds = 3 + 0.15 * activeBook.chapters.length + pace * activeBook.estimated_seconds;
   $('bookExport').disabled = !formats.length;
   $('bookExportTiming').textContent = formats.length
-    ? 'Allow about ' + bookDuration(seconds) + ' for export. The time depends on your computer. '
-      + 'Once started, the export cannot be stopped. The Lab finishes writing and checking the package.'
-    : 'Choose at least one audio format to export.';
+    ? LabText.t('books.allow_about_for_export_the', {bookDuration: bookDuration(seconds)})
+    : LabText.t('books.choose_at_least_one_audio');
 }
 function renderBook(fields) {
   $('bookProject').hidden = !activeBook;
@@ -237,7 +230,7 @@ function renderBook(fields) {
     $('bookGap').value = activeBook.gap_ms;
     $('bookPronounce').value = activeBook.pronunciations.map(function (row) { return row.source + ' = ' + row.replacement; }).join('\n');
   }
-  $('bookEstimate').textContent = 'Estimated listening time · About ' + bookDuration(activeBook.estimated_seconds);
+  $('bookEstimate').textContent = LabText.t('books.estimated_listening_time_about', {bookDuration: bookDuration(activeBook.estimated_seconds)});
   renderBookExportTiming();
   var table = $('bookChapters');
   table.replaceChildren();
@@ -247,48 +240,47 @@ function renderBook(fields) {
     title.scope = 'row';
     title.textContent = (index + 1) + '. ' + chapter.title;
     var state = document.createElement('td'), actions = document.createElement('td');
-    state.textContent = chapter.selected + '/' + chapter.segments + ' selected · ' + chapter.status.replaceAll('_', ' ')
-      + ' · about ' + bookDuration(chapter.estimated_seconds);
-    actions.appendChild(sceneButton('Edit', 'Edit chapter ' + chapter.title, function () {
-      if (sceneDirty && !window.confirm('Discard unsaved edits to the open scene?')) return;
+    state.textContent = LabText.t('books.selected_about', {selected: chapter.selected, segments: chapter.segments, replaceAll: chapter.status.replaceAll('_', ' '), bookDuration: bookDuration(chapter.estimated_seconds)});
+    actions.appendChild(sceneButton(LabText.t('books.edit'), LabText.t('books.edit_chapter', {title: chapter.title}), function () {
+      if (sceneDirty && !window.confirm(LabText.t('books.discard_unsaved_edits_to_the'))) return;
       location.hash = '#scenes';
       refreshSceneList(chapter.id).catch(bookError);
     }));
     var running = ['queued', 'running', 'pausing', 'cancelling'].includes(chapter.status);
     if (!running) {
-      var renderLabel = chapter.status === 'paused' ? 'Resume' : 'Render missing';
-      actions.appendChild(sceneButton(renderLabel, renderLabel + ' for ' + chapter.title,
+      var renderLabel = chapter.status === 'paused' ? LabText.t('books.resume') : LabText.t('books.render_missing');
+      actions.appendChild(sceneButton(renderLabel, renderLabel + LabText.t('books.for') + chapter.title,
         function () { queueBook([chapter.id], false); }));
       if (chapter.status === 'review_takes' || chapter.status === 'ready') {
-        actions.appendChild(sceneButton('Use newest takes', 'Use newest takes for ' + chapter.title, function () {
-          bookChapterAction(chapter.id, '/choose', 'Selecting the chapter takes…');
+        actions.appendChild(sceneButton(LabText.t('books.use_newest_takes'), LabText.t('books.use_newest_takes_for', {title: chapter.title}), function () {
+          bookChapterAction(chapter.id, '/choose', LabText.t('books.selecting_the_chapter_takes'));
         }));
       }
       if (chapter.status === 'ready') {
-        actions.appendChild(sceneButton('Audition', 'Audition ' + chapter.title, function () {
-          bookAction('Assembling the chapter audition…', async function () {
+        actions.appendChild(sceneButton(LabText.t('books.audition'), LabText.t('books.audition_2', {title: chapter.title}), function () {
+          bookAction(LabText.t('books.assembling_the_chapter_audition'), async function () {
             var result = await fetchJson(bookUrl() + '/chapters/' + chapter.id + '/audition', {});
             var audio = /** @type {HTMLAudioElement} */ ($('bookAudition'));
             audio.src = result.audio_url;
             audio.hidden = false;
-            bookNote('Audition ready · ' + chapter.title);
+            bookNote(LabText.t('books.audition_ready', {title: chapter.title}));
           });
         }));
-        actions.appendChild(sceneButton('Rerender', 'Rerender ' + chapter.title, function () { queueBook([chapter.id], true); }));
+        actions.appendChild(sceneButton(LabText.t('books.rerender'), LabText.t('books.rerender_2', {title: chapter.title}), function () { queueBook([chapter.id], true); }));
       }
     }
     if (chapter.job && (running || chapter.status === 'paused')) {
       var verb = chapter.status === 'running' ? 'pause' : 'cancel';
       if (!['pausing', 'cancelling'].includes(chapter.status)) actions.appendChild(sceneButton(
-        verb === 'pause' ? 'Pause' : 'Cancel', (verb === 'pause' ? 'Pause' : 'Cancel') + ' ' + chapter.title, function () {
-          bookAction('Updating the chapter job…', async function () {
+        verb === 'pause' ? LabText.t('books.pause') : LabText.t('books.cancel'), (verb === 'pause' ? LabText.t('books.pause') : LabText.t('books.cancel')) + ' ' + chapter.title, function () {
+          bookAction(LabText.t('books.updating_the_chapter_job'), async function () {
             await fetchJson('/api/scenes/jobs/' + chapter.job.id + '/' + verb, {});
             await openBook(activeBook.id, false);
-            bookNote('Chapter job updated.');
+            bookNote(LabText.t('books.chapter_job_updated'));
           });
         }));
     }
-    if (index > 0) actions.appendChild(sceneButton('Move earlier', 'Move earlier · ' + chapter.title, function () {
+    if (index > 0) actions.appendChild(sceneButton(LabText.t('books.move_earlier'), LabText.t('books.move_earlier_2', {title: chapter.title}), function () {
       var order = activeBook.chapters.slice();
       [order[index - 1], order[index]] = [order[index], order[index - 1]];
       saveBook({chapters: order});
@@ -308,9 +300,7 @@ function paintBookDelivery() {
     return;
   }
   var levels = data.loudness;
-  $('bookDeliverySummary').textContent = 'Last export · ' + bookDuration(data.duration_seconds)
-    + (levels.integrated_lufs == null ? '' : ' · ' + levels.integrated_lufs + ' LUFS')
-    + (levels.true_peak_dbtp == null ? '' : ' · ' + levels.true_peak_dbtp + ' dBTP');
+  $('bookDeliverySummary').textContent = LabText.t('books.last_export', {bookDuration: bookDuration(data.duration_seconds), value: levels.integrated_lufs == null ? '' : ' · ' + levels.integrated_lufs + ' LUFS', value2: levels.true_peak_dbtp == null ? '' : ' · ' + levels.true_peak_dbtp + ' dBTP'});
   var downloads = $('bookDownloads');
   downloads.replaceChildren();
   Object.keys(data.files).concat('manifest.json').forEach(function (name) {
@@ -325,21 +315,21 @@ function bookChapterAction(id, suffix, note) {
   bookAction(note, async function () {
     await fetchJson(bookUrl() + '/chapters/' + id + suffix, {});
     await openBook(activeBook.id, false);
-    bookNote('Chapter updated.');
+    bookNote(LabText.t('books.chapter_updated'));
   });
 }
 function queueBook(chapters, rerender) {
-  bookAction('Checking the render queue…', async function () {
+  bookAction(LabText.t('books.checking_the_render_queue'), async function () {
     var data = await fetchJson(bookUrl() + '/queue', {chapters: chapters || undefined, rerender: rerender});
     await openBook(activeBook.id, false);
-    bookNote(data.jobs.length ? 'Queued chapter jobs are saved.' : 'Every requested chapter already has current audio.');
+    bookNote(data.jobs.length ? LabText.t('books.queued_chapter_jobs_are_saved') : LabText.t('books.every_requested_chapter_already_has'));
   });
 }
 function saveBook(changes) {
-  bookAction('Saving book details…', async function () {
+  bookAction(LabText.t('books.saving_book_details'), async function () {
     await fetchJson(bookUrl(), {expected_revision: activeBook.revision, ...changes});
     await refreshBooks(activeBook.id);
-    bookNote('Book details saved.');
+    bookNote(LabText.t('books.book_details_saved'));
   });
 }
 $('bookSelect').addEventListener('change', function () { openBook(this.value, true).catch(bookError); });
@@ -351,7 +341,7 @@ $('bookSave').addEventListener('click', function () {
     $('bookPronounce').value.split('\n').filter(function (line) { return line.trim(); }).forEach(function (line) {
       var separator = line.indexOf('=');
       var word = line.slice(0, separator).trim(), spoken = line.slice(separator + 1).trim();
-      if (separator < 0 || !word || !spoken) throw new Error('Add one pronunciation per line, such as harbor = har-bor.');
+      if (separator < 0 || !word || !spoken) throw new Error(LabText.t('books.add_one_pronunciation_per_line'));
       rules[word] = spoken;
     });
     saveBook({metadata: info, gap_ms: Number($('bookGap').value), pronunciations: rules});
@@ -359,12 +349,12 @@ $('bookSave').addEventListener('click', function () {
 });
 $('bookUploadCover').addEventListener('click', function () {
   var file = $('bookCover').files[0];
-  if (!file) return bookNote('Choose a JPEG or PNG cover first.');
-  bookAction('Saving cover…', async function () {
+  if (!file) return bookNote(LabText.t('books.choose_a_jpeg_or_png'));
+  bookAction(LabText.t('books.saving_cover'), async function () {
     await bookUpload(bookUrl() + '/cover?revision=' + activeBook.revision, file);
     $('bookCover').value = '';
     await openBook(activeBook.id, true);
-    bookNote('Cover saved.');
+    bookNote(LabText.t('books.cover_saved'));
   });
 });
 bookFormats.forEach(function (name) {
@@ -373,17 +363,17 @@ bookFormats.forEach(function (name) {
 $('bookExport').addEventListener('click', function () {
   var formats = selectedBookFormats();
   if (!formats.length) return;
-  bookAction('Building and checking the audiobook. Downloads appear when the files pass their checks.', async function () {
+  bookAction(LabText.t('books.building_and_checking_the_audiobook'), async function () {
     await fetchJson(bookUrl() + '/exports', {expected_revision: activeBook.revision, formats: formats});
     await openBook(activeBook.id, false);
-    bookNote('Verified audiobook package ready.');
+    bookNote(LabText.t('books.verified_audiobook_package_ready'));
   });
 });
 $('bookVerify').addEventListener('click', function () {
   if (!bookDelivery) return;
-  bookAction('Checking audiobook files…', async function () {
+  bookAction(LabText.t('books.checking_audiobook_files'), async function () {
     var result = await fetchJson(bookUrl() + '/exports/' + bookDelivery.id + '/verify', {});
-    bookNote(bookCount(result.files, 'file') + ' and ' + bookCount(result.chapters, 'chapter') + ' verified.');
+    bookNote(LabText.t('books.and_verified', {bookCount: LabText.plural('books.file_count', result.files), bookCount2: LabText.plural('books.chapter_count', result.chapters)}));
   });
 });
 

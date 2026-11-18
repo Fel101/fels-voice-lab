@@ -848,91 +848,91 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="audio-tools">
-  <h2>Audio tools</h2>
-  <details open><summary>Sound effects</summary>
-    <label class="field">Description<input id="sfxWords" maxlength="180" placeholder="Rain, surf, wind, fire, or a chime"></label>
-    <div class="row"><label class="field compact">Seconds<input id="sfxSeconds" type="number" min=".4" max="180" step=".1" value="6"></label>
-      <label class="field compact">Variation number<input id="sfxSeed" type="number" min="0" max="4294967295" value="42"></label>
-      <button id="makeSfx" type="button">Generate effect</button></div>
-    <div id="sfxDubRow" class="row" hidden><label class="field">Timed dub<select id="sfxDub"></select></label>
-      <button id="addSfxBackground" type="button">Use as dub background</button></div>
+  <h2>{{ui:audio.audio_tools}}</h2>
+  <details open><summary>{{ui:audio.sound_effects}}</summary>
+    <label class="field">{{ui:audio.description}}<input id="sfxWords" maxlength="180" placeholder="{{ui:audio.rain_surf_wind_fire_or}}"></label>
+    <div class="row"><label class="field compact">{{ui:audio.seconds}}<input id="sfxSeconds" type="number" min=".4" max="180" step=".1" value="6"></label>
+      <label class="field compact">{{ui:audio.variation_number}}<input id="sfxSeed" type="number" min="0" max="4294967295" value="42"></label>
+      <button id="makeSfx" type="button">{{ui:audio.generate_effect}}</button></div>
+    <div id="sfxDubRow" class="row" hidden><label class="field">{{ui:audio.timed_dub}}<select id="sfxDub"></select></label>
+      <button id="addSfxBackground" type="button">{{ui:audio.use_as_dub_background}}</button></div>
   </details>
-  <details><summary>Mastering</summary>
-    <label class="field">Local WAV or FLAC<input id="masterSource" type="file" accept=".wav,.flac"></label>
+  <details><summary>{{ui:audio.mastering}}</summary>
+    <label class="field">{{ui:audio.local_wav_or_flac}}<input id="masterSource" type="file" accept=".wav,.flac"></label>
     <div class="row">
-      <label class="field compact">WAV precision<select id="masterPrecision"><option value="PCM_24">24-bit PCM</option><option value="PCM_16">16-bit PCM</option><option value="FLOAT">32-bit float</option></select></label>
-      <label class="field compact">Gain (dB)<input id="masterGain" type="number" step=".1" value="0"></label>
-      <label class="field compact">Target loudness (LUFS)<input id="masterLoudness" type="number" step=".1" placeholder="Keep source loudness"></label>
-      <label class="field compact">Peak ceiling (dBTP)<input id="masterPeak" type="number" step=".1" value="-1"></label>
+      <label class="field compact">{{ui:audio.wav_precision}}<select id="masterPrecision"><option value="PCM_24">{{ui:audio.24_bit_pcm}}</option><option value="PCM_16">{{ui:audio.16_bit_pcm}}</option><option value="FLOAT">{{ui:audio.32_bit_float}}</option></select></label>
+      <label class="field compact">{{ui:audio.gain_db}}<input id="masterGain" type="number" step=".1" value="0"></label>
+      <label class="field compact">{{ui:audio.target_loudness_lufs}}<input id="masterLoudness" type="number" step=".1" placeholder="{{ui:audio.keep_source_loudness}}"></label>
+      <label class="field compact">{{ui:audio.peak_ceiling_dbtp}}<input id="masterPeak" type="number" step=".1" value="-1"></label>
     </div>
-    <label><input id="masterLimit" type="checkbox" checked> Limit true peak</label>
-    <div class="row"><button id="makeMaster" type="button">Make preview WAV</button></div>
+    <label><input id="masterLimit" type="checkbox" checked> {{ui:audio.limit_true_peak}}</label>
+    <div class="row"><button id="makeMaster" type="button">{{ui:audio.make_preview_wav}}</button></div>
   </details>
   <p id="audioToolStatus" role="status"></p>
   <audio id="audioToolPlayer" controls hidden></audio>
-  <p><a id="audioToolDownload" download hidden>Download WAV</a> <a id="audioToolReceipt" hidden>See how it was made</a></p>
+  <p><a id="audioToolDownload" download hidden>{{ui:audio.download_wav}}</a> <a id="audioToolReceipt" hidden>{{ui:audio.see_how_it_was_made}}</a></p>
 </section>
 
 <section class="card" id="books">
-  <h2>Stories &amp; audiobooks</h2>
+  <h2>{{ui:books.stories_audiobooks}}</h2>
   <details open>
-    <summary>Narrate a document</summary>
+    <summary>{{ui:books.narrate_a_document}}</summary>
     <div class="row">
-      <label class="field compact">Manuscript file<input id="bookFile" type="file" accept=".txt,.md,.markdown"></label>
-      <label class="field compact">Split into<select id="bookSplit"><option value="paragraph">Paragraphs</option><option value="sentence">Sentences</option><option value="chapter">Chapters</option></select></label>
-      <button id="bookPreviewFile" type="button">Preview file</button>
+      <label class="field compact">{{ui:books.manuscript_file}}<input id="bookFile" type="file" accept=".txt,.md,.markdown"></label>
+      <label class="field compact">{{ui:books.split_into}}<select id="bookSplit"><option value="paragraph">{{ui:books.paragraphs}}</option><option value="sentence">{{ui:books.sentences}}</option><option value="chapter">{{ui:books.chapters}}</option></select></label>
+      <button id="bookPreviewFile" type="button">{{ui:books.preview_file}}</button>
     </div>
-    <label class="field">Or paste a manuscript<textarea id="bookPaste" rows="4" placeholder="# Chapter One&#10;Text or [voice:Mira] dialogue"></textarea></label>
-    <button id="bookPreviewPaste" type="button">Preview pasted text</button>
+    <label class="field">{{ui:books.or_paste_a_manuscript}}<textarea id="bookPaste" rows="4" placeholder="{{ui:books.chapter_one_text_or_voice}}"></textarea></label>
+    <button id="bookPreviewPaste" type="button">{{ui:books.preview_pasted_text}}</button>
     <div id="bookReview" hidden>
       <p class="meta" id="bookImportSummary"></p>
       <ul id="bookImportWarnings" class="meta"></ul>
-      <label class="field compact">Chapter to review<select id="bookReviewChapter"></select></label>
-      <label class="field">Extracted speech<textarea id="bookReviewText" rows="5" readonly></textarea></label>
+      <label class="field compact">{{ui:books.chapter_to_review}}<select id="bookReviewChapter"></select></label>
+      <label class="field">{{ui:books.extracted_speech}}<textarea id="bookReviewText" rows="5" readonly></textarea></label>
       <div class="row" id="bookVoiceMap"></div>
       <div class="row">
-        <label class="field compact">Book title<input id="bookImportTitle" maxlength="120"></label>
-        <label class="field compact">Paragraph pause (ms)<input id="bookParagraphPause" type="number" value="275" min="0" max="10000"></label>
-        <label class="field compact">Pause between chapters (ms)<input id="bookImportGap" type="number" value="750" min="0" max="10000"></label>
-        <button id="bookCreate" type="button" disabled>Create book</button>
+        <label class="field compact">{{ui:books.book_title}}<input id="bookImportTitle" maxlength="120"></label>
+        <label class="field compact">{{ui:books.paragraph_pause_ms}}<input id="bookParagraphPause" type="number" value="275" min="0" max="10000"></label>
+        <label class="field compact">{{ui:books.pause_between_chapters_ms}}<input id="bookImportGap" type="number" value="750" min="0" max="10000"></label>
+        <button id="bookCreate" type="button" disabled>{{ui:books.create_book}}</button>
       </div>
     </div>
   </details>
-  <div class="row"><label class="field compact">Saved book<select id="bookSelect"></select></label></div>
+  <div class="row"><label class="field compact">{{ui:books.saved_book}}<select id="bookSelect"></select></label></div>
   <p class="meta" id="bookStatus" role="status" aria-live="polite"></p>
   <div id="bookProject" hidden>
     <details>
-      <summary>Book details, cover and pronunciations</summary>
+      <summary>{{ui:books.book_details_cover_and_pronunciations}}</summary>
       <div class="row">
-        <label class="field compact">Title<input id="bookTitle" maxlength="120"></label>
-        <label class="field compact">Author<input id="bookAuthor" maxlength="160"></label>
-        <label class="field compact">Narrator credit<input id="bookNarrator" maxlength="160"></label>
-        <label class="field compact">Genre<input id="bookGenre" maxlength="80"></label>
-        <label class="field compact">Year<input id="bookYear" inputmode="numeric" maxlength="4"></label>
+        <label class="field compact">{{ui:books.title}}<input id="bookTitle" maxlength="120"></label>
+        <label class="field compact">{{ui:books.author}}<input id="bookAuthor" maxlength="160"></label>
+        <label class="field compact">{{ui:books.narrator_credit}}<input id="bookNarrator" maxlength="160"></label>
+        <label class="field compact">{{ui:books.genre}}<input id="bookGenre" maxlength="80"></label>
+        <label class="field compact">{{ui:books.year}}<input id="bookYear" inputmode="numeric" maxlength="4"></label>
       </div>
-      <label class="field">Description<textarea id="bookDescription" rows="2" maxlength="2000"></textarea></label>
-      <label class="field">Project pronunciations<textarea id="bookPronounce" rows="3" placeholder="harbor = har-bor"></textarea></label>
+      <label class="field">{{ui:books.description}}<textarea id="bookDescription" rows="2" maxlength="2000"></textarea></label>
+      <label class="field">{{ui:books.project_pronunciations}}<textarea id="bookPronounce" rows="3" placeholder="{{ui:books.harbor_har_bor}}"></textarea></label>
       <div class="row">
-        <label class="field compact">Chapter gap (ms)<input id="bookGap" type="number" min="0" max="10000"></label>
-        <label class="field compact">Cover (JPEG or PNG)<input id="bookCover" type="file" accept=".jpg,.jpeg,.png"></label>
-        <button id="bookUploadCover" type="button">Save cover</button>
-        <img id="bookCoverPreview" width="80" height="80" style="object-fit:contain" alt="Saved book cover" hidden>
-        <button id="bookSave" type="button">Save book details</button>
+        <label class="field compact">{{ui:books.chapter_gap_ms}}<input id="bookGap" type="number" min="0" max="10000"></label>
+        <label class="field compact">{{ui:books.cover_jpeg_or_png}}<input id="bookCover" type="file" accept=".jpg,.jpeg,.png"></label>
+        <button id="bookUploadCover" type="button">{{ui:books.save_cover}}</button>
+        <img id="bookCoverPreview" width="80" height="80" style="object-fit:contain" alt="{{ui:books.saved_book_cover}}" hidden>
+        <button id="bookSave" type="button">{{ui:books.save_book_details}}</button>
       </div>
     </details>
-    <div class="row"><button id="bookQueue" type="button">Render missing chapters</button><span id="bookEstimate" class="meta"></span></div>
-    <table class="scene-table"><thead><tr><th scope="col">Chapter</th><th scope="col">Takes and status</th><th scope="col">Actions</th></tr></thead><tbody id="bookChapters"></tbody></table>
+    <div class="row"><button id="bookQueue" type="button">{{ui:books.render_missing_chapters}}</button><span id="bookEstimate" class="meta"></span></div>
+    <table class="scene-table"><thead><tr><th scope="col">{{ui:books.chapter}}</th><th scope="col">{{ui:books.takes_and_status}}</th><th scope="col">{{ui:books.actions}}</th></tr></thead><tbody id="bookChapters"></tbody></table>
     <audio id="bookAudition" controls preload="metadata" hidden></audio>
     <div class="row">
-      <label><input type="checkbox" id="bookWav" checked> WAV</label>
-      <label><input type="checkbox" id="bookFlac" checked> FLAC</label>
-      <label><input type="checkbox" id="bookMp3" checked> MP3</label>
-      <label><input type="checkbox" id="bookM4b" checked> M4B</label>
-      <button id="bookExport" type="button">Export audiobook</button>
-      <button id="bookPlayM4b" type="button" disabled>Play M4B</button>
-      <button id="bookVerify" type="button" disabled>Verify export</button>
+      <label><input type="checkbox" id="bookWav" checked> {{ui:books.wav}}</label>
+      <label><input type="checkbox" id="bookFlac" checked> {{ui:books.flac}}</label>
+      <label><input type="checkbox" id="bookMp3" checked> {{ui:books.mp3}}</label>
+      <label><input type="checkbox" id="bookM4b" checked> {{ui:books.m4b}}</label>
+      <button id="bookExport" type="button">{{ui:books.export_audiobook}}</button>
+      <button id="bookPlayM4b" type="button" disabled>{{ui:books.play_m4b}}</button>
+      <button id="bookVerify" type="button" disabled>{{ui:books.verify_export}}</button>
     </div>
-    <p class="meta">For audiobook files and covers, <a href="#system">install FFmpeg in System &amp; backups</a> if you need it.</p>
+    <p class="meta">{{ui:books.for_audiobook_files_and_covers}} <a href="#system">{{ui:books.install_ffmpeg_in_system_backups}}</a> {{ui:books.if_you_need_it}}</p>
     <p id="bookExportTiming" class="meta" aria-live="polite"></p>
     <p id="bookDeliverySummary" class="meta"></p>
     <div class="row" id="bookDownloads"></div>
