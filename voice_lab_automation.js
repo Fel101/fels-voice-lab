@@ -1,14 +1,14 @@
 // The recipe editor sends the same typed step list as the automation API.
 var automationOperations = {
-  speak: ['text','audio','Speak text',{voice:['Voice name','', 'text'],speed:['Speed','1','number'],provider:['Provider','local-voice-lab',['local-voice-lab']]}],
-  transcribe: ['audio','text','Transcribe audio',{language:['Language code (optional)','','text']}],
-  translate: ['text','text','Translate text',{source_language:['Source language','en','text'],
-    target_language:['Target language','es','text'],provider:['Provider','',['']]}],
-  normalize: ['audio','audio','Master audio',{target_lufs:['Target LUFS','-18','number'],
-    ceiling_dbtp:['True-peak ceiling','-1','number'],precision:['WAV encoding','PCM_24',['PCM_16','PCM_24','FLOAT']]}],
-  convert: ['audio','audio','Convert voice',{identity_id:['Approved Cast voice','',[]]}],
-  dub: ['scene','dub_job','Send to dub queue',{target_language:['Target language','es','text'],
-    format:['Output format','wav',['wav','mp4']],render_missing:['Render missing cues',true,'checkbox']}],
+  speak: ['text','audio',LabText.t('automation.speak_text'),{voice:[LabText.t('automation.voice_name'),'', 'text'],speed:[LabText.t('automation.speed'),'1','number'],provider:[LabText.t('automation.provider'),'local-voice-lab',['local-voice-lab']]}],
+  transcribe: ['audio','text',LabText.t('automation.transcribe_audio'),{language:[LabText.t('automation.language_code_optional'),'','text']}],
+  translate: ['text','text',LabText.t('automation.translate_text'),{source_language:[LabText.t('automation.source_language'),'en','text'],
+    target_language:[LabText.t('automation.target_language'),'es','text'],provider:[LabText.t('automation.provider'),'',['']]}],
+  normalize: ['audio','audio',LabText.t('automation.master_audio'),{target_lufs:[LabText.t('automation.target_lufs'),'-18','number'],
+    ceiling_dbtp:[LabText.t('automation.true_peak_ceiling'),'-1','number'],precision:[LabText.t('automation.wav_encoding'),'PCM_24',['PCM_16','PCM_24','FLOAT']]}],
+  convert: ['audio','audio',LabText.t('automation.convert_voice'),{identity_id:[LabText.t('automation.approved_cast_voice'),'',[]]}],
+  dub: ['scene','dub_job',LabText.t('automation.send_to_dub_queue'),{target_language:['Target language','es','text'],
+    format:[LabText.t('automation.output_format'),'wav',['wav','mp4']],render_missing:[LabText.t('automation.render_missing_cues'),true,'checkbox']}],
 };
 var automationRecipe = {id:'', revision:0, /** @type {any[]} */ steps:[]};
 var configuredAutomationProviders = [], automationConversionVoices = [];
@@ -27,16 +27,17 @@ function automationForm() {
   $('automationFileRow').hidden = kind !== 'audio';
   $('automationSceneRow').hidden = kind !== 'scene';
   $('automationKind').disabled = !!automationRecipe.steps.length;
-  var sources = [{label:'Original '+kind,kind:kind,index:0}];
+  var inputKind = {text: LabText.t('automation.text_kind'), audio: LabText.t('automation.audio_kind'), scene: LabText.t('automation.scene_kind')};
+  var sources = [{label:LabText.t('automation.original', {kind: inputKind[kind] || kind}),kind:kind,index:0}];
   automationRecipe.steps.forEach(function(row,index) {
     var desc = automationOperations[row.operation];
     var fieldset = document.createElement('fieldset'), title = document.createElement('legend');
-    title.textContent = 'Step '+(index+1)+' · '+desc[2]; fieldset.append(title);
+    title.textContent = LabText.t('automation.step', {number: index+1, value: desc[2]}); fieldset.append(title);
     var edge = document.createElement('p');
     edge.className='meta';
     edge.textContent = sources[row.source_step ?? index].label+' → '+desc[2];
     fieldset.append(edge);
-    sources.push({label:'Step '+(index+1)+' · '+desc[2],kind:desc[1],index:index+1});
+    sources.push({label:LabText.t('automation.step', {number: index+1, value: desc[2]}),kind:desc[1],index:index+1});
     Object.entries(desc[3]).forEach(function([name, details]) {
       var label = document.createElement('label'); label.className = 'field'; label.textContent = details[0];
       if (Array.isArray(details[2])) {
@@ -47,9 +48,9 @@ function automationForm() {
         }).map(function(provider){return provider.id;}));
         if (name === 'identity_id') {
           var saved = row.settings[name];
-          option(select, '', automationConversionVoices.length ? 'Choose a voice' : 'Approve a voice recording in Cast');
+          option(select, '', automationConversionVoices.length ? LabText.t('automation.choose_a_voice') : LabText.t('automation.approve_a_voice_recording_in'));
           if (saved && !automationConversionVoices.some(function(voice) {return voice.id === saved;})) {
-            option(select, saved, 'Saved voice is unavailable', true);
+            option(select, saved, LabText.t('automation.saved_voice_is_unavailable'), true);
           }
           automationConversionVoices.forEach(function(voice) {option(select, voice.id, voice.label);});
         } else choices.forEach(function(value) {option(select,value,value);});
@@ -69,7 +70,7 @@ function automationForm() {
       fieldset.append(label);
     });
     if (index===automationRecipe.steps.length-1) {
-      var remove = document.createElement('button'); remove.type='button'; remove.textContent='Remove step';
+      var remove = document.createElement('button'); remove.type='button'; remove.textContent=LabText.t('automation.remove_step');
       remove.addEventListener('click',function(){automationRecipe.steps.pop();automationForm();});
       fieldset.append(remove);
     }
@@ -103,7 +104,7 @@ async function refreshAutomation() {
       .map(function(voice) {return {id: voice.id, label: character.name + ' · ' + voice.label};});
   });
   automationForm();
-  var chooser=$('automationChoice'); chooser.textContent=''; option(chooser,'','New recipe');
+  var chooser=$('automationChoice'); chooser.textContent=''; option(chooser,'',LabText.t('automation.new_recipe'));
   automationSaved.forEach(function(row){option(chooser,row.id,row.name);});
   chooser.value=automationRecipe.id;
   var scenes=$('automationScene'); scenes.textContent='';
@@ -120,12 +121,12 @@ $('automationProviderForm').addEventListener('submit',async function(event) {
   var name=$('automationProviderName').value.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   var key=$('automationProviderKey');
   try {
-    if (!name || !capabilities.length) throw new Error('Enter a name and select what this provider can do.');
+    if (!name || !capabilities.length) throw new Error(LabText.t('automation.enter_a_name_and_select'));
     var result=await fetchJson('/api/automation/providers',{profile:{id:'provider-'+name,
       base_url:$('automationProviderUrl').value.trim(),model:$('automationProviderModel').value.trim(),capabilities:capabilities},
       key:key.value});
     key.value='';
-    status.textContent='Profile saved for '+result.provider.destination+'.';
+    status.textContent=LabText.t('automation.profile_saved_for', {destination: result.provider.destination});
     await refreshAutomation();
   } catch(error) {
     status.textContent=error.message;
@@ -139,7 +140,7 @@ async function refreshAutomationRuns() {
     heading.textContent=run.recipe.name+' · '+run.status.replaceAll('_',' ');
     panel.append(heading);
     if(run.status==='running') {
-      var stop=document.createElement('button'); stop.type='button'; stop.textContent='Cancel unfinished items';
+      var stop=document.createElement('button'); stop.type='button'; stop.textContent=LabText.t('automation.cancel_unfinished_items');
       stop.addEventListener('click',async function(){
         try {await fetchJson('/api/automation/runs/'+run.id+'/cancel',{});await refreshAutomationRuns();}
         catch(error){automationError(error);}
@@ -148,16 +149,16 @@ async function refreshAutomationRuns() {
     }
     run.items.forEach(function(row){
       var li=document.createElement('li');
-      li.textContent='Item '+(row.ordinal+1)+' · '+row.state+(row.error?' · '+row.error:'');
+      li.textContent=LabText.t('automation.item', {value: row.ordinal+1, state: row.state, value2: row.error?' · '+row.error:''});
       row.steps.forEach(function(step){
         if(step.kind==='audio') {
           var link=document.createElement('a'); link.href='/api/automation/assets/'+step.value;
-          link.download='step-'+step.sequence+'-audio.wav'; link.textContent=' Download step '+step.sequence+' audio';
+          link.download='step-'+step.sequence+'-audio.wav'; link.textContent=LabText.t('automation.download_step_audio', {sequence: step.sequence});
           li.append(link);
         }
-        if(step.kind==='error'||step.kind==='blocked') li.append(' · Step '+step.sequence+' '+step.error);
+        if(step.kind==='error'||step.kind==='blocked') li.append(LabText.t('automation.step_2', {sequence: step.sequence, error: step.error}));
         if(step.kind==='text') li.append(' · '+step.value);
-        if(step.kind==='dub_job') li.append(' · Dub job '+step.value);
+        if(step.kind==='dub_job') li.append(LabText.t('automation.dub_job', {value: step.value}));
       });
       list.append(li);
     });
@@ -174,7 +175,7 @@ async function localAutomationInputs() {
     var response=await fetch('/api/automation/assets?filename='+encodeURIComponent(file.name),{method:'POST',
       headers:{'Content-Type':'application/octet-stream'},body:file});
     var result=await response.json();
-    if(!response.ok) throw new Error(result.error || 'Audio upload failed.');
+    if(!response.ok) throw new Error(result.error || LabText.t('automation.audio_upload_failed'));
     values.push(result.asset_id);
   }
   return values;
@@ -209,7 +210,7 @@ $('automationAdd').addEventListener('click',function(){
 $('automationSave').addEventListener('click',function(){
   automationAction(async function(){
     var result=await fetchJson('/api/automation/recipes',automationDocument());
-    automationRecipe=result.recipe; $('automationStatus').textContent='Recipe saved.';
+    automationRecipe=result.recipe; $('automationStatus').textContent=LabText.t('automation.recipe_saved');
     await refreshAutomation();
   });
 });
@@ -219,38 +220,36 @@ $('automationPreview').addEventListener('click',function(){
     var list=$('automationPlan'); list.hidden=false; list.textContent='';
     result.plan.recipe.steps.forEach(function(step,index) {
       var li=document.createElement('li');
-      li.textContent=(step.source_step ? 'Step '+step.source_step : 'Original input')+' → Step '+(index+1)+' · '+
-        automationOperations[step.operation][2]+' · '+step.provider+' · '+step.destination+
-        (step.transfer?' · Sends '+step.transfer+' to '+step.connector.destination:'');
+      li.textContent=LabText.t('automation.step_3', {value: step.source_step ? 'Step '+step.source_step : 'Original input', number: index+1, value2: automationOperations[step.operation][2], provider: step.provider, destination: step.destination, value3: step.transfer?' · Sends '+step.transfer+' to '+step.connector.destination:''});
       list.append(li);
     });
-    $('automationStatus').textContent=result.plan.inputs.length+' inputs. '+(result.plan.external_transfer?
-      'Review the external destinations shown above before running.':'All processing stays local.');
+    $('automationStatus').textContent=LabText.t('automation.inputs', {length: result.plan.inputs.length, value: result.plan.external_transfer?
+      'Review the external destinations shown above before running.':'All processing stays local.'});
   });
 });
 $('automationRun').addEventListener('click',function(){
   automationAction(async function(){
-    if(!automationRecipe.id) throw new Error('Save the recipe before running it.');
+    if(!automationRecipe.id) throw new Error(LabText.t('automation.save_the_recipe_before_running'));
     var inputs=await localAutomationInputs();
     var body={recipe_id:automationRecipe.id,revision:automationRecipe.revision,inputs:inputs};
     var preview=await fetchJson('/api/automation/preview',body), approved=[];
     if(preview.plan.provider_approvals.length) {
-      var list=preview.plan.provider_approvals.map(function(row){return row.destination+' will receive '+row.data;});
-      if(!window.confirm('Run this recipe with the selected providers?\n'+list.join('\n'))) return;
+      var list=preview.plan.provider_approvals.map(function(row){return row.destination+LabText.t('automation.will_receive')+row.data;});
+      if(!window.confirm(LabText.t('automation.run_this_recipe_with_the', {join: list.join('\n')}))) return;
       approved=preview.plan.provider_approvals.map(function(row){return row.revision;});
     }
     await fetchJson('/api/automation/runs',{...body,approve_provider_revisions:approved});
-    $('automationStatus').textContent='Run queued.';
+    $('automationStatus').textContent=LabText.t('automation.run_queued');
     await refreshAutomationRuns();
   });
 });
 $('automationRefresh').addEventListener('click',function(){refreshAutomationRuns().catch(automationError);});
 $('simulationListen').addEventListener('click',async function(){
   var state=$('simulationWords'), file=/** @type {HTMLInputElement} */ ($('simulationFile')).files[0];
-  if(!file){state.textContent='Choose a recording first.'; return;}
+  if(!file){state.textContent=LabText.t('automation.choose_a_recording_first'); return;}
   try {
-    state.textContent='Transcribing locally…';
-    var form=new FormData();form.append('model','whisper-1');form.append('file',file);
+    state.textContent=LabText.t('automation.transcribing_locally');
+    var form=new FormData();form.append(LabText.t('automation.model_2'),LabText.t('automation.whisper_1'));form.append(LabText.t('automation.file'),file);
     var reply=await fetch('/v1/audio/transcriptions',{method:'POST',body:form}), result=await reply.json();
     if(!reply.ok) throw new Error(result.error.message);
     state.textContent=result.text;
@@ -259,7 +258,7 @@ $('simulationListen').addEventListener('click',async function(){
 $('simulationPlay').addEventListener('click',async function(){
   var state=$('simulationStatus');
   try {
-    state.textContent='Preparing the draft reply…';
+    state.textContent=LabText.t('automation.preparing_the_draft_reply');
     var reply=await fetch('/v1/audio/speech',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'tts-1',voice:$('simulationVoice').value,input:$('simulationReply').value,response_format:'wav'})});
     if(!reply.ok) throw new Error((await reply.json()).error.message);
@@ -267,7 +266,7 @@ $('simulationPlay').addEventListener('click',async function(){
     simulationUrl=URL.createObjectURL(await reply.blob());
     var audio=/** @type {HTMLAudioElement} */ ($('simulationPlayer'));
     audio.src=simulationUrl; audio.hidden=false;
-    state.textContent='Reply ready to play.';
+    state.textContent=LabText.t('automation.reply_ready_to_play');
   } catch(error){state.textContent=error.message;}
 });
 automationForm();

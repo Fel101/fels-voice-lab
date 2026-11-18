@@ -37,7 +37,8 @@ class PageTextTests(unittest.TestCase):
 
     def save_catalog(self, code, name, messages, draft=False):
         (self.catalogs / f"{code}.json").write_text(
-            json.dumps({"name": name, "draft": draft, "messages": messages}), encoding="utf-8"
+            json.dumps({"name": name, "draft": draft, "messages": messages}),
+            encoding="utf-8",
         )
 
     def test_catalog_keys_are_known_and_match_the_kind_of_call(self):
@@ -51,7 +52,9 @@ class PageTextTests(unittest.TestCase):
                 with self.subTest(source=source.name, key=key):
                     self.assertIsInstance(PAGE_TEXT.english[key], dict if call == "plural" else str)
 
-    def test_before_javascript_markup_has_the_language_escaped_words_and_english_fallback(self):
+    def test_before_javascript_markup_has_the_language_escaped_words_and_english_fallback(
+        self,
+    ):
         self.save_catalog("es", "Español", {"home.welcome": "<b>Bienvenida</b></script>"}, draft=True)
         store = UiPreferences(self.root, PageText(self.catalogs))
         store.save({"language": "es", "theme": "dark"})
@@ -62,16 +65,24 @@ class PageTextTests(unittest.TestCase):
         self.assertIn('<html lang="es" data-theme="dark">', rendered)
         self.assertIn("<title>&lt;b&gt;Bienvenida&lt;/b&gt;&lt;/script&gt;</title>", rendered)
         self.assertIn("<label>Page language<select>", rendered)
-        self.assertIn('<option value="es" selected>Español (draft, not yet checked by a speaker)</option>', rendered)
+        self.assertIn(
+            '<option value="es" selected>Español (draft, not yet checked by a speaker)</option>',
+            rendered,
+        )
         self.assertEqual(rendered.count("</script>"), 1)
         self.assertEqual(store.save({"theme": "forest"})["language"], "es")
         self.assertEqual(store.get()["language"], "es")
 
-    def test_unknown_or_missing_language_reads_as_english_themes_and_updates_are_preserved(self):
+    def test_unknown_or_missing_language_reads_as_english_themes_and_updates_are_preserved(
+        self,
+    ):
         store = UiPreferences(self.root, PageText(self.catalogs))
         store.path.parent.mkdir(parents=True)
         for extra in ({}, {"language": "zz"}, {"language": None}, {"language": ["es"]}):
-            store.path.write_text(json.dumps({"theme": "dark", "check_updates": True, **extra}), encoding="utf-8")
+            store.path.write_text(
+                json.dumps({"theme": "dark", "check_updates": True, **extra}),
+                encoding="utf-8",
+            )
             self.assertEqual(store.get(), {"theme": "dark", "check_updates": True, "language": "en"})
         before = store.path.read_bytes()
         with self.assertRaisesRegex(ValueError, "page language"):
@@ -103,7 +114,10 @@ class PageTextTests(unittest.TestCase):
         self.assertIn('<option value="en" selected>English</option>', rendered)
         self.assertNotIn('value="es"', rendered)
         self.assertEqual(len(page_text.skipped_catalogs), 2)
-        self.assertIn("es.json: es: home.greeting has an unknown value place", page_text.skipped_catalogs[0])
+        self.assertIn(
+            "es.json: es: home.greeting has an unknown value place",
+            page_text.skipped_catalogs[0],
+        )
         self.assertIn("fr.json", page_text.skipped_catalogs[1])
 
         self.save_catalog("en", "English", {"broken": {"one": "One"}})
@@ -119,8 +133,14 @@ class PageTextTests(unittest.TestCase):
                 "language.label": "Idioma",
                 "projects.heading": "Proyectos",
                 "projects.kind.scene": "Escena",
-                "projects.voice_count": {"one": "{count} voz", "other": "{count} voces"},
-                "projects.line_count": {"one": "{count} línea", "other": "{count} líneas"},
+                "projects.voice_count": {
+                    "one": "{count} voz",
+                    "other": "{count} voces",
+                },
+                "projects.line_count": {
+                    "one": "{count} línea",
+                    "other": "{count} líneas",
+                },
             },
             draft=True,
         )
@@ -133,31 +153,46 @@ class PageTextTests(unittest.TestCase):
             voice = server.cast.create_identity(character["id"], "kokoro", "Warm", {"voice": "af_heart"})
             server.cast.update_identity(voice["id"], {"status": "approved"})
             server.scenes.import_script(
-                "Mira: Leave the light on.", "text", {"Mira": {"identity_id": voice["id"]}}, name="Porch light"
+                "Mira: Leave the light on.",
+                "text",
+                {"Mira": {"identity_id": voice["id"]}},
+                name="Porch light",
             )
             page = DevToolsPage(BROWSER)
             page.open(server.base + "/#projects")
             self.assertEqual(page.evaluate("document.documentElement.lang"), "en")
             page.set_value("#languageChoice", "es")
-            page.wait_until("document.documentElement.lang === 'es'")
+            page.wait_until(
+                "document.documentElement.lang === 'es' && document.readyState === 'complete' && typeof $ === 'function'"
+            )
             self.assertEqual(page.evaluate("location.hash"), "#projects")
             self.assertTrue(page.evaluate("document.querySelector('label[for=languageChoice]').innerText.startsWith('Idioma')"))
             self.assertIn(
-                "draft, not yet checked by a speaker", page.evaluate("$('languageChoice').selectedOptions[0].textContent")
+                "draft, not yet checked by a speaker",
+                page.evaluate("$('languageChoice').selectedOptions[0].textContent"),
             )
             page.wait_until("document.querySelector('#projectRows li')?.textContent.includes('1 voz')")
             self.assertIn(
                 "Porch light · Escena · 1 línea · 1 voz · 0 selected takes",
                 page.evaluate("document.querySelector('#projectRows li').textContent"),
             )
-            self.assertEqual(page.evaluate("document.querySelector('#projects h2').textContent"), "Proyectos")
-            self.assertIn("Search titles or script", page.evaluate("$('projectsQuery').labels[0].innerText"))
+            self.assertEqual(
+                page.evaluate("document.querySelector('#projects h2').textContent"),
+                "Proyectos",
+            )
+            self.assertIn(
+                "Search titles or script",
+                page.evaluate("$('projectsQuery').labels[0].innerText"),
+            )
             page.open(server.base + "/compare")
             self.assertEqual(page.evaluate("document.documentElement.lang"), "es")
             self.assertTrue(page.evaluate("document.querySelector('label[for=languageChoice]').innerText.startsWith('Idioma')"))
-            self.assertEqual(page.evaluate("document.querySelector('h1').textContent"), "Compare voices")
+            self.assertEqual(
+                page.evaluate("document.querySelector('h1').textContent"),
+                "Compare voices",
+            )
             page.set_value("#languageChoice", "en")
-            page.wait_until("document.documentElement.lang === 'en'")
+            page.wait_until("document.documentElement.lang === 'en' && document.readyState === 'complete'")
             self.assertEqual(UiPreferences(self.root / "library", page_text).get()["language"], "en")
             self.assertEqual(page.problems, [])
         finally:

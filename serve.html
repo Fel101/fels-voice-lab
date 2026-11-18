@@ -376,21 +376,21 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="conversion">
-  <h2>Chatterbox voice conversion</h2>
-  <p class="meta">Convert an existing spoken performance into a separate target voice. The performance and the voice recording stay separate; output is watermarked and saved with both input hashes and the pinned model revision. The performance can be up to 60 seconds, the voice recording up to 10.</p>
+  <h2>{{ui:conversion.chatterbox_voice_conversion}}</h2>
+  <p class="meta">{{ui:conversion.convert_an_existing_spoken_performance}}</p>
   <div class="row">
-    <label class="field">Performance to convert<select id="conversionSource"></select></label>
-    <label class="field">Voice to convert it to<select id="conversionTarget"></select></label>
-    <button class="go" type="button" id="convertVoice">Convert voice</button>
+    <label class="field">{{ui:conversion.performance_to_convert}}<select id="conversionSource"></select></label>
+    <label class="field">{{ui:conversion.voice_to_convert_it_to}}<select id="conversionTarget"></select></label>
+    <button class="go" type="button" id="convertVoice">{{ui:conversion.convert_voice}}</button>
   </div>
   <div class="cast-grid">
-    <div><label class="field">Use a recording from this computer<input id="conversionSourceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-      <p class="meta">WAV, FLAC, OGG, MP3 or M4A, up to 60 seconds. Its voice is replaced, so it needs no permission.</p></div>
-    <div><label class="field">Where it comes from<input id="conversionTargetOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
-      <label class="field">Who may use it, and how<input id="conversionTargetAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label>
-      <label><input id="conversionTargetPermission" type="checkbox"> I own this recording or have permission to clone this voice.</label>
-      <label class="field">Use a voice recording from this computer<input id="conversionTargetFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-      <p class="meta">Up to 10 seconds. Fill in its origin and allowed use and tick the box first: every conversion to this voice records them in its manifest.</p></div>
+    <div><label class="field">{{ui:conversion.use_a_recording_from_this}}<input id="conversionSourceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <p class="meta">{{ui:conversion.wav_flac_ogg_mp3_or}}</p></div>
+    <div><label class="field">{{ui:conversion.where_it_comes_from}}<input id="conversionTargetOrigin" type="text" maxlength="1000" placeholder="{{ui:conversion.for_example_my_own_voice}}"></label>
+      <label class="field">{{ui:conversion.who_may_use_it_and}}<input id="conversionTargetAllowedUse" type="text" maxlength="1000" placeholder="{{ui:conversion.record_the_permission_and_any}}"></label>
+      <label><input id="conversionTargetPermission" type="checkbox"> {{ui:conversion.i_own_this_recording_or}}</label>
+      <label class="field">{{ui:conversion.use_a_voice_recording_from}}<input id="conversionTargetFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <p class="meta">{{ui:conversion.up_to_10_seconds_fill}}</p></div>
   </div>
   <p id="conversionError" role="alert"></p><p class="meta" id="conversionStatus"></p>
   <audio id="conversionPlayer" controls></audio>
@@ -764,53 +764,53 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
   <audio id="player" controls></audio>
 </section>
 <section class="card" id="automation">
-  <h2>Automation</h2>
+  <h2>{{ui:automation.automation}}</h2>
   <details id="automationProviderSettings">
-    <summary>Provider profiles</summary>
-    <p class="meta">Optional. Saving a profile keeps its settings on this computer. A key stays in memory until the Lab closes.</p>
+    <summary>{{ui:automation.provider_profiles}}</summary>
+    <p class="meta">{{ui:automation.optional_saving_a_profile_keeps}}</p>
     <form id="automationProviderForm">
       <div class="row">
-        <label class="field">Provider name<input id="automationProviderName" maxlength="40" required></label>
-        <label class="field">Base address<input id="automationProviderUrl" type="url" placeholder="https://provider.example/v1" required></label>
-        <label class="field">Model<input id="automationProviderModel" maxlength="120" required></label>
-        <label class="field">Key for this session<input id="automationProviderKey" type="password" autocomplete="off" maxlength="512"></label>
+        <label class="field">{{ui:automation.provider_name}}<input id="automationProviderName" maxlength="40" required></label>
+        <label class="field">{{ui:automation.base_address}}<input id="automationProviderUrl" type="url" placeholder="{{ui:automation.https_provider_example_v1}}" required></label>
+        <label class="field">{{ui:automation.model}}<input id="automationProviderModel" maxlength="120" required></label>
+        <label class="field">{{ui:automation.key_for_this_session}}<input id="automationProviderKey" type="password" autocomplete="off" maxlength="512"></label>
       </div>
-      <label><input type="checkbox" id="automationProviderTranslate" checked> Translate text</label>
-      <label><input type="checkbox" id="automationProviderSpeak"> Speak text</label>
-      <button type="submit">Save profile</button>
+      <label><input type="checkbox" id="automationProviderTranslate" checked> {{ui:automation.translate_text}}</label>
+      <label><input type="checkbox" id="automationProviderSpeak"> {{ui:automation.speak_text}}</label>
+      <button type="submit">{{ui:automation.save_profile}}</button>
     </form>
     <p id="automationProviderNote" class="meta" role="status"></p>
   </details>
-  <label class="field">Saved recipe<select id="automationChoice"><option value="">New recipe</option></select></label>
+  <label class="field">{{ui:automation.saved_recipe}}<select id="automationChoice"><option value="">{{ui:automation.new_recipe}}</option></select></label>
   <div class="row">
-    <label class="field">Name<input id="automationName" maxlength="100"></label>
-    <label class="field compact">Input type<select id="automationKind"><option value="text">Text</option><option value="audio">Audio files</option><option value="scene">Saved dub scene</option></select></label>
+    <label class="field">{{ui:automation.name}}<input id="automationName" maxlength="100"></label>
+    <label class="field compact">{{ui:automation.input_type}}<select id="automationKind"><option value="text">{{ui:automation.text}}</option><option value="audio">{{ui:automation.audio_files}}</option><option value="scene">{{ui:automation.saved_dub_scene}}</option></select></label>
   </div>
   <div id="automationSteps"></div>
   <div class="row">
-    <label class="field compact">Feed from<select id="automationSource"></select></label>
-    <label class="field compact">Next step<select id="automationOptions"></select></label>
-    <button id="automationAdd" type="button">Add step</button>
-    <button id="automationSave" type="button">Save recipe</button>
+    <label class="field compact">{{ui:automation.feed_from}}<select id="automationSource"></select></label>
+    <label class="field compact">{{ui:automation.next_step}}<select id="automationOptions"></select></label>
+    <button id="automationAdd" type="button">{{ui:automation.add_step}}</button>
+    <button id="automationSave" type="button">{{ui:automation.save_recipe}}</button>
   </div>
-  <label class="field" id="automationTextRow">Text inputs, one per line<textarea id="automationText" rows="4"></textarea></label>
-  <label class="field" id="automationFileRow" hidden>Local audio files<input type="file" id="automationFiles" accept="audio/*,.wav,.flac,.m4a,.mp4,.webm" multiple></label>
-  <label class="field" id="automationSceneRow" hidden>Timed dub<select id="automationScene"></select></label>
-  <div class="row"><button id="automationPreview" type="button">Preview operations</button><button class="go" id="automationRun" type="button">Run saved recipe</button></div>
+  <label class="field" id="automationTextRow">{{ui:automation.text_inputs_one_per_line}}<textarea id="automationText" rows="4"></textarea></label>
+  <label class="field" id="automationFileRow" hidden>{{ui:automation.local_audio_files}}<input type="file" id="automationFiles" accept="audio/*,.wav,.flac,.m4a,.mp4,.webm" multiple></label>
+  <label class="field" id="automationSceneRow" hidden>{{ui:automation.timed_dub}}<select id="automationScene"></select></label>
+  <div class="row"><button id="automationPreview" type="button">{{ui:automation.preview_operations}}</button><button class="go" id="automationRun" type="button">{{ui:automation.run_saved_recipe}}</button></div>
   <ol id="automationPlan" hidden></ol>
   <p id="automationStatus" role="status"></p>
-  <h3>Recent runs</h3>
-  <button id="automationRefresh" type="button">Refresh runs</button>
+  <h3>{{ui:automation.recent_runs}}</h3>
+  <button id="automationRefresh" type="button">{{ui:automation.refresh_runs}}</button>
   <div id="automationRuns"></div>
   <details>
-    <summary>Practice a local conversation</summary>
-    <label class="field">Recorded opening turn<input id="simulationFile" type="file" accept="audio/*,.wav,.flac,.m4a,.webm"></label>
-    <button type="button" id="simulationListen">Transcribe turn locally</button>
+    <summary>{{ui:automation.practice_a_local_conversation}}</summary>
+    <label class="field">{{ui:automation.recorded_opening_turn}}<input id="simulationFile" type="file" accept="audio/*,.wav,.flac,.m4a,.webm"></label>
+    <button type="button" id="simulationListen">{{ui:automation.transcribe_turn_locally}}</button>
     <p id="simulationWords" role="status"></p>
-    <label class="field">Draft a reply<textarea id="simulationReply" maxlength="500"></textarea></label>
-    <label class="field">Voice name<input id="simulationVoice" list="automationVoices"></label>
+    <label class="field">{{ui:automation.draft_a_reply}}<textarea id="simulationReply" maxlength="500"></textarea></label>
+    <label class="field">{{ui:automation.voice_name}}<input id="simulationVoice" list="automationVoices"></label>
     <datalist id="automationVoices"></datalist>
-    <button type="button" id="simulationPlay">Speak draft locally</button>
+    <button type="button" id="simulationPlay">{{ui:automation.speak_draft_locally}}</button>
     <p id="simulationStatus" role="status"></p>
     <audio id="simulationPlayer" hidden controls></audio>
   </details>
