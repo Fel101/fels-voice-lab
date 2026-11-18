@@ -11,7 +11,7 @@ from unittest import mock
 import serve
 from tests.test_browser_flow import BROWSER, DevToolsPage, FlowServer
 
-from ui_localization import PAGE_TEXT, TOKEN, PageText
+from ui_localization import PAGE_TEXT, TOKEN, VALUE, PageText
 from ui_preferences import UiPreferences
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -200,19 +200,48 @@ class PageTextTests(unittest.TestCase):
                 page.close()
             server.close()
 
-    def test_all_project_markup_text_and_labels_use_the_catalog(self):
-        class ProjectMarkup(HTMLParser):
+    def test_the_spanish_draft_covers_the_english_catalog_and_value_places(self):
+        text = PageText(ROOT / "locales")
+        spanish = text.catalogs["es"]
+        self.assertEqual(spanish["name"], "Español")
+        self.assertTrue(spanish["draft"])
+        self.assertEqual(spanish["messages"].keys(), text.english.keys())
+        for key, original in text.english.items():
+            with self.subTest(key=key):
+                translated = spanish["messages"][key]
+                if isinstance(original, dict):
+                    self.assertEqual(translated.keys(), original.keys())
+                    messages = zip(original.values(), (translated[form] for form in original))
+                else:
+                    messages = [(original, translated)]
+                for before, after in messages:
+                    self.assertCountEqual(VALUE.findall(before), VALUE.findall(after))
+                    self.assertTrue(after.strip())
+
+    def test_page_markup_text_and_labels_use_the_catalog(self):
+        class PageMarkup(HTMLParser):
+            in_code = False
+
             def handle_data(self, data):
-                if data.strip():
-                    self.check(data.strip())
+                if not self.in_code:
+                    word = data.strip()
+                    literal = TOKEN.sub("", word).replace("__APP_VERSION__", "").replace("__PAGE_LANGUAGE_OPTIONS__", "")
+                    if re.search(r"[a-zA-Z]", literal):
+                        self.check(word)
 
             def handle_starttag(self, tag, attributes):
+                if tag in {"style", "script"}:
+                    self.in_code = True
                 for name, value in attributes:
                     if name in {"title", "aria-label", "placeholder", "alt"} and value:
                         self.check(value)
 
-        page = (ROOT / "serve.html").read_text(encoding="utf-8")
-        block = page.split('<section class="card" id="projects">', 1)[1].split("</section>", 1)[0]
-        parser = ProjectMarkup()
-        parser.check = lambda word: self.assertIsNotNone(TOKEN.fullmatch(word), word)
-        parser.feed(block)
+            def handle_endtag(self, tag):
+                if tag in {"style", "script"}:
+                    self.in_code = False
+
+        for file in ("serve.html", "compare.html"):
+            with self.subTest(file=file):
+                parser = PageMarkup()
+                parser.check = lambda word: self.assertIsNotNone(TOKEN.fullmatch(word), word)
+                parser.feed((ROOT / file).read_text(encoding="utf-8"))

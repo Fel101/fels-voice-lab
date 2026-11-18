@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- The Language picker and English message catalog prepare the Lab for translations. This draws on
+- Choose **Page language** beside Theme to use the Lab in English or Spanish. Spanish is a draft awaiting
+  review by a speaker. This draws on
   [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
 
 - System & backups links to feedback and includes workspace counts and setup status in the report you can review and

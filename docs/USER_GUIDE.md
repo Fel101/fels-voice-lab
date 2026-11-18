@@ -5,6 +5,9 @@ Updated 13 November 2026. Start with [setup](SETUP.md) and
 packages and pinned assets have been installed. The version you are running is
 at the foot of every page and in `/api/health`; `python serve.py --version` prints it.
 
+Choose **Page language** beside Theme on the main page or Compare. Save your work first because changing the
+page language reloads the page. Spanish is a draft awaiting review by a speaker.
+
 ## What do you want to do?
 
 - [Install a first model](#the-first-time)

@@ -24,7 +24,11 @@ var LabText = (function () {
   }
 
   function error(payload, fallback) {
-    var key = 'error.' + payload.code;
+    var key = {
+      model_not_installed: 'error.model_not_installed',
+      ffmpeg_not_installed: 'error.ffmpeg_not_installed',
+      cancelled: 'error.cancelled'
+    }[payload.code];
     // The English service text can carry more specific advice about this model or request.
     return language !== 'en' && Object.hasOwn(messages, key) ? t(key) : payload.error || fallback;
   }

@@ -98,7 +98,7 @@ function runCleanup(){
   if(!window.confirm(LabText.t('system.remove_the_stopped_worker_folders')))return Promise.resolve();
   $('systemClean').disabled=true;$('systemError').textContent='';
   return fetchJson('/api/system/cleanup',{}).then(function(result){
-    var message=LabText.t('system.removed', {plural: LabText.plural('system.item_count', result.removed), formatBytes: formatBytes(result.bytes), value: result.errors.length?'; '+result.errors.length+' could not be removed.':'.'});
+    var message=LabText.t('system.removed', {plural: LabText.plural('system.item_count', result.removed), formatBytes: formatBytes(result.bytes), value: result.errors.length?LabText.t('system.cleanup_unremoved', {count: result.errors.length}):'.'});
     return measureStorage().then(function(){$('systemStatus').textContent=message;});
   }).catch(function(e){$('systemError').textContent=LabText.t('system.cleanup_did_not_finish', {message: e.message});});
 }
@@ -337,7 +337,7 @@ function ffmpegJobText(job){
   if(job.state==='running')return LabText.t('system.installing_ffmpeg_it_cannot_be', {value: lines.slice(-1)[0]||'Starting.'});
   if(job.state==='finished')return LabText.t('system.ffmpeg_is_installed');
   var errors=lines.filter(function(line){return /^error:/.test(line);}).map(function(line){return line.replace(/^error:\s*/,'');});
-  return LabText.t('system.ffmpeg_was_not_installed_press', {value: errors.join(' ')||lines.slice(-1)[0]||'the installer stopped without saying why.'});
+  return LabText.t('system.ffmpeg_was_not_installed_press', {value: errors.join(' ')||lines.slice(-1)[0]||LabText.t('system.install_stopped_without_reason')});
 }
 function renderFfmpegOffer(where,report){
   if(report!==undefined)ffmpegOffers[where]=report&&report.offer||null;
@@ -364,7 +364,7 @@ function pollFfmpegInstall(){
 function startFfmpegInstall(){
   ffmpegError='';
   return fetchJson('/api/ffmpeg/install',{}).then(function(result){renderFfmpegJob(result.install);}).catch(function(e){
-    ffmpegError='FFmpeg was not installed: '+e.message;renderFfmpegOffer('system');renderFfmpegOffer('export');});
+    ffmpegError=LabText.t('system.ffmpeg_install_error', {message: e.message});renderFfmpegOffer('system');renderFfmpegOffer('export');});
 }
 // Connect other apps: where programs on this computer reach this service, a command that tests it, and the port the Lab's
 // window asks for (desktop.local.json). The address file and the known port are lab_address.py's.
@@ -425,7 +425,7 @@ function saveConnectPort(){
   var text=$('connectPort').value.trim(),port=Number(text);
   if(!text||!Number.isInteger(port)){systemNote('connectPortStatus',LabText.t('system.type_a_whole_number_0'),true);return Promise.resolve();}
   return fetchJson('/api/system/connect/port',{port:port}).then(function(result){
-    systemNote('connectPortStatus',LabText.t('system.the_next_time_it_opens', {value: result.window_port===0?'Saved. The window takes any free port':'Saved. The window asks for port '+result.window_port}),false);
+    systemNote('connectPortStatus',LabText.t('system.the_next_time_it_opens', {value: result.window_port===0?LabText.t('system.saved_free_port'):LabText.t('system.saved_specific_port', {port: result.window_port})}),false);
   }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
 }
 // Install speech recognition.

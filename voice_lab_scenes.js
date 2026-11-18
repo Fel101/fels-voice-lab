@@ -1419,7 +1419,7 @@ function removeSample() {
       sceneDirty = false;
       return Promise.all([refreshCast(), refreshSceneList()]).then(function () {
         $('sampleStatus').textContent =
-          LabText.t('scenes.removed_the_sample_scene_its', {take: report.removed.take, value: report.removed.take === 1 ? ' take.' : ' takes.', value2: copies ? ' Copies in export packages stay where they are (' + copies + (copies === 1 ? ' file).' : ' files).') : ''});
+          LabText.plural('scenes.sample_removed', report.removed.take, {copies: copies ? LabText.plural('scenes.sample_export_copies', copies) : ''});
       });
     })
     .catch(function (error) {
@@ -1960,7 +1960,7 @@ function showScenePreview(preview) {
   $('scenePlayers').hidden = false;
   var mastering = preview.mastering || {};
   $('scenePreviewMeta').textContent =
-    LabText.t('scenes.s_hz_mastered_lufs_target', {value: preview.timing ? 'Timed cue mix' : 'Separate sequential calls with explicit silence', toFixed: preview.duration_seconds.toFixed(2), sample_rate: preview.sample_rate, toFixed2: Number(mastering.target_lufs).toFixed(0), toFixed3: Number(mastering.peak_ceiling_dbfs).toFixed(0)});
+    LabText.t('scenes.s_hz_mastered_lufs_target', {value: preview.timing ? LabText.t('scenes.timed_cue_mix') : LabText.t('scenes.separate_calls'), toFixed: preview.duration_seconds.toFixed(2), sample_rate: preview.sample_rate, toFixed2: Number(mastering.target_lufs).toFixed(0), toFixed3: Number(mastering.peak_ceiling_dbfs).toFixed(0)});
   if (preview.timing && preview.timing.warnings.length)
     $('scenePreviewMeta').textContent += ' ' + preview.timing.warnings.map(function (warning) {
       return warning.message;
@@ -2253,7 +2253,7 @@ function refreshExports(preferred, recheck) {
       keep = preferred || select.value;
     select.textContent = '';
     (result.exports || []).forEach(function (row) {
-      option(select, row.name, row.name + ' / ' + (row.scene_name || 'unknown scene') + ' / ' + row.status);
+      option(select, row.name, row.name + ' / ' + (row.scene_name || LabText.t('scenes.unknown_scene_name')) + ' / ' + row.status);
     });
     if (keep) select.value = keep;
     applyExportFfmpeg(result.ffmpeg);
@@ -2424,7 +2424,7 @@ function paintDubAssets() {
   $('dubAttachments').textContent = [
     source ? source.name + ' · ' + sceneCueTime(source.duration_ms) + (source.transcript_source_verified ? LabText.t('scenes.source_hash_matched') : '') : '',
     bed ? LabText.t('scenes.background', {name: bed.name}) : '',
-    output ? LabText.t('scenes.last_delivery_revision', {scene_revision: output.scene_revision, value: dubState.scene_revision !== output.scene_revision ? ' · older than the saved scene' : ''}) : ''
+    output ? LabText.t('scenes.last_delivery_revision', {scene_revision: output.scene_revision, value: dubState.scene_revision !== output.scene_revision ? LabText.t('scenes.older_than_saved') : ''}) : ''
   ].filter(Boolean).join(' / ');
   $('dubSourceFile').disabled = dubBusy || !!source;
   $('dubBedFile').disabled = dubBusy || !!bed;

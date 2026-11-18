@@ -1259,7 +1259,6 @@
     "scenes.recording": " recording",
     "scenes.recordings": " recordings",
     "scenes.remove_the_sample_this_deletes": "Remove the sample? This deletes the scene “{value}” with its batches and built previews, {join}. Your own characters and scenes are not touched. It cannot be undone.",
-    "scenes.removed_the_sample_scene_its": "Removed the sample scene, its characters and {take}{value}{value2}",
     "scenes.choose_a_character_and_voice": "Choose a character and voice in Perform first.",
     "scenes.discard_unsaved_scene_edits_and_2": "Discard unsaved scene edits and start a new script from Perform?",
     "scenes.scene": " scene",
@@ -2011,6 +2010,42 @@
     "system.media_missing_count": {
       "one": "; {count} media file was already missing from the library",
       "other": "; {count} media files were already missing from the library"
-    }
+    },
+    "language.english_name": "English",
+    "compare.saved_voice_comparison": "Saved voice comparison",
+    "system.cleanup_unremoved": "; {count} could not be removed.",
+    "system.install_stopped_without_reason": "the installer stopped without saying why.",
+    "system.ffmpeg_install_error": "FFmpeg was not installed: {message}",
+    "system.saved_free_port": "Saved. The window takes any free port",
+    "system.saved_specific_port": "Saved. The window asks for port {port}",
+    "automation.source_step": "Step {number}",
+    "automation.original_input": "Original input",
+    "automation.sends_to": " · Sends {transfer} to {destination}",
+    "automation.review_external_destinations": "Review the external destinations shown above before running.",
+    "automation.keeps_processing_local": "All processing stays local.",
+    "scenes.timed_cue_mix": "Timed cue mix",
+    "scenes.separate_calls": "Separate sequential calls with explicit silence",
+    "scenes.older_than_saved": " · older than the saved scene",
+    "scenes.unknown_scene_name": "unknown scene",
+    "scenes.sample_export_copies": {
+      "one": " Copies in export packages stay where they are ({count} file).",
+      "other": " Copies in export packages stay where they are ({count} files)."
+    },
+    "scenes.sample_removed": {
+      "one": "Removed the sample scene, its characters and {count} take.{copies}",
+      "other": "Removed the sample scene, its characters and {count} takes.{copies}"
+    },
+    "studio.reusable_voice_still_saved": " The reusable voice is still saved when it finishes.",
+    "cast.similar_to_recording": "likely the voice of its recording",
+    "cast.different_from_recording": "likely a different voice",
+    "cast.performance_in_sequence": " in sequence",
+    "cast.stopping_after_current_take": " (stopping after this take)",
+    "cast.slate_clip_registered": "This clip is already in Cast.",
+    "cast.slate_clip_imported": "The clip is in Cast.",
+    "cast.error_not_known": "unknown error",
+    "cast.nothing_else": "nothing else",
+    "cast.saved_equal_blend": " · saved equal speaker blend.",
+    "cast.use_terms_undocumented": "Not documented. Verify before reusing or sharing.",
+    "compare.language_unknown": "Language unknown"
   }
 }

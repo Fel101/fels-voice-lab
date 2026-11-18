@@ -84,7 +84,8 @@ class PageText:
         def option(code, catalog):
             draft = f" ({text('language.draft')})" if catalog["draft"] else ""
             selected = " selected" if code == language else ""
-            return f'<option value="{code}"{selected}>{html.escape(catalog["name"] + draft)}</option>'
+            name = text("language.english_name") if code == "en" else catalog["name"]
+            return f'<option value="{code}"{selected}>{html.escape(name + draft)}</option>'
 
         # This is inert JSON. Escaping '<' also prevents a translated line from closing the script element.
         data = json.dumps({"language": language, "english": self.english, "messages": messages if language != "en" else {}})

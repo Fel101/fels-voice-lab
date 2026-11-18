@@ -67,7 +67,7 @@
         global.refresh();el(selector).value=reference.path;el(selector).dispatchEvent(new Event('change'));
       }
       global.refresh();global.updateValues();
-      el('studioVoiceSelection').textContent=LabText.t('cast.selected', {character_name: voice.character_name, engineName: engineName(voice.engine_id,voice.engine_name), value: voice.identity_kind==='fixed_voice'?' · saved equal speaker blend.':' · '+voice.identity_status+' voice.'});
+      el('studioVoiceSelection').textContent=LabText.t('cast.selected', {character_name: voice.character_name, engineName: engineName(voice.engine_id,voice.engine_name), value: voice.identity_kind==='fixed_voice'?LabText.t('cast.saved_equal_blend'):' · '+voice.identity_status+' voice.'});
       location.hash='studio';
       return;
     }
@@ -151,7 +151,7 @@
       var details=node('details');details.appendChild(node('summary',LabText.t('cast.voice_description_and_use_notes')));
       details.appendChild(node('p',voice.character_description||LabText.t('cast.no_description_saved'),'meta'));
       details.appendChild(node('p',LabText.t('cast.origin_2', {value: voice.origin||'Not documented.'}),'meta'));
-      details.appendChild(node('p',LabText.t('cast.allowed_use_2', {value: voice.allowed_use||'Not documented. Verify before reusing or sharing.'}),'meta'));
+      details.appendChild(node('p',LabText.t('cast.allowed_use_2', {value: voice.allowed_use||LabText.t('cast.use_terms_undocumented')}),'meta'));
       card.appendChild(details);gallery.appendChild(card);
     });
   }

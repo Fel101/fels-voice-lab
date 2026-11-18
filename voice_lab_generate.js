@@ -159,7 +159,7 @@ function requestSpeech() {
   }).catch(function (e) {
     clearInterval(ticker);
     if (request.stopped) {
-      $('status').textContent = LabText.t('studio.stopped_waiting_if_the_model', {value: body.save_voice_as ? ' The reusable voice is still saved when it finishes.' : ''});
+      $('status').textContent = LabText.t('studio.stopped_waiting_if_the_model', {value: body.save_voice_as ? LabText.t('studio.reusable_voice_still_saved') : ''});
     } else { $('err').textContent = e.message; $('status').textContent = ''; }
   }).then(function () {
     clearInterval(ticker);

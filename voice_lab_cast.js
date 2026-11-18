@@ -355,7 +355,7 @@ var takeCheckLabels={silent_audio:LabText.t('cast.silent'),clipping:LabText.t('c
 function appendTakeChecks(parent,checks){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!checks||checks.status==='not_recorded'){note.textContent=LabText.t('cast.waveform_checks_were_not_recorded');}
-  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {value: checks.error||'unknown error'});}
+  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {value: checks.error||LabText.t('cast.error_not_known')});}
   else if(!checks.flags.length){note.textContent=LabText.t('cast.automatic_waveform_checks_found_no');}
   else{note.className+=' flagged';note.textContent=LabText.t('cast.automatic_waveform_checks_flagged_listen', {join: checks.flags.map(function(flag){
     return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')});}
@@ -365,7 +365,7 @@ var loudnessNotes={silent:LabText.t('cast.no_loudness_reading_the_take'),too_sho
 function appendTakeLoudness(parent,loudness){
   var note=document.createElement('p');note.className='meta take-checks';
   if(!loudness||loudness.status==='not_measured'){note.textContent=LabText.t('cast.loudness_has_not_been_measured');}
-  else if(loudness.status==='unavailable'){note.textContent=LabText.t('cast.loudness_could_not_be_measured', {value: loudness.reason||'unknown error'});}
+  else if(loudness.status==='unavailable'){note.textContent=LabText.t('cast.loudness_could_not_be_measured', {value: loudness.reason||LabText.t('cast.error_not_known')});}
   else{
     var parts=[loudness.integrated_lufs===null?(loudnessNotes[loudness.note]||LabText.t('cast.no_loudness_reading')):LabText.t('cast.loudness_lufs', {toFixed: loudness.integrated_lufs.toFixed(1)})];
     if(loudness.sample_peak_dbfs!==null)parts.push(LabText.t('cast.sample_peak_dbfs', {toFixed: loudness.sample_peak_dbfs.toFixed(1)}));
@@ -386,7 +386,7 @@ function retireAction(kind,id,label){
     var parts=[];
     if(result.affected.reference)parts.push(result.affected.reference+LabText.t('cast.recording_version_s'));
     if(result.affected.take)parts.push(result.affected.take+LabText.t('cast.take_s'));
-    return LabText.t('cast.retired_blocked_with_it_listening', {label: label, value: parts.join(', ')||'nothing else'});
+    return LabText.t('cast.retired_blocked_with_it_listening', {label: label, value: parts.join(', ')||LabText.t('cast.nothing_else')});
   });
 }
 function restoreAction(kind,id,label){
@@ -448,7 +448,7 @@ function renderTakes(takes){
       reference_version_id:take.reference_version_id||null,provenance:take.provenance||{}},null,2);
     provenance.appendChild(provenanceTitle);provenance.appendChild(provenanceBody);article.appendChild(provenance);
     var actions=document.createElement('div');actions.className='cast-actions';[['selected',LabText.t('cast.select')],['candidate',LabText.t('cast.keep_as_candidate')],['rejected',LabText.t('cast.reject')]].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
-    var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {toFixed: m.score.toFixed(2), value: {likely_same:'likely the voice of its recording',uncertain:'uncertain',likely_different:'likely a different voice'}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
+    var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {toFixed: m.score.toFixed(2), value: {likely_same:LabText.t('cast.similar_to_recording'),uncertain:'uncertain',likely_different:LabText.t('cast.different_from_recording')}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
 }
 var takeLoadRevision=0;
 function loadCurrentTakes(){
@@ -499,7 +499,7 @@ function generatePerformanceSet(){
 }
 var performRun=null;
 function performStatusText(run){
-  return LabText.t('cast.making_take_of_s', {index: run.index, count: run.count, value: run.count>1?' in sequence':'', round: Math.round((performance.now()-run.started)/1000), value2: run.stopRequested?' (stopping after this take)':''});
+  return LabText.t('cast.making_take_of_s', {index: run.index, count: run.count, value: run.count>1?LabText.t('cast.performance_in_sequence'):'', round: Math.round((performance.now()-run.started)/1000), value2: run.stopRequested?LabText.t('cast.stopping_after_current_take'):''});
 }
 function stopPerformanceSet(){
   if(performRun&&!performRun.stopRequested){performRun.stopRequested=true;$('performStatus').textContent=performStatusText(performRun);}
@@ -571,7 +571,7 @@ $('slateImportForm').addEventListener('submit', function (event) {
     $('slateBundle').value = '';
     $('slateImportForm').hidden = true;
     $('slateImportStatus').textContent =
-      LabText.t('cast.review_the_recording_and_approve', {value: result.status === 'already_registered' ? 'This clip is already in Cast.' : 'The clip is in Cast.'});
+      LabText.t('cast.review_the_recording_and_approve', {value: result.status === 'already_registered' ? LabText.t('cast.slate_clip_registered') : LabText.t('cast.slate_clip_imported')});
     $('castEditor').open = true;
     return refreshCast(result.character_id, result.identity_id);
   }).catch(function (error) {

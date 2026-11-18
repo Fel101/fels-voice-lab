@@ -7,7 +7,7 @@ var automationOperations = {
   normalize: ['audio','audio',LabText.t('automation.master_audio'),{target_lufs:[LabText.t('automation.target_lufs'),'-18','number'],
     ceiling_dbtp:[LabText.t('automation.true_peak_ceiling'),'-1','number'],precision:[LabText.t('automation.wav_encoding'),'PCM_24',['PCM_16','PCM_24','FLOAT']]}],
   convert: ['audio','audio',LabText.t('automation.convert_voice'),{identity_id:[LabText.t('automation.approved_cast_voice'),'',[]]}],
-  dub: ['scene','dub_job',LabText.t('automation.send_to_dub_queue'),{target_language:['Target language','es','text'],
+  dub: ['scene','dub_job',LabText.t('automation.send_to_dub_queue'),{target_language:[LabText.t('automation.target_language'),'es','text'],
     format:[LabText.t('automation.output_format'),'wav',['wav','mp4']],render_missing:[LabText.t('automation.render_missing_cues'),true,'checkbox']}],
 };
 var automationRecipe = {id:'', revision:0, /** @type {any[]} */ steps:[]};
@@ -220,11 +220,11 @@ $('automationPreview').addEventListener('click',function(){
     var list=$('automationPlan'); list.hidden=false; list.textContent='';
     result.plan.recipe.steps.forEach(function(step,index) {
       var li=document.createElement('li');
-      li.textContent=LabText.t('automation.step_3', {value: step.source_step ? 'Step '+step.source_step : 'Original input', number: index+1, value2: automationOperations[step.operation][2], provider: step.provider, destination: step.destination, value3: step.transfer?' · Sends '+step.transfer+' to '+step.connector.destination:''});
+      li.textContent=LabText.t('automation.step_3', {value: step.source_step ? LabText.t('automation.source_step', {number: step.source_step}) : LabText.t('automation.original_input'), number: index+1, value2: automationOperations[step.operation][2], provider: step.provider, destination: step.destination, value3: step.transfer?LabText.t('automation.sends_to', {transfer: step.transfer, destination: step.connector.destination}):''});
       list.append(li);
     });
     $('automationStatus').textContent=LabText.t('automation.inputs', {length: result.plan.inputs.length, value: result.plan.external_transfer?
-      'Review the external destinations shown above before running.':'All processing stays local.'});
+      LabText.t('automation.review_external_destinations'):LabText.t('automation.keeps_processing_local')});
   });
 });
 $('automationRun').addEventListener('click',function(){
