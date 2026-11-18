@@ -20,7 +20,7 @@
       (row.duration_seconds ? ' · ' + row.duration_seconds.toFixed(2) + LabText.t('studio.s') : '') +
       (row.generation_engine_name ? LabText.t('studio.created_with', {generation_engine_name: row.generation_engine_name}) : '') +
       (row.engine_name ? LabText.t('studio.saved_voice_uses', {engine_name: row.engine_name}) : '') +
-      (row.identity_status ? LabText.t('studio.voice_status', {identity_status: row.identity_status}) : '') +
+      (row.identity_status ? LabText.t('studio.voice_status', {identity_status: LabText.statusName(row.identity_status)}) : '') +
       (row.version ? LabText.t('studio.recording_version', {version: row.version}) : '') +
       LabText.t('studio.origin') + (row.origin || LabText.t('studio.unknown_source_not_documented')) +
       LabText.t('studio.allowed_use') + (row.allowed_use || LabText.t('studio.unknown_do_not_assume_permission')) +

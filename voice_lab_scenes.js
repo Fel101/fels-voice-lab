@@ -466,7 +466,7 @@ function renderSceneLineEditor(line, index, article) {
   var voices = document.createElement('select');
   if (identityInfo) {
     (identityInfo.character.identities || []).forEach(function (item) {
-      option(voices, item.id, item.engine_id + ' / ' + item.label + ' — ' + item.status + (item.retired ? LabText.t('scenes.retired') : ''));
+      option(voices, item.id, item.engine_id + ' / ' + item.label + ' — ' + LabText.statusName(item.status) + (item.retired ? LabText.t('scenes.retired') : ''));
     });
   }
   voices.value = line.identity_id || '';
@@ -669,7 +669,7 @@ function renderSceneLineEditor(line, index, article) {
       input.required = true;
       input.value = line.settings[control.id] === undefined ? control.default : line.settings[control.id];
     }
-    var labelText = control.label + (control.status === 'experimental' ? LabText.t('scenes.experimental') : '');
+    var labelText = LabText.label('control.' + control.id, control.label) + (control.status === 'experimental' ? LabText.t('scenes.experimental') : '');
     input.setAttribute('aria-label', labelText + ' — ' + (line.cue ? 'line ' + (index + 1) : line.line_id));
     sceneLabel(labelText, input, settings, true);
     input.addEventListener('input', function () {
@@ -1458,7 +1458,7 @@ function startSceneFromPerformer() {
   if (!Number.isFinite(seed)) seed = 42;
   var payload = {
     schema_version: 1,
-    name: character.name + LabText.t('scenes.scene'),
+    name: LabText.t('scenes.scene', {name: character.name}),
     lines: [
       {
         line_id: 'line-001',
@@ -1556,7 +1556,7 @@ function sceneScriptPicker(name, narration, timed) {
       var item = document.createElement('option');
       item.value = voice.id;
       item.textContent =
-        voice.label + ' · ' + sceneModelName(voice.engine_id) + (voice.status === 'approved' ? '' : ' (' + voice.status + ')');
+        voice.label + ' · ' + sceneModelName(voice.engine_id) + (voice.status === 'approved' ? '' : ' (' + LabText.statusName(voice.status) + ')');
       choices.appendChild(item);
     });
     select.appendChild(choices);
@@ -1774,11 +1774,13 @@ function batchOrderText(job) {
     return false;
   });
   if (current < 0) return '';
-  var text = parts[current].name + ': ' + parts[current].done + LabText.t('scenes.of') + parts[current].total;
-  parts.slice(current + 1).forEach(function (part) {
-    text += LabText.t('scenes.then', {name: part.name, total: part.total});
+  var part = parts[current];
+  var progress = LabText.t('scenes.model_progress', {name: part.name, done: part.done, total: part.total});
+  var remaining = parts.slice(current + 1).map(function (next) {
+    return LabText.t('scenes.model_pending', {name: next.name, total: next.total});
   });
-  return parts.length > 1 ? LabText.t('scenes.rendering_in_model_order', {models: text}) : LabText.t('scenes.rendering_one_model', {models: text});
+  if (remaining.length) return LabText.t('scenes.rendering_models_then', {progress: progress, remaining: LabText.list(remaining)});
+  return parts.length > 1 ? LabText.t('scenes.rendering_in_model_order', {models: progress}) : LabText.t('scenes.rendering_one_model', {models: progress});
 }
 function refreshSceneJob() {
   if (!activeSceneJobId) return Promise.resolve();

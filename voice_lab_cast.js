@@ -194,11 +194,11 @@ function selectedReference(identity, selector) {
 function renderActiveIdentity() {
   clearReferenceEditor();
   var identity=activeIdentity(); $('referenceEditor').hidden=!identity||identity.kind!=='reference';
-  $('identityState').textContent=identity?identity.engine_id+' / '+identity.status+(identity.approved_reference_id?LabText.t('cast.approved_recording_v', {version: (identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version}):''):'';
+  $('identityState').textContent=identity?identity.engine_id+' / '+LabText.statusName(identity.status)+(identity.approved_reference_id?LabText.t('cast.approved_recording_v', {version: (identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version}):''):'';
   $('approveFixedIdentity').hidden=!identity||['fixed_voice','preset_voice'].indexOf(identity.kind)<0;
   if(identity&&identity.kind==='preset_voice'){
     $('approveFixedIdentity').textContent=LabText.t('cast.approve_this_preset_voice');
-    $('identityState').textContent=LabText.t('cast.revision', {checkpoint: identity.engine_options.checkpoint, checkpoint_revision: identity.engine_options.checkpoint_revision, speaker: identity.engine_options.speaker, language: identity.engine_options.language, status: identity.status});
+    $('identityState').textContent=LabText.t('cast.revision', {checkpoint: identity.engine_options.checkpoint, checkpoint_revision: identity.engine_options.checkpoint_revision, speaker: identity.engine_options.speaker, language: identity.engine_options.language, status: LabText.statusName(identity.status)});
   }else{$('approveFixedIdentity').textContent=LabText.t('cast.approve_this_preset_voice');}
   if(identity&&identity.kind==='fixed_voice') {
     var savedVoices=(identity.engine_options.voice||'').split(',');
@@ -275,7 +275,7 @@ function renderPerformanceSettings(identity,schema){
   $('performSettingsPanel').hidden=!controls.length;
   controls.forEach(function(control){
     if(control.id==='seed')return;
-    var label=document.createElement('label'),title=control.label+(control.status==='experimental'?LabText.t('cast.experimental'):'');
+    var label=document.createElement('label'),title=LabText.label('control.'+control.id, control.label)+(control.status==='experimental'?LabText.t('cast.experimental'):'');
     label.className='field compact';label.textContent=title;var input;
     if(control.type==='select'){
       input=document.createElement('select');(control.choices||[]).forEach(function(value){option(input,value,value);});input.value=control.default;
@@ -384,8 +384,8 @@ function retireAction(kind,id,label){
   if(!window.confirm(LabText.t('cast.retire_new_performances_scene_rows', {label: label})))return Promise.resolve(null);
   return fetchJson('/api/retirements',{kind:kind,id:id,reason:''}).then(function(result){
     var parts=[];
-    if(result.affected.reference)parts.push(result.affected.reference+LabText.t('cast.recording_version_s'));
-    if(result.affected.take)parts.push(result.affected.take+LabText.t('cast.take_s'));
+    if(result.affected.reference)parts.push(LabText.plural('cast.recording_version_count', result.affected.reference));
+    if(result.affected.take)parts.push(LabText.plural('system.take_count', result.affected.take));
     return LabText.t('cast.retired_blocked_with_it_listening', {label: label, affected_items: parts.join(', ')||LabText.t('cast.nothing_else')});
   });
 }
@@ -395,7 +395,9 @@ function restoreAction(kind,id,label){
 function purgeAction(kind,id,label){
   return fetchJson('/api/purges/preview?kind='+encodeURIComponent(kind)+'&id='+encodeURIComponent(id)).then(function(preview){
     var counts=preview.would_purge,parts=[];
-    [['identity','voice','voices'],['reference',LabText.t('cast.voice_recording'),LabText.t('cast.voice_recordings')],['take','take','takes']].forEach(function(kind){var count=counts[kind[0]];if(count)parts.push(count+' '+(count===1?kind[1]:kind[2]));});
+    if(counts.identity)parts.push(LabText.plural('system.voice_count', counts.identity));
+    if(counts.reference)parts.push(LabText.plural('system.voice_recording_count', counts.reference));
+    if(counts.take)parts.push(LabText.plural('system.take_count', counts.take));
     if(!window.confirm(LabText.t('cast.permanently_delete_this_removes_and', {label: label, affected_items: parts.join(', ')})))return null;
     return fetchJson('/api/purges',{kind:kind,id:id,confirm:true}).then(function(report){
       var text=LabText.t('cast.deleted_for_good', {deleted_items: parts.join(', ')});
@@ -439,7 +441,7 @@ function updateReferenceRetirement(){
 }
 function renderTakes(takes){
   var container=$('takeList');container.textContent='';if(!takes.length){container.textContent=LabText.t('cast.no_saved_takes_for_this');return;}
-  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: take.status, seconds: take.duration_seconds.toFixed(2)});article.appendChild(title);
+  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: LabText.statusName(take.status), seconds: take.duration_seconds.toFixed(2)});article.appendChild(title);
     var player=document.createElement('audio');player.controls=true;player.src=take.audio_url;article.appendChild(player);
     var detail=document.createElement('p');detail.className='meta';detail.textContent=(LabText.t('cast.text_sent_revision', {spoken_text: take.spoken_text, backend: take.model.backend, checkpoint: take.model.checkpoint, checkpoint_revision: take.model.checkpoint_revision, mode: take.model.mode||''}) + (take.edit?'\n'+takeEditNote(take):''));article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
     var provenance=document.createElement('details'),provenanceTitle=document.createElement('summary'),provenanceBody=document.createElement('pre');

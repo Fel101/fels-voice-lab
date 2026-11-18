@@ -11,7 +11,7 @@
       'qwen3-tts-0.6b-base':'Qwen Base 0.6B','qwen3-tts-1.7b-custom-voice':'Qwen CustomVoice 1.7B','voxcpm2':'VoxCPM2','breeze-tts-2':'Breeze TTS 2'};
     return names[id]||fallback||id||LabText.t('cast.source_model_not_recorded');
   }
-  function identityLabel(identity){return engineName(identity.engine_id)+' · '+identity.label+' ('+identity.status+')';}
+  function identityLabel(identity){return engineName(identity.engine_id)+' · '+identity.label+' ('+LabText.statusName(identity.status)+')';}
   function visibleVoices(){
     var query=el('voiceSearch').value.trim().toLowerCase();
     return library.voices.filter(function(voice){
@@ -67,7 +67,7 @@
         global.refresh();el(selector).value=reference.path;el(selector).dispatchEvent(new Event('change'));
       }
       global.refresh();global.updateValues();
-      el('studioVoiceSelection').textContent=(voice.identity_kind==='fixed_voice' ? LabText.t('cast.selected_blend', {character_name: voice.character_name, model: engineName(voice.engine_id,voice.engine_name)}) : LabText.t('cast.selected', {character_name: voice.character_name, model: engineName(voice.engine_id,voice.engine_name), status: voice.identity_status}));
+      el('studioVoiceSelection').textContent=(voice.identity_kind==='fixed_voice' ? LabText.t('cast.selected_blend', {character_name: voice.character_name, model: engineName(voice.engine_id,voice.engine_name)}) : LabText.t('cast.selected', {character_name: voice.character_name, model: engineName(voice.engine_id,voice.engine_name), status: LabText.statusName(voice.identity_status)}));
       location.hash='studio';
       return;
     }
@@ -81,7 +81,7 @@
       selectValue(el('performLanguage'),voice.audition&&voice.audition.language);
       await global.loadCurrentTakes();
       location.hash='perform';
-      el('performStatus').textContent=LabText.t('cast.ready_to_write_dialogue_for', {character_name: voice.character_name, identity_status: voice.identity_status});
+      el('performStatus').textContent=LabText.t('cast.ready_to_write_dialogue_for', {character_name: voice.character_name, identity_status: LabText.statusName(voice.identity_status)});
     }
   }
   function action(voice,title,target){
@@ -104,14 +104,14 @@
   function render(){
     var gallery=el('voiceGallery');if(!gallery)return;
     gallery.querySelectorAll('audio').forEach(function(audio){audio.pause();});gallery.textContent='';
-    var voices=visibleVoices(),summary=voices.length+' '+(voices.length===1?'voice':'voices');
+    var voices=visibleVoices(),summary=LabText.plural('system.voice_count', voices.length);
     status(summary+(voices.length?LabText.t('cast.listen_below_then_choose_where'):LabText.t('cast.no_voices_match_clear_the')));
     voices.forEach(function(voice){
       var card=node('article',undefined,'saved-voice'),parts=voice.character_name.split(' · ');
       // A preset voice is its model's own: until a take says which model made its audition, that model made it.
       var preset=voice.identity_kind==='fixed_voice'||voice.identity_kind==='preset_voice',blend=String((voice.engine_options||{}).voice||'').split(',').filter(Boolean);
       var maker=voice.generation_engine_id||(preset?voice.engine_id:null),makerName=voice.generation_engine_id?voice.generation_engine_name:(preset?voice.engine_name:null);
-      card.appendChild(node('span',(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?LabText.t('cast.speaker_blend'):LabText.t('cast.preset_voice_2')):''),'voice-kind'));
+      card.appendChild(node('span',LabText.statusName(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?LabText.t('cast.speaker_blend'):LabText.t('cast.preset_voice_2')):''),'voice-kind'));
       card.appendChild(node('h3',parts[0]));card.appendChild(node('p',parts.slice(1).join(' · ')||voice.identity_label,'voice-role'));
       card.appendChild(node('p',LabText.t('cast.created_with', {model: engineName(maker,makerName)})));
       if(maker!==voice.engine_id)card.appendChild(node('p',LabText.t('cast.generate_dialogue_with', {model: engineName(voice.engine_id,voice.engine_name)}),'meta'));

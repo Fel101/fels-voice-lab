@@ -61,9 +61,19 @@ test('dates use a matching browser region and otherwise follow the page language
 
 test('known language names follow the page while engine labels remain available as fallbacks', () => {
   const words = helper('es', {'language.automatic': 'Automático'});
-  assert.equal(words.languageName('American English'), new Intl.DisplayNames('es', {type: 'language'}).of('en-US'));
-  assert.equal(words.languageName('Korean'), 'coreano');
+  const americanEnglish = new Intl.DisplayNames('es', {type: 'language'}).of('en-US');
+  assert.equal(words.languageName('American English'), americanEnglish[0].toUpperCase() + americanEnglish.slice(1));
+  assert.equal(words.languageName('Korean'), 'Coreano');
   assert.equal(words.languageName('Auto'), 'Automático');
   assert.equal(words.languageName('Unknown dialect'), 'Unknown dialect');
   assert.equal(helper('en', {}).languageName('American English'), 'American English');
+});
+
+test('keyed service labels keep a supplied fallback and lists follow the page language', () => {
+  const words = helper('es', {'control.speed': 'Velocidad', 'cast.status.approved': 'aprobada'});
+  assert.equal(words.label('control.speed', 'Speed'), 'Velocidad');
+  assert.equal(words.label('control.new_control', 'New control'), 'New control');
+  assert.equal(words.statusName('approved'), 'aprobada');
+  assert.equal(words.statusName('imported'), 'imported');
+  assert.equal(words.list(['Kokoro', 'Breeze', 'Drama']), 'Kokoro, Breeze y Drama');
 });

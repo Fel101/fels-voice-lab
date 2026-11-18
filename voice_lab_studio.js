@@ -493,7 +493,6 @@ function modelFits(facts,filter){
   if(filter.clone&&!facts.voices.clones){return false;}
   return !filter.language||(facts.languages.filter||[]).indexOf(filter.language)>=0;
 }
-function wordList(items){return items.length<2?items.join(''):items.slice(0,-1).join(', ')+LabText.t('studio.and')+items[items.length-1];}
 function filterLanguages(result){
   var seen={};
   (result.engines||[]).forEach(function(entry){((entry.facts||{}).languages||{filter:[]}).filter.forEach(function(name){seen[name]=true;});});
@@ -536,7 +535,7 @@ function applyModelFilter(){
   var line=$('modelFilterMatch');
   line.hidden=!asked;
   line.textContent=!asked?'':!fits.length?LabText.t('studio.no_model_fits_all_of')
-    :LabText.plural('studio.models_fit', fits.length, {models: wordList(fits)});
+    :LabText.plural('studio.models_fit', fits.length, {models: LabText.list(fits)});
 }
 var installRunning=false,installTimer=null;
 function refreshEngineStatus(){

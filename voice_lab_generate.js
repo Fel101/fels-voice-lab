@@ -135,7 +135,9 @@ function requestSpeech() {
     var checkpoint = r.headers.get('X-Model-Checkpoint'); if (checkpoint) { meta += ' / ' + checkpoint; }
     var revision = r.headers.get('X-Checkpoint-Revision'); if (revision) { meta += LabText.t('studio.revision', {revision: revision}); }
     var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += LabText.t('studio.effective_sampling', {sampling: sampling}); }
-    var language = r.headers.get('X-Voice-Language'); if (language) { meta += ' / ' + language; }
+    // Leave one-letter model codes out. The language picker already shows the selected language.
+    var language = r.headers.get('X-Voice-Language');
+    if (language && language.length > 1) { meta += ' / ' + language; }
     var speaker = r.headers.get('X-Voice-Speaker'); if (speaker) { meta += ' / ' + speaker; }
     var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += LabText.t('studio.voice_recording_cached', {cache_hit: cacheHit}); }
     var savedAsset = r.headers.get('X-Voice-Asset-Path');

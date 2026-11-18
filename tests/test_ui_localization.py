@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+import library_backup
+import performance_settings
 import serve
 from tests.test_browser_flow import BROWSER, DevToolsPage, FlowServer
 
@@ -27,6 +29,7 @@ CODE_VALUE = re.compile(
 JS_TEXT_TOKEN = re.compile(r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|[()]""")
 UI_PROSE = re.compile(r"^[a-z]{2,}$|[A-Za-z]{2,}(?:[ ,.:;!?…]+[A-Za-z])|^[A-Z][a-z]{2,}[. :!?…]*$|[A-Za-z]{3,}[:,] $")
 NESTED_KEY = re.compile(r"LabText\.(?:t|plural)\(\s*$")
+LITERAL_PLURAL = re.compile(r"""\?\s*(['"])([a-zA-Z][a-zA-Z -]*)\1\s*:\s*(['"])([a-zA-Z][a-zA-Z -]*)\3""")
 SHARED_NAMES = {
     "automation.https_provider_example_v1",
     "automation.whisper_1",
@@ -40,6 +43,9 @@ SHARED_NAMES = {
     "cloning.mozilla_common_voice",
     "compare.fel_s_voice_lab",
     "compare.http",
+    "control.min_p",
+    "control.top_k",
+    "control.top_p",
     "scenes.aac_m4a",
     "scenes.flac",
     "scenes.fountain",
@@ -292,6 +298,14 @@ class PageTextTests(unittest.TestCase):
     def test_page_scripts_pass_data_instead_of_prose_to_messages(self):
         for source in (*ROOT.glob("*.js"), ROOT / "compare.html"):
             body = source.read_text(encoding="utf-8")
+            for match in LITERAL_PLURAL.finditer(body):
+                singular, plural = match[2], match[4]
+                forms = {singular + "s", singular + "es"}
+                if singular.endswith("y"):
+                    forms.add(singular[:-1] + "ies")
+                if plural in forms:
+                    line = body.count("\n", 0, match.start()) + 1
+                    self.fail(f"{source.name}:{line} chooses raw page plurals: {singular!r}, {plural!r}")
             for call in CALL.finditer(body):
                 depth = 1
                 for token in JS_TEXT_TOKEN.finditer(body, call.end()):
@@ -307,6 +321,20 @@ class PageTextTests(unittest.TestCase):
                         if UI_PROSE.search(words) and not words.startswith(("/api/", "#", ".", "X-")):
                             line = body.count("\n", 0, token.start()) + 1
                             self.fail(f"{source.name}:{line} passes raw page text into a message: {words!r}")
+
+    def test_service_controls_and_backup_sections_have_catalog_labels(self):
+        spanish = PAGE_TEXT.catalogs["es"]["messages"]
+        for section in library_backup.SECTIONS:
+            key = f"system.storage_section.{section.key}"
+            with self.subTest(key=key):
+                self.assertEqual(PAGE_TEXT.english[key], section.label)
+                self.assertIn(key, spanish)
+        for controls in performance_settings.CONTROL_UI.values():
+            for control, label in controls.items():
+                key = f"control.{control}"
+                with self.subTest(key=key):
+                    self.assertEqual(PAGE_TEXT.english[key], label[0])
+                    self.assertIn(key, spanish)
 
     def test_page_markup_text_and_labels_use_the_catalog(self):
         class PageMarkup(HTMLParser):

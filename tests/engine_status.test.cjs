@@ -751,7 +751,7 @@ test('three answers find the model that clones a voice with no graphics card in 
   c.renderModelOverview(PICKING);
   answer(fields, 'modelFilterCpu');
   assert.deepEqual(visible(c), ['kokoro', 'turbo', 'drama-3']);
-  assert.equal(fields.modelFilterMatch.textContent, '3 models fit: Kokoro 82M, Chatterbox Turbo and Drama 3.');
+  assert.equal(fields.modelFilterMatch.textContent, '3 models fit: Kokoro 82M, Chatterbox Turbo, and Drama 3.');
   answer(fields, 'modelFilterClone');
   assert.deepEqual(visible(c), ['turbo', 'drama-3']);
   pickLanguage(fields, 'Spanish');

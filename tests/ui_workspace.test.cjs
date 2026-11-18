@@ -30,7 +30,7 @@ test('retire, restore, and purge confirm first and report exactly what they bloc
   assert.equal(c.retirementLabel({retirement: {reason: 'Withdrawn.', inherited: true, source_label: 'its voice'}}),
     'Withdrawn. It is retired because its voice is retired.');
   const retired = await c.retireAction('take', 'take-1', 'this take');
-  assert.equal(retired, 'Retired this take. Blocked with it: 1 recording version(s), 2 take(s). Listening stays available for review.');
+  assert.equal(retired, 'Retired this take. Blocked with it: 1 recording version, 2 takes. Listening stays available for review.');
   assert.deepEqual(calls.pop(), {url: '/api/retirements', body: {kind: 'take', id: 'take-1', reason: ''}});
   confirmAnswer = false;
   assert.equal(await c.retireAction('take', 'take-1', 'this take'), null);

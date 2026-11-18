@@ -17,6 +17,7 @@ var LabText = (function () {
     hungarian: 'hu', persian: 'fa', catalan: 'ca', cantonese: 'yue',
   };
   var languageNames = new Intl.DisplayNames(language, {type: 'language', fallback: 'none'});
+  var listFormat = new Intl.ListFormat(language);
   var pageLocale = language.toLowerCase();
   var regionalLocale = (globalThis.navigator?.languages || []).find(function (locale) {
     var tag = locale.toLowerCase();
@@ -29,7 +30,8 @@ var LabText = (function () {
     var code = tag || languageTags[label.toLowerCase()];
     if (!code) return label;
     try {
-      return languageNames.of(code) || label;
+      var name = languageNames.of(code);
+      return name ? name.charAt(0).toLocaleUpperCase(language) + name.slice(1) : label;
     } catch (_) {
       return label;
     }
@@ -48,6 +50,18 @@ var LabText = (function () {
   function t(key, values) {
     var message = Object.hasOwn(messages, key) ? messages[key] : Object.hasOwn(english, key) ? english[key] : key;
     return format(message, values);
+  }
+
+  function label(key, fallback) {
+    return Object.hasOwn(messages, key) ? t(key) : fallback;
+  }
+
+  function statusName(status) {
+    return label('cast.status.' + status, status);
+  }
+
+  function list(items) {
+    return listFormat.format(items);
   }
 
   function plural(key, count, values) {
@@ -98,5 +112,6 @@ var LabText = (function () {
     });
   });
 
-  return {t: t, plural: plural, error: error, language: language, languageName: languageName, dateTime: dateTime};
+  return {t: t, plural: plural, error: error, label: label, statusName: statusName,
+    language: language, languageName: languageName, dateTime: dateTime, list: list};
 }());
