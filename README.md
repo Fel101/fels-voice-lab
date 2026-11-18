@@ -10,7 +10,7 @@ computer can speak with its voices too: Claude Code and other apps that use MCP,
 
 On Windows 10 or 11, with nothing installed first (not even Python):
 
-1. Download `FelsVoiceLab-Setup-<version>.exe` (70 MB) from the newest release on the
+1. Download `FelsVoiceLab-Setup-<version>.exe` (72 MB) from the newest release on the
    [Releases page](https://github.com/Fel101/fels-voice-lab/releases) and run it. It is not signed yet, so Windows SmartScreen
    warns about it: press **More info**, then **Run anyway**.
 2. Press **Next** until **Install**. It installs for you alone, with no administrator prompt and no internet, and opens the Lab
@@ -71,8 +71,8 @@ VoxCPM2.
 
 https://github.com/user-attachments/assets/e1bbee2f-c3ce-4242-96af-819682310bfe
 
-The Lab opens on **Home**, with links to your five most recent scenes, dubs and books.
-On an empty library, Home shows ways to start a scene or narrate a document.
+The animation and the video show 0.3.0, which opened on **Model studio**. 0.4.0 opens on **Home**, with links to your
+five most recent scenes, dubs and books. On an empty library, Home shows ways to start a scene or narrate a document.
 
 ![Home showing a recent scene](docs/images/home.png)
 
