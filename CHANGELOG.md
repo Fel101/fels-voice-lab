@@ -41,8 +41,9 @@ draft. [Every change in detail](docs/releases/0.4.0.md).
 - **Tell us what you need** on **System & backups** opens the Discussions page. The report you can copy counts the new
   workspaces and says what is set up, never an address or a key.
 
-Home, subtitles, narration, dubbing, Projects, the page language and the report draw on
-[VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
+Home, subtitles and dubbing, stories and audiobooks, Projects and voice files, recipes, transcription and audio tools
+draw on the workflows of [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its
+contributors. The Lab's code for them is its own.
 
 ### Changed
 

@@ -36,6 +36,8 @@ desktop window, the speech models install from the page or with `setup.bat`, and
 its own. It was built and checked on one Windows machine with an AMD GPU, and every NVIDIA build the installers offer was
 checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB). There are no Linux or macOS results. Original application code
 is MIT; borrowed code and optional models keep their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
+Several of 0.4.0's workspaces draw on the workflows of [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash
+Debnath and its contributors.
 
 ## Hear it
 

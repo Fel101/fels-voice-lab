@@ -136,6 +136,7 @@ does not establish new rights. See [Responsible use](docs/RESPONSIBLE_USE.md).
 
 ### VoiceStudio
 
-Subtitle import, timed scene editing, audiobooks and portable projects draw on the public VoiceStudio workflows by Palash Debnath
-(`debpalash`) and the VoiceStudio contributors. Voice Lab uses its own scene and export implementation.
+Home, subtitles and dubbing, stories and audiobooks, Projects and voice files, recipes, transcription and audio tools,
+all new in 0.4.0, draw on the public VoiceStudio workflows by Palash Debnath (`debpalash`) and the VoiceStudio
+contributors. The Lab's code for them is its own, and it holds no VoiceStudio code, text or translations.
 [VoiceStudio](https://github.com/debpalash/voicestudio)
