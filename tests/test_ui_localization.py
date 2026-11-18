@@ -17,6 +17,46 @@ from ui_preferences import UiPreferences
 ROOT = Path(__file__).resolve().parents[1]
 CALL = re.compile(r"""\bLabText\.(t|plural)\(\s*['"]([a-z][a-zA-Z0-9_.-]+)['"]""")
 
+MODEL_TAG = re.compile(r"\[[^\[\]\r\n]+\]|<\|[^|\r\n]+\|>")
+SHARED_NAMES = {
+    "automation.https_provider_example_v1",
+    "automation.whisper_1",
+    "books.flac",
+    "books.m4b",
+    "books.mp3",
+    "books.wav",
+    "cast.16_khz",
+    "cast.48_khz",
+    "cloning.edinburgh_cstr_vctk",
+    "cloning.mozilla_common_voice",
+    "compare.fel_s_voice_lab",
+    "compare.http",
+    "models.align_takes_py",
+    "scenes.aac_m4a",
+    "scenes.character_line_id",
+    "scenes.flac",
+    "scenes.fountain",
+    "scenes.mp3",
+    "scenes.ogg",
+    "scenes.wav",
+    "shell.fel_s_voice_lab",
+    "shell.fel_s_voice_lab_2",
+    "shell.s",
+    "shell.v",
+    "studio.breeze_tts_2",
+    "studio.eager",
+    "studio.fish_audio_drama_3",
+    "studio.phonon_31m_english",
+    "studio.qwen3_tts",
+    "studio.s",
+    "studio.top_k",
+    "studio.top_p",
+    "studio.voxcpm2",
+    "system.ffmpeg",
+    "system.update_bat",
+    "system.venv_scripts_python_exe_serve",
+}
+
 
 class PageTextTests(unittest.TestCase):
     def setUp(self):
@@ -218,6 +258,23 @@ class PageTextTests(unittest.TestCase):
                     self.assertCountEqual(VALUE.findall(before), VALUE.findall(after))
                     self.assertTrue(after.strip())
 
+    def test_translations_preserve_model_tags_and_translate_page_copy(self):
+        text = PageText(ROOT / "locales")
+        for locale, catalog in text.catalogs.items():
+            if locale == "en":
+                continue
+            for key, message in catalog["messages"].items():
+                original = text.english[key]
+                if isinstance(message, dict):
+                    forms = [(original.get(form, original["other"]), line) for form, line in message.items()]
+                else:
+                    forms = [(original, message)]
+                for before, after in forms:
+                    with self.subTest(locale=locale, key=key, text=after):
+                        self.assertCountEqual(MODEL_TAG.findall(before), MODEL_TAG.findall(after))
+                        if key not in SHARED_NAMES:
+                            self.assertNotEqual(before, after)
+
     def test_page_markup_text_and_labels_use_the_catalog(self):
         class PageMarkup(HTMLParser):
             in_code = False
@@ -226,7 +283,7 @@ class PageTextTests(unittest.TestCase):
                 if not self.in_code:
                     word = data.strip()
                     literal = TOKEN.sub("", word).replace("__APP_VERSION__", "").replace("__PAGE_LANGUAGE_OPTIONS__", "")
-                    if re.search(r"[a-zA-Z]", literal):
+                    if re.search(r"[a-zA-Z]", literal) and literal not in {"(laugh)", "(sigh)"}:
                         self.check(word)
 
             def handle_starttag(self, tag, attributes):

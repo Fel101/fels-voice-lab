@@ -519,8 +519,6 @@
     "studio.angry_and_cold": "Angry and cold",
     "studio.describe_the_acting_not_the": "Describe the acting, not the voice.",
     "studio.breeze_vocal_event_examples": "Breeze vocal event examples:",
-    "studio.laugh": "(laugh)",
-    "studio.sigh": "(sigh)",
     "studio.keep_the_tags_in_the": ". Keep the tags in the text. Inference is offline and uses the installed BF16 checkpoint.",
     "studio.sampling_controls": "Sampling controls",
     "studio.guidance_scale": "Guidance scale",
