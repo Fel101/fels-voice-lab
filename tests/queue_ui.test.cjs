@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 // The page's side of the line for the model worker (voice_lab_queue.js): its model requests wait in line under ids it chose,
 // and the Model worker panel says what runs and what waits, with Stop and Cancel.
 const {test}=require('node:test');
@@ -28,6 +30,7 @@ function page(){
     setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout(){},Date,Math,JSON,Object,Array,String,
     encodeURIComponent,catalog:{engines:[{id:'kokoro',name:'Kokoro 82M'}]}};
   context.window=context;
+  context.LabText = labText;
   vm.createContext(context);
   vm.runInContext(script,context);
   return {context,nodes,calls,timers,answers,queue:context.VoiceLabQueue};

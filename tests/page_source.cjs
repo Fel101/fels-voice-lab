@@ -11,4 +11,19 @@ function pageSource() {
   return [html, ...scripts.map((name) => fs.readFileSync(path.join(root, name), 'utf8'))].join('\n');
 }
 
-module.exports = {pageSource};
+// The test DOM gets the same English text methods as a real page.
+function englishPageText() {
+  const vm = require('node:vm');
+  const {messages: english} = require('../locales/en.json');
+  const config = {language: 'en', english, messages: {}};
+  const document = {
+    getElementById() {return {textContent: JSON.stringify(config)};},
+    addEventListener() {},
+  };
+  const context = vm.createContext({document});
+  const script = fs.readFileSync(path.join(root, 'voice_lab_i18n.js'), 'utf8');
+  vm.runInContext(script, context);
+  return context.LabText;
+}
+
+module.exports = {pageSource, englishPageText};

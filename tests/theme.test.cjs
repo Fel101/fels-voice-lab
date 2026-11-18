@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,7 +11,7 @@ function fixture(fetch) {
   const root = {dataset:{theme:'dark'}};
   const picker = {value:'system',addEventListener(event, listener){this.change = listener;}};
   const status = {textContent:''};
-  const context = vm.createContext({document:{documentElement:root,
+  const context = vm.createContext({LabText: labText, document:{documentElement:root,
     getElementById:id=>id==='themeChoice'?picker:status},fetch,Promise});
   vm.runInContext(source,context);
   return {root,picker,status};

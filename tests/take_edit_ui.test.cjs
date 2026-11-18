@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -39,7 +41,7 @@ function world(){
   w.document={createElement:tag=>new El(tag,w),createTextNode:text=>{const node=new El('#text',w);node.textContent=text;return node;},body:{}};
   w.fetch=(url,options)=>{const call=Object.assign({url,options},deferred());w.calls.push(call);return call.promise;};
   w.URL={createObjectURL:blob=>{const url='blob:'+(w.urls.length+1);w.urls.push(url);return url;},revokeObjectURL:url=>w.revoked.push(url)};
-  const context=vm.createContext({LabText:{error:(body, status)=>body.error||status},document:w.document,fetch:w.fetch,URL:w.URL,getComputedStyle:()=>({getPropertyValue:name=>name}),
+  const context=vm.createContext({LabText: labText,document:w.document,fetch:w.fetch,URL:w.URL,getComputedStyle:()=>({getPropertyValue:name=>name}),
     window:{crypto:{randomUUID:()=>'uuid-'+(++w.uuid)}}});
   vm.runInContext(between('function fetchJson(','function loadReferences('),context);
   vm.runInContext(script,context);

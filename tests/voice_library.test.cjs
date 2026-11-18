@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -29,7 +31,7 @@ function harness(){
     preferred_reference_id:i===8?null:'ref'+i,preferred_reference_available:i!==8,reference_count:i===8?0:1,
     engine_options:i===8?{voice:'bf_alice,bf_emma'}:{},audition:{audio_url:'/take'+i,language:i===8?'British English':'English',settings:i===8?{speed:1.05}:{}}}));
   const data={voices};
-  const ctx=vm.createContext({document:{getElementById:el,createElement:create,addEventListener(type,fn){ready.push(fn);}},location:{hash:''},
+  const ctx=vm.createContext({LabText: labText, document:{getElementById:el,createElement:create,addEventListener(type,fn){ready.push(fn);}},location:{hash:''},
     Event:class{constructor(type){this.type=type;}},option(select,value,text){const option=create('option');option.value=value;option.textContent=text;select.appendChild(option);},
     async fetchJson(url){calls.push(url);return data;},async loadReferences(){calls.push('references');},
     async refreshCast(character,identity){calls.push(['cast',character,identity]);},renderPerformanceCharacter(){calls.push('performCharacter');},
@@ -139,7 +141,7 @@ test('a slower take response cannot replace a different voice or the latest requ
   const html=pageSource();
   const code=html.slice(html.indexOf('var takeLoadRevision=0;'),html.indexOf('function performanceSettings('));
   let current={id:'mara'},line='line-01';const pending=[],rendered=[],list={};
-  const ctx=vm.createContext({performanceIdentity:()=>current,$:id=>id==='lineId'?{value:line}:list,URLSearchParams,
+  const ctx=vm.createContext({LabText: labText, performanceIdentity:()=>current,$:id=>id==='lineId'?{value:line}:list,URLSearchParams,
     fetchJson:()=>new Promise(resolve=>pending.push(resolve)),renderTakes:rows=>rendered.push(rows)});
   vm.runInContext(code,ctx);const first=ctx.loadCurrentTakes();current={id:'orin'};const second=ctx.loadCurrentTakes();
   pending[1]({takes:['Orin']});await second;pending[0]({takes:['Mara']});await first;

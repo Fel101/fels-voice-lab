@@ -21,11 +21,11 @@ $('stopStream').addEventListener('click', function(){stopStreamPlayback(activeSt
 $('reroll').addEventListener('click', function () { var seed = Number($('seed').value) || 42; $('seed').value = seed >= 2147483647 ? 1 : seed + 1; generate(); });
 $('load').addEventListener('click', function () {
   var body = {engine:$('engine').value}; if (body.engine === 'breeze-tts-2') { body.profile = $('profile').value; }
-  $('load').disabled = true; $('err').textContent = ''; $('status').textContent = 'Loading and warming model...';
-  fetchJson('/api/load',body).then(function (r) { applyQwenCapabilities(r, r.engine); if(r.engine==='qwen3-tts-1.7b-custom-voice')applyCustomVoiceIdentityOptions(r); $('status').textContent = r.engine + ' ready' + (r.profile ? ' / ' + r.profile : '') + (r.backend ? ' / ' + r.backend : '') + (r.load_seconds ? ' / ' + r.load_seconds + ' s load' : '') + (r.supported_speakers && r.supported_speakers.length ? ' / ' + r.supported_speakers.length + ' model speakers' : ''); })
+  $('load').disabled = true; $('err').textContent = ''; $('status').textContent = LabText.t('shell.loading_and_warming_model');
+  fetchJson('/api/load',body).then(function (r) { applyQwenCapabilities(r, r.engine); if(r.engine==='qwen3-tts-1.7b-custom-voice')applyCustomVoiceIdentityOptions(r); $('status').textContent = LabText.t('shell.ready', {engine: r.engine, value: r.profile ? ' / ' + r.profile : '', value2: r.backend ? ' / ' + r.backend : '', value3: r.load_seconds ? ' / ' + r.load_seconds + ' s load' : '', value4: r.supported_speakers && r.supported_speakers.length ? ' / ' + r.supported_speakers.length + ' model speakers' : ''}); })
     .catch(function (e) { $('err').textContent=e.message; $('status').textContent=''; }).then(function () { $('load').disabled=false; });
 });
-$('unload').addEventListener('click', function () { fetchJson('/api/unload',{}).then(function () { $('status').textContent='Models unloaded.'; }).catch(function(e){$('err').textContent=e.message;}); });
+$('unload').addEventListener('click', function () { fetchJson('/api/unload',{}).then(function () { $('status').textContent=LabText.t('shell.models_unloaded'); }).catch(function(e){$('err').textContent=e.message;}); });
 
 fetch('/api/info').then(function(r){return r.json();}).then(function(i){
   $('voice').textContent=''; (i.voices||[]).forEach(function(v){option($('voice'),v,VoiceLabWorkflows.kokoroLabel(v));});
@@ -37,19 +37,19 @@ fetch('/api/info').then(function(r){return r.json();}).then(function(i){
     .forEach(function(item){option($('kokoroLanguage'),item.name,item.name+' ('+item.code+')');});
   $('kokoroLanguage').value='American English';
   if(activeIdentity()&&activeIdentity().kind==='fixed_voice'){renderActiveIdentity();}
-  $('status').textContent='Device: '+i.device+' / free RAM '+i.free_ram_gb+' GB';
+  $('status').textContent=LabText.t('shell.device_free_ram_gb', {device: i.device, free_ram_gb: i.free_ram_gb});
 }).catch(function(){});
 $('convertVoice').addEventListener('click',function(){
   var source=$('conversionSource').selectedOptions[0],target=$('conversionTarget').selectedOptions[0];
-  if(!source||!target){$('conversionError').textContent='Choose a performance to convert and a voice to convert it to.';return;}
-  if(source.value===target.value){$('conversionError').textContent='Source and target must be separate files.';return;}
+  if(!source||!target){$('conversionError').textContent=LabText.t('shell.choose_a_performance_to_convert');return;}
+  if(source.value===target.value){$('conversionError').textContent=LabText.t('shell.source_and_target_must_be');return;}
   $('convertVoice').disabled=true;$('conversionError').textContent='';$('conversionManifest').textContent='';
-  $('conversionStatus').textContent='Loading the isolated Chatterbox VC worker and converting...';
+  $('conversionStatus').textContent=LabText.t('shell.loading_the_isolated_chatterbox_vc');
   fetchJson('/api/convert',{source_path:source.value,target_reference_path:target.value,
     target_reference_id:target.dataset.referenceId||null})
     .then(function(result){var conversion=result.conversion;$('conversionPlayer').src=conversion.audio_url;
-      $('conversionStatus').textContent='Conversion saved: '+conversion.audio_path+' / '+conversion.manifest.output.duration_seconds.toFixed(2)+' s / Perth watermark retained.';
-      var link=document.createElement('a');link.href=conversion.audio_url.replace(/converted\.wav$/,'manifest.json');link.textContent='Open provenance manifest';
+      $('conversionStatus').textContent=LabText.t('shell.conversion_saved_s_perth_watermark', {audio_path: conversion.audio_path, toFixed: conversion.manifest.output.duration_seconds.toFixed(2)});
+      var link=document.createElement('a');link.href=conversion.audio_url.replace(/converted\.wav$/,'manifest.json');link.textContent=LabText.t('shell.open_provenance_manifest');
       $('conversionManifest').textContent='';$('conversionManifest').appendChild(link);})
     .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';})
     .then(function(){$('convertVoice').disabled=false;});
@@ -65,28 +65,27 @@ function uploadConversionFile(role,input){
     metadata.origin=$('conversionTargetOrigin').value.trim();metadata.allowed_use=$('conversionTargetAllowedUse').value.trim();
     metadata.permission=$('conversionTargetPermission').checked;
     if(!metadata.permission||!metadata.origin||!metadata.allowed_use){
-      problem='Before you choose a target voice file, tick that you own it or have permission to clone the voice, and fill in its origin and allowed use.';}
+      problem=LabText.t('shell.before_you_choose_a_target');}
   }
-  if(!problem&&!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)){problem='Choose WAV, FLAC, OGG, MP3 or M4A audio.';}
-  if(!problem&&file.size>32*1024*1024){problem='The file is larger than 32 MB.';}
+  if(!problem&&!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)){problem=LabText.t('shell.choose_wav_flac_ogg_mp3');}
+  if(!problem&&file.size>32*1024*1024){problem=LabText.t('shell.the_file_is_larger_than');}
   $('conversionError').textContent=problem;
   if(problem){input.value='';return Promise.resolve(null);}
-  $('conversionStatus').textContent='Reading '+file.name+'…';
+  $('conversionStatus').textContent=LabText.t('shell.reading', {name: file.name});
   return fetch('/api/conversion/uploads',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream',
       'X-Reference-Metadata':encodeReferenceMetadata(metadata)},body:file})
     .then(function(response){return response.json().then(function(body){
-      if(!response.ok){throw new Error(body.error||('The service answered '+response.status+'.'));}return body.upload;});})
+      if(!response.ok){throw new Error(body.error||(LabText.t('shell.the_service_answered', {status: response.status})));}return body.upload;});})
     .then(function(upload){return refreshConversionAssets().then(function(){
       list.value=upload.path;
       if(role==='target'){$('conversionTargetPermission').checked=false;}
-      $('conversionStatus').textContent='Added '+upload.original_name+' ('+upload.duration_seconds+' s) as the '+
-        (role==='target'?'target voice.':'source performance.');
+      $('conversionStatus').textContent=LabText.t('shell.added_s_as_the', {original_name: upload.original_name, duration_seconds: upload.duration_seconds, value: role==='target'?'target voice.':'source performance.'});
       return upload;});})
     .catch(function(error){$('conversionError').textContent=error.message;$('conversionStatus').textContent='';return null;})
     .then(function(result){input.value='';return result;});
 }
 function conversionLabel(item){
-  return (item.original_name?item.original_name+' (from this computer, ':item.relative_path+' (')+item.duration_seconds+' s)';
+  return (item.original_name?item.original_name+LabText.t('shell.from_this_computer'):item.relative_path+' (')+item.duration_seconds+LabText.t('shell.s');
 }
 function refreshConversionAssets(){
 var previousSource=$('conversionSource').value,previousTarget=$('conversionTarget').value;
@@ -94,19 +93,19 @@ return Promise.all([fetchJson('/api/conversion/sources'),fetchJson('/api/convers
   var sources=$('conversionSource'),targets=$('conversionTarget');sources.textContent='';targets.textContent='';
   (values[0].sources||[]).forEach(function(item){option(sources,item.path,conversionLabel(item));});
   (values[1].targets||[]).forEach(function(item){var label=conversionLabel(item);
-    if(item.character_name){label+=' — '+item.character_name+' / '+item.identity_label+' v'+(item.version||'?');}
+    if(item.character_name){label+=' — '+item.character_name+' / '+item.identity_label+LabText.t('shell.v')+(item.version||'?');}
     option(targets,item.path,label);targets.options[targets.options.length-1].dataset.referenceId=item.reference_version_id||'';});
-  if(!sources.options.length){option(sources,'','No local source WAVs found',true);}
-  if(!targets.options.length){option(targets,'','No saved voice recordings found',true);}
+  if(!sources.options.length){option(sources,'',LabText.t('shell.no_local_source_wavs_found'),true);}
+  if(!targets.options.length){option(targets,'',LabText.t('shell.no_saved_voice_recordings_found'),true);}
 if(Array.from(sources.options).some(function(item){return item.value===previousSource;}))sources.value=previousSource;
   if(Array.from(targets.options).some(function(item){return item.value===previousTarget;}))targets.value=previousTarget;
-}).catch(function(error){$('conversionError').textContent='Could not list local conversion inputs: '+error.message;});
+}).catch(function(error){$('conversionError').textContent=LabText.t('shell.could_not_list_local_conversion', {message: error.message});});
 }
 refreshConversionAssets();
 $('conversionSourceFile').addEventListener('change',function(){uploadConversionFile('source',this);});
 $('conversionTargetFile').addEventListener('change',function(){uploadConversionFile('target',this);});
 $('previewKokoroPhonemes').addEventListener('click',function(){
-  $('kokoroPhonemes').textContent='Checking installed pronunciation frontend...';
+  $('kokoroPhonemes').textContent=LabText.t('shell.checking_installed_pronunciation_frontend');
   fetchJson('/api/kokoro/phonemize',{text:$('text').value,language:$('kokoroLanguage').value})
     .then(function(result){$('kokoroPhonemes').textContent=result.language_name+' ('+result.language+')\n'+result.segments.map(function(segment){return segment.graphemes+'\n'+segment.phonemes;}).join('\n\n');})
     .catch(function(error){$('kokoroPhonemes').textContent=error.message;});
@@ -119,7 +118,7 @@ function showWorkspace(){
     if(link.getAttribute('href')==='#'+active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
   document.documentElement.classList.add('workspace-ready');
-  document.title="Fel's Voice Lab · "+$(active).querySelector('h2').textContent;
+  document.title=LabText.t('shell.fel_s_voice_lab_2', {textContent: $(active).querySelector('h2').textContent});
   window.scrollTo(0,0);
   placeFirstRun(active);
   if(active==='home')refreshHome();

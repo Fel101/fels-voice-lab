@@ -4,7 +4,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 
 const source = pageSource();
 function sourceBetween(start, end) {
@@ -36,6 +37,7 @@ function harness(replies, extra = {}) {
   fields.updateDialog = Object.assign(element('dialog'), {open: false, showModal() { this.open = true; }, close() { this.open = false; }});
   const installs = [];
   const context = vm.createContext({
+    LabText: labText,
     $: (id) => fields[id],
     whenText: (iso) => 'at ' + iso,
     document: {createElement: element, createTextNode: (text) => ({textContent: text, children: []})},

@@ -7,11 +7,11 @@
     /^\/api\/engines\/[^/]+\/check$/];
   var WAIT_SECONDS = 3600;
   // What the panel says the worker is busy with, for each kind of work GET /api/queue names.
-  var DOING = {'Clip':'a clip is being made', 'Live clip':'a live clip is being made', 'Take':'a take is being made',
-    'Load':'a model is loading', 'Unload':'the model is unloading', 'Model test':'a model is being tested',
-    'Voice conversion':'a voice is being converted', 'Voice recording':'a voice recording is being prepared',
-    'Pronunciation preview':'a pronunciation is being previewed', 'Drama studio take':'a Drama studio take is being made',
-    'Device switch':'the model is moving to another device', 'Idle unload':'an idle model is unloading'};
+  var DOING = {'Clip':LabText.t('shell.a_clip_is_being_made'), 'Live clip':LabText.t('shell.a_live_clip_is_being'), 'Take':LabText.t('shell.a_take_is_being_made'),
+    'Load':LabText.t('shell.a_model_is_loading'), 'Unload':LabText.t('shell.the_model_is_unloading'), 'Model test':LabText.t('shell.a_model_is_being_tested'),
+    'Voice conversion':LabText.t('shell.a_voice_is_being_converted'), 'Voice recording':LabText.t('shell.a_voice_recording_is_being'),
+    'Pronunciation preview':LabText.t('shell.a_pronunciation_is_being_previewed'), 'Drama studio take':LabText.t('shell.a_drama_studio_take_is'),
+    'Device switch':LabText.t('shell.the_model_is_moving_to'), 'Idle unload':LabText.t('shell.an_idle_model_is_unloading')};
   var send = global.fetch, mine = {}, count = 0, timer = null, last = null, failure = '', failureUntil = 0, quiet = 0;
 
   /** @param {string} id @returns {any} */
@@ -53,9 +53,9 @@
   }
 
   function doing(running) {
-    if (running.priority === 'low') return 'a scene batch is rendering';
+    if (running.priority === 'low') return LabText.t('shell.a_scene_batch_is_rendering');
     if (running.detail) return running.detail; // an install: "Kokoro 82M is being installed"
-    return DOING[running.what] || running.what + ' is running';
+    return DOING[running.what] || running.what + LabText.t('shell.is_running');
   }
   function modelName(engine) {
     var entry = ((global.catalog && global.catalog.engines) || []).find(function (item) { return item.id === engine; });
@@ -68,25 +68,24 @@
     var running = state.running, waiting = state.waiting || [], lines = [], others = 0;
     if (running) {
       lines.push({id:running.id, action:running.can_stop ? 'stop' : null,
-        text:'Now: ' + running.what + (running.engine ? ' · ' + modelName(running.engine) : '') + ' · '
-          + Math.round(running.seconds) + ' s' + (own[running.id] ? ' (yours)' : '')});
+        text:LabText.t('shell.now_s', {what: running.what, value: running.engine ? ' · ' + modelName(running.engine) : '', round: Math.round(running.seconds), value2: own[running.id] ? ' (yours)' : ''})});
     }
     waiting.forEach(function (item, index) {
       if (!own[item.id]) { others += 1; return; }
       var ahead = index + (running ? 1 : 0);
-      lines.push({id:item.id, action:'cancel', text:ahead === 0 ? 'Waiting: next in line'
-        : 'Waiting: ' + ahead + ' ahead of you' + (running ? ' (' + doing(running) + ')' : '')});
+      lines.push({id:item.id, action:'cancel', text:ahead === 0 ? LabText.t('shell.waiting_next_in_line')
+        : LabText.t('shell.waiting_ahead_of_you', {ahead: ahead, value: running ? ' (' + doing(running) + ')' : ''})});
     });
-    if (others) lines.push({id:'others', action:null, text:others + (others === 1 ? ' more request waits' : ' more requests wait')});
+    if (others) lines.push({id:'others', action:null, text:others + (others === 1 ? LabText.t('shell.more_request_waits') : LabText.t('shell.more_requests_wait'))});
     return lines;
   }
-  var BUTTONS = {stop:['Stop', 'Stopping…'], cancel:['Cancel', 'Cancelling…']};
+  var BUTTONS = {stop:[LabText.t('shell.stop'), LabText.t('shell.stopping')], cancel:[LabText.t('shell.cancel'), LabText.t('shell.cancelling')]};
   function act(item, button) {
     button.disabled = true; button.textContent = BUTTONS[item.action][1]; failure = '';
     var failed = function (message) { failure = message; failureUntil = Date.now() + 10000; };
     send.call(global, '/api/queue/' + encodeURIComponent(item.id) + '/cancel', {method:'POST'}).then(function (response) {
       if (response.ok || response.status === 404) return null; // a 404: it finished, or left the line, meanwhile
-      return response.json().then(function (answer) { failed(answer.error || 'Could not stop it.'); });
+      return response.json().then(function (answer) { failed(answer.error || LabText.t('shell.could_not_stop_it')); });
     }).catch(function (error) { failed(error.message); }).then(soon);
   }
   function render(state) {
@@ -114,7 +113,7 @@
         }
         if (item.action === 'stop') {
           var note = global.document.createElement('span');
-          note.className = 'meta'; note.textContent = 'Stop ends it now; the model loads again for the next request.';
+          note.className = 'meta'; note.textContent = LabText.t('shell.stop_ends_it_now_the');
           row.appendChild(note);
         }
         list.appendChild(row);

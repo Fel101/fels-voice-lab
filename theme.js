@@ -20,10 +20,10 @@
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({theme: theme}), cache: 'no-store'
       }).then(function (response) {
-        if (!response.ok) throw new Error('Theme could not be saved.');
+        if (!response.ok) throw new Error(LabText.t('shell.theme_could_not_be_saved'));
       });
     }).catch(function () {
-      if (current === revision) status.textContent = 'Theme changed for this window; saving failed. Try choosing it again.';
+      if (current === revision) status.textContent = LabText.t('shell.theme_changed_for_this_window');
     });
   });
 }());

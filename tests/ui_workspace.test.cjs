@@ -2,7 +2,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 const source = pageSource();
 // The page's scripts with all white space taken out, for checks that should not depend on how a script is formatted.
 const compact = source.replace(/\s+/g, '');
@@ -14,6 +15,7 @@ test('retire, restore, and purge confirm first and report exactly what they bloc
   const calls = [];
   let confirmAnswer = true;
   const c = vm.createContext({
+    LabText: labText,
     window: {confirm: () => confirmAnswer},
     encodeURIComponent,
     fetchJson: async (url, body) => {
@@ -44,7 +46,7 @@ test('take retirement controls show the correct buttons for active, retired, and
   const makeElement = () => ({children: [], className: '', textContent: '', disabled: false, type: '',
     addEventListener(event, handler) { this.handler = handler; },
     appendChild(child) { this.children.push(child); return child; }});
-  const c = vm.createContext({document: {createElement: makeElement}, Promise, window: {confirm: () => true},
+  const c = vm.createContext({LabText: labText, document: {createElement: makeElement}, Promise, window: {confirm: () => true},
     fetchJson: async () => ({})});
   vm.runInContext(sourceBetween('function retirementLabel(', 'function renderTakes('), c);
   const buttonsFor = (take) => {
@@ -67,7 +69,7 @@ test('take retirement controls show the correct buttons for active, retired, and
 });
 
 test('take waveform checks are plain text beside each Perform and Scenes take', () => {
-  const c = vm.createContext({document: {createElement() {
+  const c = vm.createContext({LabText: labText, document: {createElement() {
     return {children: [], className: '', textContent: '', appendChild(child) { this.children.push(child); }};
   }}});
   vm.runInContext(sourceBetween('var takeCheckLabels=', 'function renderTakes('), c);
@@ -95,7 +97,7 @@ test('cloning is a full workspace; navigation shows exactly one panel', () => {
     querySelector:()=>({textContent:id})}]));
   const links = ids.map(id=>({current:false,getAttribute:()=> '#'+id,
     setAttribute(){this.current=true;},removeAttribute(){this.current=false;}}));
-  const c = vm.createContext({$:id=>fields[id],location:{hash:'#cloning'},
+  const c = vm.createContext({LabText: labText, $:id=>fields[id],location:{hash:'#cloning'},
     placeFirstRun(){},refreshHome(){opened.push('home');},loadReferences(){},refreshConversionAssets(){},refreshEngineStatus(){},refreshSystemPage(){opened.push('system');},
     refreshProjects(){opened.push('projects');return Promise.resolve();},projectsError(error){throw error;},
     refreshAutomation(){opened.push('automation');return Promise.resolve();},automationError(error){throw error;},
@@ -117,7 +119,7 @@ test('Chatterbox cloning sends the selected recording rather than a hardcoded pr
   const fields={},field=id=>fields[id]||(fields[id]={value:'',checked:false});
   field('engine').value='turbo';field('text').value='Test.';field('clone').checked=true;
   field('chatterboxReference').value='/managed/new-character.wav';
-  const c=vm.createContext({$:field,selectedValues:()=>[],qwenModeFor:()=>null});
+  const c=vm.createContext({LabText: labText, $:field,selectedValues:()=>[],qwenModeFor:()=>null});
   vm.runInContext(sourceBetween('function bodyForRequest()', 'function makeHistory('),c);
   assert.equal(c.bodyForRequest().reference_path,'/managed/new-character.wav');
   field('clone').checked=false;assert.equal(c.bodyForRequest().reference_path,undefined);
@@ -131,7 +133,7 @@ test('recent clip rendering retains previous articles and the supported zero see
   const history=element();history.insertBefore=function(row){this.children.unshift(row);};
   history.querySelector=function(selector){return selector==='article'&&this.children.length?this.children[0]:null;};
   Object.defineProperty(history,'textContent',{set(){this.children=[];}});
-  const player={};const c=vm.createContext({$:id=>id==='hist'?history:player,
+  const player={};const c=vm.createContext({LabText: labText, $:id=>id==='hist'?history:player,
     document:{createElement(){const el=element();elements.push(el);return el;}},
     URL:{createObjectURL:()=> 'blob:audio'},Date,VoiceLabWorkflows:{openFromClip(){}}});
   vm.runInContext(sourceBetween('function makeHistory(', 'function generate('),c);
@@ -146,7 +148,7 @@ test('Drama 3 studio sends supported design/clone controls and the exact transcr
   for(const [id,value] of Object.entries({engine:'drama-3',text:'Keep the gate closed.',dramaMode:'design',
     dramaSeed:'0',dramaTemperature:'1',dramaTopK:'30',dramaTopP:'.9',dramaMaxSeconds:'20',
     dramaDescription:'A clear adult voice',dramaDirection:'quietly',dramaReference:'ref.wav',dramaTranscript:'Exact words.'}))field(id).value=value;
-  const c=vm.createContext({$:field,selectedValues:()=>[],qwenModeFor:()=>null});
+  const c=vm.createContext({LabText: labText, $:field,selectedValues:()=>[],qwenModeFor:()=>null});
   vm.runInContext(sourceBetween('function bodyForRequest()', 'function makeHistory('),c);
   let request=c.bodyForRequest();assert.equal(request.seed,0);assert.equal(request.voice_description,'A clear adult voice');
   assert.equal(request.max_seconds,20);assert.equal(request.repetition_penalty,undefined);assert.equal(request.speed,undefined);
@@ -154,7 +156,7 @@ test('Drama 3 studio sends supported design/clone controls and the exact transcr
   assert.equal(request.reference_path,'ref.wav');assert.equal(request.reference_text,'Exact words.');
   assert.equal(request.voice_description,'');assert.equal(request.direction,'quietly');
 });
-const context = vm.createContext({});
+const context = vm.createContext({LabText: labText});
 vm.runInContext(sourceBetween('function editSceneField(', 'function changeSceneField('), context);
 const edit = context.editSceneField;
 function fixture() {
@@ -183,7 +185,7 @@ test('form can assign a character voice while protecting absent lines and revisi
 });
 test('line operations retain stable IDs, clear duplicated selections and keep scene order', () => {
   const scene=fixture();
-  const c=vm.createContext({JSON,Set,Error,sceneBody:()=>scene,
+  const c=vm.createContext({LabText: labText, JSON,Set,Error,sceneBody:()=>scene,
     updateSceneEditor:()=>{},renderSceneForm:()=>{}});
   vm.runInContext(sourceBetween('function stableSceneLineId(', 'function sceneIdentityById('),c);
   vm.runInContext(sourceBetween('function mutateSceneLine(', 'function addSceneLine('),c);
@@ -199,7 +201,7 @@ test('line operations retain stable IDs, clear duplicated selections and keep sc
   assert.throws(()=>c.mutateSceneLine(0,'remove'));
 });
 test('unsaved scenes request unload protection and small screens reflow the workspaces', () => {
-  const c=vm.createContext({sceneDirty:true,window:{addEventListener(){}}});
+  const c=vm.createContext({LabText: labText, sceneDirty:true,window:{addEventListener(){}}});
   vm.runInContext(sourceBetween('function guardUnsavedSceneUnload(', 'function option('),c);
   let prevented=false;const event={preventDefault(){prevented=true;}};
   c.guardUnsavedSceneUnload(event);assert.equal(prevented,true);assert.equal(event.returnValue,'');
@@ -212,7 +214,7 @@ test('performer starter copies the actual engine and preserves seed zero', () =>
   const fields={performReference:{value:''},performText:{value:'Line'},performLanguage:{value:'English'},
     performDirection:{value:'Deliver clearly.'},performSeed:{value:'0'},usePronunciations:{checked:false},
     sceneEditor:{value:''},sceneStatus:{textContent:''},sceneTimelineNote:{},sceneExportJson:{},sceneExportCsv:{}};
-  const c=vm.createContext({sceneDirty:false,activeSceneId:null,$:id=>fields[id],
+  const c=vm.createContext({LabText: labText, sceneDirty:false,activeSceneId:null,$:id=>fields[id],
     performanceCharacter:()=>({id:'character',name:'Mira'}),
     performanceIdentity:()=>({id:'voice',kind:'preset_voice',engine_id:'qwen3-tts-1.7b-custom-voice'}),
     performanceSettings:(identity,seed)=>({seed}),clearSceneOutputs(){},bindDubScene(){},renderSceneForm(){},resetSceneHistory(){},window:{confirm:()=>true}});
@@ -233,7 +235,7 @@ test('scene editor explains blank, empty, and invalid script states', () => {
 });
 test('failed generation retains failure status and reenables controls', async () => {
   const fields={};const field=id=>fields[id]||(fields[id]={value:'',checked:false,disabled:false,textContent:''});
-  const c=vm.createContext({$:field,performanceIdentity:()=>({id:'voice',character_id:'c',engine_id:'kokoro'}),
+  const c=vm.createContext({LabText: labText, $:field,performanceIdentity:()=>({id:'voice',character_id:'c',engine_id:'kokoro'}),
     performanceSettings:()=>({speed:1}),fetch:()=>Promise.reject(new Error('worker unavailable')),
     loadCurrentTakes:()=>Promise.resolve(),performance:{now:()=>0},setInterval:()=>1,clearInterval(){}});
   vm.runInContext(sourceBetween('function generatePerformanceSet(', 'function loadPronunciations('),c);
@@ -250,7 +252,7 @@ function reassignmentFixture(schema,nextEngine='new-engine') {
     voice_identity:{id:'voice'},settings:{seed:0,cfg_value:0.75}});
   const status={textContent:''},identity={id:'new-voice',kind:'reference',engine_id:nextEngine,
     approved_reference_id:'new-ref',references:[]};
-  const c=vm.createContext({sceneBody:()=>scene,sceneIdentityById:()=>({character:{id:'new-character'},identity}),
+  const c=vm.createContext({LabText: labText, sceneBody:()=>scene,sceneIdentityById:()=>({character:{id:'new-character'},identity}),
     performanceCapabilitiesByEngine:{[nextEngine]:schema},performanceUnscreenedByEngine:{},updateSceneEditor(){},renderSceneForm(){},$:()=>status});
   vm.runInContext(sourceBetween('function changeSceneIdentity(', 'function mutateSceneLine('),c);
   vm.runInContext(sourceBetween('function sceneLanguageOptions(', 'function sceneLabel('),c);
@@ -306,7 +308,7 @@ test('both Character and Voice dropdowns preserve authored lines through their a
 });
 
 test('unscreened picker languages are labelled in every language picker, and the value stays the language', () => {
-  const c = vm.createContext({performanceUnscreenedByEngine:{'qwen3-tts-1.7b-base':['Portuguese']}});
+  const c = vm.createContext({LabText: labText, performanceUnscreenedByEngine:{'qwen3-tts-1.7b-base':['Portuguese']}});
   vm.runInContext(sourceBetween('function unscreenedLanguages(', 'function applyQwenCapabilities('), c);
   assert.equal(c.languageOptionLabel('qwen3-tts-1.7b-base', 'Portuguese'), 'Portuguese (unscreened)');
   assert.equal(c.languageOptionLabel('qwen3-tts-1.7b-base', 'German'), 'German');
@@ -319,7 +321,7 @@ test('preset switch applies its saved language to the request; refreshing retain
     language:'French',supported_languages:['English','French'],default_direction:'Calm.'}};
   const fields={},field=id=>fields[id]||(fields[id]={value:'',textContent:'',parentElement:{}}),requests=[];
   field('performLanguage').value='English';
-  const c=vm.createContext({$:field,performanceCharacter:()=>({id:'character'}),performanceIdentity:()=>identity,
+  const c=vm.createContext({LabText: labText, $:field,performanceCharacter:()=>({id:'character'}),performanceIdentity:()=>identity,
     lastPerformanceIdentityId:'english',performanceCapabilitiesByEngine:{custom:{controls:[],direction:{status:'supported'}}},performanceUnscreenedByEngine:{},
     option(){},renderPerformanceSettings(){},loadPronunciations(){},performanceSettings:()=>({}),
     fetch:(_url,request)=>{requests.push(JSON.parse(request.body));return Promise.resolve({ok:true,blob:()=>Promise.resolve({})});},
@@ -348,7 +350,7 @@ function performFixture({variants = '1', seeded = true, fetch} = {}) {
   field('performSeed').value = '42';
   const calls = [];
   let clock = 0, tick = null;
-  const c = vm.createContext({$: field, performanceIdentity: () => ({id: 'voice', character_id: 'c', engine_id: 'qwen3-tts-1.7b-base'}),
+  const c = vm.createContext({LabText: labText, $: field, performanceIdentity: () => ({id: 'voice', character_id: 'c', engine_id: 'qwen3-tts-1.7b-base'}),
     performanceSettings: (identity, seed) => seeded ? {seed} : {speed: 1},
     fetch: (url, request) => { calls.push(JSON.parse(request.body)); return fetch ? fetch(calls.length) : okResponse(); },
     loadCurrentTakes: () => Promise.resolve(), performance: {now: () => clock},
@@ -415,7 +417,7 @@ function generateFixture(fetch, requestBody = {engine: 'kokoro', text: 'hello'})
   const field = id => fields[id] || (fields[id] = {value: '', checked: false, disabled: false, hidden: false, textContent: ''});
   let clock = 0, tick = null;
   const history = [];
-  const c = vm.createContext({$: field, bodyForRequest: () => ({...requestBody}),
+  const c = vm.createContext({LabText: labText, $: field, bodyForRequest: () => ({...requestBody}),
     VoiceLabWorkflows: {freezeRequest: body => body}, AbortController, fetch, performance: {now: () => clock},
     setInterval: callback => { tick = callback; return 7; }, clearInterval() { tick = null; },
     makeHistory: (blob, body, meta) => history.push(meta), persistHistory: () => Promise.resolve(), loadReferences() {}});
@@ -570,7 +572,7 @@ test('Phonon sends its preset voice, seed, temperature and pace shift, and nothi
   for(const [id,value] of Object.entries({engine:'phonon-31m-en',text:'Keep the gate closed.',phononVoice:'Zoey',phononSeed:'7',
     phononTemperature:'0.5',phononPace:'-0.2',speed:'1.2',chatterboxReference:'ref.wav',dramaDirection:'quietly'}))field(id).value=value;
   field('clone').checked=true;
-  const c=vm.createContext({$:field,selectedValues:()=>['af_heart'],qwenModeFor:()=>null});
+  const c=vm.createContext({LabText: labText, $:field,selectedValues:()=>['af_heart'],qwenModeFor:()=>null});
   vm.runInContext(sourceBetween('function bodyForRequest()', 'function makeHistory('),c);
   assert.deepEqual(JSON.parse(JSON.stringify(c.bodyForRequest())),
     {engine:'phonon-31m-en',text:'Keep the gate closed.',voice:'Zoey',seed:7,temperature:0.5,duration_delta:-0.2});
@@ -625,7 +627,7 @@ test('the Phonon pickers group the installed voices, keep a choice that is still
     {name: 'Harper', group: 'American English', gender: 'female', age: 'Adult', character: false, description: 'Modern and friendly.'},
     {name: 'Alfie', group: 'British English', gender: 'male', age: 'Young Adult', character: false, description: 'Bright.'},
     {name: 'Azgorath', group: 'Characters', gender: null, age: null, character: true, description: 'An ancient demon.'}];
-  const c = vm.createContext({$: id => picks[id], document: {createElement: makeElement}, phononVoices: [],
+  const c = vm.createContext({LabText: labText, $: id => picks[id], document: {createElement: makeElement}, phononVoices: [],
     fetchJson: async url => { assert.equal(url, '/api/info'); return {phonon_voices: voices}; }});
   vm.runInContext(sourceBetween('function phononVoiceLabel(', 'function openHistoryDb('), c);
   assert.equal(await c.refreshPhononVoices(), 4);
@@ -668,7 +670,7 @@ test('the page offers the stop controls, the variant count, and the version', ()
 
 // Take loudness: LUFS, sample peak and true peak beside each take, in plain words.
 function loudnessLine(loudness) {
-  const c = vm.createContext({document: {createElement() { return {children: [], className: '', textContent: '', appendChild(child) { this.children.push(child); }}; }}});
+  const c = vm.createContext({LabText: labText, document: {createElement() { return {children: [], className: '', textContent: '', appendChild(child) { this.children.push(child); }}; }}});
   vm.runInContext(sourceBetween('var takeCheckLabels=', 'function renderTakes('), c);
   const parent = {children: [], appendChild(child) { this.children.push(child); }};
   c.appendTakeLoudness(parent, loudness);
@@ -721,7 +723,7 @@ function exportPanel(report, {job = null} = {}) {
   const boxes = ['wav', 'flac', 'ogg', 'mp3', 'm4a'].map(value => make('box-' + value, {value, checked: value === 'wav'}));
   const byId = Object.fromEntries([note, install, progress, ...others, ...buttons].map(item => [item.id, item]));
   const refreshed = [];
-  const c = vm.createContext({$: id => byId[id], document: {querySelectorAll: () => boxes}, setTimeout: () => 1, clearTimeout() {},
+  const c = vm.createContext({LabText: labText, $: id => byId[id], document: {querySelectorAll: () => boxes}, setTimeout: () => 1, clearTimeout() {},
     refreshSystem: again => refreshed.push(['system', again]), refreshExports: (scene, again) => refreshed.push(['exports', again])});
   vm.runInContext(sourceBetween('function applyExportFfmpeg(', 'function refreshExports(') + FFMPEG_INSTALL_SOURCE(), c);
   if (job) c.ffmpegJob = job;
@@ -827,6 +829,7 @@ function systemPanel({answers = {}, confirm = true, navigator = {}, copyAllowed 
     'restoreUse', 'restoreHint', 'restoreCommand', 'systemAsrInstall', 'systemAsrState'].forEach(id => { nodes[id] = make(id, 'div'); });
   const inputs = () => nodes.backupSections.children.flatMap(label => label.children).filter(item => item.tagName === 'input');
   const context = vm.createContext({
+    LabText: labText,
     $: id => nodes[id], navigator,
     document: {createElement: tag => make(null, tag), createTextNode: text => ({textContent: text}), execCommand: () => copyAllowed,
       querySelector: () => inputs()[0] || null, querySelectorAll: () => inputs(), body: {appendChild() {}, removeChild() {}}},
@@ -1246,7 +1249,8 @@ test('every control the System script reaches for is on the page, wired once, an
     ['backupCreate', 'startBackup'], ['restoreGo', 'startRestore'], ['restoreUse', 'useRestoredLibrary']]) {
     assert.match(script, new RegExp(`\\$\\('${id}'\\)\\.addEventListener\\('click',${handler}\\)`), `${id} is wired`);
   }
-  assert.match(html, /<a href="#system">System &amp; backups<\/a>/);
+  assert.match(html, /<a href="#system">\{\{ui:shell\.system_backups\}\}<\/a>/);
+  assert.equal(labText.t('shell.system_backups'), 'System & backups');
   assert.match(html, /<section class="card" id="system"><h2>System &amp; backups<\/h2>/);
   assert.ok(html.indexOf('/voice_lab_system.js') > html.indexOf('/voice_lab_generate.js') && html.indexOf('/voice_lab_system.js') < html.indexOf('/voice_lab_app.js'));
   assert.match(source, /if\(active==='system'\)refreshSystemPage\(\)/);
@@ -1261,7 +1265,7 @@ test('a file from this computer is uploaded and chosen in its list, and a target
     path: `D:\\lab\\out\\conversions\\uploads\\${role}\\0a1b.wav`, original_name: role === 'target' ? 'voice.mp3' : 'take.wav',
     duration_seconds: role === 'target' ? 6.2 : 41.5}})});
   let refreshed = 0;
-  const c = vm.createContext({$: (id) => fields[id], Promise, Error, JSON,
+  const c = vm.createContext({LabText: labText, $: (id) => fields[id], Promise, Error, JSON,
     encodeReferenceMetadata: (metadata) => JSON.stringify(metadata),
     fetch: async (url, options) => {
       calls.push({url, options});
@@ -1330,7 +1334,7 @@ function pageHtml() {
 }
 
 test('the dub language lists name each language once, by its current code', () => {
-  const c = vm.createContext({Intl});
+  const c = vm.createContext({LabText: labText, Intl});
   vm.runInContext(sourceBetween('var dubLanguageDisplay', 'function dubVoiceLanguage('), c);
   const choices = Array.from(vm.runInContext('dubLanguageChoices', c));
   const names = choices.map((tag) => vm.runInContext(`dubLanguageName(${JSON.stringify(tag)})`, c));

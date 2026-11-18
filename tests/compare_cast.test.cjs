@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -27,7 +29,7 @@ function setup(takes = []) {
     createTextNode(text) { const result = new Element('#text'); result.textContent = text; return result; },
   };
   const state = { takes, runs: [], sessions: [], requests: [], manifests: {} };
-  const context = vm.createContext({ document, console, fetch(url, options = {}) {
+  const context = vm.createContext({LabText: labText,  document, console, fetch(url, options = {}) {
     state.requests.push({ url, options });
     let data;
     if (url === '/api/takes') data = { takes: state.takes };

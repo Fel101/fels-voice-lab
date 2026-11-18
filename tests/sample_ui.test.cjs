@@ -3,7 +3,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 
 const source = pageSource();
 function sourceBetween(start, end) {
@@ -29,6 +30,7 @@ function harness({state = {sample: null, can_make: true, why_not: null}, scenes 
       external_copies: ['out/exports/x/line-001.wav']}),
   };
   const context = vm.createContext({
+    LabText: labText,
     $: field, location: {hash: '#cast'}, sceneDirty: false, sceneListCount: scenes, sampleState: null,
     activeSceneId: active, castLoaded: true, castCharacters: characters, firstRun: {ready},
     window: {confirm(text) { confirms.push(text); return confirm; }},

@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -21,7 +23,7 @@ function harness(){
     createTextNode:text=>({textContent:text}),querySelectorAll:()=>[],
     addEventListener(type,fn){if(type==='DOMContentLoaded')ready=fn;}};
   const entries=['drama-3','qwen3-tts-1.7b-base','turbo','orig','breeze-tts-2','voxcpm2'].map(id=>({id,name:id,integration:{service_api:true}}));
-  const ctx=vm.createContext({document,location:{hash:''},navigator:{},TextEncoder,Uint8Array,crypto:webcrypto,
+  const ctx=vm.createContext({LabText: labText, document,location:{hash:''},navigator:{},TextEncoder,Uint8Array,crypto:webcrypto,
     File:class extends Blob{constructor(parts,name,options){super(parts,options);this.name=name;}},
     Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout,clearTimeout,btoa:s=>Buffer.from(s,'binary').toString('base64'),
     catalog:{engines:entries},referenceRows:[],addEventListener(){},

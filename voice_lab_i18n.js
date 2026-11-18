@@ -60,5 +60,5 @@ var LabText = (function () {
     });
   });
 
-  return {t: t, plural: plural, error: error};
+  return {t: t, plural: plural, error: error, language: language};
 }());

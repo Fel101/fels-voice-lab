@@ -50,7 +50,7 @@ async function refreshHome() {
     $('homeStart').hidden = !!list.children.length;
     status.textContent = '';
   } catch (error) {
-    status.textContent = 'Recent work could not be loaded. Open a workspace from the menu, or reload this page to try again.';
+    status.textContent = LabText.t('home.recent_work_could_not_be');
   }
 }
 function projectJobStatus(status) {

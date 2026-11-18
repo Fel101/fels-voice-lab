@@ -3,7 +3,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 
 const page = pageSource();
 
@@ -52,6 +53,7 @@ function harness(responses = {}) {
       return value instanceof Error ? Promise.reject(value) : Promise.resolve(value);
     },
   };
+  context.LabText = labText;
   vm.createContext(context);
   vm.runInContext(sourceBetween('var modelCards={};', 'var castCharacters = [];'), context);
   context.wireInstallDialog();

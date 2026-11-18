@@ -1,3 +1,5 @@
+const {englishPageText} = require('./page_source.cjs');
+const labText = englishPageText();
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
@@ -9,7 +11,7 @@ function fields(){const map={};return id=>map[id]||(map[id]={value:'',disabled:f
   getContext:()=>({clearRect(){}}),pause(){},load(){},removeAttribute(){}});}
 test('decoding a new file immediately invalidates the old upload and ignores a late old decode',async()=>{
   const $=fields(),first=deferred(),second=deferred(),a={name:'a.wav'},b={name:'b.wav'};
-  const c=vm.createContext({$,referenceLoadRevision:0,referencePreviewRevision:0,referenceDecodePending:false,
+  const c=vm.createContext({LabText: labText, $,referenceLoadRevision:0,referencePreviewRevision:0,referenceDecodePending:false,
     referenceSourceFile:{name:'previous.wav'},referenceSourceBlob:{},referenceBuffer:{duration:1},
     decodeBlob:blob=>blob===a?first.promise:second.promise,setReferencePlayer(){},
     syncNoiseReductionFields(){},bufferAnalysis:()=>({clipped:0}),drawReferenceWave(){}});
@@ -22,7 +24,7 @@ test('decoding a new file immediately invalidates the old upload and ignores a l
 });
 test('a pending processed preview cannot repaint a different reference',async()=>{
   const $=fields(),reply=deferred();let repainted=0;
-  const c=vm.createContext({$,referenceLoadRevision:4,referenceSourceBlob:{type:'audio/wav'},referenceSourceFile:{name:'test.wav'},
+  const c=vm.createContext({LabText: labText, $,referenceLoadRevision:4,referenceSourceBlob:{type:'audio/wav'},referenceSourceFile:{name:'test.wav'},
     referenceBuffer:{},referencePreviewRevision:0,activeTrim:()=>({start:0,end:8}),activeIdentity:()=>({id:'identity',kind:'reference'}),
     selectedReference:()=>null,fillReferenceMetadata:()=>({}),encodeReferenceMetadata:()=>'',
     fetch:()=>reply.promise,setReferencePlayer(){repainted++;},drawReferenceWave(){}});
@@ -32,7 +34,7 @@ test('a pending processed preview cannot repaint a different reference',async()=
 });
 test('only the latest processed preview may replace audio for one source',async()=>{
   const $=fields(),first=deferred(),second=deferred();let requests=0;const painted=[];
-  const c=vm.createContext({$,referenceLoadRevision:4,referencePreviewRevision:0,referenceSourceBlob:{},referenceSourceFile:{name:'test.wav'},referenceBuffer:{},
+  const c=vm.createContext({LabText: labText, $,referenceLoadRevision:4,referencePreviewRevision:0,referenceSourceBlob:{},referenceSourceFile:{name:'test.wav'},referenceBuffer:{},
     activeTrim:()=>({start:0,end:8}),activeIdentity:()=>({id:'identity',kind:'reference'}),selectedReference:()=>null,
     fillReferenceMetadata:()=>({}),encodeReferenceMetadata:()=>'',fetch:()=>++requests===1?first.promise:second.promise,
     setReferencePlayer(blob){painted.push(blob);},drawReferenceWave(){}});
@@ -44,13 +46,13 @@ test('only the latest processed preview may replace audio for one source',async(
 });
 test('switching identities during microphone permission closes the late stream',async()=>{
   const $=fields(),permission=deferred();let stopped=0;
-  const c=vm.createContext({$,referenceLoadRevision:2,navigator:{mediaDevices:{getUserMedia:()=>permission.promise}}});
+  const c=vm.createContext({LabText: labText, $,referenceLoadRevision:2,navigator:{mediaDevices:{getUserMedia:()=>permission.promise}}});
   vm.runInContext(between('function beginMicCapture()', 'function pcmCaptureWav('),c);c.beginMicCapture();
   c.referenceLoadRevision++;permission.resolve({getTracks:()=>[{stop(){stopped++;}}]});
   await new Promise(r=>setImmediate(r));assert.equal(stopped,1);assert.equal(c.micStream,undefined);
 });
 test('a closed preview AudioContext is replaced before another recording or decode',()=>{
-  let created=0;const c=vm.createContext({audioContext:{state:'closed'},window:{AudioContext:class{constructor(){created++;this.state='running';}}}});
+  let created=0;const c=vm.createContext({LabText: labText, audioContext:{state:'closed'},window:{AudioContext:class{constructor(){created++;this.state='running';}}}});
   vm.runInContext(between('function apiAudioContext()', 'function decodeBlob('),c);
   assert.equal(c.apiAudioContext().state,'running');assert.equal(created,1);c.apiAudioContext();assert.equal(created,1);
 });

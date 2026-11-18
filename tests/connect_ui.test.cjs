@@ -3,7 +3,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 
 const source = pageSource();
 function sourceBetween(start, end) {
@@ -37,6 +38,7 @@ function harness(replies, {clipboard = 'works', execCommand = false} = {}) {
     return clipboard === 'works' ? Promise.resolve() : Promise.reject(new Error('NotAllowedError'));
   }}};
   const context = vm.createContext({
+    LabText: labText,
     $: (id) => fields[id],
     navigator,
     Number,

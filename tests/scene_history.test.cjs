@@ -2,7 +2,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const {pageSource} = require('./page_source.cjs');
+const {pageSource, englishPageText } = require('./page_source.cjs');
+const labText = englishPageText();
 
 const source = pageSource();
 function sourceBetween(start, end) {
@@ -17,7 +18,7 @@ function harness(text) {
   const clock = {now: 0};
   const fields = {sceneEditor: {value: text}, sceneStatus: {textContent: ''}, sceneError: {textContent: ''},
     sceneUndo: {disabled: true}, sceneRedo: {disabled: true}};
-  const c = vm.createContext({$: (id) => fields[id], Date: {now: () => clock.now}, renderSceneForm() {}, paintSceneRow() {}});
+  const c = vm.createContext({LabText: labText, $: (id) => fields[id], Date: {now: () => clock.now}, renderSceneForm() {}, paintSceneRow() {}});
   vm.runInContext(sourceBetween('function showSceneError(', 'function editSceneSetting('), c);
   vm.runInContext(sourceBetween('function updateSceneEditor(', 'function stableSceneLineId('), c);
   return {c, fields, clock, name: () => JSON.parse(fields.sceneEditor.value).name};
@@ -102,7 +103,7 @@ test('saving or loading a scene clears undo, so an undo cannot restore an older 
 });
 
 test('while a batch runs, the status line says which model renders now and which come after it', () => {
-  const c = vm.createContext({});
+  const c = vm.createContext({LabText: labText});
   vm.runInContext(sourceBetween('function batchOrderText(', 'function refreshSceneJob('), c);
   const kokoro = {engine_id: 'kokoro', name: 'Kokoro 82M', total: 12, done: 7};
   const qwen = {engine_id: 'qwen3-tts-1.7b-base', name: 'Qwen3-TTS 1.7B Base', total: 8, done: 0};
@@ -116,7 +117,7 @@ test('while a batch runs, the status line says which model renders now and which
 });
 
 test('a row waits for a save while its line differs from the saved scene, then shows the server status', () => {
-  const c = vm.createContext({});
+  const c = vm.createContext({LabText: labText});
   vm.runInContext(sourceBetween('function savedSceneLines(', 'function resetSceneHistory('), c);
   vm.runInContext(sourceBetween('function sceneRowState(', 'function sceneButton('), c);
   c.sceneSavedLines = c.savedSceneLines(JSON.stringify({lines: [{line_id: 'a', text: 'One.'}, {line_id: 'b', text: 'Two.'}]}));
@@ -131,7 +132,7 @@ test('a row waits for a save while its line differs from the saved scene, then s
 
 test('Render what is missing takes the lines not rendered, failed or out of date, in script order', () => {
   const fields = {sceneStatus: {textContent: ''}};
-  const c = vm.createContext({$: (id) => fields[id]});
+  const c = vm.createContext({LabText: labText, $: (id) => fields[id]});
   vm.runInContext(sourceBetween('var sceneNeedsRender', 'function sceneModelName('), c);
   vm.runInContext(sourceBetween('function sceneOrderedRows(', 'function sceneButton('), c);
   vm.runInContext(sourceBetween('function missingSceneLines(', 'function chooseNewestSceneTakes('), c);
