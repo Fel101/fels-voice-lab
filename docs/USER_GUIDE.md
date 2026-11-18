@@ -1,6 +1,6 @@
 # Fel's Voice Lab guide
 
-Updated 13 November 2026. Start with [setup](SETUP.md) and
+Updated 18 November 2026. Start with [setup](SETUP.md) and
 [model capabilities](../MODEL_CAPABILITIES.md). Models work offline after their
 packages and pinned assets have been installed. The version you are running is
 at the foot of every page and in `/api/health`; `python serve.py --version` prints it.
@@ -23,13 +23,21 @@ and audio controls follow the browser's language.
 - [Turn a script into a scene and render it](#scenes-and-batch)
 - [Bring in a script you already have (plain text or Fountain)](#import-a-script)
 - [Export a scene for an editor or a game](#export-a-package)
+- [Turn a subtitle file into a timed scene](#timed-scenes-from-subtitle-files)
+- [Dub a video or a recording](#dub-a-local-recording)
+- [Narrate a document as an audiobook](#stories-and-audiobooks)
+- [Move a project to another library, or share a voice as a file](#move-a-project-or-share-a-voice)
+- [Make a sound effect or master a finished clip](#make-a-sound-effect-or-adjust-a-finished-clip)
+- [Repeat a chain of steps with a recipe](AUTOMATION.md)
 - [Compare takes or models, blind](#compare-and-diagnose)
 - [Convert one voice into another, or check a voice match](#other-voice-tools)
 - [Write a scene for Drama 3 and hear it as it is made](#drama-scene-and-narration-studio)
 - [Retire a voice or a take, or delete it for good](#retire-restore-and-delete-for-good)
 - [See which models can speak which languages](#check-which-models-can-speak)
 - [Get word times, captions or lip-sync tracks](#word-times-and-captions)
+- [Let Claude Code or another app speak with your voices](CONNECT.md)
 - [Use the Lab from a script](#use-the-lab-from-a-script)
+- [Update the Lab](#system-the-report-ffmpeg-disk-space-and-storage)
 - [Back up, restore or clean up](#stop-and-back-up)
 
 ## The first time

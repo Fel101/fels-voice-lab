@@ -1,48 +1,83 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-18
 
-- Choose **Page language** beside Theme to use the Lab in English or Spanish. Spanish is a draft awaiting
-  review by a speaker. This draws on
-  [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
+**From 0.3.0, download `FelsVoiceLab-Setup-0.4.0.exe` and run it.** It says it will update 0.3.0 to 0.4.0, keeps your
+library and models, and opens the Lab. 0.3.0 has no **Update now**; from 0.4.0 the Lab updates itself. `update.bat` works
+too.
 
-- System & backups links to feedback and includes workspace counts and setup status in the report you can review and
-  copy. The diagnostics idea draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath
-  (`debpalash`) and its contributors.
+Other apps on your computer can now speak with the Lab's voices: Claude Code and other MCP apps, and apps that use
+OpenAI's speech API. The Lab narrates documents, turns subtitle files into timed scenes, dubs local video, and shares a
+voice as a checked file. It opens on your recent work, helps you choose a model, and can show its page in Spanish, as a
+draft. [Every change in detail](docs/releases/0.4.0.md).
 
-- Home opens on your recent projects. Empty workspaces explain where to start, and Scenes has one place to import
-  a script or subtitles. The Home view draws on [VoiceStudio](https://github.com/debpalash/voicestudio) by
-  Palash Debnath (`debpalash`) and its contributors.
+### New
 
-- Connect through local MCP with a voice per connection, more output formats, transcription and voice design.
-  The n8n example uses the Lab from the same computer.
+- **Connect other apps.** **Connect other apps** on **System & backups** gives the line that lets Claude Code, or another
+  app that uses MCP, speak with your voices. It also gives the address for apps that use OpenAI's speech API, such as Open
+  WebUI, and a command that tests the Lab. The Lab listens on `127.0.0.1:8765` and writes its address where other
+  programs on this computer find it. [Connecting other apps](docs/CONNECT.md).
+- **Update now** on **System & backups** and in the header: the Lab closes, updates in a window of its own and opens
+  again. A newer Setup.exe run over the Lab is an update too.
+- **Home** opens on the five things you worked on last. An empty workspace says where to start, and **Open the sample
+  scene** makes two characters and a nine-line scene to render with Kokoro. **Remove the sample…** takes it all back.
+- **Help choosing a model.** Each card in **Models & features** says whether the model needs a graphics card, whether
+  it clones a voice, its languages, and what its audio may be used for. **Which model fits?** hides the rest, and
+  **Uninstall…** removes a model.
+- **Narrate a document.** **Stories & audiobooks** reads a text or Markdown file with one voice or several, makes each
+  chapter a scene, and exports chapter files and an audiobook with chapter marks.
+- **Subtitles in.** An SRT or WebVTT file becomes a timed scene: a voice for each speaker, and each take placed on its
+  cue. Captions go out on the original times.
+- **Dub a video.** Attach a video or audio file to a timed scene, change the wording, speed a line up to fit (1.35× at
+  most), and export the audio, the captions and an MP4.
+- **Projects and voice files.** **Projects** finds scenes, dubs and books, and moves a checked copy to another library.
+  **Export this voice** shares an approved voice as a file. A voice you import arrives as a candidate.
+- **Automation.** A recipe repeats a chain of steps: speak, transcribe, translate, master, convert and dub. A recipe that
+  uses an outside provider shows where it sends what, and sends nothing until you approve.
+- **Speech recognition**, installed from **System & backups**, runs on your computer. It drafts transcripts and subtitles.
+- **Audio tools** make repeatable sound effects and master a WAV or FLAC file to a target loudness.
+- **Page language.** Choose English or Spanish beside **Theme**. Spanish is a draft, not yet checked by a speaker. Model
+  facts, voice descriptions and the diagnostics report stay in English.
+- **Tell us what you need** on **System & backups** opens the Discussions page. The report you can copy counts the new
+  workspaces and says what is set up, never an address or a key.
 
-- Save recipes to repeat speech, transcription and dubbing tasks. Preview outside providers and approve
-  the destination and fields before running a recipe that uses one.
+Home, subtitles, narration, dubbing, Projects, the page language and the report draw on
+[VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
 
-- Dub local media using timed scenes and edited dialogue. Review the picture, fit lines when needed and
-  verify the audio, video and caption delivery.
+### Changed
 
-- Transcribe local audio, translate speech to English, and stream live replies through local API sessions. Review a
-  Voice Slate handoff in Cast and import its recording as a candidate.
+- **Long text.** `/api/speak` and `/api/performance` take up to 10,000 characters, spoken in parts and joined into one
+  file.
+- **Backups** also hold recipes, and can hold attached dub media and Audio tools files. 0.4.0 restores a 0.3.0 backup,
+  but 0.3.0 cannot restore one made by 0.4.0.
+- A scene shows its batch controls and players only when it has a batch or a built mix.
+- `serve.bat` uses port 8765, as everything else does. It used 8768.
+- When a Kokoro voice, or Kokoro itself, is missing, the message says what to do.
 
-- Install speech recognition from System & backups. Transcript drafts run on your computer.
+### Fixed
 
-- Back up recipes and their runs with the library, and choose to include attached dub media, audio tool files, and
-  project and voice files. Version 0.3.0 cannot restore these backups and asks you to update.
+- A Kokoro line of about 1,200 characters failed with "Worker protocol message exceeds 65536 bytes".
+- An edit made just after **Save** in Scenes could be replaced when the page reloaded the scene.
+- `[softly] MIRA: Did you?` in a plain-text script is Mira's line with the direction "softly", not narration.
+- Two Lab services could listen on the same port.
+- A "not found" answer's sentence came wrapped in quotes.
 
-- Make repeatable sound effects and master a WAV or FLAC locally. Choose 16-bit PCM, 24-bit PCM or floating-point WAV
-  for mastering and scene deliveries.
+### After updating
 
-- Find saved scenes and books in Projects and move portable copies between libraries. Share an approved voice as a
-  checked file, and review imported voices as candidates. Inspired by VoiceStudio’s library workflows.
+The library opens as it was, and no model needs installing again. A backup made by 0.4.0 needs 0.4.0 or later to
+restore. The Lab still answers only this computer, so an app in a container or on another computer cannot reach it yet.
 
-- Narrate a text or Markdown document with Cast voices. Edit and render chapters in Scenes, then export chapter files
-  and a whole audiobook with chapter marks. Inspired by VoiceStudio’s long-form workflow.
+### For scripts and contributors
 
-- Import SRT and WebVTT subtitles, assign Cast voices and build a scene on the subtitle clock. Edit, split or merge cues,
-  review takes that run long and export the original and rendered captions. Inspired by
-  [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash Debnath (`debpalash`) and its contributors.
+- Every error answer has a `code` beside its sentence. A model that is not installed answers **503**
+  `model_not_installed`; 0.3.0 answered 500. Errors on `/v1/` routes take OpenAI's shape.
+- New routes: `GET /api/voices`, `POST /v1/audio/speech`, `/v1/audio/transcriptions` and `/v1/audio/translations`,
+  `GET /v1/models`, `/api/sample`, `POST /api/engines/{engine_id}/uninstall`, and the routes of the new workspaces
+  ([the API guide](docs/API.md)). `GET /api/health` answers `app` and `lab_id`.
+- `lab_cli.py` has `voices`, `--play` and `--no-keep`. The MCP server is `tools/mcp_server.py`.
+- A release is made as a draft. Its files are downloaded and checked, and its Setup.exe is installed over the release
+  before it, before the draft is published.
+- The page's words are in `locales/en.json`: [Translate the Lab](CONTRIBUTING.md#translate-the-lab).
 
 ## 0.3.0 — 2026-11-13
 

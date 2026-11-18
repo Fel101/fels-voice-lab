@@ -3,7 +3,8 @@
 A local studio for character voices on Windows. Design or clone a voice, approve it as a character
 in your Cast, act dialogue with it, render whole scenes as batches, compare takes blind, and export
 production audio with a checksummed manifest. It runs on your own computer: the service listens only
-on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate.
+on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate. Other apps on the same
+computer can speak with its voices too: Claude Code and other apps that use MCP, and apps that use OpenAI's speech API.
 
 ## Quick start
 
@@ -14,12 +15,13 @@ On Windows 10 or 11, with nothing installed first (not even Python):
    warns about it: press **More info**, then **Run anyway**.
 2. Press **Next** until **Install**. It installs for you alone, with no administrator prompt and no internet, and opens the Lab
    when it is done. It took 70 seconds here.
-3. **Model studio** says that no voice model is installed yet. Press **Install Kokoro 82M**, read what it will do, and press
-   **Install now**. It downloads 0.6 GB and took 5 minutes here, most of it unpacking Python packages. On a computer with
-   a graphics card, Kokoro's card is set to install its GPU build instead, 2.0 to 2.4 GB, which took 7 minutes here; set it
-   to **CPU** in **Models & features** first for the smaller one.
-4. When it finishes, the studio is ready to speak, with a sentence in the box. Press **Generate**. The first sentence took 11
-   seconds here, most of it loading the model (26 seconds with the GPU build); after that a sentence takes about a second.
+3. The Lab opens on **Home**, which says that no voice model is installed yet. Press **Install Kokoro 82M**, read what it will
+   do, and press **Install now**. It downloads 0.6 GB and took 5 minutes here, most of it unpacking Python packages. On a
+   computer with a graphics card, Kokoro's card is set to install its GPU build instead, 2.0 to 2.4 GB, which took 7 minutes
+   here; set it to **CPU** in **Models & features** first for the smaller one.
+4. When it finishes, **Model studio** opens, ready to speak, with a sentence in the box. Press **Generate**. The first sentence
+   took 11 seconds here, most of it loading the model (26 seconds with the GPU build); after that a sentence takes about a
+   second.
 5. To hear a whole scene without writing one, press **Open the sample scene** in the same note: two characters with Kokoro's
    voices and nine lines, ready to render in **Scenes & batch** ([the sample scene](docs/USER_GUIDE.md#the-sample-scene)).
    **Remove the sample…** takes all of it back.
@@ -138,6 +140,18 @@ package back and checks every hash, the captions, and each file's codec and leng
 - **Scenes and batch:** script import from plain text and Fountain, line names, long lines split
   into parts, sequential jobs with pause, resume, cancel
   and retry, stale-take protection, undo and redo, and previews.
+- **Home:** the five things you worked on last, and in an empty library the ways to start, with a sample scene to
+  render.
+- **Stories and audiobooks:** narrate a text or Markdown file with one voice or several, and export chapter files and an
+  audiobook with chapter marks.
+- **Subtitles and dubbing:** an SRT or WebVTT file becomes a timed scene. Attach a video, speed a line up to fit, and
+  export the audio, the captions and an MP4.
+- **Projects and voice files:** find scenes, dubs and books, move a checked copy to another library, and share an
+  approved voice as a file.
+- **Automation:** recipes that repeat speaking, transcription, translation, mastering, conversion and dubbing
+  ([automation](docs/AUTOMATION.md)). Nothing goes to an outside provider until you approve it.
+- **Speech recognition and audio tools:** transcripts and subtitles drafted on your computer, sound effects, and
+  mastering to a target loudness.
 - **Compare and export:** blind A/B listening on saved Cast takes, measurements, optional transcript
   and speaker proxies, packages in five formats with manifests and captions, and lip-sync tracks.
   Every file the Lab makes is labelled inside it as AI-generated speech; your own recordings never are.
@@ -149,7 +163,9 @@ package back and checks every hash, the captions, and each file's codec and leng
   library in use.
 - **Retire, or delete for good:** stop a voice, recording or take, and everything made from it, from being
   used again without deleting its audio, or delete it for good after a confirmation.
-- **From a script:** a documented local HTTP API and a small command-line tool.
+- **Connect other apps:** an MCP server for Claude Code and other MCP apps, an OpenAI-style speech route, a documented
+  local HTTP API and a small command-line tool ([connecting other apps](docs/CONNECT.md)).
+- **Page language:** English, or Spanish as a draft not yet checked by a speaker.
 - **Other tools:** voice conversion, consent-aware import of clips kept by
   [Fel's Voice Slate](https://github.com/Fel101/fels-voice-slate), the companion recorder, and dataset
   preparation. Nothing here trains or fine-tunes a model.
@@ -161,7 +177,9 @@ VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means
 interface exist. The **Models & features** page says whether a family is *installed* (its
 environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
 spoke one sentence), shows how much free RAM each family needs, and can install every one of them for you (the Qwen3-TTS
-models, VoxCPM2 and Breeze TTS 2 only on a computer with a graphics card, an NVIDIA card or an AMD Radeon).
+models, VoxCPM2 and Breeze TTS 2 only on a computer with a graphics card, an NVIDIA card or an AMD Radeon). Each card says
+in plain words whether the model needs a graphics card, whether it clones a voice, its languages and what its audio may be
+used for, and **Which model fits?** hides the rest.
 Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
 
@@ -240,6 +258,7 @@ What is planned, and what anyone can pick up, is in the pinned
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | What runs on which computer, setup and RAM problems, graphics cards, updates, FFmpeg, reporting a problem |
 | [User guide](docs/USER_GUIDE.md) | Design through delivery, stopping and backups |
 | [Connect other apps](docs/CONNECT.md) | Claude Code and other MCP apps, apps that use OpenAI's speech API, the command-line tool, your own programs |
+| [Automation](docs/AUTOMATION.md) | Recipes, the dubbing queue and outside providers |
 | [Architecture](docs/ARCHITECTURE.md) | For contributors: the processes and environments, a request's path, where things are decided |
 | [Capabilities](MODEL_CAPABILITIES.md) | Integrated features versus trials and blocked models |
 | [Language screen](docs/LANGUAGE_MATRIX.md) | Languages each engine was screened in, with word error rates and the hardware used |
@@ -248,13 +267,13 @@ What is planned, and what anyone can pick up, is in the pinned
 | [Scene schema](docs/scenes/scene-schema-v1.md) | Scripts, stable IDs and selection rules |
 | [HTTP API](docs/API.md) | Calls for scripts and other programs: speak, speak as a Cast voice, the command-line tool, and [`openapi.json`](openapi.json) |
 | [Responsible use](docs/RESPONSIBLE_USE.md) | Recording/voice rights and output restrictions |
-| [Changelog](CHANGELOG.md) | What is in this release, and its known limits |
+| [Changelog](CHANGELOG.md) | What is in this release, and its known limits; [0.4.0 in detail](docs/releases/0.4.0.md) |
 
 ## Verify
 
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
-node --test tests/ui_workspace.test.cjs tests/ui_localization.test.cjs tests/drama3_studio.test.cjs tests/theme.test.cjs tests/voice_workflows.test.cjs tests/voice_library.test.cjs tests/compare_cast.test.cjs tests/cast_reference_ui.test.cjs tests/engine_status.test.cjs tests/scene_history.test.cjs tests/take_edit_ui.test.cjs tests/updates_ui.test.cjs tests/queue_ui.test.cjs
+node --test "tests/*.test.cjs"
 .venv\Scripts\python.exe tools/check_repo.py
 ```
 

@@ -119,10 +119,13 @@ version number, a tag and a GitHub release that agree:
    tag.
 3. Pushing the tag publishes the release once the checks pass. [The release workflow](.github/workflows/release.yml) runs the
    same checks as every push on the tagged commit. Then it refuses a tag that is not `v` and `VERSION`, writes the notes from
-   the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), and
-   publishes the release. GitHub packs the source ZIP that `update.bat` downloads. Before publishing, it builds
+   the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), builds
    `FelsVoiceLab-Setup-<version>.exe` from the tag with `tools/build_installer.py` (Inno Setup is on GitHub's Windows
-   runner), writes `SHA256SUMS`, records a GitHub attestation of both, and attaches both to the release. Setup.exe carries
+   runner), writes `SHA256SUMS`, records a GitHub attestation of both, and makes the release as a draft with both
+   attached. A second job, on a runner that did not build them, downloads the two files from the draft, checks their
+   names, hashes and attestations (`tools/check_release_files.py`), and installs that Setup.exe over the release before
+   it (`tools/check_setup_update.ps1`). Only then is the draft published, and it is marked latest only when it is the
+   newest version. GitHub packs the source ZIP that `update.bat` downloads. Setup.exe carries
    the file lists of every release tag up to its version, so an update can remove what the new version dropped; the build
    needs the tags (`git fetch --tags`), and the workflows check out the whole history for them. Every push also builds
    Setup.exe, installs it silently, starts the Lab and uninstalls it, then installs the release before this version from
@@ -130,9 +133,9 @@ version number, a tag and a GitHub release that agree:
    (`winget install JRSoftware.InnoSetup`) and run `.venv\Scripts\python.exe tools/build_installer.py`; it writes to
    `out\installer\`.
 
-When the checks fail on the tag, nothing is published. Do not move or delete the tag even then: fix the problem and release the
-next patch number. When the checks passed and only publishing failed (GitHub was down, say), run the Release workflow again
-from the Actions tab with the tag's name.
+When the checks fail on the tag, nothing is published; delete the draft if one was made. Do not move or delete the tag even
+then: fix the problem and release the next patch number. When the checks passed and only publishing failed (GitHub was down,
+say), run the Release workflow again from the Actions tab with the tag's name.
 
 `update.bat` refuses a release whose `app_version.py` names another version than its tag. It compares the new release with
 the previous one's ZIP to tell a file the project removed from one a user changed, so do not move or delete a published tag.

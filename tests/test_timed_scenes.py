@@ -8,11 +8,13 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import soundfile as sf
 
 import export_panel
+import synthetic_label
 from scene_store import SceneBatchRunner
 from tools import scene_export
 import timed_scene
@@ -202,7 +204,9 @@ class UntimedSceneTests(unittest.TestCase):
                 for number, (before, after) in enumerate(((1, 2), (3, 4)), 1)
             ]
             output = root / "mix.wav"
-            scene_export.make_scene_mix(root, selected, output)
+            # The mix's label names the Lab's version, so the hash is taken with the version it was captured with.
+            with mock.patch.object(synthetic_label, "SOFTWARE", "Fel's Voice Lab 0.3.0"):
+                scene_export.make_scene_mix(root, selected, output)
             # Captured with the same inputs using the parent commit's scene exporter.
             self.assertEqual(
                 hashlib.sha256(output.read_bytes()).hexdigest(),
