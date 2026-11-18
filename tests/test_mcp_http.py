@@ -1,7 +1,9 @@
 """The loopback MCP connection requires its token and keeps per-client voice settings."""
 
+import http.client
 import json
 from pathlib import Path
+import select
 import tempfile
 import threading
 import unittest
@@ -97,3 +99,46 @@ class TokenFileTests(unittest.TestCase):
             first = mcp_http._connection_token(path)
             self.assertGreaterEqual(len(first), 32)
             self.assertEqual(mcp_http._connection_token(path), first)
+
+
+class RefusedBodyTests(unittest.TestCase):
+    def test_mcp_refuses_requests_without_resetting_the_connection(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            token = "local-test-token-" + "x" * 34
+            with mcp_http.Host(0, None, root, root, token) as host:
+                thread = threading.Thread(target=host.serve_forever, daemon=True)
+                thread.start()
+                client = http.client.HTTPConnection("127.0.0.1", host.server_port, timeout=5)
+                body = json.dumps({"text": "a" * 60_000}).encode()
+                try:
+                    for _ in range(30):
+                        client.request("POST", "/mcp", body, {"Content-Type": "application/json"})
+                        with client.getresponse() as reply:
+                            self.assertEqual(reply.status, 401)
+                            self.assertIn("Bearer", reply.headers["WWW-Authenticate"])
+                            self.assertEqual(reply.read(), b"")
+
+                    # A client may still be transmitting when the server decides to refuse it.
+                    client.putrequest("POST", "/mcp")
+                    client.putheader("Content-Type", "application/json")
+                    client.putheader("Content-Length", str(len(body)))
+                    client.endheaders()
+                    self.assertFalse(select.select([client.sock], [], [], 0.25)[0], "reply arrived before the body")
+                    client.send(body)
+                    with client.getresponse() as reply:
+                        self.assertEqual(reply.status, 401)
+                        self.assertEqual(reply.read(), b"")
+
+                    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + token}
+                    oversized = b"a" * (mcp_http.MAX_BODY + 4096)
+                    for _ in range(20):
+                        client.request("POST", "/mcp", oversized, headers)
+                        with client.getresponse() as reply:
+                            self.assertEqual(reply.status, 413)
+                            self.assertEqual(reply.headers["Connection"], "close")
+                            self.assertEqual(reply.read(), b"")
+                finally:
+                    client.close()
+                    host.shutdown()
+                    thread.join(timeout=3)

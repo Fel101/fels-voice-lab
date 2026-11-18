@@ -5,6 +5,7 @@ import io
 import json
 import os
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -29,6 +30,7 @@ class Connection:
 
 class Host(ThreadingHTTPServer):
     daemon_threads = True
+    request_queue_size = 128
 
     def __init__(self, port, lab, workspace, clips, token):
         self.lab, self.workspace, self.clips = lab, workspace, clips
@@ -71,21 +73,57 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
+    def body_length(self):
+        try:
+            return int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return None
+
+    def discard_body(self, length, timeout):
+        self.connection.settimeout(timeout)
+        try:
+            self.rfile.read(length)
+        except OSError:
+            pass
+
+    def refuse(self, code, headers=None):
+        length = self.body_length()
+        if length is not None and 0 <= length <= MAX_BODY:
+            if length:
+                self.discard_body(length, 15)
+            return self.reply(code, headers=headers)
+
+        oversized = length is not None and length > MAX_BODY
+        if oversized:
+            self.discard_body(MAX_BODY, 1)
+        # Finish sending before closing. Even after a write shutdown, Windows can reset a
+        # socket with unread bytes, so give the client a short, bounded drain on the read side.
+        self.close_connection = True
+        try:
+            self.reply(code, headers={**(headers or {}), "Connection": "close"})
+        finally:
+            try:
+                self.connection.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+            if oversized:
+                self.discard_body(min(length - MAX_BODY, MAX_BODY), 1)
+
     def allowed(self):
         if self.path != "/mcp":
-            self.reply(404)
+            self.refuse(404)
             return False
         port = self.server.server_port
         if self.headers.get("Host", "").lower() not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
-            self.reply(403)
+            self.refuse(403)
             return False
         origin = self.headers.get("Origin")
         if origin and origin.lower() not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
-            self.reply(403)
+            self.refuse(403)
             return False
         given = self.headers.get("Authorization", "").encode("utf-8")
         if not hmac.compare_digest(given, b"Bearer " + self.server.token):
-            self.reply(401, headers={"WWW-Authenticate": 'Bearer realm="voice-lab"'})
+            self.refuse(401, headers={"WWW-Authenticate": 'Bearer realm="voice-lab"'})
             return False
         return True
 
@@ -103,13 +141,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get_content_type() != "application/json" or "application/json" not in self.headers.get(
             "Accept", "application/json"
         ):
-            return self.reply(406)
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            return self.reply(400)
+            return self.refuse(406)
+        length = self.body_length()
+        if length is None:
+            return self.refuse(400)
         if not 0 < length <= MAX_BODY:
-            return self.reply(413)
+            return self.refuse(413)
         self.connection.settimeout(15)
         try:
             raw = self.rfile.read(length)

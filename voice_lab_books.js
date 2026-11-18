@@ -244,7 +244,7 @@ function renderBook(fields) {
     actions.appendChild(sceneButton(LabText.t('books.edit'), LabText.t('books.edit_chapter', {title: chapter.title}), function () {
       if (sceneDirty && !window.confirm(LabText.t('books.discard_unsaved_edits_to_the'))) return;
       location.hash = '#scenes';
-      refreshSceneList(chapter.id).catch(bookError);
+      refreshSceneList(chapter.id, $('sceneEditor').value).catch(bookError);
     }));
     var running = ['queued', 'running', 'pausing', 'cancelling'].includes(chapter.status);
     if (!running) {

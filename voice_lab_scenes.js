@@ -1298,10 +1298,14 @@ function scenePickerOrder(scenes, books) {
     return rows;
   });
 }
-function refreshSceneList(preferred) {
+function canReplaceScene(discardedText) {
+  return !sceneDirty || $('sceneEditor').value === discardedText;
+}
+function refreshSceneList(preferred, discardedText) {
   return fetchJson('/api/scenes').then(function (result) {
     var select = $('sceneSelect'),
-      keep = preferred || activeSceneId;
+      replace = canReplaceScene(discardedText),
+      keep = (replace && preferred) || activeSceneId;
     sceneListCount = (result.scenes || []).length;
     $('sceneSaved').hidden = !sceneListCount;
     select.textContent = '';
@@ -1311,6 +1315,10 @@ function refreshSceneList(preferred) {
       var name = book ? book.title + ' · ' + scene.name : scene.name;
       option(select, scene.scene_id, LabText.t('scenes.r', {name: name, revision: scene.revision}));
     });
+    if (!replace) {
+      select.value = activeSceneId || '';
+      return;
+    }
     if (
       keep &&
       (result.scenes || []).some(function (scene) {
@@ -1319,9 +1327,12 @@ function refreshSceneList(preferred) {
     )
       select.value = keep;
     else if (select.options.length) select.selectedIndex = 0;
-    if (select.value)
-      return fetchJson('/api/scenes/' + select.value).then(function (value) {
-        return renderScene(value.scene);
+    var selected = select.value;
+    if (selected)
+      return fetchJson('/api/scenes/' + selected).then(function (value) {
+        if (select.value !== selected) return;
+        if (canReplaceScene(discardedText)) return renderScene(value.scene);
+        select.value = activeSceneId || '';
       });
     activeSceneId = null;
     activeSceneJobId = null;
@@ -1377,6 +1388,7 @@ function sampleButtons(disabled) {
 function openSample() {
   var onHome = !$('home').hidden;
   if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and'))) return Promise.resolve(null);
+  var discardedText = $('sceneEditor').value;
   sampleButtons(true);
   $('sampleStatus').textContent = LabText.t('scenes.opening_the_sample_scene');
   if (onHome) $('homeSampleStatus').textContent = $('sampleStatus').textContent;
@@ -1389,7 +1401,7 @@ function openSample() {
         ? LabText.t('scenes.made_the_sample_scene_and')
         : LabText.t('scenes.opened_the_sample_scene');
       return refreshCast().then(function () {
-        return refreshSceneList(result.sample.scene_id);
+        return refreshSceneList(result.sample.scene_id, discardedText);
       });
     })
     .catch(function (error) {
@@ -1484,6 +1496,7 @@ function startSceneFromPerformer() {
 }
 function importSceneFile(file) {
   if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_3'))) return Promise.resolve(null);
+  var discardedText = $('sceneEditor').value;
   var format = file.name.toLowerCase().endsWith('.csv') ? 'csv' : 'json';
   return file
     .text()
@@ -1491,7 +1504,7 @@ function importSceneFile(file) {
       return fetchJson('/api/scenes/import', { format: format, content: content });
     })
     .then(function (result) {
-      return result ? refreshSceneList(result.scene.scene_id) : null;
+      return result ? refreshSceneList(result.scene.scene_id, discardedText) : null;
     });
 }
 // A script in plain text or Fountain: read it (POST /api/scenes/import/preview), give each speaker a voice, then create the
@@ -1726,6 +1739,7 @@ function sceneScriptReportText(scene, report) {
 function createSceneFromScript() {
   if (!sceneScript) return Promise.resolve(null);
   if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_3'))) return Promise.resolve(null);
+  var discardedText = $('sceneEditor').value;
   var speakers = Object.create(null),
     narrator = null;
   $('sceneScriptSpeakers')
@@ -1743,7 +1757,7 @@ function createSceneFromScript() {
     .then(function (result) {
       clearSceneScript(); // A second press would make the scene twice.
       $('sceneScriptReport').textContent = sceneScriptReportText(result.scenes || [result.scene], result.report);
-      return refreshSceneList(result.scene.scene_id);
+      return refreshSceneList(result.scene.scene_id, discardedText);
     })
     .finally(sceneScriptReady);
 }
@@ -1976,7 +1990,7 @@ function showScenePreview(preview) {
 }
 $('sceneRefresh').addEventListener('click', function () {
   if (sceneDirty && !window.confirm(LabText.t('scenes.discard_unsaved_scene_edits_and_4'))) return;
-  refreshSceneList().catch(showSceneError);
+  refreshSceneList(undefined, $('sceneEditor').value).catch(showSceneError);
 });
 $('sceneSelect').addEventListener('change', function () {
   var target = this.value;
@@ -1984,10 +1998,13 @@ $('sceneSelect').addEventListener('change', function () {
     this.value = activeSceneId || '';
     return;
   }
+  var discardedText = $('sceneEditor').value;
   if (target)
     fetchJson('/api/scenes/' + target)
       .then(function (result) {
-        return renderScene(result.scene);
+        if ($('sceneSelect').value !== target) return;
+        if (canReplaceScene(discardedText)) return renderScene(result.scene);
+        $('sceneSelect').value = activeSceneId || '';
       })
       .catch(showSceneError);
 });

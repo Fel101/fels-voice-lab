@@ -1129,7 +1129,7 @@ class ModelHelpPageTests(unittest.TestCase):
                 self.assertNotIn("cue-001", page.evaluate("document.getElementById('sceneError').textContent"))
                 page.set_value('input[aria-label="Cue end for line 1"]', "00:01.400")
                 page.click("#sceneSave")
-                page.wait_until("!sceneDirty")
+                page.wait_until("!sceneDirty && $('sceneStatus').textContent.includes(' / SHA-256 ')")
                 saved = server.scenes.get_scene(server.scenes.list_scenes()[0]["scene_id"])
                 self.assertEqual(saved["lines"][0]["cue"]["start_ms"], 1050)
                 self.assertEqual(saved["lines"][0]["cue"]["source_start_ms"], 1000)
@@ -1141,7 +1141,7 @@ class ModelHelpPageTests(unittest.TestCase):
                 page.click('button[aria-label="Merge with next cue"]')
                 page.wait_until("document.querySelectorAll('.scene-row').length === 4")
                 page.click("#sceneSave")
-                page.wait_until("!sceneDirty")
+                page.wait_until("!sceneDirty && $('sceneStatus').textContent.includes(' / SHA-256 ')")
                 reopened = server.scenes.get_scene(saved["scene_id"])
                 first = reopened["lines"][0]
                 self.assertNotEqual(first["line_id"], "cue-001")
@@ -1154,6 +1154,54 @@ class ModelHelpPageTests(unittest.TestCase):
                 page.click("#sceneChooseNewest")
                 page.wait_until("document.querySelectorAll('.scene-line[data-status=\"done\"]').length === 4")
                 self.assertIn("Too long by 0.2 s", page.evaluate("document.querySelector('.scene-status').textContent"))
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
+
+    def test_scene_refresh_preserves_an_edit_made_after_saving(self):
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            server = FlowServer(Path(temp))
+            page = None
+            try:
+                character = server.cast.create_character("Mira", "")
+                voice = server.cast.create_identity(character["id"], "kokoro", "Warm", {"voice": "af_heart"})
+                server.cast.update_identity(voice["id"], {"status": "approved"})
+                server.scenes.import_script(
+                    "Mira: Keep the door open.", "text", {"Mira": {"identity_id": voice["id"]}}, name="Before saving"
+                )
+                scene_id = server.scenes.list_scenes()[0]["scene_id"]
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#scenes")
+                page.wait_until("$('sceneName').value === 'Before saving'")
+                page.evaluate(f"""(() => {{
+                    const originalFetch = fetchJson;
+                    const originalRefresh = refreshSceneList;
+                    fetchJson = async function (path, body) {{
+                        const result = await originalFetch(path, body);
+                        if (!body && path === {json.dumps("/api/scenes/" + scene_id)} && !window.releaseSceneRead) {{
+                            await new Promise(resolve => {{ window.releaseSceneRead = resolve; }});
+                        }}
+                        return result;
+                    }};
+                    refreshSceneList = function (...args) {{
+                        window.finishedSceneRefresh = originalRefresh(...args);
+                        return window.finishedSceneRefresh;
+                    }};
+                }})()""")
+                page.set_value("#sceneName", "First edit")
+                page.click("#sceneSave")
+                page.wait_until("!!window.releaseSceneRead")
+                self.assertEqual(server.scenes.get_scene(scene_id)["name"], "First edit")
+                page.set_value("#sceneName", "Second edit")
+                page.evaluate("(async () => { window.releaseSceneRead(); await window.finishedSceneRefresh; })()")
+                self.assertEqual(page.evaluate("$('sceneName').value"), "Second edit")
+                self.assertTrue(page.evaluate("sceneDirty"))
+                self.assertEqual(page.evaluate("$('sceneSelect').value"), scene_id)
+                page.click("#sceneSave")
+                page.wait_until("!sceneDirty && $('sceneStatus').textContent.startsWith('Second edit / revision ')")
+                self.assertEqual(server.scenes.get_scene(scene_id)["name"], "Second edit")
                 self.assertEqual(page.problems, [])
             finally:
                 if page is not None:

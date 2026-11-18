@@ -18,7 +18,7 @@ function openProductionProject(kind, id) {
     refreshBooks(id).catch(bookError);
   } else {
     location.hash = '#scenes';
-    refreshSceneList(id).catch(showSceneError);
+    refreshSceneList(id, $('sceneEditor').value).catch(showSceneError);
   }
 }
 ['homeImportScript', 'homeImportMore'].forEach(function (id) {
