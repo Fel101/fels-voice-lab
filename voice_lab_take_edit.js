@@ -2,19 +2,19 @@
 // the original; the original is never changed.
 var TAKE_EDIT_POINTS = 600;
 var TAKE_EDIT_FIELDS = [
-  {name:'start_seconds', label:'Start (s)', noun:'The start', placeholder:'0', step:'0.01', row:0},
-  {name:'end_seconds', label:'End (s)', noun:'The end', placeholder:'end of take', step:'0.01', row:0},
-  {name:'silence_threshold_db', label:'Quieter than (dB)', noun:'The silence level', placeholder:'-50', step:'1', row:1, silence:true},
-  {name:'keep_silence_ms', label:'Silence to keep (ms)', noun:'The silence to keep', placeholder:'80', step:'10', row:1, silence:true},
-  {name:'fade_in_ms', label:'Fade in (ms)', noun:'The fade in', placeholder:'0', step:'10', row:2},
-  {name:'fade_out_ms', label:'Fade out (ms)', noun:'The fade out', placeholder:'0', step:'10', row:2},
-  {name:'gain_db', label:'Gain (dB)', noun:'The gain', placeholder:'0', step:'0.5', row:2}
+  {name:'start_seconds', label:LabText.t('cast.start_s'), noun:LabText.t('cast.the_start'), placeholder:'0', step:'0.01', row:0},
+  {name:'end_seconds', label:LabText.t('cast.end_s'), noun:LabText.t('cast.the_end'), placeholder:LabText.t('cast.end_of_take'), step:'0.01', row:0},
+  {name:'silence_threshold_db', label:LabText.t('cast.quieter_than_db'), noun:LabText.t('cast.the_silence_level'), placeholder:'-50', step:'1', row:1, silence:true},
+  {name:'keep_silence_ms', label:LabText.t('cast.silence_to_keep_ms'), noun:LabText.t('cast.the_silence_to_keep'), placeholder:'80', step:'10', row:1, silence:true},
+  {name:'fade_in_ms', label:LabText.t('cast.fade_in_ms'), noun:LabText.t('cast.the_fade_in'), placeholder:'0', step:'10', row:2},
+  {name:'fade_out_ms', label:LabText.t('cast.fade_out_ms'), noun:LabText.t('cast.the_fade_out'), placeholder:'0', step:'10', row:2},
+  {name:'gain_db', label:LabText.t('cast.gain_db'), noun:LabText.t('cast.the_gain'), placeholder:'0', step:'0.5', row:2}
 ];
 function takeEditNumber(text, label) {
   var trimmed = String(text == null ? '' : text).trim();
   if (trimmed === '') { return null; }
   var number = Number(trimmed);
-  if (!isFinite(number)) { throw new Error(label + ' must be a number.'); }
+  if (!isFinite(number)) { throw new Error(LabText.t('cast.must_be_a_number', {label: label})); }
   return number;
 }
 // The JSON body for the edit routes from the panel's fields. A blank field is left out, so the service's default applies; the
@@ -44,16 +44,15 @@ function takeEditNote(take) {
   if (!edit) { return ''; }
   var request = edit.request || {}, result = edit.result || {}, parts = [];
   if (result.start_seconds > 0 || result.end_seconds < edit.parent_duration_seconds - 0.0005) {
-    parts.push('kept ' + result.start_seconds.toFixed(2) + ' to ' + result.end_seconds.toFixed(2) + ' s of the original ' +
-      edit.parent_duration_seconds.toFixed(2) + ' s');
+    parts.push(LabText.t('cast.kept_to_s_of_the', {toFixed: result.start_seconds.toFixed(2), toFixed2: result.end_seconds.toFixed(2), toFixed3: edit.parent_duration_seconds.toFixed(2)}));
   }
   if (request.auto_trim) {
-    parts.push('silence quieter than ' + request.silence_threshold_db + ' dB cut from both ends, ' + request.keep_silence_ms + ' ms left');
+    parts.push(LabText.t('cast.silence_quieter_than_db_cut', {silence_threshold_db: request.silence_threshold_db, keep_silence_ms: request.keep_silence_ms}));
   }
-  if (request.fade_in_ms) { parts.push('fade in ' + request.fade_in_ms + ' ms'); }
-  if (request.fade_out_ms) { parts.push('fade out ' + request.fade_out_ms + ' ms'); }
-  if (request.gain_db) { parts.push('gain ' + takeEditSigned(request.gain_db) + ' dB'); }
-  return 'Edited from take ' + String(take.parent_take_id).slice(0, 8) + (parts.length ? ': ' + parts.join(', ') : '') + '.';
+  if (request.fade_in_ms) { parts.push(LabText.t('cast.fade_in_ms_2', {fade_in_ms: request.fade_in_ms})); }
+  if (request.fade_out_ms) { parts.push(LabText.t('cast.fade_out_ms_2', {fade_out_ms: request.fade_out_ms})); }
+  if (request.gain_db) { parts.push(LabText.t('cast.gain_db_2', {takeEditSigned: takeEditSigned(request.gain_db)})); }
+  return LabText.t('cast.edited_from_take', {slice: String(take.parent_take_id).slice(0, 8), value: parts.length ? ': ' + parts.join(', ') : ''});
 }
 function drawTakeWave(canvas, wave, kept) {
   var ctx = canvas.getContext('2d'), width = canvas.width, height = canvas.height, style = getComputedStyle(document.body);
@@ -89,7 +88,7 @@ function takeEditLabelled(label, input) {
 }
 // Adds an "Edit take…" button to a take's actions. It opens a panel under the take and closes it again.
 function appendTakeEditor(article, take, actions, after, show) {
-  var button = takeEditElement('button', '', 'Edit take…'), slot = takeEditElement('div'), editor = null;
+  var button = takeEditElement('button', '', LabText.t('cast.edit_take')), slot = takeEditElement('div'), editor = null;
   button.type = 'button'; button.setAttribute('aria-expanded', 'false');
   button.addEventListener('click', function () {
     if (editor) { editor.close(); return; }
@@ -101,11 +100,10 @@ function appendTakeEditor(article, take, actions, after, show) {
 function openTakeEditor(slot, take, after, show, onClose) {
   var state = {wave:null, previewUrl:null, revision:0, key:takeEditKey(), closed:false, drag:null};
   var root = takeEditElement('div', 'take-edit'), inputs = {}, rows = [takeEditElement('div', 'row'), takeEditElement('div', 'row'), takeEditElement('div', 'row')];
-  root.setAttribute('role', 'group'); root.setAttribute('aria-label', 'Edit this take');
-  root.appendChild(takeEditElement('p', 'meta', 'Drag across the waveform to choose the part to keep, or type the times. Listen to the result, then save it. ' +
-    'It is saved as a new take; this one is not changed.'));
-  var canvas = takeEditElement('canvas', 'wave'), speech = takeEditElement('p', 'meta take-edit-speech', 'Loading the waveform…');
-  canvas.width = 900; canvas.height = 120; canvas.setAttribute('aria-label', 'Waveform of this take. Drag across it to choose the part to keep.');
+  root.setAttribute('role', 'group'); root.setAttribute('aria-label', LabText.t('cast.edit_this_take'));
+  root.appendChild(takeEditElement('p', 'meta', LabText.t('cast.drag_across_the_waveform_to')));
+  var canvas = takeEditElement('canvas', 'wave'), speech = takeEditElement('p', 'meta take-edit-speech', LabText.t('cast.loading_the_waveform'));
+  canvas.width = 900; canvas.height = 120; canvas.setAttribute('aria-label', LabText.t('cast.waveform_of_this_take_drag'));
   root.appendChild(canvas); root.appendChild(speech);
   var silence = document.createElement('input');
   silence.type = 'checkbox'; silence.setAttribute('data-edit-field', 'auto_trim');
@@ -115,13 +113,13 @@ function openTakeEditor(slot, take, after, show, onClose) {
     inputs[field.name] = input;
     if (field.name === 'silence_threshold_db') {
       var box = takeEditElement('label');
-      box.appendChild(silence); box.appendChild(document.createTextNode(' Cut the silence at both ends')); rows[1].appendChild(box);
+      box.appendChild(silence); box.appendChild(document.createTextNode(LabText.t('cast.cut_the_silence_at_both'))); rows[1].appendChild(box);
     }
     rows[field.row].appendChild(takeEditLabelled(field.label, input));
   });
   rows.forEach(function (row) { root.appendChild(row); });
-  var buttons = takeEditElement('div', 'cast-actions'), hear = takeEditElement('button', '', 'Hear the edit'),
-    save = takeEditElement('button', 'go', 'Save as new take'), close = takeEditElement('button', '', 'Close');
+  var buttons = takeEditElement('div', 'cast-actions'), hear = takeEditElement('button', '', LabText.t('cast.hear_the_edit')),
+    save = takeEditElement('button', 'go', LabText.t('cast.save_as_new_take')), close = takeEditElement('button', '', LabText.t('cast.close'));
   [hear, save, close].forEach(function (button) { button.type = 'button'; buttons.appendChild(button); });
   var player = takeEditElement('audio'), status = takeEditElement('p', 'meta'), problem = takeEditElement('p');
   player.controls = true; player.hidden = true; problem.setAttribute('role', 'alert'); status.setAttribute('role', 'status');
@@ -185,7 +183,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
     var request;
     try { request = takeEditRequest(values()); } catch (error) { fail(error); return; }
     var revision = ++state.revision;
-    fail(null); say('Making the edited clip…');
+    fail(null); say(LabText.t('cast.making_the_edited_clip'));
     fetch('/api/takes/' + take.id + '/edit-preview', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(request)})
       .then(function (response) {
         if (!response.ok) { return response.json().then(function (j) { throw new Error(j.error || response.status); }); }
@@ -198,7 +196,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
         clearPreview(); state.previewUrl = URL.createObjectURL(result.blob); player.src = state.previewUrl; player.hidden = false;
         var playing = player.play();
         if (playing && playing.catch) { playing.catch(function () {}); }
-        say('The edited clip is ' + result.seconds + ' s' + (result.peak ? ', peaking at ' + result.peak + ' dBFS.' : ' and silent.'));
+        say(LabText.t('cast.the_edited_clip_is_s', {seconds: result.seconds, value: result.peak ? ', peaking at ' + result.peak + ' dBFS.' : ' and silent.'}));
       })
       .catch(function (error) { if (!stale(revision)) { say(''); fail(error); } });
   });
@@ -206,11 +204,11 @@ function openTakeEditor(slot, take, after, show, onClose) {
     var request;
     try { request = takeEditRequest(values()); } catch (error) { fail(error); return; }
     request.idempotency_key = state.key;
-    save.disabled = hear.disabled = true; fail(null); say('Saving…');
+    save.disabled = hear.disabled = true; fail(null); say(LabText.t('cast.saving'));
     fetchJson('/api/takes/' + take.id + '/edit', request).then(function (result) {
       state.key = takeEditKey();
-      show(result.replayed ? 'That edit was already saved as a new take.'
-        : 'Saved as a new take, ' + result.take.duration_seconds.toFixed(2) + ' s. The original is unchanged.');
+      show(result.replayed ? LabText.t('cast.that_edit_was_already_saved')
+        : LabText.t('cast.saved_as_a_new_take', {toFixed: result.take.duration_seconds.toFixed(2)}));
       return Promise.resolve(after()).catch(function (error) { show(error.message); });  // the save worked; only the refresh failed
     }, function (error) {
       if (root.isConnected) { say(''); fail(error); } else { show(error.message); }
@@ -228,8 +226,7 @@ function openTakeEditor(slot, take, after, show, onClose) {
   fetchJson('/api/takes/' + take.id + '/waveform?points=' + TAKE_EDIT_POINTS).then(function (wave) {
     if (!root.isConnected) { return; }
     state.wave = wave; hear.disabled = save.disabled = false; redraw();
-    speech.textContent = wave.speech ? 'Speech from ' + wave.speech.start_seconds.toFixed(2) + ' to ' + wave.speech.end_seconds.toFixed(2) +
-      ' s (louder than ' + wave.speech.threshold_db + ' dB).' : 'No speech found: this take is quieter than the default silence level.';
+    speech.textContent = wave.speech ? LabText.t('cast.speech_from_to_s_louder', {toFixed: wave.speech.start_seconds.toFixed(2), toFixed2: wave.speech.end_seconds.toFixed(2), threshold_db: wave.speech.threshold_db}) : LabText.t('cast.no_speech_found_this_take');
   }).catch(function (error) { speech.textContent = ''; fail(error); });
   return {close:closeEditor};
 }

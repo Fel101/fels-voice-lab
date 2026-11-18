@@ -223,7 +223,8 @@ test('performer starter copies the actual engine and preserves seed zero', () =>
   assert.equal(scene.lines[0].engine_id,'qwen3-tts-1.7b-custom-voice');assert.equal(scene.lines[0].settings.seed,0);
 });
 test('saved takes expose effective settings and identity provenance', () => {
-  assert.ok(source.includes("provenanceTitle.textContent='Effective settings and provenance'"));
+  assert.match(source, /provenanceTitle\.textContent=LabText\.t\('cast\.effective_settings_and_provenance'\)/);
+  assert.equal(labText.t('cast.effective_settings_and_provenance'), 'Effective settings and provenance');
   assert.ok(source.includes('effective_settings:take.model.effective_settings||{}'));
   assert.ok(source.includes('voice_identity:take.model.voice_identity||null'));
 });

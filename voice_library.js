@@ -9,7 +9,7 @@
     var names={'drama-3':'Fish Audio Drama 3','kokoro':'Kokoro 82M','phonon-31m-en':'Phonon 31M English','orig':'Chatterbox Original','turbo':'Chatterbox Turbo',
       'qwen3-tts-1.7b-voice-design':'Qwen VoiceDesign 1.7B','qwen3-tts-1.7b-base':'Qwen Base 1.7B',
       'qwen3-tts-0.6b-base':'Qwen Base 0.6B','qwen3-tts-1.7b-custom-voice':'Qwen CustomVoice 1.7B','voxcpm2':'VoxCPM2','breeze-tts-2':'Breeze TTS 2'};
-    return names[id]||fallback||id||'Source model not recorded';
+    return names[id]||fallback||id||LabText.t('cast.source_model_not_recorded');
   }
   function identityLabel(identity){return engineName(identity.engine_id)+' · '+identity.label+' ('+identity.status+')';}
   function visibleVoices(){
@@ -33,15 +33,15 @@
       if(voice.identity_kind==='reference'){
         await global.loadReferences();
         reference=(global.referenceRows||[]).find(function(row){return row.reference_version_id===voice.preferred_reference_id;});
-        if(!reference)throw new Error('The saved voice recording is unavailable. Open Edit voice to see its versions.');
+        if(!reference)throw new Error(LabText.t('cast.the_saved_voice_recording_is'));
       }
       if(!Array.from(el('engine').options).some(function(option){return option.value===voice.engine_id;}))
-        throw new Error('This voice’s model is not in the installed catalogue.');
+        throw new Error(LabText.t('cast.this_voice_s_model_is'));
       var options=voice.engine_options||{},audition=voice.audition||{};
       if(voice.identity_kind==='fixed_voice'){
         var voices=(options.voice||'').split(',').filter(Boolean);
         if(!voices.length||voices.some(function(value){return !Array.from(el('voice').options).some(function(item){return item.value===value;});}))
-          throw new Error('A saved speaker pack is missing. Refresh installed Kokoro speaker packs first.');
+          throw new Error(LabText.t('cast.a_saved_speaker_pack_is'));
       }
       el('engine').value=voice.engine_id;global.refresh();
       if(voice.identity_kind==='fixed_voice'){
@@ -67,8 +67,7 @@
         global.refresh();el(selector).value=reference.path;el(selector).dispatchEvent(new Event('change'));
       }
       global.refresh();global.updateValues();
-      el('studioVoiceSelection').textContent='Selected '+voice.character_name+' · '+engineName(voice.engine_id,voice.engine_name)+
-        (voice.identity_kind==='fixed_voice'?' · saved equal speaker blend.':' · '+voice.identity_status+' voice.');
+      el('studioVoiceSelection').textContent=LabText.t('cast.selected', {character_name: voice.character_name, engineName: engineName(voice.engine_id,voice.engine_name), value: voice.identity_kind==='fixed_voice'?' · saved equal speaker blend.':' · '+voice.identity_status+' voice.'});
       location.hash='studio';
       return;
     }
@@ -82,7 +81,7 @@
       selectValue(el('performLanguage'),voice.audition&&voice.audition.language);
       await global.loadCurrentTakes();
       location.hash='perform';
-      el('performStatus').textContent='Ready to write dialogue for '+voice.character_name+'. Listen and review this '+voice.identity_status+' voice before approving it.';
+      el('performStatus').textContent=LabText.t('cast.ready_to_write_dialogue_for', {character_name: voice.character_name, identity_status: voice.identity_status});
     }
   }
   function action(voice,title,target){
@@ -96,63 +95,63 @@
     var report='',show=function(message){report=message;status(message);};
     // The refresh redraws the cards and writes the voice count into the same line, so the report goes back above it.
     var after=function(){return refresh().then(function(){if(report)status(report+'\n'+el('voiceLibraryStatus').textContent);});};
-    if(!voice.retired)return [global.retirementButton('Retire voice',function(){return global.retireAction('identity',voice.identity_id,'this voice');},after,show)];
+    if(!voice.retired)return [global.retirementButton(LabText.t('cast.retire_voice'),function(){return global.retireAction('identity',voice.identity_id,LabText.t('cast.this_voice'));},after,show)];
     var controls=[];
-    if(!voice.retirement.inherited)controls.push(global.retirementButton('Restore voice',function(){return global.restoreAction('identity',voice.identity_id,'this voice');},after,show));
-    controls.push(global.retirementButton('Delete this voice for good…',function(){return global.purgeAction('identity',voice.identity_id,'this voice');},after,show));
+    if(!voice.retirement.inherited)controls.push(global.retirementButton(LabText.t('cast.restore_voice'),function(){return global.restoreAction('identity',voice.identity_id,'this voice');},after,show));
+    controls.push(global.retirementButton(LabText.t('cast.delete_this_voice_for_good'),function(){return global.purgeAction('identity',voice.identity_id,'this voice');},after,show));
     return controls;
   }
   function render(){
     var gallery=el('voiceGallery');if(!gallery)return;
     gallery.querySelectorAll('audio').forEach(function(audio){audio.pause();});gallery.textContent='';
     var voices=visibleVoices(),summary=voices.length+' '+(voices.length===1?'voice':'voices');
-    status(summary+(voices.length?'\nListen below, then choose where to use a voice.':'\nNo voices match. Clear the search to see more.'));
+    status(summary+(voices.length?LabText.t('cast.listen_below_then_choose_where'):LabText.t('cast.no_voices_match_clear_the')));
     voices.forEach(function(voice){
       var card=node('article',undefined,'saved-voice'),parts=voice.character_name.split(' · ');
       // A preset voice is its model's own: until a take says which model made its audition, that model made it.
       var preset=voice.identity_kind==='fixed_voice'||voice.identity_kind==='preset_voice',blend=String((voice.engine_options||{}).voice||'').split(',').filter(Boolean);
       var maker=voice.generation_engine_id||(preset?voice.engine_id:null),makerName=voice.generation_engine_id?voice.generation_engine_name:(preset?voice.engine_name:null);
-      card.appendChild(node('span',(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?' · speaker blend':' · preset voice'):''),'voice-kind'));
+      card.appendChild(node('span',(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?LabText.t('cast.speaker_blend'):LabText.t('cast.preset_voice_2')):''),'voice-kind'));
       card.appendChild(node('h3',parts[0]));card.appendChild(node('p',parts.slice(1).join(' · ')||voice.identity_label,'voice-role'));
-      card.appendChild(node('p','Created with '+engineName(maker,makerName)));
-      if(maker!==voice.engine_id)card.appendChild(node('p','Generate dialogue with '+engineName(voice.engine_id,voice.engine_name),'meta'));
+      card.appendChild(node('p',LabText.t('cast.created_with', {engineName: engineName(maker,makerName)})));
+      if(maker!==voice.engine_id)card.appendChild(node('p',LabText.t('cast.generate_dialogue_with', {engineName: engineName(voice.engine_id,voice.engine_name)}),'meta'));
       var audition=voice.audition;
       if(audition&&audition.audio_url){
         var audio=node('audio');audio.controls=true;audio.preload='none';audio.src=audition.audio_url;
-        audio.setAttribute('aria-label','Listen to '+voice.character_name);
+        audio.setAttribute('aria-label',LabText.t('cast.listen_to', {character_name: voice.character_name}));
         audio.addEventListener('play',function(){gallery.querySelectorAll('audio').forEach(function(other){if(other!==audio)other.pause();});});card.appendChild(audio);
-      }else card.appendChild(node('p','No saved audition yet. Generate one in Perform lines.','meta'));
-      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p',(blend.length>1?'Saved Kokoro blend: ':'Kokoro preset voice: ')+blend.join(',')+'. No voice recording needed.','meta'));
-      else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+' saved recording '+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?'Ready to use.':'Voice recording unavailable.'),'meta'));
+      }else card.appendChild(node('p',LabText.t('cast.no_saved_audition_yet_generate'),'meta'));
+      if(voice.identity_kind==='fixed_voice')card.appendChild(node('p',(blend.length>1?LabText.t('cast.saved_kokoro_blend'):LabText.t('cast.kokoro_preset_voice'))+blend.join(',')+LabText.t('cast.no_voice_recording_needed'),'meta'));
+      else if(voice.identity_kind==='reference')card.appendChild(node('p',voice.reference_count+LabText.t('cast.saved_recording')+(voice.reference_count===1?'version':'versions')+'. '+(voice.preferred_reference_available?LabText.t('cast.ready_to_use'):LabText.t('cast.voice_recording_unavailable')),'meta'));
       var buttons=node('div',undefined,'cast-actions');
-      var studio=action(voice,'Use in Model studio','studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
-      var perform=action(voice,'Perform lines','perform');
+      var studio=action(voice,LabText.t('cast.use_in_model_studio'),'studio');studio._referenceMissing=voice.identity_kind==='reference'&&!voice.preferred_reference_available;studio.disabled=busyNavigation||studio._referenceMissing;
+      var perform=action(voice,LabText.t('cast.perform_lines'),'perform');
       studio._retired=perform._retired=!!voice.retired;studio.disabled=studio.disabled||!!voice.retired;perform.disabled=busyNavigation||!!voice.retired;
-      buttons.append(studio,perform,action(voice,'Edit voice','edit'));
+      buttons.append(studio,perform,action(voice,LabText.t('cast.edit_voice'),'edit'));
       if (!voice.retired && voice.identity_status === 'approved') {
-        var share=node('button','Export this voice');share.type='button';
-        share.setAttribute('aria-label','Export this voice: '+voice.character_name);
+        var share=node('button',LabText.t('cast.export_this_voice'));share.type='button';
+        share.setAttribute('aria-label',LabText.t('cast.export_this_voice_2', {character_name: voice.character_name}));
         share.addEventListener('click',async function(){
           if(busyNavigation)return;
           var recorded=voice.identity_kind==='reference'&&!String(voice.origin||'').startsWith('Original synthetic voice design via ');
-          if(recorded&&!global.confirm('This voice file includes the approved voice recording and its audition. Export only if you have permission to share this voice. Continue?'))return;
-          setNavigationBusy(true);status('Checking the voice file…');
+          if(recorded&&!global.confirm(LabText.t('cast.this_voice_file_includes_the')))return;
+          setNavigationBusy(true);status(LabText.t('cast.checking_the_voice_file'));
           try{
             var result=await global.fetchJson('/api/portable/export',{kind:'persona',identity_id:voice.identity_id,permission:recorded});
-            var download=node('a','Download voice file');download.href=result.archive.download;
+            var download=node('a',LabText.t('cast.download_voice_file'));download.href=result.archive.download;
             download.download=voice.character_name.replace(/[<>:"/\\|?*]/g,'-')+'.voice.zip';
-            status('Voice file ready. ');el('voiceLibraryStatus').appendChild(download);
+            status(LabText.t('cast.voice_file_ready'));el('voiceLibraryStatus').appendChild(download);
           }catch(error){status(error.message);}finally{setNavigationBusy(false);}
         });
         buttons.appendChild(share);
       }
       card.appendChild(buttons);
-      if(voice.retired){card.classList.add('retired');card.appendChild(node('p',global.retirementLabel(voice)+' New use is blocked; listening stays available for review.','meta'));}
+      if(voice.retired){card.classList.add('retired');card.appendChild(node('p',global.retirementLabel(voice)+LabText.t('cast.new_use_is_blocked_listening_2'),'meta'));}
       var controls=node('div',undefined,'cast-actions');retirementControls(voice).forEach(function(button){controls.appendChild(button);});card.appendChild(controls);
-      var details=node('details');details.appendChild(node('summary','Voice description and use notes'));
-      details.appendChild(node('p',voice.character_description||'No description saved.','meta'));
-      details.appendChild(node('p','Origin: '+(voice.origin||'Not documented.'),'meta'));
-      details.appendChild(node('p','Allowed use: '+(voice.allowed_use||'Not documented. Verify before reusing or sharing.'),'meta'));
+      var details=node('details');details.appendChild(node('summary',LabText.t('cast.voice_description_and_use_notes')));
+      details.appendChild(node('p',voice.character_description||LabText.t('cast.no_description_saved'),'meta'));
+      details.appendChild(node('p',LabText.t('cast.origin_2', {value: voice.origin||'Not documented.'}),'meta'));
+      details.appendChild(node('p',LabText.t('cast.allowed_use_2', {value: voice.allowed_use||'Not documented. Verify before reusing or sharing.'}),'meta'));
       card.appendChild(details);gallery.appendChild(card);
     });
   }
@@ -162,7 +161,7 @@
     try{
       var result=await global.fetchJson('/api/voice-library'+(el('showRetiredVoices').checked?'?include_retired=1':''));if(request!==revision)return;
       library={voices:result.voices||[]};render();
-    }catch(error){if(request===revision)status('Saved voices unavailable: '+error.message);}
+    }catch(error){if(request===revision)status(LabText.t('cast.saved_voices_unavailable', {message: error.message}));}
   }
   document.addEventListener('DOMContentLoaded',function(){
     el('showRetiredVoices').addEventListener('change',refresh);

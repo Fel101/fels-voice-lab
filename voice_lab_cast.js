@@ -20,7 +20,7 @@ function clearReferenceEditor() {
   referenceDecodePending=false;$('saveReference').disabled=false;$('saveReferenceVersion').disabled=false;$('previewReference').disabled=false;
   $('referenceFile').value='';$('referenceTranscript').value='';$('referenceOrigin').value='';$('referenceAllowedUse').value='';
   setReferencePlayer(null);
-  $('referenceAnalysis').textContent='No recording loaded.';$('referenceStatus').textContent='';
+  $('referenceAnalysis').textContent=LabText.t('cast.no_recording_loaded');$('referenceStatus').textContent='';
   $('trimStart').value='0';$('trimEnd').value='';$('noiseReductionEnabled').checked=false;syncNoiseReductionFields();
   var canvas=$('referenceWave');canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
 }
@@ -37,7 +37,7 @@ function performanceIdentity() {
 }
 function apiAudioContext() {
   if (!audioContext || audioContext.state==='closed') { var AudioCtor = window.AudioContext || window.webkitAudioContext; if (AudioCtor) { audioContext = new AudioCtor(); } }
-  if (!audioContext) { throw new Error('This browser cannot decode the audio to preview the recording.'); }
+  if (!audioContext) { throw new Error(LabText.t('cast.this_browser_cannot_decode_the')); }
   if (audioContext.state === 'suspended') { audioContext.resume(); }
   return audioContext;
 }
@@ -92,46 +92,46 @@ function wavBlob(buffer, startSeconds, endSeconds, targetRate, channelMode) {
   return new Blob([bytes],{type:'audio/wav'});
 }
 function activeTrim() {
-  if (!referenceBuffer) { throw new Error('Choose or record a voice recording first.'); }
+  if (!referenceBuffer) { throw new Error(LabText.t('cast.choose_or_record_a_voice')); }
   var start=Number($('trimStart').value), end=Number($('trimEnd').value);
-  if (!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>referenceBuffer.duration+0.02) { throw new Error('Choose a valid trim range within the source waveform.'); }
-  if (end-start>60) { throw new Error('This recording is longer than 60 seconds, the most the Lab takes. Trim it before saving.'); }
+  if (!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>referenceBuffer.duration+0.02) { throw new Error(LabText.t('cast.choose_a_valid_trim_range')); }
+  if (end-start>60) { throw new Error(LabText.t('cast.this_recording_is_longer_than')); }
   return {start:start,end:end};
 }
 function previewReferenceClip() {
   var revision=referenceLoadRevision,previewRevision=++referencePreviewRevision;
   try {
     var range=activeTrim(),identity=activeIdentity();
-    if(!identity||identity.kind!=='reference'){throw new Error('Choose a voice that clones a recording in Cast first.');}
-    if(!referenceSourceBlob){throw new Error('Choose or record a voice recording first.');}
+    if(!identity||identity.kind!=='reference'){throw new Error(LabText.t('cast.choose_a_voice_that_clones'));}
+    if(!referenceSourceBlob){throw new Error(LabText.t('cast.choose_or_record_a_voice'));}
     var selected=selectedReference(identity,$('referenceVersion'));
     var metadata={filename:referenceSourceFile?referenceSourceFile.name:(selected&&selected.source_name)||'source.wav',edits:fillReferenceMetadata()};
     var encoded=encodeReferenceMetadata(metadata);
-    $('referenceStatus').textContent=$('noiseReductionEnabled').checked?'Creating denoised preview...':'Creating processed preview...';
+    $('referenceStatus').textContent=$('noiseReductionEnabled').checked?LabText.t('cast.creating_denoised_preview'):LabText.t('cast.creating_processed_preview');
     fetch('/api/identities/'+identity.id+'/references/preview',{method:'POST',headers:{'Content-Type':referenceSourceBlob.type||'application/octet-stream','X-Reference-Metadata':encoded},body:referenceSourceBlob})
       .then(function(response){if(!response.ok){return response.json().then(function(result){throw new Error(result.error||response.status);});}return response.blob().then(function(blob){return {blob:blob,headers:response.headers};});})
       .then(function(result){if(revision!==referenceLoadRevision||previewRevision!==referencePreviewRevision)return;setReferencePlayer(result.blob);
         drawReferenceWave(referenceBuffer,range.start,range.end);
-        var details='Preview: '+result.headers.get('X-Reference-Duration')+' s, mono, '+result.headers.get('X-Reference-Sample-Rate')+' Hz, RMS '+result.headers.get('X-Reference-RMS')+' dBFS.';details+=referenceQualityText(decodeReferenceQuality(result.headers.get('X-Reference-Quality')));
-        if($('noiseReductionEnabled').checked){details+=' Steady-noise reduction is active; the original remains unchanged.';}
-        $('referenceAnalysis').textContent=details;$('referenceStatus').textContent='Preview ready. Listen before saving this version.';})
-      .catch(function(error){if(revision===referenceLoadRevision&&previewRevision===referencePreviewRevision)$('referenceStatus').textContent='Could not create processed preview: '+error.message;});
+        var details=LabText.t('cast.preview_s_mono_hz_rms', {get: result.headers.get('X-Reference-Duration'), get2: result.headers.get('X-Reference-Sample-Rate'), get3: result.headers.get('X-Reference-RMS')});details+=referenceQualityText(decodeReferenceQuality(result.headers.get('X-Reference-Quality')));
+        if($('noiseReductionEnabled').checked){details+=LabText.t('cast.steady_noise_reduction_is_active');}
+        $('referenceAnalysis').textContent=details;$('referenceStatus').textContent=LabText.t('cast.preview_ready_listen_before_saving');})
+      .catch(function(error){if(revision===referenceLoadRevision&&previewRevision===referencePreviewRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_create_processed_preview', {message: error.message});});
   } catch(error) { $('referenceStatus').textContent=error.message; }
 }
 function loadReferenceSource(blob, file, revision) {
   var token=revision===undefined?++referenceLoadRevision:revision;
-  if(token!==referenceLoadRevision)return Promise.reject(new Error('The chosen recording changed.'));
+  if(token!==referenceLoadRevision)return Promise.reject(new Error(LabText.t('cast.the_chosen_recording_changed')));
   referenceSourceFile=null;referenceSourceBlob=null;referenceBuffer=null;
   referenceDecodePending=true;referencePreviewRevision++;$('saveReference').disabled=true;$('saveReferenceVersion').disabled=true;$('previewReference').disabled=true;
   if(file)setReferencePlayer(null);
   return decodeBlob(blob).then(function(buffer) {
-    if(token!==referenceLoadRevision){throw new Error('The chosen recording changed; choose the current one.');}
+    if(token!==referenceLoadRevision){throw new Error(LabText.t('cast.the_chosen_recording_changed_choose'));}
     referenceSourceFile=file||null;referenceSourceBlob=blob;
     referenceBuffer=buffer; $('trimStart').value='0'; $('trimEnd').value=buffer.duration.toFixed(2);
     if(file) {
       $('noiseReductionEnabled').checked=false;$('noiseProfileStart').value='0';$('noiseProfileEnd').value=Math.min(0.30,buffer.duration).toFixed(2);syncNoiseReductionFields();
       setReferencePlayer(file);
-      var stats=bufferAnalysis(buffer); $('referenceAnalysis').textContent='Loaded '+file.name+' / '+buffer.duration.toFixed(2)+' s / '+buffer.sampleRate+' Hz / '+buffer.numberOfChannels+' channel(s)'+(stats.clipped?' / clipped samples '+stats.clipped:'');
+      var stats=bufferAnalysis(buffer); $('referenceAnalysis').textContent=LabText.t('cast.loaded_s_hz_channel_s', {name: file.name, toFixed: buffer.duration.toFixed(2), sampleRate: buffer.sampleRate, numberOfChannels: buffer.numberOfChannels, value: stats.clipped?' / clipped samples '+stats.clipped:''});
     }
     drawReferenceWave(buffer,0,buffer.duration); return buffer;
   }).finally(function(){if(token===referenceLoadRevision){referenceDecodePending=false;$('saveReference').disabled=false;$('saveReferenceVersion').disabled=false;$('previewReference').disabled=false;}});
@@ -153,13 +153,13 @@ function applyCustomVoiceIdentityOptions(info) {
   $('presetSpeaker').textContent='';$('presetLanguage').textContent='';
   speakers.forEach(function(value){option($('presetSpeaker'),value,value);});
   languages.forEach(function(value){option($('presetLanguage'),value,languageOptionLabel('qwen3-tts-1.7b-custom-voice',value));});
-  if(!speakers.length||!languages.length){$('customVoiceIdentityStatus').textContent='The loaded checkpoint reported no selectable speaker/language metadata.';return;}
-  $('customVoiceIdentityStatus').textContent='Loaded '+(info.checkpoint||'CustomVoice')+' / revision '+(info.checkpoint_revision||'not reported')+' / '+speakers.length+' speakers / '+languages.length+' languages.';
+  if(!speakers.length||!languages.length){$('customVoiceIdentityStatus').textContent=LabText.t('cast.the_loaded_checkpoint_reported_no');return;}
+  $('customVoiceIdentityStatus').textContent=LabText.t('cast.loaded_revision_speakers_languages', {value: info.checkpoint||'CustomVoice', value2: info.checkpoint_revision||'not reported', length: speakers.length, length2: languages.length});
 }
 function loadCustomVoiceIdentityOptions() {
-  $('loadCustomVoiceIdentity').disabled=true;$('customVoiceIdentityStatus').textContent='Loading the pinned local CustomVoice checkpoint to query its speakers and languages...';
+  $('loadCustomVoiceIdentity').disabled=true;$('customVoiceIdentityStatus').textContent=LabText.t('cast.loading_the_pinned_local_customvoice');
   return fetchJson('/api/load',{engine:'qwen3-tts-1.7b-custom-voice'}).then(applyCustomVoiceIdentityOptions)
-    .catch(function(error){$('customVoiceIdentityStatus').textContent='CustomVoice metadata unavailable: '+error.message;})
+    .catch(function(error){$('customVoiceIdentityStatus').textContent=LabText.t('cast.customvoice_metadata_unavailable', {message: error.message});})
     .then(function(){$('loadCustomVoiceIdentity').disabled=false;});
 }
 function refreshCast(preferredCharacter, preferredIdentity) {
@@ -177,11 +177,11 @@ function refreshCast(preferredCharacter, preferredIdentity) {
     renderActiveCharacter(idBefore); renderPerformanceCharacter();
     if(typeof renderSampleNotes==='function'){renderSampleNotes();}
     if(window.VoiceLabLibrary) return window.VoiceLabLibrary.refresh();
-  }).catch(function(error){$('referenceStatus').textContent='Cast library unavailable: '+error.message;});
+  }).catch(function(error){$('referenceStatus').textContent=LabText.t('cast.cast_library_unavailable', {message: error.message});});
 }
 function renderActiveCharacter(preferredIdentity) {
   var character=activeCharacter(); $('identitySelect').textContent='';
-  if(!character){clearReferenceEditor();option($('identitySelect'),'','Create or open a character first',true);$('characterNotes').value='';$('referenceEditor').hidden=true;return;}
+  if(!character){clearReferenceEditor();option($('identitySelect'),'',LabText.t('cast.create_or_open_a_character'),true);$('characterNotes').value='';$('referenceEditor').hidden=true;return;}
   $('characterNotes').value=character.description||'';
   character.identities.forEach(function(identity){option($('identitySelect'),identity.id,VoiceLabLibrary.identityLabel(identity));});
   if(character.identities.some(function(i){return i.id===preferredIdentity;})){$('identitySelect').value=preferredIdentity;}
@@ -194,21 +194,21 @@ function selectedReference(identity, selector) {
 function renderActiveIdentity() {
   clearReferenceEditor();
   var identity=activeIdentity(); $('referenceEditor').hidden=!identity||identity.kind!=='reference';
-  $('identityState').textContent=identity?identity.engine_id+' / '+identity.status+(identity.approved_reference_id?' / approved recording v'+(identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version:''):'';
+  $('identityState').textContent=identity?identity.engine_id+' / '+identity.status+(identity.approved_reference_id?LabText.t('cast.approved_recording_v', {version: (identity.references.find(function(r){return r.id===identity.approved_reference_id;})||{}).version}):''):'';
   $('approveFixedIdentity').hidden=!identity||['fixed_voice','preset_voice'].indexOf(identity.kind)<0;
   if(identity&&identity.kind==='preset_voice'){
-    $('approveFixedIdentity').textContent='Approve this preset voice';
-    $('identityState').textContent=identity.engine_options.checkpoint+' / revision '+identity.engine_options.checkpoint_revision+' / '+identity.engine_options.speaker+' / '+identity.engine_options.language+' / '+identity.status;
-  }else{$('approveFixedIdentity').textContent='Approve this preset voice';}
+    $('approveFixedIdentity').textContent=LabText.t('cast.approve_this_preset_voice');
+    $('identityState').textContent=LabText.t('cast.revision', {checkpoint: identity.engine_options.checkpoint, checkpoint_revision: identity.engine_options.checkpoint_revision, speaker: identity.engine_options.speaker, language: identity.engine_options.language, status: identity.status});
+  }else{$('approveFixedIdentity').textContent=LabText.t('cast.approve_this_preset_voice');}
   if(identity&&identity.kind==='fixed_voice') {
     var savedVoices=(identity.engine_options.voice||'').split(',');
     Array.from($('fixedVoice').options).forEach(function(item){item.selected=savedVoices.indexOf(item.value)>=0;});
   }
   $('referenceVersion').textContent=''; $('approveReference').textContent='';
   if(identity&&identity.kind==='reference') {
-    identity.references.forEach(function(ref){option($('referenceVersion'),ref.id,'v'+ref.version+' — '+ref.duration_seconds.toFixed(2)+' s — '+ref.transcript.slice(0,60)+(ref.retired?' — retired':''));if(!ref.retired)option($('approveReference'),ref.id,'v'+ref.version+' — '+ref.transcript.slice(0,60));});
+    identity.references.forEach(function(ref){option($('referenceVersion'),ref.id,LabText.t('cast.v_s', {version: ref.version, toFixed: ref.duration_seconds.toFixed(2), slice: ref.transcript.slice(0,60), value: ref.retired?' — retired':''}));if(!ref.retired)option($('approveReference'),ref.id,LabText.t('cast.v', {version: ref.version, slice: ref.transcript.slice(0,60)}));});
     if(identity.references.length){$('referenceVersion').value=identity.references[0].id;$('approveReference').value=identity.approved_reference_id||(identity.references.find(function(ref){return !ref.retired;})||{}).id||'';loadSavedReference(identity.references[0]);}
-    else { $('referenceAnalysis').textContent='No version saved yet.'; }
+    else { $('referenceAnalysis').textContent=LabText.t('cast.no_version_saved_yet'); }
     $('saveReference').hidden=false;$('saveReferenceVersion').hidden=!identity.references.length;
   }
   updateReferenceRetirement();
@@ -224,14 +224,14 @@ function loadSavedReference(reference) {
   $('noiseProfileStart').value=noise.profile_start_seconds===undefined?0:noise.profile_start_seconds;
   $('noiseProfileEnd').value=noise.profile_end_seconds===undefined?0.30:noise.profile_end_seconds;
   $('noiseReductionStrength').value=noise.strength===undefined?0.75:noise.strength;syncNoiseReductionFields();
-  fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not load audio: '+error.message;});
+  fetch(reference.audio_url).then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){if(revision===referenceLoadRevision){setReferencePlayer(blob);}}).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_load_audio', {message: error.message});});
   fetch('/api/references/'+reference.id+'/source').then(function(r){if(!r.ok)throw new Error(String(r.status));return r.blob();}).then(function(blob){return loadReferenceSource(blob,null,revision);})
-    .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent='v'+reference.version+' / '+reference.duration_seconds.toFixed(2)+' s / '+reference.sample_rate+' Hz / '+reference.channels+' mono channel(s) / '+reference.audio_sha256.slice(0,16)+(reference.warnings.length?' / '+reference.warnings.join(' '):'');})
-    .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Could not preview the saved recording: '+error.message;});
+    .then(function(buffer){$('trimStart').value=reference.edit.start_seconds||0;$('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;$('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate);$('referenceChannel').value=reference.edit.channel||'mono';drawReferenceWave(buffer,Number($('trimStart').value),Number($('trimEnd').value));$('referenceAnalysis').textContent=LabText.t('cast.v_s_hz_mono_channel', {version: reference.version, toFixed: reference.duration_seconds.toFixed(2), sample_rate: reference.sample_rate, channels: reference.channels, slice: reference.audio_sha256.slice(0,16), value: reference.warnings.length?' / '+reference.warnings.join(' '):''});})
+    .catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent=LabText.t('cast.could_not_preview_the_saved', {message: error.message});});
 }
 function renderPerformanceCharacter() {
   var character=performanceCharacter(), select=$('performIdentity'), before=select.value; select.textContent='';
-  if(!character){option(select,'','Open a character first',true);$('performReference').textContent='';return;}
+  if(!character){option(select,'',LabText.t('cast.open_a_character_first'),true);$('performReference').textContent='';return;}
   var visible=character.identities.filter(function(identity){return !identity.retired;});
   visible.forEach(function(identity){option(select,identity.id,VoiceLabLibrary.identityLabel(identity));});
   if(visible.some(function(i){return i.id===before;})){select.value=before;} else if(visible.length){select.value=visible[0].id;}
@@ -239,11 +239,11 @@ function renderPerformanceCharacter() {
 }
 function renderPerformanceIdentity() {
   var character=performanceCharacter(), identity=performanceIdentity();$('performReference').textContent='';
-  if(!identity){option($('performReference'),'','No voice',true);$('performSupport').textContent='Add a voice in Cast first.';$('performDirectionWrap').hidden=true;$('nativeTags').hidden=true;$('performSettingsPanel').hidden=true;return;}
+  if(!identity){option($('performReference'),'',LabText.t('cast.no_voice'),true);$('performSupport').textContent=LabText.t('cast.add_a_voice_in_cast');$('performDirectionWrap').hidden=true;$('nativeTags').hidden=true;$('performSettingsPanel').hidden=true;return;}
   var options=identity.engine_options||{}, isPreset=identity.kind==='preset_voice';
   $('performReference').parentElement.hidden=identity.kind!=='reference';
   if(identity.kind==='reference'){
-    (identity.references||[]).filter(function(ref){return !ref.retired;}).forEach(function(ref){option($('performReference'),ref.id,'v'+ref.version+(ref.id===identity.approved_reference_id?' — approved':' — candidate')+' / '+ref.duration_seconds.toFixed(2)+' s');});
+    (identity.references||[]).filter(function(ref){return !ref.retired;}).forEach(function(ref){option($('performReference'),ref.id,LabText.t('cast.v_s_2', {version: ref.version, value: ref.id===identity.approved_reference_id?' — approved':' — candidate', toFixed: ref.duration_seconds.toFixed(2)}));});
     if(identity.approved_reference_id){$('performReference').value=identity.approved_reference_id;} else if(identity.references&&identity.references.length){$('performReference').value=identity.references[0].id;}
   }
   var schema=performanceCapabilitiesByEngine[identity.engine_id]||{controls:[],direction:{status:'unsupported'}};
@@ -258,15 +258,15 @@ function renderPerformanceIdentity() {
   var seeded=(schema.controls||[]).some(function(control){return control.id==='seed';});
   $('performSeed').parentElement.hidden=!seeded;$('variantCount').parentElement.hidden=!seeded;
   $('performDirectionWrap').hidden=!directionSupported;$('actingPreset').parentElement.hidden=!directionSupported;
-  $('performSupport').textContent=directionStatus==='experimental'?'Acting direction is experimental with this model.':
-    isPreset?'Checkpoint preset: '+options.speaker+' / '+$('performLanguage').value+'. No voice recording is used.':
-    identity.engine_id==='turbo'?'Voice recordings must be longer than 5 seconds. Use [laugh], [chuckle], or [cough] tags in text.':
-    directionSupported?'This model takes an acting direction.':
-    identity.engine_id==='orig'?'Text direction is unsupported for this checkpoint.':
-    identity.kind==='fixed_voice'?'A preset voice: it clones no recording.':'A voice cloned from a recording.';
+  $('performSupport').textContent=directionStatus==='experimental'?LabText.t('cast.acting_direction_is_experimental_with'):
+    isPreset?LabText.t('cast.checkpoint_preset_no_voice_recording', {speaker: options.speaker, value: $('performLanguage').value}):
+    identity.engine_id==='turbo'?LabText.t('cast.voice_recordings_must_be_longer'):
+    directionSupported?LabText.t('cast.this_model_takes_an_acting'):
+    identity.engine_id==='orig'?LabText.t('cast.text_direction_is_unsupported_for'):
+    identity.kind==='fixed_voice'?LabText.t('cast.a_preset_voice_it_clones'):LabText.t('cast.a_voice_cloned_from_a');
   renderPerformanceSettings(identity,schema);
   var native=identity.engine_id==='turbo'||identity.engine_id==='breeze-tts-2'||identity.engine_id==='drama-3'; $('nativeTags').hidden=!native;
-  $('nativeTags').textContent='Insert model-native event: ';
+  $('nativeTags').textContent=LabText.t('cast.insert_model_native_event');
   if(native){(identity.engine_id==='turbo'?['[laugh]','[chuckle]','[cough]']:identity.engine_id==='drama-3'?['[laughs]','[sighs]','[whispers]']:['(laugh)','(sigh)','(cough)']).forEach(function(tag){var b=document.createElement('button');b.type='button';b.textContent=tag;b.addEventListener('click',function(){insertTag(tag);});$('nativeTags').appendChild(b);});}
   loadPronunciations(character.id);
 }
@@ -275,25 +275,25 @@ function renderPerformanceSettings(identity,schema){
   $('performSettingsPanel').hidden=!controls.length;
   controls.forEach(function(control){
     if(control.id==='seed')return;
-    var label=document.createElement('label'),title=control.label+(control.status==='experimental'?' (experimental)':'');
+    var label=document.createElement('label'),title=control.label+(control.status==='experimental'?LabText.t('cast.experimental'):'');
     label.className='field compact';label.textContent=title;var input;
     if(control.type==='select'){
       input=document.createElement('select');(control.choices||[]).forEach(function(value){option(input,value,value);});input.value=control.default;
     }else{
       input=document.createElement('input');input.type='number';input.value=control.default;input.min=control.minimum;input.max=control.maximum;input.step=control.step;
     }
-    input.dataset.settingKey=control.id;input.setAttribute('aria-label',title+' for '+identity.engine_id);
+    input.dataset.settingKey=control.id;input.setAttribute('aria-label',LabText.t('cast.for', {title: title, engine_id: identity.engine_id}));
     label.appendChild(input);container.appendChild(label);
   });
 }
 function insertTag(tag){var field=$('performText'),a=field.selectionStart,b=field.selectionEnd;field.value=field.value.slice(0,a)+tag+field.value.slice(b);field.focus();field.selectionStart=field.selectionEnd=a+tag.length;}
 function saveIdentityUpdate(changes) {
-  var identity=activeIdentity();if(!identity){return Promise.reject(new Error('Choose a voice first.'));}
+  var identity=activeIdentity();if(!identity){return Promise.reject(new Error(LabText.t('cast.choose_a_voice_first')));}
   return fetchJson('/api/identities/'+identity.id+'/update',changes);
 }
 function syncNoiseReductionFields(){$('noiseProfileFields').hidden=!$('noiseReductionEnabled').checked;$('noiseReductionStrengthValue').textContent=Number($('noiseReductionStrength').value).toFixed(2);}
 function decodeReferenceQuality(value){if(!value)return null;try{return JSON.parse(atob(value.replace(/-/g,'+').replace(/_/g,'/')));}catch(error){return null;}}
-function referenceQualityText(quality){if(!quality)return '';var text=' Quality '+quality.score+'/100, '+quality.verdict+'.';if(quality.warnings&&quality.warnings.length)text+=' '+quality.warnings.join(' ');return text;}
+function referenceQualityText(quality){if(!quality)return '';var text=LabText.t('cast.quality_100', {score: quality.score, verdict: quality.verdict});if(quality.warnings&&quality.warnings.length)text+=' '+quality.warnings.join(' ');return text;}
 function encodeReferenceMetadata(metadata){return btoa(Array.from(new TextEncoder().encode(JSON.stringify(metadata)),function(byte){return String.fromCharCode(byte);}).join('')).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function fillReferenceMetadata(){
   var target=Number($('referenceRate').value),edits={start_seconds:Number($('trimStart').value),end_seconds:Number($('trimEnd').value),
@@ -303,36 +303,36 @@ function fillReferenceMetadata(){
   return edits;
 }
 function saveUploadedReference(){
-  var identity=activeIdentity();if(!identity||!referenceSourceFile){$('referenceStatus').textContent='Choose a source file or record audio first.';return;}
+  var identity=activeIdentity();if(!identity||!referenceSourceFile){$('referenceStatus').textContent=LabText.t('cast.choose_a_source_file_or');return;}
   var range;try{range=activeTrim();}catch(error){$('referenceStatus').textContent=error.message;return;}
-  var analysis=bufferAnalysis(referenceBuffer);if(analysis.rms<0.001){$('referenceStatus').textContent='Source is silent/too quiet; record a clear passage.';return;}
+  var analysis=bufferAnalysis(referenceBuffer);if(analysis.rms<0.001){$('referenceStatus').textContent=LabText.t('cast.source_is_silent_too_quiet');return;}
   var metadata={filename:referenceSourceFile.name||'microphone-capture.wav',transcript:$('referenceTranscript').value,
     origin:$('referenceOrigin').value,allowed_use:$('referenceAllowedUse').value,edits:fillReferenceMetadata()};
-  $('saveReference').disabled=true;$('referenceStatus').textContent='Saving the original audio and this version of the recording...';
+  $('saveReference').disabled=true;$('referenceStatus').textContent=LabText.t('cast.saving_the_original_audio_and');
   var encoded=encodeReferenceMetadata(metadata);
   fetch('/api/identities/'+identity.id+'/references',{method:'POST',headers:{'Content-Type':referenceSourceFile.type||'application/octet-stream','X-Reference-Metadata':encoded},body:referenceSourceFile})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||r.status);return j.reference;});})
-    .then(function(ref){$('referenceStatus').textContent='Saved immutable v'+ref.version+' / '+ref.duration_seconds.toFixed(2)+' s / '+ref.sample_rate+' Hz / RMS '+ref.rms_dbfs.toFixed(1)+' dBFS'+(ref.warnings.length?' / '+ref.warnings.join(' '):'')+referenceQualityText(ref.quality);referenceSourceFile=null;return refreshCast(identity.character_id,identity.id);})
+    .then(function(ref){$('referenceStatus').textContent=LabText.t('cast.saved_immutable_v_s_hz', {version: ref.version, toFixed: ref.duration_seconds.toFixed(2), sample_rate: ref.sample_rate, toFixed2: ref.rms_dbfs.toFixed(1), value: ref.warnings.length?' / '+ref.warnings.join(' '):'', referenceQualityText: referenceQualityText(ref.quality)});referenceSourceFile=null;return refreshCast(identity.character_id,identity.id);})
     .catch(function(error){$('referenceStatus').textContent=error.message;}).then(function(){$('saveReference').disabled=false;});
 }
 function saveEditedReferenceVersion(){
   var identity=activeIdentity(),previous=selectedReference(identity,$('referenceVersion'));if(!previous){return;}
   var body={transcript:$('referenceTranscript').value,origin:$('referenceOrigin').value,allowed_use:$('referenceAllowedUse').value};
   try{Object.assign(body,fillReferenceMetadata());}catch(error){$('referenceStatus').textContent=error.message;return;}
-  fetchJson('/api/references/'+previous.id+'/versions',body).then(function(result){$('referenceStatus').textContent='Saved immutable v'+result.reference.version+'; the approved version remains unchanged until you approve this one.';return refreshCast(identity.character_id,identity.id);})
+  fetchJson('/api/references/'+previous.id+'/versions',body).then(function(result){$('referenceStatus').textContent=LabText.t('cast.saved_immutable_v_the_approved', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);})
     .catch(function(error){$('referenceStatus').textContent=error.message;});
 }
 function beginMicCapture(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('referenceStatus').textContent='Microphone capture is not available in this browser.';return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('referenceStatus').textContent=LabText.t('cast.microphone_capture_is_not_available');return;}
   var revision=referenceLoadRevision;$('micStart').disabled=true;
   navigator.mediaDevices.getUserMedia({audio:{channelCount:2,echoCancellation:false,noiseSuppression:false,autoGainControl:false}}).then(function(stream){
     if(revision!==referenceLoadRevision){stream.getTracks().forEach(function(track){track.stop();});return;}
     micStream=stream;micContext=apiAudioContext();var source=micContext.createMediaStreamSource(stream);micProcessor=micContext.createScriptProcessor(4096,Math.min(2,source.channelCount),1);micChunks=[];
     micProcessor.onaudioprocess=function(event){var chunk=[];for(var c=0;c<event.inputBuffer.numberOfChannels;c++){chunk.push(new Float32Array(event.inputBuffer.getChannelData(c)));}micChunks.push(chunk);};
     var silent=micContext.createGain();silent.gain.value=0;source.connect(micProcessor);micProcessor.connect(silent);silent.connect(micContext.destination);
-    $('micStart').hidden=true;$('micStop').hidden=false;$('referenceStatus').textContent='Recording locally. Select Stop recording when the spoken passage is complete.';
+    $('micStart').hidden=true;$('micStop').hidden=false;$('referenceStatus').textContent=LabText.t('cast.recording_locally_select_stop_recording');
     castMicTimer=setTimeout(stopMicCapture,59000);
-  }).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent='Microphone could not start: '+error.message;})
+  }).catch(function(error){if(revision===referenceLoadRevision)$('referenceStatus').textContent=LabText.t('cast.microphone_could_not_start', {message: error.message});})
     .finally(function(){if(revision===referenceLoadRevision)$('micStart').disabled=false;});
 }
 function pcmCaptureWav(chunks, sampleRate){
@@ -348,58 +348,58 @@ function stopMicCapture(){
   if(micProcessor){micProcessor.disconnect();micProcessor.onaudioprocess=null;}if(micStream){micStream.getTracks().forEach(function(track){track.stop();});}
   var wav=pcmCaptureWav(micChunks,micContext.sampleRate),file=new File([wav],'microphone-capture.wav',{type:'audio/wav'});
   micProcessor=null;micStream=null;micChunks=[];$('micStart').hidden=false;$('micStop').hidden=true;
-  loadReferenceSource(wav,file).then(function(){previewReferenceClip();$('referenceStatus').textContent='Microphone capture is ready; enter the exact words, source, and allowed use before saving.';})
-    .catch(function(error){$('referenceStatus').textContent='Could not prepare captured audio: '+error.message;});
+  loadReferenceSource(wav,file).then(function(){previewReferenceClip();$('referenceStatus').textContent=LabText.t('cast.microphone_capture_is_ready_enter');})
+    .catch(function(error){$('referenceStatus').textContent=LabText.t('cast.could_not_prepare_captured_audio', {message: error.message});});
 }
-var takeCheckLabels={silent_audio:'Silent',clipping:'Possible clipping',long_pause:'Long pause inside the take',duration_suspiciously_short:'Shorter than its text'};
+var takeCheckLabels={silent_audio:LabText.t('cast.silent'),clipping:LabText.t('cast.possible_clipping'),long_pause:LabText.t('cast.long_pause_inside_the_take'),duration_suspiciously_short:LabText.t('cast.shorter_than_its_text')};
 function appendTakeChecks(parent,checks){
   var note=document.createElement('p');note.className='meta take-checks';
-  if(!checks||checks.status==='not_recorded'){note.textContent='Waveform checks were not recorded for this take.';}
-  else if(checks.status==='unavailable'){note.className+=' flagged';note.textContent='Waveform checks could not run: '+(checks.error||'unknown error')+'.';}
-  else if(!checks.flags.length){note.textContent='Automatic waveform checks found no flags. They do not judge the words, the voice or the acting.';}
-  else{note.className+=' flagged';note.textContent='Automatic waveform checks flagged: '+checks.flags.map(function(flag){
-    return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')+'. Listen before selecting.';}
+  if(!checks||checks.status==='not_recorded'){note.textContent=LabText.t('cast.waveform_checks_were_not_recorded');}
+  else if(checks.status==='unavailable'){note.className+=LabText.t('cast.flagged');note.textContent=LabText.t('cast.waveform_checks_could_not_run', {value: checks.error||'unknown error'});}
+  else if(!checks.flags.length){note.textContent=LabText.t('cast.automatic_waveform_checks_found_no');}
+  else{note.className+=' flagged';note.textContent=LabText.t('cast.automatic_waveform_checks_flagged_listen', {join: checks.flags.map(function(flag){
+    return flag==='long_pause'?takeCheckLabels[flag]+' ('+checks.longest_pause_seconds.toFixed(1)+' s)':(takeCheckLabels[flag]||flag);}).join('; ')});}
   parent.appendChild(note);
 }
-var loudnessNotes={silent:'No loudness reading (the take is silent)',too_short:'No loudness reading (under 0.4 s is too short)',too_quiet:'No loudness reading (too quiet)'};
+var loudnessNotes={silent:LabText.t('cast.no_loudness_reading_the_take'),too_short:LabText.t('cast.no_loudness_reading_under_0'),too_quiet:LabText.t('cast.no_loudness_reading_too_quiet')};
 function appendTakeLoudness(parent,loudness){
   var note=document.createElement('p');note.className='meta take-checks';
-  if(!loudness||loudness.status==='not_measured'){note.textContent='Loudness has not been measured for this take yet.';}
-  else if(loudness.status==='unavailable'){note.textContent='Loudness could not be measured: '+(loudness.reason||'unknown error')+'.';}
+  if(!loudness||loudness.status==='not_measured'){note.textContent=LabText.t('cast.loudness_has_not_been_measured');}
+  else if(loudness.status==='unavailable'){note.textContent=LabText.t('cast.loudness_could_not_be_measured', {value: loudness.reason||'unknown error'});}
   else{
-    var parts=[loudness.integrated_lufs===null?(loudnessNotes[loudness.note]||'No loudness reading'):'Loudness '+loudness.integrated_lufs.toFixed(1)+' LUFS'];
-    if(loudness.sample_peak_dbfs!==null)parts.push('sample peak '+loudness.sample_peak_dbfs.toFixed(1)+' dBFS');
-    if(loudness.true_peak_dbtp!==null)parts.push('true peak '+loudness.true_peak_dbtp.toFixed(1)+' dBTP');
+    var parts=[loudness.integrated_lufs===null?(loudnessNotes[loudness.note]||LabText.t('cast.no_loudness_reading')):LabText.t('cast.loudness_lufs', {toFixed: loudness.integrated_lufs.toFixed(1)})];
+    if(loudness.sample_peak_dbfs!==null)parts.push(LabText.t('cast.sample_peak_dbfs', {toFixed: loudness.sample_peak_dbfs.toFixed(1)}));
+    if(loudness.true_peak_dbtp!==null)parts.push(LabText.t('cast.true_peak_dbtp', {toFixed: loudness.true_peak_dbtp.toFixed(1)}));
     note.textContent=parts.join(' · ')+'.';
-    if(loudness.true_peak_dbtp!==null&&loudness.true_peak_dbtp>-1)note.textContent+=' The true peak is above -1 dBTP, so MP3, AAC or Ogg export can clip.';
+    if(loudness.true_peak_dbtp!==null&&loudness.true_peak_dbtp>-1)note.textContent+=LabText.t('cast.the_true_peak_is_above');
   }
   parent.appendChild(note);
 }
 function retirementLabel(item){
   var state=item.retirement;
   if(!state)return '';
-  return state.reason+(state.inherited?' It is retired because '+state.source_label+' is retired.':'');
+  return state.reason+(state.inherited?LabText.t('cast.it_is_retired_because_is', {source_label: state.source_label}):'');
 }
 function retireAction(kind,id,label){
-  if(!window.confirm('Retire '+label+'? New performances, scene rows, comparisons, conversions and exports that use it are blocked. Nothing is deleted, and you can restore it.'))return Promise.resolve(null);
+  if(!window.confirm(LabText.t('cast.retire_new_performances_scene_rows', {label: label})))return Promise.resolve(null);
   return fetchJson('/api/retirements',{kind:kind,id:id,reason:''}).then(function(result){
     var parts=[];
-    if(result.affected.reference)parts.push(result.affected.reference+' recording version(s)');
-    if(result.affected.take)parts.push(result.affected.take+' take(s)');
-    return 'Retired '+label+'. Blocked with it: '+(parts.join(', ')||'nothing else')+'. Listening stays available for review.';
+    if(result.affected.reference)parts.push(result.affected.reference+LabText.t('cast.recording_version_s'));
+    if(result.affected.take)parts.push(result.affected.take+LabText.t('cast.take_s'));
+    return LabText.t('cast.retired_blocked_with_it_listening', {label: label, value: parts.join(', ')||'nothing else'});
   });
 }
 function restoreAction(kind,id,label){
-  return fetchJson('/api/retirements/restore',{kind:kind,id:id}).then(function(){return 'Restored '+label+'. Restoring never re-approves a voice.';});
+  return fetchJson('/api/retirements/restore',{kind:kind,id:id}).then(function(){return LabText.t('cast.restored_restoring_never_re_approves', {label: label});});
 }
 function purgeAction(kind,id,label){
   return fetchJson('/api/purges/preview?kind='+encodeURIComponent(kind)+'&id='+encodeURIComponent(id)).then(function(preview){
     var counts=preview.would_purge,parts=[];
-    [['identity','voice','voices'],['reference','voice recording','voice recordings'],['take','take','takes']].forEach(function(kind){var count=counts[kind[0]];if(count)parts.push(count+' '+(count===1?kind[1]:kind[2]));});
-    if(!window.confirm('Permanently delete '+label+'? This removes '+parts.join(', ')+' and their audio from Cast. It cannot be undone.'))return null;
+    [['identity','voice','voices'],['reference',LabText.t('cast.voice_recording'),LabText.t('cast.voice_recordings')],['take','take','takes']].forEach(function(kind){var count=counts[kind[0]];if(count)parts.push(count+' '+(count===1?kind[1]:kind[2]));});
+    if(!window.confirm(LabText.t('cast.permanently_delete_this_removes_and', {label: label, join: parts.join(', ')})))return null;
     return fetchJson('/api/purges',{kind:kind,id:id,confirm:true}).then(function(report){
-      var text='Deleted for good: '+parts.join(', ')+'.';
-      if(report.external_copies.length)text+=' Copies outside Cast still hold this audio: '+report.external_copies.join(', ')+(report.external_copies_truncated?' (list truncated)':'')+'. Cast does not delete them; remove them yourself.';
+      var text=LabText.t('cast.deleted_for_good', {join: parts.join(', ')});
+      if(report.external_copies.length)text+=LabText.t('cast.copies_outside_cast_still_hold', {join: report.external_copies.join(', '), value: report.external_copies_truncated?' (list truncated)':''});
       return text;
     });
   });
@@ -420,10 +420,10 @@ function appendTakeRetirement(article,take,after,show){
   var row=document.createElement('div');row.className='cast-actions';
   var note=document.createElement('p');note.className='meta take-checks';
   if(take.retired){
-    note.className+=' flagged';note.textContent=retirementLabel(take)+' New use is blocked; listening stays available for review.';
-    if(!take.retirement.inherited)row.appendChild(retirementButton('Restore take',function(){return restoreAction('take',take.id,'this take');},after,show));
-    row.appendChild(retirementButton('Delete this take for good…',function(){return purgeAction('take',take.id,'this take');},after,show));
-  }else row.appendChild(retirementButton('Retire take',function(){return retireAction('take',take.id,'this take');},after,show));
+    note.className+=' flagged';note.textContent=LabText.t('cast.new_use_is_blocked_listening', {retirementLabel: retirementLabel(take)});
+    if(!take.retirement.inherited)row.appendChild(retirementButton(LabText.t('cast.restore_take'),function(){return restoreAction('take',take.id,LabText.t('cast.this_take'));},after,show));
+    row.appendChild(retirementButton(LabText.t('cast.delete_this_take_for_good'),function(){return purgeAction('take',take.id,'this take');},after,show));
+  }else row.appendChild(retirementButton(LabText.t('cast.retire_take'),function(){return retireAction('take',take.id,'this take');},after,show));
   article.appendChild(note);article.appendChild(row);
 }
 function selectedReferenceVersion(){
@@ -438,22 +438,22 @@ function updateReferenceRetirement(){
   $('referenceRetirement').textContent=ref&&ref.retired?retirementLabel(ref):'';
 }
 function renderTakes(takes){
-  var container=$('takeList');container.textContent='';if(!takes.length){container.textContent='No saved takes for this line yet.';return;}
-  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=take.character_name+' / '+take.identity_label+' / '+take.line_id+' / '+take.status+' / '+take.duration_seconds.toFixed(2)+' s';article.appendChild(title);
+  var container=$('takeList');container.textContent='';if(!takes.length){container.textContent=LabText.t('cast.no_saved_takes_for_this');return;}
+  takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: take.status, toFixed: take.duration_seconds.toFixed(2)});article.appendChild(title);
     var player=document.createElement('audio');player.controls=true;player.src=take.audio_url;article.appendChild(player);
-    var detail=document.createElement('p');detail.className='meta';detail.textContent='Text sent: '+take.spoken_text+'\n'+take.model.backend+' / '+take.model.checkpoint+' / revision '+take.model.checkpoint_revision+' / '+(take.model.mode||'')+(take.edit?'\n'+takeEditNote(take):'');article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
+    var detail=document.createElement('p');detail.className='meta';detail.textContent=LabText.t('cast.text_sent_revision', {spoken_text: take.spoken_text, backend: take.model.backend, checkpoint: take.model.checkpoint, checkpoint_revision: take.model.checkpoint_revision, value: take.model.mode||'', value2: take.edit?'\n'+takeEditNote(take):''});article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
     var provenance=document.createElement('details'),provenanceTitle=document.createElement('summary'),provenanceBody=document.createElement('pre');
-    provenanceTitle.textContent='Effective settings and provenance';provenanceBody.className='meta';
+    provenanceTitle.textContent=LabText.t('cast.effective_settings_and_provenance');provenanceBody.className='meta';
     provenanceBody.textContent=JSON.stringify({effective_settings:take.model.effective_settings||{},voice_identity:take.model.voice_identity||null,
       reference_version_id:take.reference_version_id||null,provenance:take.provenance||{}},null,2);
     provenance.appendChild(provenanceTitle);provenance.appendChild(provenanceBody);article.appendChild(provenance);
-    var actions=document.createElement('div');actions.className='cast-actions';[['selected','Select'],['candidate','Keep as candidate'],['rejected','Reject']].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
-    var newReference=document.createElement('button');newReference.type='button';newReference.textContent='Make a voice recording from this take';newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent='Choose this take’s voice in Perform first.';return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent='Created recording v'+result.reference.version+' with inherited use restrictions.';return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent='Check voice match';var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent='Measuring the voice match…';fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?('Voice match (proxy) '+m.score.toFixed(2)+': '+({likely_same:'likely the voice of its recording',uncertain:'uncertain',likely_different:'likely a different voice'}[m.band])+'. Calibrated on one voice; this is not a listening test.'):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!=='Check voice match')b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
+    var actions=document.createElement('div');actions.className='cast-actions';[['selected',LabText.t('cast.select')],['candidate',LabText.t('cast.keep_as_candidate')],['rejected',LabText.t('cast.reject')]].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
+    var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {toFixed: m.score.toFixed(2), value: {likely_same:'likely the voice of its recording',uncertain:'uncertain',likely_different:'likely a different voice'}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});
 }
 var takeLoadRevision=0;
 function loadCurrentTakes(){
   var request=++takeLoadRevision,identity=performanceIdentity(),line=$('lineId').value||'';
-  $('takeList').textContent=identity?'Loading saved takes…':'';
+  $('takeList').textContent=identity?LabText.t('cast.loading_saved_takes'):'';
   if(!identity){renderTakes([]);return Promise.resolve();}
   var query=new URLSearchParams({identity_id:identity.id,line_id:line});
   return fetchJson('/api/takes?'+query.toString()).then(function(result){
@@ -472,7 +472,7 @@ function performanceSettings(identity, seed){
   return settings;
 }
 function generatePerformanceSet(){
-  var identity=performanceIdentity();if(!identity){$('performError').textContent='Choose a voice.';return;}
+  var identity=performanceIdentity();if(!identity){$('performError').textContent=LabText.t('cast.choose_a_voice');return;}
   var count=Math.max(1,Math.min(8,Math.floor(Number($('variantCount').value))||1)),seed=Number.isFinite(Number($('performSeed').value))?Number($('performSeed').value):42;
   var settings=performanceSettings(identity,seed);
   if(!Object.prototype.hasOwnProperty.call(settings,'seed'))count=1;
@@ -493,19 +493,18 @@ function generatePerformanceSet(){
       .then(function(response){if(!response.ok)return response.json().then(function(j){throw new Error(j.error||response.status);});return response.blob();})
       .then(function(){run.done++;return loadCurrentTakes();}).then(function(){return next(i+1);});
   }
-  next(0).then(function(){$('performStatus').textContent=run.done<count?'Stopped after '+run.done+' of '+count+' takes. The takes already made are saved.':'Takes made. Each has its own WAV and records its model and voice recording.';})
-    .catch(function(error){$('performError').textContent=error.message+' Previously completed takes remain saved.';$('performStatus').textContent='Generation stopped before the set completed.';})
+  next(0).then(function(){$('performStatus').textContent=run.done<count?LabText.t('cast.stopped_after_of_takes_the', {done: run.done, count: count}):LabText.t('cast.takes_made_each_has_its');})
+    .catch(function(error){$('performError').textContent=LabText.t('cast.previously_completed_takes_remain_saved', {message: error.message});$('performStatus').textContent=LabText.t('cast.generation_stopped_before_the_set');})
     .then(function(){clearInterval(ticker);if(performRun===run)performRun=null;$('performStop').hidden=true;$('performGenerate').disabled=false;});
 }
 var performRun=null;
 function performStatusText(run){
-  return 'Making take '+run.index+' of '+run.count+(run.count>1?' in sequence':'')+'... '+Math.round((performance.now()-run.started)/1000)+' s'
-    +(run.stopRequested?' (stopping after this take)':'');
+  return LabText.t('cast.making_take_of_s', {index: run.index, count: run.count, value: run.count>1?' in sequence':'', round: Math.round((performance.now()-run.started)/1000), value2: run.stopRequested?' (stopping after this take)':''});
 }
 function stopPerformanceSet(){
   if(performRun&&!performRun.stopRequested){performRun.stopRequested=true;$('performStatus').textContent=performStatusText(performRun);}
 }
-function loadPronunciations(characterId){fetchJson('/api/pronunciations?character_id='+encodeURIComponent(characterId)).then(function(result){$('pronunciationList').textContent=(result.pronunciations||[]).map(function(item){return item.source+' → '+item.replacement;}).join(' · ')||'No pronunciation entries yet.';});}
+function loadPronunciations(characterId){fetchJson('/api/pronunciations?character_id='+encodeURIComponent(characterId)).then(function(result){$('pronunciationList').textContent=(result.pronunciations||[]).map(function(item){return item.source+' → '+item.replacement;}).join(' · ')||LabText.t('cast.no_pronunciation_entries_yet');});}
 
 // The selected file is posted only to this Lab. Preview makes no Cast entry.
 var slateBundleFile = null, slateReviewedSidecar = null;
@@ -514,7 +513,7 @@ function postSlateBundle(path, file) {
     method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
   }).then(async function (response) {
     var result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Could not read the Voice Slate clip.');
+    if (!response.ok) throw new Error(result.error || LabText.t('cast.could_not_read_the_voice'));
     return result;
   });
 }
@@ -523,7 +522,7 @@ $('slateBundle').addEventListener('change', function () {
   slateBundleFile = file || null;
   slateReviewedSidecar = null;
   $('slateImportForm').hidden = true;
-  $('slateImportStatus').textContent = file ? 'Checking the clip and its sidecar…' : '';
+  $('slateImportStatus').textContent = file ? LabText.t('cast.checking_the_clip_and_its') : '';
   $('slateAcceptDraft').checked = false;
   $('slateImportGo').disabled = false;
   if (!file) return;
@@ -536,8 +535,8 @@ $('slateBundle').addEventListener('change', function () {
     $('slateClipDetails').textContent = [
       clip.file + ' · ' + Number(clip.seconds).toFixed(2) + ' s',
       clip.transcript,
-      'Origin: ' + clip.origin,
-      'Allowed use: ' + clip.allowed_use,
+      LabText.t('cast.origin', {origin: clip.origin}),
+      LabText.t('cast.allowed_use', {allowed_use: clip.allowed_use}),
     ].concat(clip.warnings).join('\n');
     $('slateCharacter').value = clip.speaker || '';
     picker.textContent = '';
@@ -547,7 +546,7 @@ $('slateBundle').addEventListener('change', function () {
     $('slateDraftLabel').hidden = !draft;
     $('slateAcceptDraft').required = draft;
     $('slateImportForm').hidden = false;
-    $('slateImportStatus').textContent = 'The kept WAV hash and permission sidecar were checked.';
+    $('slateImportStatus').textContent = LabText.t('cast.the_kept_wav_hash_and');
   }).catch(function (error) {
     if (slateBundleFile === file) $('slateImportStatus').textContent = error.message;
   });
@@ -564,7 +563,7 @@ $('slateImportForm').addEventListener('submit', function (event) {
     accept_draft: $('slateAcceptDraft').checked ? '1' : '0',
   });
   $('slateImportGo').disabled = true;
-  $('slateImportStatus').textContent = 'Importing the kept clip…';
+  $('slateImportStatus').textContent = LabText.t('cast.importing_the_kept_clip');
   postSlateBundle('import?' + query, file).then(function (result) {
     if (slateBundleFile !== file) return;
     slateBundleFile = null;
@@ -572,8 +571,7 @@ $('slateImportForm').addEventListener('submit', function (event) {
     $('slateBundle').value = '';
     $('slateImportForm').hidden = true;
     $('slateImportStatus').textContent =
-      (result.status === 'already_registered' ? 'This clip is already in Cast.' : 'The clip is in Cast.') +
-      ' Review the recording and approve it before use.';
+      LabText.t('cast.review_the_recording_and_approve', {value: result.status === 'already_registered' ? 'This clip is already in Cast.' : 'The clip is in Cast.'});
     $('castEditor').open = true;
     return refreshCast(result.character_id, result.identity_id);
   }).catch(function (error) {

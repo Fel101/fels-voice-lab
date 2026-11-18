@@ -250,128 +250,128 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="cast">
-  <h2>Cast library</h2>
-  <p class="meta">Listen to your saved voices and choose one for dialogue. Each card shows how the voice was created and which model will use it.</p>
-  <div class="workflow-note" id="castEmpty" hidden><p>No characters yet. <a href="#cast" id="castCreateFirst">Create a character</a> or <a href="#cloning">start with a voice recording</a>.</p></div>
+  <h2>{{ui:cast.cast_library}}</h2>
+  <p class="meta">{{ui:cast.listen_to_your_saved_voices}}</p>
+  <div class="workflow-note" id="castEmpty" hidden><p>{{ui:cast.no_characters_yet}} <a href="#cast" id="castCreateFirst">{{ui:cast.create_a_character}}</a> {{ui:cast.or}} <a href="#cloning">{{ui:cast.start_with_a_voice_recording}}</a>.</p></div>
   <div id="castBrowsing" hidden>
   <div class="row">
-    <label class="field">Find a voice<input id="voiceSearch" type="text" placeholder="Name, character role, or model"></label>
-    <button id="refreshVoices" type="button">Refresh voices</button>
+    <label class="field">{{ui:cast.find_a_voice}}<input id="voiceSearch" type="text" placeholder="{{ui:cast.name_character_role_or_model}}"></label>
+    <button id="refreshVoices" type="button">{{ui:cast.refresh_voices}}</button>
   </div>
-  <label class="meta"><input id="showRetiredVoices" type="checkbox"> Show retired voices</label>
+  <label class="meta"><input id="showRetiredVoices" type="checkbox"> {{ui:cast.show_retired_voices}}</label>
   <p id="voiceLibraryStatus" class="meta" role="status" aria-live="polite"></p>
-  <div id="voiceGallery" class="voice-gallery" aria-label="Saved voices"></div>
+  <div id="voiceGallery" class="voice-gallery" aria-label="{{ui:cast.saved_voices}}"></div>
   </div>
-  <div class="workflow-note" id="castSampleNote" hidden><p>Try two of Kokoro’s preset voices in a short scene you can render.</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">Open the sample scene</button></div></div>
-  <p><a href="#projects" id="castImportVoiceFile">Import a voice file</a></p>
+  <div class="workflow-note" id="castSampleNote" hidden><p>{{ui:cast.try_two_of_kokoro_s}}</p><div class="cast-actions"><button class="go" type="button" id="castSampleOpen">{{ui:cast.open_the_sample_scene}}</button></div></div>
+  <p><a href="#projects" id="castImportVoiceFile">{{ui:cast.import_a_voice_file}}</a></p>
   <details>
-    <summary>Import from Voice Slate</summary>
-    <p class="meta">In Voice Slate, use Save for Voice Lab on a kept clip. Review its transcript and allowed use here, then import it as a candidate.</p>
-    <label class="field compact">Voice Slate handoff<input id="slateBundle" type="file" accept=".voiceslate"></label>
+    <summary>{{ui:cast.import_from_voice_slate}}</summary>
+    <p class="meta">{{ui:cast.in_voice_slate_use_save}}</p>
+    <label class="field compact">{{ui:cast.voice_slate_handoff}}<input id="slateBundle" type="file" accept=".voiceslate"></label>
     <form id="slateImportForm" hidden>
       <p class="meta" id="slateClipDetails" style="white-space:pre-line"></p>
-      <div class="row"><label class="field compact">Character name (creates one if needed)<input id="slateCharacter" maxlength="80" required></label>
-        <label class="field compact">Cloning model<select id="slateEngine" required></select></label></div>
-      <label id="slateDraftLabel" hidden><input id="slateAcceptDraft" type="checkbox"> I understand that the transcript is a draft and needs checking</label>
-      <button type="submit" id="slateImportGo">Import as candidate</button>
+      <div class="row"><label class="field compact">{{ui:cast.character_name_creates_one_if}}<input id="slateCharacter" maxlength="80" required></label>
+        <label class="field compact">{{ui:cast.cloning_model}}<select id="slateEngine" required></select></label></div>
+      <label id="slateDraftLabel" hidden><input id="slateAcceptDraft" type="checkbox"> {{ui:cast.i_understand_that_the_transcript}}</label>
+      <button type="submit" id="slateImportGo">{{ui:cast.import_as_candidate}}</button>
     </form>
     <p class="meta" id="slateImportStatus" role="status" aria-live="polite"></p>
   </details>
-  <details id="castEditor"><summary>Create or edit a character, its voices and its recordings</summary>
-  <p class="meta">Build your cast and approve a voice recording for each character. Your recordings and every saved version stay on this PC.</p>
+  <details id="castEditor"><summary>{{ui:cast.create_or_edit_a_character}}</summary>
+  <p class="meta">{{ui:cast.build_your_cast_and_approve}}</p>
   <div class="cast-grid">
-    <label class="field">Character name<input id="characterName" type="text" maxlength="80" placeholder="Character name"></label>
-    <label class="field">Description<input id="characterDescription" type="text" maxlength="2000" placeholder="Who this character is; keep acting out of this field"></label>
+    <label class="field">{{ui:cast.character_name}}<input id="characterName" type="text" maxlength="80" placeholder="{{ui:cast.character_name}}"></label>
+    <label class="field">{{ui:cast.description}}<input id="characterDescription" type="text" maxlength="2000" placeholder="{{ui:cast.who_this_character_is_keep}}"></label>
   </div>
-  <div class="cast-actions"><button type="button" id="createCharacter">Create character</button><label class="field compact">Open character<select id="characterSelect"></select></label></div>
-  <label class="field">Character notes<textarea id="characterNotes" placeholder="What stays the same about this character, and continuity notes"></textarea></label>
-  <div class="cast-actions"><button type="button" id="saveCharacter">Save notes</button></div>
+  <div class="cast-actions"><button type="button" id="createCharacter">{{ui:cast.create_character}}</button><label class="field compact">{{ui:cast.open_character}}<select id="characterSelect"></select></label></div>
+  <label class="field">{{ui:cast.character_notes}}<textarea id="characterNotes" placeholder="{{ui:cast.what_stays_the_same_about}}"></textarea></label>
+  <div class="cast-actions"><button type="button" id="saveCharacter">{{ui:cast.save_notes}}</button></div>
   <hr>
   <div class="cast-grid">
-    <label class="field">Model<select id="identityEngine"></select></label>
-    <label class="field">Voice name<input id="identityLabel" type="text" maxlength="80" value="Neutral candidate"></label>
+    <label class="field">{{ui:cast.model}}<select id="identityEngine"></select></label>
+    <label class="field">{{ui:cast.voice_name}}<input id="identityLabel" type="text" maxlength="80" value="Neutral candidate"></label>
   </div>
-  <div class="row" id="fixedVoiceRow" hidden><label class="field compact">Preset voices (one, or several blended equally)<select id="fixedVoice" multiple size="5"></select>
-    <span class="meta">Select one or more installed voices; several are blended equally.</span></label></div>
+  <div class="row" id="fixedVoiceRow" hidden><label class="field compact">{{ui:cast.preset_voices_one_or_several}}<select id="fixedVoice" multiple size="5"></select>
+    <span class="meta">{{ui:cast.select_one_or_more_installed}}</span></label></div>
   <div class="cast-grid" id="customVoiceIdentityRow" hidden>
-    <button type="button" id="loadCustomVoiceIdentity">Load CustomVoice speakers</button>
-    <label class="field compact">Preset voice<select id="presetSpeaker"><option value="">Load the local checkpoint first</option></select></label>
-    <label class="field compact">Language<select id="presetLanguage"><option value="">Load the local checkpoint first</option></select></label>
-    <label class="field">Default acting direction (optional)<textarea id="presetDirection" maxlength="1000" placeholder="A reusable acting starting point; each performance can override it."></textarea></label>
+    <button type="button" id="loadCustomVoiceIdentity">{{ui:cast.load_customvoice_speakers}}</button>
+    <label class="field compact">{{ui:cast.preset_voice}}<select id="presetSpeaker"><option value="">{{ui:cast.load_the_local_checkpoint_first}}</option></select></label>
+    <label class="field compact">{{ui:cast.language}}<select id="presetLanguage"><option value="">{{ui:cast.load_the_local_checkpoint_first}}</option></select></label>
+    <label class="field">{{ui:cast.default_acting_direction_optional}}<textarea id="presetDirection" maxlength="1000" placeholder="{{ui:cast.a_reusable_acting_starting_point}}"></textarea></label>
     <p class="meta" id="customVoiceIdentityStatus" role="status"></p>
   </div>
   <div class="cast-grid" id="phononIdentityRow" hidden>
-    <label class="field compact">Phonon voice<select id="phononIdentityVoice"></select></label>
+    <label class="field compact">{{ui:cast.phonon_voice}}<select id="phononIdentityVoice"></select></label>
     <p class="meta" id="phononIdentityInfo" role="status"></p>
   </div>
-  <label class="field">Notes on this voice<textarea id="identityNotes" placeholder="Keep this voice's stable qualities separate from per-line acting"></textarea></label>
-  <div class="cast-actions"><button type="button" id="createIdentity">Add voice</button><label class="field compact">Voice<select id="identitySelect"></select></label><span class="meta" id="identityState"></span><button type="button" id="approveFixedIdentity" hidden>Approve this preset voice</button></div>
+  <label class="field">{{ui:cast.notes_on_this_voice}}<textarea id="identityNotes" placeholder="{{ui:cast.keep_this_voice_s_stable}}"></textarea></label>
+  <div class="cast-actions"><button type="button" id="createIdentity">{{ui:cast.add_voice}}</button><label class="field compact">{{ui:cast.voice}}<select id="identitySelect"></select></label><span class="meta" id="identityState"></span><button type="button" id="approveFixedIdentity" hidden>{{ui:cast.approve_this_preset_voice}}</button></div>
   <div id="referenceEditor" hidden>
-    <hr><h3>Voice recording and its versions</h3>
-    <p class="meta">Original audio is saved unchanged. Each trim, channel choice, resample, or transcript edit creates a new immutable version. Breeze takes a voice recording of up to 60 seconds, and the Lab keeps every other recording to 60 seconds too.</p>
-    <div class="row"><label class="field">Import WAV, FLAC, OGG, MP3 or M4A<input id="referenceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-      <button id="micStart" type="button">Record from the microphone</button><button id="micStop" type="button" hidden>Stop recording</button></div>
-    <div class="row"><label class="field compact">Saved recording version<select id="referenceVersion"></select></label>
-      <label class="field compact">Trim start (seconds)<input id="trimStart" type="number" min="0" step="0.01" value="0"></label>
-      <label class="field compact">Trim end (seconds)<input id="trimEnd" type="number" min="0.5" step="0.01"></label></div>
-    <div class="row"><label class="field compact">Channel (for a stereo recording)<select id="referenceChannel"><option value="mono">Average to mono</option><option value="left">Use left channel</option><option value="right">Use right channel</option></select></label>
-      <label class="field compact">Sample rate<select id="referenceRate"><option value="24000">24 kHz (recommended)</option><option value="16000">16 kHz</option><option value="48000">48 kHz</option><option value="0">Keep source rate</option></select></label>
-      <button id="previewReference" type="button">Hear the edited clip</button></div>
+    <hr><h3>{{ui:cast.voice_recording_and_its_versions}}</h3>
+    <p class="meta">{{ui:cast.original_audio_is_saved_unchanged}}</p>
+    <div class="row"><label class="field">{{ui:cast.import_wav_flac_ogg_mp3}}<input id="referenceFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+      <button id="micStart" type="button">{{ui:cast.record_from_the_microphone}}</button><button id="micStop" type="button" hidden>{{ui:cast.stop_recording}}</button></div>
+    <div class="row"><label class="field compact">{{ui:cast.saved_recording_version}}<select id="referenceVersion"></select></label>
+      <label class="field compact">{{ui:cast.trim_start_seconds}}<input id="trimStart" type="number" min="0" step="0.01" value="0"></label>
+      <label class="field compact">{{ui:cast.trim_end_seconds}}<input id="trimEnd" type="number" min="0.5" step="0.01"></label></div>
+    <div class="row"><label class="field compact">{{ui:cast.channel_for_a_stereo_recording}}<select id="referenceChannel"><option value="mono">{{ui:cast.average_to_mono}}</option><option value="left">{{ui:cast.use_left_channel}}</option><option value="right">{{ui:cast.use_right_channel}}</option></select></label>
+      <label class="field compact">{{ui:cast.sample_rate}}<select id="referenceRate"><option value="24000">{{ui:cast.24_khz_recommended}}</option><option value="16000">{{ui:cast.16_khz}}</option><option value="48000">{{ui:cast.48_khz}}</option><option value="0">{{ui:cast.keep_source_rate}}</option></select></label>
+      <button id="previewReference" type="button">{{ui:cast.hear_the_edited_clip}}</button></div>
     <div class="workflow-note">
-      <label><input id="noiseReductionEnabled" type="checkbox"> Reduce steady background noise in this version</label>
-      <p class="meta">Choose a short noise-only part of the trimmed clip (no speech) as the noise profile. This spectral gate can reduce steady fan or hiss noise; it may color the voice and cannot separate overlapping speech or music. The original recording stays unchanged.</p>
+      <label><input id="noiseReductionEnabled" type="checkbox"> {{ui:cast.reduce_steady_background_noise_in}}</label>
+      <p class="meta">{{ui:cast.choose_a_short_noise_only}}</p>
       <div id="noiseProfileFields" class="row" hidden>
-        <label class="field compact">Noise profile start (seconds in trimmed clip)<input id="noiseProfileStart" type="number" min="0" step="0.01" value="0"></label>
-        <label class="field compact">Noise profile end<input id="noiseProfileEnd" type="number" min="0.05" step="0.01" value="0.30"></label>
-        <label class="field compact">Reduction strength<input id="noiseReductionStrength" type="range" min="0.1" max="1" step="0.05" value="0.75"><span class="meta" id="noiseReductionStrengthValue">0.75</span></label>
+        <label class="field compact">{{ui:cast.noise_profile_start_seconds_in}}<input id="noiseProfileStart" type="number" min="0" step="0.01" value="0"></label>
+        <label class="field compact">{{ui:cast.noise_profile_end}}<input id="noiseProfileEnd" type="number" min="0.05" step="0.01" value="0.30"></label>
+        <label class="field compact">{{ui:cast.reduction_strength}}<input id="noiseReductionStrength" type="range" min="0.1" max="1" step="0.05" value="0.75"><span class="meta" id="noiseReductionStrengthValue">0.75</span></label>
       </div>
     </div>
-    <canvas class="wave" id="referenceWave" width="900" height="120" aria-label="Waveform of the voice recording"></canvas>
+    <canvas class="wave" id="referenceWave" width="900" height="120" aria-label="{{ui:cast.waveform_of_the_voice_recording}}"></canvas>
     <audio id="referencePlayer" controls></audio>
     <p class="meta" id="referenceAnalysis"></p>
-    <label class="field">Exact words in the recording<textarea id="referenceTranscript" placeholder="Type and verify every word; guessed transcripts are never marked exact"></textarea></label>
-    <div class="cast-actions"><button type="button" id="suggestTranscript">Suggest the words from the saved clip</button><span class="meta">A local draft to check word by word. It is not saved or marked exact.</span> <a href="#system">Speech recognition setup</a></div>
-    <div class="cast-grid"><label class="field">Where it comes from<input id="referenceOrigin" type="text" maxlength="1000" placeholder="Where this recording/design came from"></label>
-      <label class="field">Who may use it, and how<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="Permission and use limits; restrictions carry forward"></label></div>
-    <div class="cast-actions"><button type="button" id="saveReference">Save the recording</button><button type="button" id="saveReferenceVersion" hidden>Save edited version</button>
-      <label class="field compact">Approve this version<select id="approveReference"></select></label><button type="button" id="approveIdentity">Approve voice</button></div>
+    <label class="field">{{ui:cast.exact_words_in_the_recording}}<textarea id="referenceTranscript" placeholder="{{ui:cast.type_and_verify_every_word}}"></textarea></label>
+    <div class="cast-actions"><button type="button" id="suggestTranscript">{{ui:cast.suggest_the_words_from_the}}</button><span class="meta">{{ui:cast.a_local_draft_to_check}}</span> <a href="#system">{{ui:cast.speech_recognition_setup}}</a></div>
+    <div class="cast-grid"><label class="field">{{ui:cast.where_it_comes_from}}<input id="referenceOrigin" type="text" maxlength="1000" placeholder="{{ui:cast.where_this_recording_design_came}}"></label>
+      <label class="field">{{ui:cast.who_may_use_it_and}}<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="{{ui:cast.permission_and_use_limits_restrictions}}"></label></div>
+    <div class="cast-actions"><button type="button" id="saveReference">{{ui:cast.save_the_recording}}</button><button type="button" id="saveReferenceVersion" hidden>{{ui:cast.save_edited_version}}</button>
+      <label class="field compact">{{ui:cast.approve_this_version}}<select id="approveReference"></select></label><button type="button" id="approveIdentity">{{ui:cast.approve_voice}}</button></div>
     <p class="meta" id="referenceStatus"></p>
-    <div class="cast-actions"><button type="button" id="retireReference">Retire this recording</button><button type="button" id="restoreReference" hidden>Restore this recording</button><button type="button" id="purgeReference" hidden>Delete this recording for good…</button></div>
+    <div class="cast-actions"><button type="button" id="retireReference">{{ui:cast.retire_this_recording}}</button><button type="button" id="restoreReference" hidden>{{ui:cast.restore_this_recording}}</button><button type="button" id="purgeReference" hidden>{{ui:cast.delete_this_recording_for_good}}</button></div>
     <p class="meta" id="referenceRetirement"></p>
   </div>
   </details>
 </section>
 
 <section class="card" id="perform">
-  <h2>Perform lines</h2>
-  <p class="meta">Choose a character voice, direct a line, and audition variations. Every take is saved with the voice, voice recording and settings that made it.</p>
-  <p class="workflow-note" id="performEmpty" hidden>No characters yet. <a href="#cast">Add a character and voice in Cast</a>, then come back to make takes.</p>
+  <h2>{{ui:perform.perform_lines}}</h2>
+  <p class="meta">{{ui:perform.choose_a_character_voice_direct}}</p>
+  <p class="workflow-note" id="performEmpty" hidden>{{ui:perform.no_characters_yet}} <a href="#cast">{{ui:perform.add_a_character_and_voice}}</a>{{ui:perform.then_come_back_to_make}}</p>
   <div id="performEditor" hidden>
-  <div class="cast-grid"><label class="field">Character<select id="performCharacter"></select></label>
-    <label class="field">Voice<select id="performIdentity"></select></label></div>
-  <div class="row"><label class="field compact">Voice recording to use<select id="performReference"></select></label>
-    <label class="field compact">Language<select id="performLanguage"><option>English</option><option>Chinese</option><option>Japanese</option><option>Korean</option><option>German</option><option>French</option><option>Italian</option><option>Portuguese</option><option>Russian</option><option>Spanish</option><option>Auto</option></select></label>
-    <label class="field compact">Starting seed<input id="performSeed" type="number" min="0" max="2147483647" value="42"></label></div>
-  <details id="performLineDetails"><summary>Details</summary>
-    <label class="field compact">Line name<input id="lineId" type="text" maxlength="100" value="line-01"></label>
-    <p class="meta">Filled in for you. Takes made for the same line name are listed together, and exports name the line by it.</p></details>
-  <label class="field">Dialogue line<textarea id="performText" maxlength="1200">I kept the porch light on. I hoped you'd find your way back.</textarea></label>
-  <div class="row"><label class="field compact">Acting preset<select id="actingPreset"><option value="">Neutral, or your own acting direction</option><option value="Speak warmly and gently, with a reassuring tone.">Warm and reassuring</option><option value="Speak with bright excitement, almost laughing.">Excited</option><option value="Whisper softly and intimately, close to the listener.">Intimate whisper</option><option value="Speak sadly, with a trembling and tearful voice.">Sad and trembling</option><option value="Speak sharply and coldly, with controlled anger.">Angry and cold</option></select></label>
-    <label class="field compact" id="performDirectionWrap">Acting direction<textarea id="performDirection" placeholder="Breeze takes an acting direction; with Qwen Base it is experimental"></textarea></label></div>
-  <div class="row"><label><input id="usePronunciations" type="checkbox"> Apply this character's pronunciation dictionary</label>
-    <label class="field compact" title="Each take uses the next seed after the starting seed. A model without a seed control makes one take.">Takes to make<select id="variantCount"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+  <div class="cast-grid"><label class="field">{{ui:perform.character}}<select id="performCharacter"></select></label>
+    <label class="field">{{ui:perform.voice}}<select id="performIdentity"></select></label></div>
+  <div class="row"><label class="field compact">{{ui:perform.voice_recording_to_use}}<select id="performReference"></select></label>
+    <label class="field compact">{{ui:perform.language}}<select id="performLanguage"><option>{{ui:perform.english}}</option><option>{{ui:perform.chinese}}</option><option>{{ui:perform.japanese}}</option><option>{{ui:perform.korean}}</option><option>{{ui:perform.german}}</option><option>{{ui:perform.french}}</option><option>{{ui:perform.italian}}</option><option>{{ui:perform.portuguese}}</option><option>{{ui:perform.russian}}</option><option>{{ui:perform.spanish}}</option><option>{{ui:perform.auto}}</option></select></label>
+    <label class="field compact">{{ui:perform.starting_seed}}<input id="performSeed" type="number" min="0" max="2147483647" value="42"></label></div>
+  <details id="performLineDetails"><summary>{{ui:perform.details}}</summary>
+    <label class="field compact">{{ui:perform.line_name}}<input id="lineId" type="text" maxlength="100" value="line-01"></label>
+    <p class="meta">{{ui:perform.filled_in_for_you_takes}}</p></details>
+  <label class="field">{{ui:perform.dialogue_line}}<textarea id="performText" maxlength="1200">{{ui:perform.i_kept_the_porch_light}}</textarea></label>
+  <div class="row"><label class="field compact">{{ui:perform.acting_preset}}<select id="actingPreset"><option value="">{{ui:perform.neutral_or_your_own_acting}}</option><option value="Speak warmly and gently, with a reassuring tone.">{{ui:perform.warm_and_reassuring}}</option><option value="Speak with bright excitement, almost laughing.">{{ui:perform.excited}}</option><option value="Whisper softly and intimately, close to the listener.">{{ui:perform.intimate_whisper}}</option><option value="Speak sadly, with a trembling and tearful voice.">{{ui:perform.sad_and_trembling}}</option><option value="Speak sharply and coldly, with controlled anger.">{{ui:perform.angry_and_cold}}</option></select></label>
+    <label class="field compact" id="performDirectionWrap">{{ui:perform.acting_direction}}<textarea id="performDirection" placeholder="{{ui:perform.breeze_takes_an_acting_direction}}"></textarea></label></div>
+  <div class="row"><label><input id="usePronunciations" type="checkbox"> {{ui:perform.apply_this_character_s_pronunciation}}</label>
+    <label class="field compact" title="{{ui:perform.each_take_uses_the_next}}">{{ui:perform.takes_to_make}}<select id="variantCount"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
     <span class="meta" id="performSupport"></span></div>
-  <details id="performSettingsPanel"><summary>Model settings</summary>
-    <p class="meta" id="performSettingsHelp">Controls shown here come from this checkpoint's supported performance schema. Each take keeps the values the model used, its defaults included.</p>
+  <details id="performSettingsPanel"><summary>{{ui:perform.model_settings}}</summary>
+    <p class="meta" id="performSettingsHelp">{{ui:perform.controls_shown_here_come_from}}</p>
     <div id="performSettingsControls" class="cast-grid"></div>
   </details>
-  <div class="cast-actions"><button class="go" type="button" id="performGenerate">Make takes</button><button type="button" id="performStop" hidden>Stop after this take</button><button type="button" id="refreshTakes">Refresh saved takes</button></div>
+  <div class="cast-actions"><button class="go" type="button" id="performGenerate">{{ui:perform.make_takes}}</button><button type="button" id="performStop" hidden>{{ui:perform.stop_after_this_take}}</button><button type="button" id="refreshTakes">{{ui:perform.refresh_saved_takes}}</button></div>
   <p id="performError" role="alert"></p><p class="meta" id="performStatus"></p><div class="take" id="takeList"></div>
-  <details><summary>Pronunciations for this character</summary>
-    <div class="cast-grid"><label class="field">Written form<input id="pronunciationSource" type="text" maxlength="100"></label><label class="field">Spoken form<input id="pronunciationReplacement" type="text" maxlength="200"></label></div>
-    <div class="row"><button type="button" id="savePronunciation">Save pronunciation</button><span class="meta" id="pronunciationList"></span></div>
+  <details><summary>{{ui:perform.pronunciations_for_this_character}}</summary>
+    <div class="cast-grid"><label class="field">{{ui:perform.written_form}}<input id="pronunciationSource" type="text" maxlength="100"></label><label class="field">{{ui:perform.spoken_form}}<input id="pronunciationReplacement" type="text" maxlength="200"></label></div>
+    <div class="row"><button type="button" id="savePronunciation">{{ui:perform.save_pronunciation}}</button><span class="meta" id="pronunciationList"></span></div>
   </details>
-  <div id="nativeTags" class="cast-actions" hidden><span class="meta">Insert model-native event:</span></div>
+  <div id="nativeTags" class="cast-actions" hidden><span class="meta">{{ui:perform.insert_model_native_event}}</span></div>
   </div>
 </section>
 
