@@ -175,7 +175,9 @@ class AutomationBrowser(test_openai_route.RouteCase):
         page.click("#automationAdd")
         page.set_value("#automationSteps fieldset:nth-child(2) input[list]", "ef_dora")
         page.click("#automationSave")
-        page.wait_until("document.querySelector('#automationChoice').selectedOptions[0].text === 'Two local outputs'")
+        page.wait_until(
+            "$('automationChoice').selectedOptions[0]?.text === 'Two local outputs' && !$('automationPreview').disabled"
+        )
         page.click("#automationPreview")
         page.wait_until("document.querySelectorAll('#automationPlan li').length === 2")
         self.assertTrue(
@@ -183,6 +185,7 @@ class AutomationBrowser(test_openai_route.RouteCase):
                 "Array.from(document.querySelectorAll('#automationPlan li')).every(li => li.textContent.startsWith('Original input'))"
             )
         )
+        page.wait_until("!$('automationRun').disabled")
         page.click("#automationRun")
         page.wait_until("document.querySelector('#automationStatus').textContent === 'Run queued.'")
         page.wait_until("(async () => (await (await fetch('/api/automation/runs')).json()).runs[0].status === 'completed')()")
@@ -191,4 +194,47 @@ class AutomationBrowser(test_openai_route.RouteCase):
         paths = page.evaluate("Array.from(document.querySelectorAll('#automationRuns a'), a => a.getAttribute('href'))")
         for path in paths:
             self.assertEqual(self.service.request("GET", path)[2][:4], b"RIFF")
+        self.assertEqual(page.problems, [])
+
+    def test_recipe_actions_are_disabled_until_a_save_refresh_finishes(self):
+        page = DevToolsPage(BROWSER)
+        self.addCleanup(page.close)
+        page.open(self.service.base)
+        page.evaluate("""(() => {
+            const refresh = refreshAutomation;
+            refreshAutomation = function () {
+                window.automationRefresh = refresh();
+                return window.automationRefresh;
+            };
+        })()""")
+        page.show("automation")
+        page.wait_until("!!window.automationRefresh")
+        page.evaluate("window.automationRefresh")
+        page.set_value("#automationName", "Wait for the refresh")
+        page.set_value("#automationText", "One local test.")
+        page.set_value("#automationOptions", "speak")
+        page.click("#automationAdd")
+        page.set_value("#automationSteps input[list]", "af_heart")
+        page.evaluate("""(() => {
+            const originalFetch = fetchJson;
+            fetchJson = async function (path, body) {
+                if (path === '/api/automation/runs' && automationBusy && automationRecipe.id && !window.releaseAutomationRefresh) {
+                    await new Promise(resolve => { window.releaseAutomationRefresh = resolve; });
+                }
+                return originalFetch(path, body);
+            };
+        })()""")
+        page.click("#automationSave")
+        page.wait_until("!!window.releaseAutomationRefresh")
+        actions = "['automationSave', 'automationPreview', 'automationRun', 'automationAdd']"
+        try:
+            self.assertEqual(page.evaluate("$('automationChoice').selectedOptions[0].text"), "Wait for the refresh")
+            self.assertEqual(page.evaluate(f"{actions}.map(id => $(id).disabled)"), [True] * 4)
+            page.click("#automationPreview")
+            self.assertEqual(page.evaluate("$('automationPlan').children.length"), 0)
+        finally:
+            page.evaluate("window.releaseAutomationRefresh()")
+        page.wait_until(f"{actions}.every(id => !$(id).disabled)")
+        page.click("#automationPreview")
+        page.wait_until("$('automationPlan').children.length === 1")
         self.assertEqual(page.problems, [])

@@ -90,7 +90,13 @@ function fillAutomationOperations(kind) {
   var ops = $('automationOptions'); ops.textContent='';
   Object.keys(automationOperations).filter(function(key){return automationOperations[key][0]===kind;})
     .forEach(function(key){option(ops,key,automationOperations[key][2]);});
-  $('automationAdd').disabled = !ops.options.length || automationRecipe.steps.length>=8;
+  updateAutomationActions();
+}
+function updateAutomationActions() {
+  ['automationSave','automationPreview','automationRun'].forEach(function(id){
+    $(id).disabled = automationBusy;
+  });
+  $('automationAdd').disabled = automationBusy || !$('automationOptions').options.length || automationRecipe.steps.length>=8;
 }
 async function refreshAutomation() {
   var [recipes, projects, voices, profiles, cast] = await Promise.all([
@@ -183,8 +189,12 @@ async function localAutomationInputs() {
 async function automationAction(action) {
   if(automationBusy) return;
   automationBusy=true;
+  updateAutomationActions();
   try { await action(); } catch(error){automationError(error);}
-  finally {automationBusy=false;}
+  finally {
+    automationBusy=false;
+    updateAutomationActions();
+  }
 }
 $('automationSource').addEventListener('change',function(){
   var index=Number($('automationSource').value);
