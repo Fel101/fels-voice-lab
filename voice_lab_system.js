@@ -2,46 +2,53 @@
 // The server decides every fact (and redacts the report); the page shows what it is told and never guesses from the browser.
 var systemTaskTimer=null,backupPlan=null,suggestedFolder='';
 function formatBytes(count){
-  if(count===null||count===undefined)return 'unknown';
+  if(count===null||count===undefined)return LabText.t('system.unknown');
   var units=['bytes','KB','MB','GB','TB'],size=Number(count),index=0;
   while(size>=1024&&index<units.length-1){size/=1024;index++;}
   return (index===0?String(Math.round(size)):size.toFixed(1))+' '+units[index];
 }
-function whenText(iso){var date=new Date(iso);return isNaN(date.getTime())?String(iso||'an unknown time'):date.toLocaleString();}
+function whenText(iso){var date=new Date(iso);return isNaN(date.getTime())?String(iso||LabText.t('system.an_unknown_time')):date.toLocaleString(LabText.language);}
 function systemFacts(report){
-  var schemas=report.library.schemas,counts=report.library.counts,schemaText=Object.keys(schemas).map(function(key){return key+' '+(schemas[key]===null?'unreadable':schemas[key]);}).join(', ');
-  var countText=[['characters','character','characters'],['identities','voice','voices'],['references','voice recording','voice recordings'],['takes','take','takes'],['scenes','scene','scenes'],
-    ['dubs','dub','dubs'],['narrations','narration','narrations'],['projects','project','projects'],
-    ['audio_tools','audio tool file','audio tool files'],['recipes','recipe','recipes']].filter(function(row){
-    return counts[row[0]]!==null&&counts[row[0]]!==undefined;}).map(function(row){return plural(counts[row[0]],row[1],row[2]);}).join(', ');
-  var source=report.system.python_source,python=report.system.python+(source==="the Lab's own"?' (the Lab\'s own)':source?' (from '+source+')':'');
-  var rows=[['Version',report.app.name+' '+report.app.version],['Python and system',python+', '+report.system.platform],
-    ['Device',report.system.device+', '+report.system.free_ram_gb+' GB of memory free'],['Library folder',report.library.path],
-    ['Database schemas',schemaText||'no databases yet'],['Library contents',countText||'nothing yet']];
-  if(report.log&&report.log.file)rows.push(['Service log',report.log.file]);
+  var schemas=report.library.schemas,counts=report.library.counts,schemaText=Object.keys(schemas).map(function(key){return key+' '+(schemas[key]===null?LabText.t('system.unreadable'):schemas[key]);}).join(', ');
+  var countText=[
+    counts.characters == null ? '' : LabText.plural('system.character_count', counts.characters),
+    counts.identities == null ? '' : LabText.plural('system.voice_count', counts.identities),
+    counts.references == null ? '' : LabText.plural('system.voice_recording_count', counts.references),
+    counts.takes == null ? '' : LabText.plural('system.take_count', counts.takes),
+    counts.scenes == null ? '' : LabText.plural('system.scene_count', counts.scenes),
+    counts.dubs == null ? '' : LabText.plural('system.dub_count', counts.dubs),
+    counts.narrations == null ? '' : LabText.plural('system.narration_count', counts.narrations),
+    counts.projects == null ? '' : LabText.plural('system.project_count', counts.projects),
+    counts.audio_tools == null ? '' : LabText.plural('system.audio_tool_file_count', counts.audio_tools),
+    counts.recipes == null ? '' : LabText.plural('system.recipe_count', counts.recipes)
+  ].filter(Boolean).join(', ');
+  var source=report.system.python_source,python=report.system.python+(source==="the Lab's own"?LabText.t('system.the_lab_s_own_2'):source?LabText.t('system.from', {source: source}):'');
+  var rows=[[LabText.t('system.version'),report.app.name+' '+report.app.version],[LabText.t('system.python_and_system'),python+', '+report.system.platform],
+    [LabText.t('system.device'),report.system.device+', '+report.system.free_ram_gb+LabText.t('system.gb_of_memory_free')],[LabText.t('system.library_folder'),report.library.path],
+    [LabText.t('system.database_schemas'),schemaText||LabText.t('system.no_databases_yet')],[LabText.t('system.library_contents'),countText||LabText.t('system.nothing_yet')]];
+  if(report.log&&report.log.file)rows.push([LabText.t('system.service_log'),report.log.file]);
   return rows;
 }
 function ffmpegSummary(ffmpeg){
-  if(!ffmpeg||!ffmpeg.found)return {ok:false,text:(ffmpeg&&ffmpeg.message)||'FFmpeg was not found on this PC.'};
-  var names={wav:'WAV',flac:'FLAC',ogg:'Ogg',mp3:'MP3',m4a:'AAC'},formats=Object.keys(names).map(function(key){return names[key]+' '+(ffmpeg.formats&&ffmpeg.formats[key]?'yes':'no');}).join(', ');
-  return {ok:!!ffmpeg.ready&&!ffmpeg.message,text:'FFmpeg '+(ffmpeg.version||'')+' found'+(ffmpeg.ready?'':', but ffprobe was not')+'. Can write: '+formats+'.'+(ffmpeg.message?' '+ffmpeg.message:'')};
+  if(!ffmpeg||!ffmpeg.found)return {ok:false,text:(ffmpeg&&ffmpeg.message)||LabText.t('system.ffmpeg_was_not_found_on')};
+  var names={wav:'WAV',flac:'FLAC',ogg:'Ogg',mp3:'MP3',m4a:'AAC'},formats=Object.keys(names).map(function(key){return names[key]+' '+(ffmpeg.formats&&ffmpeg.formats[key]?LabText.t('system.yes'):LabText.t('system.no'));}).join(', ');
+  return {ok:!!ffmpeg.ready&&!ffmpeg.message,text:LabText.t('system.ffmpeg_found_can_write', {value: ffmpeg.version||'', value2: ffmpeg.ready?'':LabText.t('system.ffprobe_missing'), formats: formats, value3: ffmpeg.message?' '+ffmpeg.message:''})};
 }
 function diskSummary(label,row){
-  if(!row)return {low:false,text:label+': the free space could not be read.'};
-  return {low:!!row.low,text:label+': '+formatBytes(row.free_bytes)+' free of '+formatBytes(row.total_bytes)+(row.low?'. That is low; a backup and new takes need room.':'.')};
+  if(!row)return {low:false,text:label+LabText.t('system.the_free_space_could_not')};
+  return {low:!!row.low,text:label+': '+formatBytes(row.free_bytes)+LabText.t('system.free_of')+formatBytes(row.total_bytes)+(row.low?LabText.t('system.that_is_low_a_backup'):'.')};
 }
 function modelsSummary(engines){
-  var words={usable:'usable',not_checked:'installed but not tested',check_outdated:'test out of date',check_failed:'test failed',not_installed:'not installed',conversion_task:'conversion tools'};
+  var words={usable:LabText.t('system.usable'),not_checked:LabText.t('system.installed_but_not_tested'),check_outdated:LabText.t('system.test_out_of_date'),check_failed:LabText.t('system.test_failed'),not_installed:LabText.t('system.not_installed'),conversion_task:LabText.t('system.conversion_tools')};
   var parts=Object.keys(engines.counts).filter(function(key){return engines.counts[key];}).map(function(key){return engines.counts[key]+' '+(words[key]||key);});
-  return (parts.length?parts.join(', '):'No models are integrated')+' (device '+engines.device+').';
+  return (parts.length?parts.join(', '):LabText.t('system.no_models_are_integrated'))+LabText.t('system.device_2')+engines.device+').';
 }
-function plural(count,one,many){return count+' '+(count===1?one:many);}
 function systemNote(id,text,flagged){var node=$(id);node.textContent=text;node.className=flagged?'meta take-checks flagged':'meta';}
 function renderSystem(report){
   var facts=$('systemFacts');facts.textContent='';
   systemFacts(report).forEach(function(row){var term=document.createElement('dt'),value=document.createElement('dd');term.textContent=row[0];value.textContent=row[1];facts.appendChild(term);facts.appendChild(value);});
   var ffmpeg=ffmpegSummary(report.ffmpeg);systemNote('systemFfmpeg',ffmpeg.text,!ffmpeg.ok);renderFfmpegOffer('system',report.ffmpeg);
-  var library=diskSummary('Library drive',report.disk.library),install=diskSummary('Program drive',report.disk.install);
+  var library=diskSummary(LabText.t('system.library_drive'),report.disk.library),install=diskSummary(LabText.t('system.program_drive'),report.disk.install);
   systemNote('systemDisk',library.text+' '+install.text,library.low||install.low);
   $('systemModels').textContent=modelsSummary(report.engines);
   $('systemDiagnostics').textContent=report.diagnostics||'';
@@ -49,12 +56,12 @@ function renderSystem(report){
 }
 function refreshSystem(recheck){
   $('systemError').textContent='';
-  return fetchJson('/api/system'+(recheck?'?recheck=1':'')).then(renderSystem).catch(function(e){$('systemError').textContent='Could not read the system report: '+e.message;});
+  return fetchJson('/api/system'+(recheck?'?recheck=1':'')).then(renderSystem).catch(function(e){$('systemError').textContent=LabText.t('system.could_not_read_the_system', {message: e.message});});
 }
 function copyDiagnostics(){
-  var text=$('systemDiagnostics').textContent||'',done=function(){$('systemCopied').textContent='Copied. It holds no scripts, names or recordings, and your home folder reads as ~. Read it under Show the report before you share it.';},
+  var text=$('systemDiagnostics').textContent||'',done=function(){$('systemCopied').textContent=LabText.t('system.copied_it_holds_no_scripts');},
     fallback=function(){var box=document.createElement('textarea');box.value=text;box.setAttribute('readonly','');document.body.appendChild(box);box.select();
-      try{if(document.execCommand('copy'))done();else $('systemCopied').textContent='Your browser blocked copying. Open Show the report, select the text and copy it yourself.';}catch(e){$('systemCopied').textContent='Your browser blocked copying. Open Show the report, select the text and copy it yourself.';}
+      try{if(document.execCommand('copy'))done();else $('systemCopied').textContent=LabText.t('system.your_browser_blocked_copying_open');}catch(e){$('systemCopied').textContent=LabText.t('system.your_browser_blocked_copying_open');}
       document.body.removeChild(box);};
   if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text).then(done,fallback);
   fallback();return Promise.resolve();
@@ -64,49 +71,53 @@ function storageRows(storage){
   return rows.concat(storage.other.map(function(row){return {label:row.label,bytes:row.bytes,backup:'no'};}));
 }
 function cleanupText(cleanup){
-  if(!cleanup.count)return 'Nothing to clean up: no stopped-worker folders, old desktop sessions, old logs or old clips for other apps are waiting.';
-  var kinds={worker:['worker scratch folder','worker scratch folders'],desktop:['old desktop session','old desktop sessions'],log:['old service log','old service logs'],
-    spoken:['folder of old clips for other apps','folders of old clips for other apps']};
-  var parts=Object.keys(kinds).filter(function(key){return cleanup.by_kind[key]&&cleanup.by_kind[key].count;}).map(function(key){return plural(cleanup.by_kind[key].count,kinds[key][0],kinds[key][1]);});
-  return 'Cleanup would remove '+parts.join(', ')+' ('+formatBytes(cleanup.bytes)+'). It never touches Cast, Scenes, exports or backups.';
+  if(!cleanup.count)return LabText.t('system.nothing_to_clean_up_no');
+  var counts=cleanup.by_kind;
+  var parts=[
+    counts.worker?.count ? LabText.plural('system.worker_scratch_folder_count', counts.worker.count) : '',
+    counts.desktop?.count ? LabText.plural('system.old_desktop_session_count', counts.desktop.count) : '',
+    counts.log?.count ? LabText.plural('system.old_service_log_count', counts.log.count) : '',
+    counts.spoken?.count ? LabText.plural('system.folder_of_old_clips_for_other_apps_count', counts.spoken.count) : ''
+  ].filter(Boolean);
+  return LabText.t('system.cleanup_would_remove_it_never', {join: parts.join(', '), formatBytes: formatBytes(cleanup.bytes)});
 }
 function renderStorage(storage){
   var body=$('systemStorage');body.textContent='';
   storageRows(storage).forEach(function(row){
-    var tr=document.createElement('tr');[row.label,formatBytes(row.bytes),row.backup==='always'?'always':row.backup==='optional'?'if ticked':'no'].forEach(function(text){
+    var tr=document.createElement('tr');[row.label,formatBytes(row.bytes),row.backup==='always'?LabText.t('system.always'):row.backup==='optional'?LabText.t('system.if_ticked'):LabText.t('system.no')].forEach(function(text){
       var cell=document.createElement('td');cell.textContent=text;tr.appendChild(cell);});body.appendChild(tr);});
   $('systemCleanup').textContent=cleanupText(storage.cleanup);
   $('systemClean').disabled=!storage.cleanup.count;
 }
 function measureStorage(){
-  $('systemError').textContent='';$('systemMeasure').disabled=true;$('systemStatus').textContent='Measuring the folders…';
+  $('systemError').textContent='';$('systemMeasure').disabled=true;$('systemStatus').textContent=LabText.t('system.measuring_the_folders');
   return fetchJson('/api/system/storage').then(function(storage){renderStorage(storage);$('systemStatus').textContent='';})
-    .catch(function(e){$('systemStatus').textContent='';$('systemError').textContent='Could not measure the folders: '+e.message;}).then(function(){$('systemMeasure').disabled=false;});
+    .catch(function(e){$('systemStatus').textContent='';$('systemError').textContent=LabText.t('system.could_not_measure_the_folders', {message: e.message});}).then(function(){$('systemMeasure').disabled=false;});
 }
 function runCleanup(){
-  if(!window.confirm('Remove the stopped-worker folders, old desktop sessions, old service logs and old clips for other apps listed above? Cast, Scenes, exports and backups are not touched.'))return Promise.resolve();
+  if(!window.confirm(LabText.t('system.remove_the_stopped_worker_folders')))return Promise.resolve();
   $('systemClean').disabled=true;$('systemError').textContent='';
   return fetchJson('/api/system/cleanup',{}).then(function(result){
-    var message='Removed '+plural(result.removed,'item','items')+' ('+formatBytes(result.bytes)+')'+(result.errors.length?'; '+result.errors.length+' could not be removed.':'.');
+    var message=LabText.t('system.removed', {plural: LabText.plural('system.item_count', result.removed), formatBytes: formatBytes(result.bytes), value: result.errors.length?'; '+result.errors.length+' could not be removed.':'.'});
     return measureStorage().then(function(){$('systemStatus').textContent=message;});
-  }).catch(function(e){$('systemError').textContent='Cleanup did not finish: '+e.message;});
+  }).catch(function(e){$('systemError').textContent=LabText.t('system.cleanup_did_not_finish', {message: e.message});});
 }
 function taskPercent(task){return task.status==='running'&&task.bytes_total?Math.min(100,Math.round(100*task.bytes_done/task.bytes_total)):null;}
 function taskMessage(task){
   var result=task.result||{},warnings=result.warnings&&result.warnings.length?' '+result.warnings.join(' '):'';
   if(task.status==='running'){
     var percent=taskPercent(task)||0;
-    return task.label+': '+percent+'% ('+task.files_done+' of '+task.files_total+' files, '+formatBytes(task.bytes_done)+' of '+formatBytes(task.bytes_total)+').';
+    return task.label+': '+percent+'% ('+task.files_done+LabText.t('system.of')+task.files_total+LabText.t('system.files')+formatBytes(task.bytes_done)+' of '+formatBytes(task.bytes_total)+').';
   }
   if(task.status==='failed')return task.error;
   if(task.status!=='done')return '';
-  if(task.kind==='backup')return 'Backup saved as '+result.name+' ('+formatBytes(result.bytes)+', '+plural(result.files,'file','files')+'). It was read back and every file matched its checksum.'+warnings;
-  if(task.kind==='check')return result.ok?result.name+' passed: every file matches its checksum and each database passes SQLite’s integrity check.':result.name+' did not pass. '+result.problems.join(' ');
-  if(task.kind==='restore')return 'Restored to '+result.state_root+' ('+plural(result.files,'file','files')+', '+plural(result.counts.takes,'take','takes')+'). Every file matched its checksum and the databases opened. Your current library was not touched.'+warnings;
+  if(task.kind==='backup')return LabText.t('system.backup_saved_as_it_was', {name: result.name, formatBytes: formatBytes(result.bytes), plural: LabText.plural('system.file_count', result.files), warnings: warnings});
+  if(task.kind==='check')return result.ok?result.name+LabText.t('system.passed_every_file_matches_its'):result.name+LabText.t('system.did_not_pass')+result.problems.join(' ');
+  if(task.kind==='restore')return LabText.t('system.restored_to_every_file_matched', {state_root: result.state_root, plural: LabText.plural('system.file_count', result.files), plural2: LabText.plural('system.take_count', result.counts.takes), warnings: warnings});
   return '';
 }
 function backupSections(plan){
-  var box=$('backupSections');box.textContent='';var legend=document.createElement('legend');legend.textContent='Also include';box.appendChild(legend);
+  var box=$('backupSections');box.textContent='';var legend=document.createElement('legend');legend.textContent=LabText.t('system.also_include');box.appendChild(legend);
   plan.sections.filter(function(row){return row.optional;}).forEach(function(row){
     var label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.name='backupSection';input.value=row.key;input.checked=true;
     input.addEventListener('change',showBackupEstimate);
@@ -118,23 +129,22 @@ function showBackupEstimate(){
   if(!backupPlan)return;
   var chosen=chosenBackupSections(),total=0;
   backupPlan.sections.forEach(function(row){if(!row.optional||chosen.indexOf(row.key)>=0)total+=row.bytes;});
-  $('backupSize').textContent='What is ticked holds about '+formatBytes(total)+' before compression. The backup always includes Cast, Scenes, Comparisons, recipes and runs, and the appearance setting.';
+  $('backupSize').textContent=LabText.t('system.what_is_ticked_holds_about', {formatBytes: formatBytes(total)});
 }
 function backupRow(backup,busy){
   var article=document.createElement('article'),title=document.createElement('strong'),detail=document.createElement('p'),row=document.createElement('div');
   title.textContent=backup.name;article.appendChild(title);detail.className='meta';
-  if(backup.problem){detail.textContent='This file does not read as a backup: '+backup.problem;article.appendChild(detail);}
+  if(backup.problem){detail.textContent=LabText.t('system.this_file_does_not_read', {problem: backup.problem});article.appendChild(detail);}
   else{
-    detail.textContent=formatBytes(backup.bytes)+', '+plural(backup.files,'file','files')+', made '+whenText(backup.created_at)+' by version '+(backup.app_version||'unknown')+
-      (backup.skipped?'; '+plural(backup.skipped,'item','items')+' left out':'')+(backup.missing_media?'; '+plural(backup.missing_media,'media file was','media files were')+' already missing from the library':'')+'.';
+    detail.textContent=LabText.t('system.made_by_version', {formatBytes: formatBytes(backup.bytes), plural: LabText.plural('system.file_count', backup.files), whenText: whenText(backup.created_at), value: backup.app_version||'unknown', value2: backup.skipped?'; '+LabText.plural('system.item_count', backup.skipped)+' left out':'', value3: backup.missing_media?LabText.plural('system.media_missing_count', backup.missing_media):''});
     article.appendChild(detail);
     var holds=document.createElement('p');holds.className='meta';
-    holds.textContent='Holds: '+Object.keys(backup.sections||{}).map(function(key){return backup.sections[key].label;}).join(', ')+'.';article.appendChild(holds);
+    holds.textContent=LabText.t('system.holds', {join: Object.keys(backup.sections||{}).map(function(key){return backup.sections[key].label;}).join(', ')});article.appendChild(holds);
   }
   row.className='row';
-  var check=document.createElement('button');check.type='button';check.textContent='Check';check.disabled=!!busy;
+  var check=document.createElement('button');check.type='button';check.textContent=LabText.t('system.check');check.disabled=!!busy;
   check.addEventListener('click',function(){startBackupTask('/api/system/backups/verify',{name:backup.name});});row.appendChild(check);
-  if(!backup.problem){var restore=document.createElement('button');restore.type='button';restore.textContent='Restore…';restore.disabled=!!busy;
+  if(!backup.problem){var restore=document.createElement('button');restore.type='button';restore.textContent=LabText.t('system.restore_2');restore.disabled=!!busy;
     restore.addEventListener('click',function(){showRestoreForm(backup.name);});row.appendChild(restore);}
   article.appendChild(row);return article;
 }
@@ -145,7 +155,7 @@ function renderBackups(result){
   $('backupFolder').textContent=result.folder;suggestedFolder=result.suggested_folder||'';backupPlan=result.plan;
   if(!document.querySelector('input[name=backupSection]'))backupSections(result.plan);else showBackupEstimate();
   var list=$('backupList');list.textContent='';
-  if(!result.backups.length){var none=document.createElement('p');none.className='meta';none.textContent='No backups yet.';list.appendChild(none);}
+  if(!result.backups.length){var none=document.createElement('p');none.className='meta';none.textContent=LabText.t('system.no_backups_yet');list.appendChild(none);}
   result.backups.forEach(function(backup){list.appendChild(backupRow(backup,result.task.status==='running'));});
   renderTask(result.task);
 }
@@ -158,7 +168,7 @@ function renderTask(task){
   ['backupCreate','restoreGo'].forEach(function(id){$(id).disabled=busy;});
   var restored=task.status==='done'&&task.kind==='restore';
   $('restoreUse').hidden=!restored;$('restoreHint').hidden=!restored;
-  if(restored){$('restoreUse').dataset.folder=task.result.folder;$('restoreCommand').textContent='.venv\\Scripts\\python.exe serve.py --state-root "'+task.result.state_root+'"';}
+  if(restored){$('restoreUse').dataset.folder=task.result.folder;$('restoreCommand').textContent=LabText.t('system.venv_scripts_python_exe_serve', {state_root: task.result.state_root});}
 }
 // The full list (and the library walk behind its sizes) is read when the page opens and when a job ends; while one runs only its small status is polled.
 function refreshBackups(){
@@ -167,13 +177,13 @@ function refreshBackups(){
     renderBackups(result);
     if(result.task.status==='running')systemTaskTimer=setTimeout(pollBackupTask,1000);
     return result;
-  }).catch(function(e){$('systemError').textContent='Could not list the backups: '+e.message;});
+  }).catch(function(e){$('systemError').textContent=LabText.t('system.could_not_list_the_backups', {message: e.message});});
 }
 function pollBackupTask(){
   return fetchJson('/api/system/task').then(function(result){
     if(result.task.status==='running'){renderTask(result.task);systemTaskTimer=setTimeout(pollBackupTask,1000);return result;}
     return refreshBackups();
-  }).catch(function(e){$('systemError').textContent='Could not read the job status: '+e.message;});
+  }).catch(function(e){$('systemError').textContent=LabText.t('system.could_not_read_the_job', {message: e.message});});
 }
 function startBackupTask(url,body){
   $('systemError').textContent='';
@@ -182,27 +192,27 @@ function startBackupTask(url,body){
 function startBackup(){return startBackupTask('/api/system/backups',{include:chosenBackupSections()});}
 function startRestore(){
   var name=$('restoreBox').dataset.backup,folder=$('restoreFolder').value.trim();
-  if(!folder){$('systemError').textContent='Type a name for the new folder.';return Promise.resolve();}
+  if(!folder){$('systemError').textContent=LabText.t('system.type_a_name_for_the');return Promise.resolve();}
   $('restoreBox').hidden=true;
   return startBackupTask('/api/system/backups/restore',{name:name,folder:folder});
 }
 function useRestoredLibrary(){
-  if(!window.confirm('Open this restored library the next time the desktop app starts? Your current library stays where it is, and you can switch back.'))return Promise.resolve();
+  if(!window.confirm(LabText.t('system.open_this_restored_library_the')))return Promise.resolve();
   return fetchJson('/api/system/use-library',{folder:$('restoreUse').dataset.folder}).then(function(result){
-    $('backupStatus').textContent='Next start: the desktop app opens '+result.state_root+'. Close and reopen Fel’s Voice Lab to switch. To go back, set state_root in '+result.settings_file+(result.previous?' to '+result.previous:' to "."')+' (or delete that line).';
+    $('backupStatus').textContent=LabText.t('system.next_start_the_desktop_app', {state_root: result.state_root, settings_file: result.settings_file, value: result.previous?' to '+result.previous:' to "."'});
   }).catch(function(e){$('systemError').textContent=e.message;});
 }
 // Updates: the service asks GitHub only when Check for updates is pressed, or once a day when the page opens if that is on.
 // A newer release shows here and in the header, each with Update now.
 function updateMessage(result){
-  if(result.error)return 'The last check failed: '+result.error;
-  return result.message+(result.checked_at?' Checked '+whenText(result.checked_at)+'.':'');
+  if(result.error)return LabText.t('system.the_last_check_failed', {error: result.error});
+  return result.message+(result.checked_at?LabText.t('system.checked', {whenText: whenText(result.checked_at)}):'');
 }
 function renderUpdate(result){
   var newer=!!(result.newer&&result.release&&!result.error),link=$('updateRelease'),badge=$('updateBadge');
   systemNote('updateStatus',updateMessage(result),!!result.error);
   link.hidden=!newer;badge.hidden=!newer;$('updateNow').hidden=!newer;$('updateNowHeader').hidden=!newer;
-  if(newer){link.href=result.release.url;link.textContent='What’s new in '+result.latest;badge.textContent='Version '+result.latest+' is available';}
+  if(newer){link.href=result.release.url;link.textContent=LabText.t('system.what_s_new_in', {latest: result.latest});badge.textContent=LabText.t('system.version_is_available', {latest: result.latest});}
   return result;
 }
 // Update now: first the plan update.bat would show (POST /api/update/plan), in a window over the page; on yes the Lab closes,
@@ -213,44 +223,44 @@ function updateNowParts(){return {box:$('updateDialog'),title:$('updateTitle'),s
 function updateLine(parent,text,className){var line=document.createElement('p');line.className=className||'meta';line.textContent=text;parent.appendChild(line);return line;}
 function updateComesBack(how){
   return how==='window'
-    ?'The Lab closes, a window of its own shows the update, and the Lab opens again when it is done. Leave that window open until it has finished.'
-    :'The Lab closes and a window of its own shows the update. When it has finished, start the Lab again with serve.bat. Leave that window open until it has finished.';
+    ?LabText.t('system.the_lab_closes_a_window')
+    :LabText.t('system.the_lab_closes_and_a');
 }
 function renderUpdatePlan(parts,result){
   var plan=result.plan||{};
-  parts.plan.textContent='';parts.close.textContent='Close';parts.go.hidden=true;
-  if(!plan.ok){parts.state.textContent=plan.problem||'The update cannot go ahead.';return;}
+  parts.plan.textContent='';parts.close.textContent=LabText.t('system.close');parts.go.hidden=true;
+  if(!plan.ok){parts.state.textContent=plan.problem||LabText.t('system.the_update_cannot_go_ahead');return;}
   if(!plan.newer){parts.state.textContent=plan.message;return;}
-  parts.title.textContent='Update from '+plan.from+' to '+plan.to;
-  parts.state.textContent=result.blocked||'This is what it will do. Nothing has changed yet.';
+  parts.title.textContent=LabText.t('system.update_from_to', {from: plan.from, to: plan.to});
+  parts.state.textContent=result.blocked||LabText.t('system.this_is_what_it_will');
   (plan.steps||[]).forEach(function(text,index){updateLine(parts.plan,(index+1)+'. '+text);});
   (plan.notes||[]).forEach(function(text){updateLine(parts.plan,text);});
   updateLine(parts.plan,updateComesBack(result.how));
   if(plan.release&&plan.release.url){
     var link=document.createElement('a');link.href=plan.release.url;link.target='_blank';link.rel='noopener noreferrer';
-    link.textContent='What’s new in '+plan.to;updateLine(parts.plan,'').appendChild(link);
+    link.textContent=LabText.t('system.what_s_new_in_2', {to: plan.to});updateLine(parts.plan,'').appendChild(link);
   }
-  parts.close.textContent='Cancel';parts.go.hidden=false;parts.go.disabled=!!result.blocked;
+  parts.close.textContent=LabText.t('system.cancel');parts.go.hidden=false;parts.go.disabled=!!result.blocked;
 }
 function openUpdateNow(){
   var parts=updateNowParts();
   updateNowState={closing:false};
-  parts.title.textContent='Update now';parts.plan.textContent='';
-  parts.state.textContent='Reading what the update will do. It downloads the new release to compare it with this copy, so it can take a minute.';
-  parts.go.hidden=true;parts.go.disabled=false;parts.close.disabled=false;parts.close.textContent='Cancel';
+  parts.title.textContent=LabText.t('system.update_now');parts.plan.textContent='';
+  parts.state.textContent=LabText.t('system.reading_what_the_update_will');
+  parts.go.hidden=true;parts.go.disabled=false;parts.close.disabled=false;parts.close.textContent=LabText.t('system.cancel');
   if(!parts.box.open&&parts.box.showModal)parts.box.showModal();
   return fetchJson('/api/update/plan',{}).then(function(result){if(parts.box.open)renderUpdatePlan(parts,result);}).catch(function(e){
-    parts.state.textContent='Could not read what the update will do: '+e.message;parts.close.textContent='Close';
+    parts.state.textContent=LabText.t('system.could_not_read_what_the', {message: e.message});parts.close.textContent=LabText.t('system.close');
   });
 }
 function startUpdateNow(){
   var parts=updateNowParts();
-  if(typeof sceneDirty!=='undefined'&&sceneDirty&&!window.confirm('The scene has changes that are not saved. Update anyway, and lose them?'))return Promise.resolve();
-  parts.go.disabled=true;parts.close.disabled=true;parts.state.textContent='Closing the Lab for the update…';
+  if(typeof sceneDirty!=='undefined'&&sceneDirty&&!window.confirm(LabText.t('system.the_scene_has_changes_that')))return Promise.resolve();
+  parts.go.disabled=true;parts.close.disabled=true;parts.state.textContent=LabText.t('system.closing_the_lab_for_the');
   return fetchJson('/api/update/start',{}).then(function(result){
     updateNowState.closing=true;parts.go.hidden=true;parts.plan.textContent='';
     parts.state.textContent=updateComesBack(result.how);
-  }).catch(function(e){parts.state.textContent='The update did not start: '+e.message;parts.go.disabled=false;parts.close.disabled=false;});
+  }).catch(function(e){parts.state.textContent=LabText.t('system.the_update_did_not_start', {message: e.message});parts.go.disabled=false;parts.close.disabled=false;});
 }
 function closeUpdateNow(){var box=$('updateDialog');if(!updateNowState.closing&&box.open&&box.close)box.close();}
 // The note an update leaves: shown once, at the top of every page, until Close this note.
@@ -260,27 +270,27 @@ function renderUpdateNotice(notice){
   if(!notice)return;
   var advice=notice.advice||[];
   if(notice.state==='updated'){
-    title.textContent='Updated to version '+notice.to;
-    text.textContent=advice.length?'Your voices, scenes and settings are as they were. Some models need installing again before they speak:':'Your voices, scenes, models and settings are as they were.';
-    if(notice.release_url){link.href=notice.release_url;link.textContent='What changed in '+notice.to;link.hidden=false;}
+    title.textContent=LabText.t('system.updated_to_version', {to: notice.to});
+    text.textContent=advice.length?LabText.t('system.your_voices_scenes_and_settings'):LabText.t('system.your_voices_scenes_models_and');
+    if(notice.release_url){link.href=notice.release_url;link.textContent=LabText.t('system.what_changed_in', {to: notice.to});link.hidden=false;}
   }else if(notice.state==='undone'){
-    title.textContent='Back to version '+notice.from;
-    text.textContent=advice.length?'The update was undone. Some models need installing again before they speak:':'The update was undone. Your voices, scenes, models and settings are as they were.';
+    title.textContent=LabText.t('system.back_to_version', {from: notice.from});
+    text.textContent=advice.length?LabText.t('system.the_update_was_undone_some'):LabText.t('system.the_update_was_undone_your');
   }else if(notice.state==='current'){
-    title.textContent='Nothing to update';text.textContent=notice.message||'This is the newest version.';
+    title.textContent=LabText.t('system.nothing_to_update');text.textContent=notice.message||LabText.t('system.this_is_the_newest_version');
   }else{
-    title.textContent='The update did not finish';
-    text.textContent=(notice.message||'')+' This is still version '+notice.from+'.';
+    title.textContent=LabText.t('system.the_update_did_not_finish');
+    text.textContent=LabText.t('system.this_is_still_version', {value: notice.message||'', from: notice.from});
   }
   (notice.problems||[]).forEach(function(problem){var item=document.createElement('li');item.className='warn';item.textContent=problem;list.appendChild(item);});
   advice.forEach(function(entry){
     var item=document.createElement('li');item.appendChild(document.createTextNode(entry.text));
     if(entry.folder){
-      var folder=document.createElement('button');folder.type='button';folder.textContent='Open the Lab’s folder';
+      var folder=document.createElement('button');folder.type='button';folder.textContent=LabText.t('system.open_the_lab_s_folder_2');
       folder.addEventListener('click',openLabFolder);item.appendChild(folder);
     }
     (entry.models||[]).forEach(function(model){
-      var install=document.createElement('button');install.type='button';install.textContent='Install '+model.name;
+      var install=document.createElement('button');install.type='button';install.textContent=LabText.t('system.install', {name: model.name});
       install.addEventListener('click',function(){location.hash='#models';planInstall(model.engine,(modelCards[model.engine]||{}).installGpu);});
       item.appendChild(install);
     });
@@ -290,14 +300,14 @@ function renderUpdateNotice(notice){
 function refreshUpdateNotice(){return fetchJson('/api/update/notice').then(function(result){renderUpdateNotice(result.notice);}).catch(function(){});}
 function dismissUpdateNotice(){$('updateNotice').hidden=true;return fetchJson('/api/update/notice/dismiss',{}).catch(function(){});}
 function openLabFolder(){
-  return fetchJson('/api/system/open-folder',{}).then(function(result){systemNote('openLabFolderStatus','Opened '+result.folder+' in File Explorer.',false);})
+  return fetchJson('/api/system/open-folder',{}).then(function(result){systemNote('openLabFolderStatus',LabText.t('system.opened_in_file_explorer', {folder: result.folder}),false);})
     .catch(function(e){systemNote('openLabFolderStatus',e.message,true);});
 }
 function checkForUpdates(quiet){
   $('updateCheck').disabled=true;
-  if(!quiet)systemNote('updateStatus','Asking GitHub…',false);
+  if(!quiet)systemNote('updateStatus',LabText.t('system.asking_github'),false);
   return fetchJson('/api/updates/check',{}).then(renderUpdate).catch(function(e){
-    if(!quiet)systemNote('updateStatus','Could not check for updates: '+e.message,true);
+    if(!quiet)systemNote('updateStatus',LabText.t('system.could_not_check_for_updates', {message: e.message}),true);
   }).then(function(){$('updateCheck').disabled=false;});
 }
 function refreshUpdates(){
@@ -305,12 +315,12 @@ function refreshUpdates(){
     $('updateAuto').checked=!!state.check_on_open;
     if(state.last)renderUpdate(state.last);
     if(state.due)return checkForUpdates(true);
-  }).catch(function(e){systemNote('updateStatus','Could not read the update status: '+e.message,true);});
+  }).catch(function(e){systemNote('updateStatus',LabText.t('system.could_not_read_the_update', {message: e.message}),true);});
 }
 function saveUpdateChoice(){
   var box=$('updateAuto'),on=box.checked;
   return fetchJson('/api/preferences',{check_updates:on}).then(function(){if(on)return checkForUpdates(false);}).catch(function(e){
-    box.checked=!on;systemNote('updateStatus','That choice could not be saved: '+e.message,true);
+    box.checked=!on;systemNote('updateStatus',LabText.t('system.that_choice_could_not_be', {message: e.message}),true);
   });
 }
 // Install FFmpeg: the button here and the one on the export panel start the same install (POST /api/ffmpeg/install), which the
@@ -320,21 +330,21 @@ var FFMPEG_VIEWS={system:['systemFfmpegInstall','systemFfmpegProgress'],export:[
 // In megabytes of a million bytes, as the installer's own progress lines count them, so the offer and the download agree.
 function ffmpegMegabytes(bytes){ return Math.round(bytes/1e6)+' MB'; }
 function ffmpegOfferText(offer){
-  return 'Install FFmpeg puts FFmpeg '+offer.version+' in the Lab\'s own folder: '+offer.builder+', licence '+offer.license+'. It downloads '+ffmpegMegabytes(offer.download_bytes)+' and uses '+ffmpegMegabytes(offer.disk_bytes)+' of disk.';
+  return LabText.t('system.install_ffmpeg_puts_ffmpeg_in', {version: offer.version, builder: offer.builder, license: offer.license, ffmpegMegabytes: ffmpegMegabytes(offer.download_bytes), ffmpegMegabytes2: ffmpegMegabytes(offer.disk_bytes)});
 }
 function ffmpegJobText(job){
   var lines=(job.lines||[]).map(function(line){return line.trim();}).filter(Boolean);
-  if(job.state==='running')return 'Installing FFmpeg. '+(lines.slice(-1)[0]||'Starting.')+' It cannot be stopped from here: closing the Lab stops it, and Install FFmpeg then continues where it stopped.';
-  if(job.state==='finished')return 'FFmpeg is installed.';
+  if(job.state==='running')return LabText.t('system.installing_ffmpeg_it_cannot_be', {value: lines.slice(-1)[0]||'Starting.'});
+  if(job.state==='finished')return LabText.t('system.ffmpeg_is_installed');
   var errors=lines.filter(function(line){return /^error:/.test(line);}).map(function(line){return line.replace(/^error:\s*/,'');});
-  return 'FFmpeg was not installed: '+(errors.join(' ')||lines.slice(-1)[0]||'the installer stopped without saying why.')+' Press Install FFmpeg to try again.';
+  return LabText.t('system.ffmpeg_was_not_installed_press', {value: errors.join(' ')||lines.slice(-1)[0]||'the installer stopped without saying why.'});
 }
 function renderFfmpegOffer(where,report){
   if(report!==undefined)ffmpegOffers[where]=report&&report.offer||null;
   var ids=FFMPEG_VIEWS[where],button=$(ids[0]),note=$(ids[1]),offer=ffmpegOffers[where],job=ffmpegJob,running=!!job&&job.state==='running';
   button.hidden=!offer&&!running;
   button.disabled=running;
-  button.textContent=running?'Installing FFmpeg…':'Install FFmpeg';
+  button.textContent=running?LabText.t('system.installing_ffmpeg'):LabText.t('system.install_ffmpeg');
   var text=ffmpegError||(job&&(running||job.state==='failed'||!offer)?ffmpegJobText(job):offer?ffmpegOfferText(offer):'');
   note.textContent=text;note.hidden=!text;
   note.className=ffmpegError||(job&&job.state==='failed')?'meta take-checks flagged':'meta';
@@ -349,7 +359,7 @@ function renderFfmpegJob(job){
 }
 function pollFfmpegInstall(){
   return fetchJson('/api/ffmpeg/install').then(function(result){ffmpegError='';renderFfmpegJob(result.install);}).catch(function(e){
-    ffmpegError='Could not follow the FFmpeg install: '+e.message+'. It may still be running; Check FFmpeg again shows when it is there.';renderFfmpegJob(null);});
+    ffmpegError=LabText.t('system.could_not_follow_the_ffmpeg', {message: e.message});renderFfmpegJob(null);});
 }
 function startFfmpegInstall(){
   ffmpegError='';
@@ -363,11 +373,11 @@ function connectNoteText(info){
   if(info.url===info.known_url)return '';
   // Without a note from the service, the port was chosen: by the window's setting below, or when the service was started.
   var port=Number(info.url.split(':').pop());
-  var why=info.note||(info.window_port===0?'The Lab’s window took a free port, as its setting below asks.'
-    :port===info.window_port?'The Lab’s window asks for port '+port+', as its setting below says.'
-    :'This service was started on port '+port+'.');
-  return why+' '+(info.in_address_file?'Programs that read the address file ('+info.address_file+') still find it; give any other program this address.'
-    :'Give programs this address: the address file names another Lab that is running.');
+  var why=info.note||(info.window_port===0?LabText.t('system.the_lab_s_window_took')
+    :port===info.window_port?LabText.t('system.the_lab_s_window_asks', {port: port})
+    :LabText.t('system.this_service_was_started_on', {port: port}));
+  return why+' '+(info.in_address_file?LabText.t('system.programs_that_read_the_address', {address_file: info.address_file})
+    :LabText.t('system.give_programs_this_address_the'));
 }
 function renderConnect(info){
   connectInfo=info;
@@ -381,7 +391,7 @@ function renderConnect(info){
   $('connectPort').value=String(info.window_port);
 }
 function refreshConnect(){
-  return fetchJson('/api/system/connect').then(renderConnect).catch(function(e){systemNote('connectStatus','Could not read the Lab’s address: '+e.message,true);});
+  return fetchJson('/api/system/connect').then(renderConnect).catch(function(e){systemNote('connectStatus',LabText.t('system.could_not_read_the_lab', {message: e.message}),true);});
 }
 function copyText(text){
   var fallback=function(){var box=document.createElement('textarea');box.value=text;box.setAttribute('readonly','');document.body.appendChild(box);box.select();
@@ -391,31 +401,31 @@ function copyText(text){
 }
 // What each Copy button copies, and what the note says once it has.
 var CONNECT_COPIES={
-  url:function(info){return [info.url,'Copied '+info.url+'.'];},
-  test:function(info){return [info.test,'Copied the test command. Paste it into a command window; it prints the Lab’s health as one line of JSON.'];},
-  mcp:function(info){return [info.mcp.claude_code,'Copied the Claude Code line. Paste it into a command window, then start a new Claude Code session and ask it to say something aloud.'];},
-  openai:function(info){return [info.openai_base,'Copied '+info.openai_base+'. In the app, choose OpenAI for speech, paste it as the base address, type any key, and choose a voice by its name in the Lab.'];},
-  settings:function(info){return [info.mcp.settings,'Copied the settings. Paste them into the app’s MCP settings, as the guide shows, and open the app again.'];}
+  url:function(info){return [info.url,LabText.t('system.copied', {url: info.url})];},
+  test:function(info){return [info.test,LabText.t('system.copied_the_test_command_paste')];},
+  mcp:function(info){return [info.mcp.claude_code,LabText.t('system.copied_the_claude_code_line')];},
+  openai:function(info){return [info.openai_base,'Copied '+info.openai_base+LabText.t('system.in_the_app_choose_openai')];},
+  settings:function(info){return [info.mcp.settings,LabText.t('system.copied_the_settings_paste_them')];}
 };
 function copyConnect(which){
   if(!connectInfo)return Promise.resolve();
   var chosen=CONNECT_COPIES[which](connectInfo);
   return copyText(chosen[0]).then(function(copied){
-    systemNote('connectStatus',!copied?'Your browser blocked copying. Select the text above and copy it yourself.':chosen[1],!copied);
+    systemNote('connectStatus',!copied?LabText.t('system.your_browser_blocked_copying_select'):chosen[1],!copied);
   });
 }
 // The settings for other MCP apps are not shown on the page, so a browser that blocks copying is answered with them.
 function copyMcpSettings(){
   return copyConnect('settings').then(function(){
     if(connectInfo&&/blocked copying/.test($('connectStatus').textContent))
-      systemNote('connectStatus','Your browser blocked copying. These are the settings: '+connectInfo.mcp.settings.replace(/\s+/g,' '),true);
+      systemNote('connectStatus',LabText.t('system.your_browser_blocked_copying_these', {replace: connectInfo.mcp.settings.replace(/\s+/g,' ')}),true);
   });
 }
 function saveConnectPort(){
   var text=$('connectPort').value.trim(),port=Number(text);
-  if(!text||!Number.isInteger(port)){systemNote('connectPortStatus','Type a whole number: 0, or 1024 to 65535.',true);return Promise.resolve();}
+  if(!text||!Number.isInteger(port)){systemNote('connectPortStatus',LabText.t('system.type_a_whole_number_0'),true);return Promise.resolve();}
   return fetchJson('/api/system/connect/port',{port:port}).then(function(result){
-    systemNote('connectPortStatus',(result.window_port===0?'Saved. The window takes any free port':'Saved. The window asks for port '+result.window_port)+' the next time it opens.',false);
+    systemNote('connectPortStatus',LabText.t('system.the_next_time_it_opens', {value: result.window_port===0?'Saved. The window takes any free port':'Saved. The window asks for port '+result.window_port}),false);
   }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
 }
 // Install speech recognition.
@@ -429,14 +439,14 @@ async function refreshAsrInstall() {
     $('systemAsrInstall').hidden = ready && !running;
     $('systemAsrInstall').disabled = !!running;
     $('systemAsrState').textContent = running
-      ? 'Installing speech recognition. Close the Lab to stop it, then choose Install again to continue.'
-      : ready ? 'Speech recognition is ready. Audio is processed on this computer.'
-        : status.install && status.install.state === 'failed' ? 'The install stopped. Choose Install speech recognition to try again.'
-          : 'Install speech recognition to draft transcripts on this computer.';
+      ? LabText.t('system.installing_speech_recognition_close_the')
+      : ready ? LabText.t('system.speech_recognition_is_ready_audio')
+        : status.install && status.install.state === 'failed' ? LabText.t('system.the_install_stopped_choose_install')
+          : LabText.t('system.install_speech_recognition_to_draft');
     if (running) asrInstallTimer = setTimeout(refreshAsrInstall, 1200);
   } catch (_) {
     $('systemAsrInstall').disabled = false;
-    $('systemAsrState').textContent = 'Could not check speech recognition. Choose Refresh to try again.';
+    $('systemAsrState').textContent = LabText.t('system.could_not_check_speech_recognition');
   }
 }
 $('systemAsrInstall').addEventListener('click', async function () {
@@ -445,8 +455,8 @@ $('systemAsrInstall').addEventListener('click', async function () {
   try {
     var response = await fetchJson('/api/asr/install',{dry_run:true});
     var plan = response.plan;
-    if (!plan.ok) throw new Error(plan.problems.join(' ') || 'Check the available disk space and try again.');
-    if (!window.confirm('Install speech recognition? This downloads about 564 MB of models and the packages they need. Audio stays on this computer.')) { button.disabled = false; return; }
+    if (!plan.ok) throw new Error(plan.problems.join(' ') || LabText.t('system.check_the_available_disk_space'));
+    if (!window.confirm(LabText.t('system.install_speech_recognition_this_downloads'))) { button.disabled = false; return; }
     await fetchJson('/api/asr/install',{});
     await refreshAsrInstall();
   } catch (error) {

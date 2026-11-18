@@ -1251,7 +1251,8 @@ test('every control the System script reaches for is on the page, wired once, an
   }
   assert.match(html, /<a href="#system">\{\{ui:shell\.system_backups\}\}<\/a>/);
   assert.equal(labText.t('shell.system_backups'), 'System & backups');
-  assert.match(html, /<section class="card" id="system"><h2>System &amp; backups<\/h2>/);
+  assert.match(html, /<section class="card" id="system"><h2>\{\{ui:system\.system_backups\}\}<\/h2>/);
+  assert.equal(labText.t('system.system_backups'), 'System & backups');
   assert.ok(html.indexOf('/voice_lab_system.js') > html.indexOf('/voice_lab_generate.js') && html.indexOf('/voice_lab_system.js') < html.indexOf('/voice_lab_app.js'));
   assert.match(source, /if\(active==='system'\)refreshSystemPage\(\)/);
 });

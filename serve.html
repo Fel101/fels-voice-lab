@@ -955,76 +955,76 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <div class="workflow-note"><strong>Production workflow</strong><p>Design or clone in Model studio → save a character voice in Cast → direct and audition takes in Perform → render dialogue in Scenes → compare and rate.</p><p class="meta">Qwen CustomVoice preset voices and Phonon voices become Cast voices with no voice recording. Qwen VoiceDesign makes voice recordings for a voice that clones.</p></div>
 <h3>Available outside the Lab's pages</h3><p class="meta">Dataset preparation (<code>tools/dataset_workbench.py</code>) and word times for captions and lip-sync (<code>align_takes.py</code>) run from a terminal; the user guide describes both. Training is not enabled.</p>
 <details><summary>Current limits</summary><p class="meta">Only the Qwen engines stream audio while it is made; the others return the whole clip. Kokoro's Japanese and Mandarin voices need language packages its installer does not add. Automated signal checks do not establish voice quality: a person still has to listen.</p></details></section>
-<section class="card" id="system"><h2>System &amp; backups</h2>
-<p class="meta">What this PC is running, whether FFmpeg is ready, how much room is left, and a checked backup of your library. Nothing here loads a model.</p>
+<section class="card" id="system"><h2>{{ui:system.system_backups}}</h2>
+<p class="meta">{{ui:system.what_this_pc_is_running}}</p>
 <p id="systemError" role="alert"></p>
-<div class="cast-actions"><button type="button" id="systemRefresh">Refresh</button><button type="button" id="systemCopy" disabled>Copy report for a bug report</button><a id="systemFeedback" href="__DISCUSSIONS_URL__" target="_blank" rel="noopener noreferrer">Tell us what you need</a></div>
+<div class="cast-actions"><button type="button" id="systemRefresh">{{ui:system.refresh}}</button><button type="button" id="systemCopy" disabled>{{ui:system.copy_report_for_a_bug}}</button><a id="systemFeedback" href="__DISCUSSIONS_URL__" target="_blank" rel="noopener noreferrer">{{ui:system.tell_us_what_you_need}}</a></div>
 <p class="meta" id="systemCopied" role="status"></p>
-<details><summary>Show the report</summary><p class="meta">This is exactly what is copied. It holds no scripts, transcripts, names of characters or voices, or recordings, and your home folder reads as ~.</p><pre id="systemDiagnostics" class="meta"></pre></details>
-<h3>This installation</h3>
+<details><summary>{{ui:system.show_the_report}}</summary><p class="meta">{{ui:system.this_is_exactly_what_is}}</p><pre id="systemDiagnostics" class="meta"></pre></details>
+<h3>{{ui:system.this_installation}}</h3>
 <dl class="facts" id="systemFacts"></dl>
-<div class="cast-actions"><button type="button" id="openLabFolder">Open the Lab's folder</button></div>
+<div class="cast-actions"><button type="button" id="openLabFolder">{{ui:system.open_the_lab_s_folder}}</button></div>
 <p class="meta" id="openLabFolderStatus" role="status"></p>
-<h3>Connect other apps</h3>
-<p class="meta">While the Lab is open, programs on this computer, such as your own scripts, can make it speak at this address. Programs on other computers cannot reach it.</p>
+<h3>{{ui:system.connect_other_apps}}</h3>
+<p class="meta">{{ui:system.while_the_lab_is_open}}</p>
 <p><code id="connectUrl" class="connect-url"></code></p>
 <p class="meta" id="connectNote" role="status" hidden></p>
-<div class="cast-actions"><button type="button" id="connectCopy">Copy the address</button><button type="button" id="connectCopyTest">Copy the test command</button><a id="connectGuide" href="#" target="_blank" rel="noopener noreferrer">How programs use it (API guide)</a></div>
-<p class="meta">The test command, for a command window: <code id="connectTest"></code></p>
-<p class="meta">Claude Code, and other assistants that use MCP, can speak aloud with the Lab's voices. This line, pasted into a command window, adds the Lab to Claude Code for all your projects. When the Lab is closed, the assistant opens its service by itself.</p>
+<div class="cast-actions"><button type="button" id="connectCopy">{{ui:system.copy_the_address}}</button><button type="button" id="connectCopyTest">{{ui:system.copy_the_test_command}}</button><a id="connectGuide" href="#" target="_blank" rel="noopener noreferrer">{{ui:system.how_programs_use_it_api}}</a></div>
+<p class="meta">{{ui:system.the_test_command_for_a}} <code id="connectTest"></code></p>
+<p class="meta">{{ui:system.claude_code_and_other_assistants}}</p>
 <p><code id="connectMcp" class="connect-url"></code></p>
-<div class="cast-actions"><button type="button" id="connectCopyMcp">Copy the Claude Code line</button><button type="button" id="connectCopyMcpSettings">Copy the settings for other MCP apps</button><a id="connectMcpGuide" href="#" target="_blank" rel="noopener noreferrer">How to connect apps (guide)</a></div>
-<p class="meta">Apps that can use OpenAI's speech API with another server, such as Open WebUI, can speak with the Lab's voices too: give them this base address and any key, and choose a voice by its name in the Lab.</p>
+<div class="cast-actions"><button type="button" id="connectCopyMcp">{{ui:system.copy_the_claude_code_line}}</button><button type="button" id="connectCopyMcpSettings">{{ui:system.copy_the_settings_for_other}}</button><a id="connectMcpGuide" href="#" target="_blank" rel="noopener noreferrer">{{ui:system.how_to_connect_apps_guide}}</a></div>
+<p class="meta">{{ui:system.apps_that_can_use_openai}}</p>
 <p><code id="connectOpenAI" class="connect-url"></code></p>
-<div class="cast-actions"><button type="button" id="connectCopyOpenAI">Copy the OpenAI-style address</button></div>
+<div class="cast-actions"><button type="button" id="connectCopyOpenAI">{{ui:system.copy_the_openai_style_address}}</button></div>
 <p class="meta" id="connectStatus" role="status"></p>
-<div class="cast-actions connect-port"><label for="connectPort">Port for the Lab's window</label><input type="number" id="connectPort" min="0" max="65535" step="1" inputmode="numeric"><button type="button" id="connectPortSave">Save</button></div>
-<p class="meta">8765 is where other programs look first. 0 lets the window take any free port, and programs then find it through the address file. A change takes effect the next time the window opens.</p>
+<div class="cast-actions connect-port"><label for="connectPort">{{ui:system.port_for_the_lab_s}}</label><input type="number" id="connectPort" min="0" max="65535" step="1" inputmode="numeric"><button type="button" id="connectPortSave">{{ui:system.save}}</button></div>
+<p class="meta">{{ui:system.8765_is_where_other_programs}}</p>
 <p class="meta" id="connectPortStatus" role="status"></p>
-<h3>Updates</h3>
-<p class="meta" id="updateStatus" role="status">This is version __APP_VERSION__.</p>
-<div class="cast-actions"><button type="button" id="updateCheck">Check for updates</button><button type="button" class="go" id="updateNow" hidden>Update now</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>What's new in it</a></div>
-<label class="meta"><input id="updateAuto" type="checkbox"> Check when the Lab opens, at most once a day</label>
-<p class="meta" id="updateHow">A check asks GitHub which release is the newest and sends nothing about you or your library; GitHub sees only that this computer asked. <strong>Update now</strong> shows what the update will do and asks first; then the Lab closes, a window of its own shows the update, and the Lab opens again. It keeps your voices, scenes, models and settings, and <code>update.bat --undo</code> in the Lab's folder puts the previous version back. <code>update.bat</code> does the same update with the Lab closed.</p>
-<h3>Speech recognition</h3>
+<h3>{{ui:system.updates}}</h3>
+<p class="meta" id="updateStatus" role="status">{{ui:system.this_is_version}} __APP_VERSION__.</p>
+<div class="cast-actions"><button type="button" id="updateCheck">{{ui:system.check_for_updates}}</button><button type="button" class="go" id="updateNow" hidden>{{ui:system.update_now}}</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>{{ui:system.what_s_new_in_it}}</a></div>
+<label class="meta"><input id="updateAuto" type="checkbox"> {{ui:system.check_when_the_lab_opens}}</label>
+<p class="meta" id="updateHow">{{ui:system.a_check_asks_github_which}} <strong>{{ui:system.update_now}}</strong> {{ui:system.shows_what_the_update_will}} <code>{{ui:system.update_bat_undo}}</code> {{ui:system.in_the_lab_s_folder}} <code>{{ui:system.update_bat}}</code> {{ui:system.does_the_same_update_with}}</p>
+<h3>{{ui:system.speech_recognition}}</h3>
 <p class="meta" id="systemAsrState" role="status"></p>
-<button type="button" id="systemAsrInstall">Install speech recognition</button>
-<h3>FFmpeg</h3>
+<button type="button" id="systemAsrInstall">{{ui:system.install_speech_recognition}}</button>
+<h3>{{ui:system.ffmpeg}}</h3>
 <p class="meta" id="systemFfmpeg" role="status"></p>
 <p class="meta" id="systemFfmpegProgress" role="status" hidden></p>
-<div class="cast-actions"><button type="button" id="systemFfmpegInstall" hidden>Install FFmpeg</button><button type="button" id="systemFfmpegCheck">Check FFmpeg again</button></div>
-<h3>Disk space</h3>
+<div class="cast-actions"><button type="button" id="systemFfmpegInstall" hidden>{{ui:system.install_ffmpeg}}</button><button type="button" id="systemFfmpegCheck">{{ui:system.check_ffmpeg_again}}</button></div>
+<h3>{{ui:system.disk_space}}</h3>
 <p class="meta" id="systemDisk" role="status"></p>
-<h3>Models</h3>
+<h3>{{ui:system.models}}</h3>
 <p class="meta" id="systemModels"></p>
-<h3>Storage</h3>
-<p class="meta">Measuring walks your library and the run folders, so it waits for the button. It never walks the Drama model folder. Cleanup removes only the scratch folders of workers that have stopped, old desktop sessions, old service logs, and clips spoken for other apps a day after the app that asked for them stopped.</p>
-<div class="cast-actions"><button type="button" id="systemMeasure">Measure folders</button><button type="button" id="systemClean" disabled>Clean up old scratch folders and logs</button></div>
+<h3>{{ui:system.storage}}</h3>
+<p class="meta">{{ui:system.measuring_walks_your_library_and}}</p>
+<div class="cast-actions"><button type="button" id="systemMeasure">{{ui:system.measure_folders}}</button><button type="button" id="systemClean" disabled>{{ui:system.clean_up_old_scratch_folders}}</button></div>
 <p class="meta" id="systemStatus" role="status"></p>
-<div class="table-wrap"><table class="speed-table storage-table"><thead><tr><th scope="col">Folder</th><th scope="col">Size</th><th scope="col">In a backup</th></tr></thead><tbody id="systemStorage"></tbody></table></div>
+<div class="table-wrap"><table class="speed-table storage-table"><thead><tr><th scope="col">{{ui:system.folder}}</th><th scope="col">{{ui:system.size}}</th><th scope="col">{{ui:system.in_a_backup}}</th></tr></thead><tbody id="systemStorage"></tbody></table></div>
 <p class="meta" id="systemCleanup"></p>
-<h3>Library backup</h3>
-<p class="meta">One ZIP of your Cast, Scenes, comparisons and appearance setting, written to <code id="backupFolder"></code>. Every file is read back and compared with its checksum before the backup is kept. Model files, logs and voice conversions are not part of it. Keep a copy on another drive.</p>
+<h3>{{ui:system.library_backup}}</h3>
+<p class="meta">{{ui:system.one_zip_of_your_cast}} <code id="backupFolder"></code>{{ui:system.every_file_is_read_back}}</p>
 <fieldset class="field" id="backupSections"></fieldset>
 <p class="meta" id="backupSize"></p>
-<div class="cast-actions"><button class="go" type="button" id="backupCreate">Back up now</button></div>
-<progress id="backupProgress" max="100" value="0" style="width:100%" aria-label="Backup progress" hidden></progress>
+<div class="cast-actions"><button class="go" type="button" id="backupCreate">{{ui:system.back_up_now}}</button></div>
+<progress id="backupProgress" max="100" value="0" style="width:100%" aria-label="{{ui:system.backup_progress}}" hidden></progress>
 <p class="meta" id="backupStatus" role="status"></p>
 <div id="backupList" class="take"></div>
 <div id="restoreBox" class="workflow-note" hidden>
-  <strong>Restore <span id="restoreName"></span></strong>
-  <p class="meta">A restore never changes your current library. It builds a checked copy in a new folder inside <code>restored</code> and keeps it only when every file matches.</p>
-  <div class="row"><label class="field compact">New folder name<input id="restoreFolder" type="text" maxlength="60" autocomplete="off"></label>
-    <button class="go" type="button" id="restoreGo">Restore</button><button type="button" id="restoreCancel">Cancel</button></div>
+  <strong>{{ui:system.restore}} <span id="restoreName"></span></strong>
+  <p class="meta">{{ui:system.a_restore_never_changes_your}} <code>{{ui:system.restored}}</code> {{ui:system.and_keeps_it_only_when}}</p>
+  <div class="row"><label class="field compact">{{ui:system.new_folder_name}}<input id="restoreFolder" type="text" maxlength="60" autocomplete="off"></label>
+    <button class="go" type="button" id="restoreGo">{{ui:system.restore}}</button><button type="button" id="restoreCancel">{{ui:system.cancel}}</button></div>
 </div>
-<div class="cast-actions"><button type="button" id="restoreUse" hidden>Open the restored library next time</button></div>
-<p class="meta" id="restoreHint" hidden>To look at it now, without switching: stop the service and start it with <code id="restoreCommand"></code></p>
+<div class="cast-actions"><button type="button" id="restoreUse" hidden>{{ui:system.open_the_restored_library_next}}</button></div>
+<p class="meta" id="restoreHint" hidden>{{ui:system.to_look_at_it_now}} <code id="restoreCommand"></code></p>
 </section>
 </main>
 <dialog id="installDialog" class="install-dialog" aria-labelledby="installTitle"><h3 id="installTitle"></h3><p class="meta" id="installState" aria-live="polite"></p><div id="installPlan" class="install-plan"></div><pre id="installLog" class="install-log" hidden></pre><div class="cast-actions"><button id="installGo" type="button" class="go" hidden>Install now</button><button id="installClose" type="button">Cancel</button></div></dialog>
 <dialog id="uninstallDialog" class="install-dialog" aria-labelledby="uninstallTitle"><h3 id="uninstallTitle"></h3><p class="meta" id="uninstallState" aria-live="polite"></p><div id="uninstallPlan" class="install-plan"></div><div class="cast-actions"><button id="uninstallGo" type="button" class="go" hidden>Uninstall</button><button id="uninstallClose" type="button">Cancel</button></div></dialog>
-<dialog id="updateDialog" class="install-dialog" aria-labelledby="updateTitle"><h3 id="updateTitle">Update now</h3><p class="meta" id="updateState" aria-live="polite"></p><div id="updatePlan" class="install-plan"></div><div class="cast-actions"><button id="updateGo" type="button" class="go" hidden>Update now</button><button id="updateClose" type="button">Cancel</button></div></dialog>
-<footer class="app-footer">Fel's Voice Lab <span id="appVersion">__APP_VERSION__</span></footer>
+<dialog id="updateDialog" class="install-dialog" aria-labelledby="updateTitle"><h3 id="updateTitle">{{ui:shell.update_now}}</h3><p class="meta" id="updateState" aria-live="polite"></p><div id="updatePlan" class="install-plan"></div><div class="cast-actions"><button id="updateGo" type="button" class="go" hidden>{{ui:shell.update_now}}</button><button id="updateClose" type="button">{{ui:shell.cancel}}</button></div></dialog>
+<footer class="app-footer">{{ui:shell.fel_s_voice_lab}} <span id="appVersion">__APP_VERSION__</span></footer>
 <script src="/voice_lab_queue.js"></script>
 <script src="/voice_workflows.js"></script>
 <script src="/voice_library.js"></script>
