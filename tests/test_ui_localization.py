@@ -41,6 +41,7 @@ class PageTextTests(unittest.TestCase):
         )
 
     def test_catalog_keys_are_known_and_match_the_kind_of_call(self):
+        PageText(ROOT / "locales")  # Shipped files must all pass, even though the service can recover.
         for source in (*ROOT.glob("*.html"), *ROOT.glob("*.js")):
             body = source.read_text(encoding="utf-8")
             for key in TOKEN.findall(body):
@@ -60,7 +61,7 @@ class PageTextTests(unittest.TestCase):
         rendered = store.render(page).decode()
         self.assertIn('<html lang="es" data-theme="dark">', rendered)
         self.assertIn("<title>&lt;b&gt;Bienvenida&lt;/b&gt;&lt;/script&gt;</title>", rendered)
-        self.assertIn("<label>Language<select>", rendered)
+        self.assertIn("<label>Page language<select>", rendered)
         self.assertIn('<option value="es" selected>Español (draft, not yet checked by a speaker)</option>', rendered)
         self.assertEqual(rendered.count("</script>"), 1)
         self.assertEqual(store.save({"theme": "forest"})["language"], "es")
@@ -87,6 +88,27 @@ class PageTextTests(unittest.TestCase):
                 self.save_catalog("es", "Español", messages)
                 with self.assertRaisesRegex(ValueError, problem):
                     PageText(self.catalogs)
+
+    def test_service_leaves_out_an_invalid_translation_and_uses_english(self):
+        self.save_catalog("es", "Español", {"home.greeting": "Hola, {wrong}"})
+        (self.catalogs / "fr.json").write_text("{", encoding="utf-8")
+        store_path = self.root / "data" / "ui" / "preferences.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text('{"language":"es","theme":"forest"}', encoding="utf-8")
+        page_text = PageText(self.catalogs, strict=False)
+        store = UiPreferences(self.root, page_text)
+        self.assertEqual(store.get()["language"], "en")
+        self.assertEqual(store.get()["theme"], "forest")
+        rendered = store.render('<html lang="en"><select>__PAGE_LANGUAGE_OPTIONS__</select>').decode()
+        self.assertIn('<option value="en" selected>English</option>', rendered)
+        self.assertNotIn('value="es"', rendered)
+        self.assertEqual(len(page_text.skipped_catalogs), 2)
+        self.assertIn("es.json: es: home.greeting has an unknown value place", page_text.skipped_catalogs[0])
+        self.assertIn("fr.json", page_text.skipped_catalogs[1])
+
+        self.save_catalog("en", "English", {"broken": {"one": "One"}})
+        with self.assertRaisesRegex(ValueError, "plural"):
+            PageText(self.catalogs, strict=False)
 
     @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
     def test_picker_persists_and_renders_both_pages_with_partial_draft_catalog(self):

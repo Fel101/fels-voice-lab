@@ -51,6 +51,7 @@ from engine_install import EngineInstaller
 from cast_store import CastStore, decode_audio
 from scene_store import SceneBatchRunner, SceneStore, SUPPORTED_LANGUAGES
 from evaluation_store import EvaluationStore
+from ui_localization import PAGE_TEXT
 from ui_preferences import UiPreferences
 from kokoro_support import discover_kokoro_voices  # noqa: F401 - the route groups read it as serve.discover_kokoro_voices
 from performance_settings import performance_controls
@@ -950,6 +951,8 @@ def main():
     except OSError as exc:  # other programs then look on the known port; the Lab itself works as before
         request_log.event(f"startup: the address file could not be written: {exc}")
     request_log.start(APP_NAME, VERSION, port=server.server_address[1], device=device, state_root=state_root)
+    for note in PAGE_TEXT.skipped_catalogs:
+        request_log.event(f"startup: {note}")
     for note in (*folder_notes, *evaluations.migration_notes, *([address_note] if address_note else [])):
         request_log.event(f"startup: {note}")
     print(f"Fel's Voice Lab on {url}  (version {VERSION}, device: {device}, "

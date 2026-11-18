@@ -2,7 +2,8 @@
   "name": "English",
   "draft": false,
   "messages": {
-    "language.label": "Language",
+    "language.label": "Page language",
+    "language.reload_hint": "Changing it reloads this page.",
     "language.draft": "draft, not yet checked by a speaker",
     "language.save_failed": "Could not save the language. Choose it again to retry.",
     "error.model_not_installed": "This model is missing. Open Models & features to install it, then try again.",
@@ -77,7 +78,10 @@
     "projects.job_status.cancelled": "cancelled",
     "projects.job_status.completed": "completed",
     "projects.archive_option": "{title} ({kind})",
-    "projects.review_title": "{title} · {kind} · {count} verified assets",
+    "projects.review_title": {
+      "one": "{title} · {kind} · {count} verified asset",
+      "other": "{title} · {kind} · {count} verified assets"
+    },
     "projects.source_terms": "{kind} · Source {origin} · Allowed use {terms}",
     "projects.install_model": "Install {model} on Models & features to speak with this voice.",
     "projects.candidate_named": "Import {name} as candidate",

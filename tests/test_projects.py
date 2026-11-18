@@ -233,6 +233,7 @@ class ProjectFilesTests(ExportPanelBase):
         for index, item in enumerate(expected):
             page.wait_until("!$('homeRecent').hidden && $('homeRecent').children.length === 5")
             self.assertEqual(page.evaluate("Array.from($('homeRecent').querySelectorAll('a'), a => a.textContent)"), titles)
+            self.assertEqual(page.evaluate("$('homeNewWork').innerText"), "Import a script · Narrate a document")
             page.click(f"#homeRecent li:nth-child({index + 1}) a")
             if "scene_id" in item:
                 page.wait_until(f"location.hash === '#scenes' && activeSceneId === {json.dumps(item['scene_id'])}")
@@ -313,7 +314,7 @@ class ProjectFilesTests(ExportPanelBase):
         )
         self.assertIn("Provider profiles: set up", text)
         self.assertIn("Speech recognition: installed", text)
-        self.assertIn("Connection for local apps: not set up", text)
+        self.assertIn("Other apps on this computer can find this Lab: no", text)
         for private in (
             self.character["name"],
             self.identity["label"],

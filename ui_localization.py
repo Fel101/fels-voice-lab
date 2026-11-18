@@ -33,19 +33,40 @@ def _validate_messages(language, messages, english):
 
 
 class PageText:
-    def __init__(self, folder):
-        self.catalogs = {}
-        for path in sorted(Path(folder).glob("*.json")):
-            language = path.stem
-            catalog = json.loads(path.read_text(encoding="utf-8"))
-            if not LANGUAGE.fullmatch(language) or not isinstance(catalog["name"], str) or not catalog["name"]:
-                raise ValueError(f"Invalid language in {path.name}")
-            if type(catalog["draft"]) is not bool or not isinstance(catalog["messages"], dict):
-                raise ValueError(f"{path.name} needs a draft flag and a messages object")
-            self.catalogs[language] = catalog
-        self.english = self.catalogs["en"]["messages"]
-        for language, catalog in self.catalogs.items():
-            _validate_messages(language, catalog["messages"], self.english)
+    def __init__(self, folder, *, strict=True):
+        folder = Path(folder)
+        english = self._read_catalog(folder / "en.json")
+        self.english = english["messages"]
+        _validate_messages("en", self.english, self.english)
+        self.catalogs = {"en": english}
+        self.skipped_catalogs = []
+        for path in sorted(folder.glob("*.json")):
+            if path.stem == "en":
+                continue
+            try:
+                catalog = self._read_catalog(path)
+                _validate_messages(path.stem, catalog["messages"], self.english)
+            except (OSError, ValueError) as error:
+                if strict:
+                    raise
+                detail = " ".join(str(error).splitlines())
+                self.skipped_catalogs.append(f"Ignored page translation {path.name}: {detail}")
+            else:
+                self.catalogs[path.stem] = catalog
+
+    @staticmethod
+    def _read_catalog(path):
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        if not (
+            isinstance(catalog, dict)
+            and LANGUAGE.fullmatch(path.stem)
+            and isinstance(catalog.get("name"), str)
+            and catalog["name"].strip()
+        ):
+            raise ValueError(f"Invalid language in {path.name}")
+        if type(catalog.get("draft")) is not bool or not isinstance(catalog.get("messages"), dict):
+            raise ValueError(f"{path.name} needs a draft flag and a messages object")
+        return catalog
 
     def language(self, value):
         return value if isinstance(value, str) and value in self.catalogs else "en"
@@ -74,4 +95,4 @@ class PageText:
         return re.sub(r"__PAGE_(?:TEXT_JSON|LANGUAGE_OPTIONS)__", lambda match: replacements[match[0]], rendered)
 
 
-PAGE_TEXT = PageText(Path(__file__).resolve().parent / "locales")
+PAGE_TEXT = PageText(Path(__file__).resolve().parent / "locales", strict=False)

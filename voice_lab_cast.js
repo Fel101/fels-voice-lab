@@ -166,6 +166,7 @@ function refreshCast(preferredCharacter, preferredIdentity) {
   var charBefore=preferredCharacter||$('characterSelect').value, idBefore=preferredIdentity||$('identitySelect').value;
   return fetchJson('/api/cast').then(function(result){
     castCharacters=result.characters||[];castLoaded=true;
+    $('homePerform').hidden = !castCharacters.some(function (character) { return !character.retired; });
     $('castEmpty').hidden=castCharacters.length>0;$('castBrowsing').hidden=!castCharacters.length;
     $('performEmpty').hidden=castCharacters.length>0;$('performEditor').hidden=!castCharacters.length;
     [$('characterSelect'),$('performCharacter')].forEach(function(select){

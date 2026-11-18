@@ -21,9 +21,11 @@ function openProductionProject(kind, id) {
     refreshSceneList(id).catch(showSceneError);
   }
 }
-$('homeImportScript').addEventListener('click', function () {
-  $('sceneScriptImport').open = true;
-  requestAnimationFrame(function () { $('sceneImportFile').focus(); });
+['homeImportScript', 'homeImportMore'].forEach(function (id) {
+  $(id).addEventListener('click', function () {
+    $('sceneScriptImport').open = true;
+    requestAnimationFrame(function () { $('sceneImportFile').focus(); });
+  });
 });
 async function refreshHome() {
   var list = $('homeRecent'), status = $('homeStatus');
@@ -44,6 +46,7 @@ async function refreshHome() {
       list.appendChild(row);
     });
     $('homeRecentHeading').hidden = list.hidden = !list.children.length;
+    $('homeNewWork').hidden = !list.children.length;
     $('homeStart').hidden = !!list.children.length;
     status.textContent = '';
   } catch (error) {
@@ -133,7 +136,7 @@ async function reviewPortable() {
   var result = await productionUpload('/api/portable/preview',file,{});
   if (file !== $('portableFile').files[0]) return;
   archiveReview = result.archive; reviewedFile = file;
-  $('portableTitle').textContent = LabText.t('projects.review_title', {title: archiveReview.title, kind: projectKindName(archiveReview.kind), count: Object.keys(archiveReview.assets || {}).length})+(archiveReview.author?' · '+archiveReview.author:'');
+  $('portableTitle').textContent = LabText.plural('projects.review_title', Object.keys(archiveReview.assets || {}).length, {title: archiveReview.title, kind: projectKindName(archiveReview.kind)})+(archiveReview.author?' · '+archiveReview.author:'');
   var parent = $('portableMappings');
   parent.textContent = '';
   archiveReview.voices.forEach(function(source) {

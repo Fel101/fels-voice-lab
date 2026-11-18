@@ -183,7 +183,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 @media(max-width:700px){.queue-panel{flex-basis:100%;margin-top:8px;padding:10px 0 0}.workspace-nav .queue-panel .eyebrow{display:block}}
 @media(max-width:700px){.app-header{flex-wrap:wrap;gap:16px}.brand{min-width:0}.header-tools{justify-content:flex-start}.cast-grid{grid-template-columns:1fr}}
 </style><script id="pageText" type="application/json">__PAGE_TEXT_JSON__</script><script src="/voice_lab_i18n.js"></script><script src="/theme.js" defer></script></head><body><main>
-<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><label class="theme-control" for="languageChoice">{{ui:language.label}}<select id="languageChoice">__PAGE_LANGUAGE_OPTIONS__</select></label><span id="languageStatus" class="theme-status" role="status" aria-live="polite"></span><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
+<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>Fel's Voice Lab</h1><p class="sub">Character voices, from first idea to final take.</p></div></div><div class="header-tools"><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>Update now</button><span class="local-badge">Local production studio</span><label class="theme-control" for="themeChoice">Theme<select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="forest">Forest</option></select></label><div><label class="theme-control" for="languageChoice">{{ui:language.label}}<select id="languageChoice" aria-describedby="languageHint">__PAGE_LANGUAGE_OPTIONS__</select></label><small class="theme-status" id="languageHint">{{ui:language.reload_hint}}</small></div><span id="languageStatus" class="theme-status" role="status" aria-live="polite"></span><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">Close this note</button></div></div>
 <nav class="workspace-nav" aria-label="Workspaces"><span class="eyebrow">Create &amp; produce</span><a href="#home">Home</a><a href="#studio">Model studio</a><a href="#cloning">Voice cloning</a><a href="#cast">Cast library</a><a href="#perform">Perform lines</a><a href="#projects">Projects</a><a href="#audio-tools">Audio tools</a><a href="#automation">Automation</a><a href="#scenes">Scenes &amp; batch</a><a href="#books">Stories &amp; audiobooks</a><a href="#conversion">Voice conversion</a><a href="/compare" class="nav-secondary">Compare &amp; rate ↗</a><a href="#library">Recent clips</a><a href="#models">Models &amp; features</a><a href="#system">System &amp; backups</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">Model worker</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
@@ -197,13 +197,15 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <p>Start a scene or turn a document into speech.</p>
     <ul>
       <li><a href="#scenes" id="homeImportScript">Import a script</a></li>
-      <li><a href="#perform">Start from the Perform line</a></li>
-      <li id="homeSampleLink" hidden><a href="#scenes">Find the sample scene in Scenes &amp; batch</a></li>
+      <li id="homePerform" hidden><a href="#perform">Start from the Perform line</a></li>
+      <li id="homeSampleLink" hidden><button type="button" id="homeSampleOpen">Open the sample scene</button></li>
       <li><a href="#books">Narrate a document</a></li>
     </ul>
   </div>
   <h3 id="homeRecentHeading" hidden>Recent work</h3>
   <ol id="homeRecent" aria-labelledby="homeRecentHeading" hidden></ol>
+  <p id="homeNewWork" hidden><a href="#scenes" id="homeImportMore">Import a script</a> · <a href="#books">Narrate a document</a></p>
+  <p id="homeSampleStatus" class="meta" role="status"></p>
   <p id="homeStatus" class="meta" role="status">Looking for recent work…</p>
 </section>
 

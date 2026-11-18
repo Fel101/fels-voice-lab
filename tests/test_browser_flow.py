@@ -785,6 +785,7 @@ class EmptyLibraryPageTests(unittest.TestCase):
                 page.wait_until("!$('home').hidden && !$('homeStart').hidden && !$('firstRun').hidden")
                 self.assertEqual(page.evaluate("$('firstRun').parentElement.id"), "homeFirstRun")
                 self.assertEqual(page.evaluate("$('homeRecent').children.length"), 0)
+                self.assertTrue(page.evaluate("$('homePerform').hidden"))
                 page.screenshot("empty-home", "#home")
                 page.click("#homeImportScript")
                 page.wait_until("!$('scenes').hidden && $('sceneScriptImport').open")
@@ -1021,7 +1022,10 @@ class SamplePageTests(unittest.TestCase):
                 self.assertTrue(page.evaluate("document.getElementById('sampleNote').hidden === false"
                                               " && document.getElementById('sampleRemove').hidden"))
                 self.assertEqual(server.cast.list_cast(), [])  # offered, never made unasked
-                page.click("#castSampleOpen")
+                page.show("home")
+                page.wait_until("!$('homeStart').hidden && !$('homeSampleLink').hidden")
+                self.assertTrue(page.evaluate("$('homePerform').hidden"))
+                page.click("#homeSampleOpen")
                 page.wait_until("location.hash === '#scenes' && document.getElementById('sceneName').value === "
                                 "'Sample: The parcel at the lighthouse' && document.querySelectorAll('#sceneLineEditor .scene-line')"
                                 ".length === 9")

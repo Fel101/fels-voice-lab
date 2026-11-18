@@ -1382,18 +1382,21 @@ function renderSampleNotes() {
   $('firstRunSample').hidden = !(firstRun.ready && !$('firstRun').hidden && sampleOffered());
 }
 function sampleButtons(disabled) {
-  ['sampleOpen', 'sampleRemove', 'castSampleOpen', 'firstRunSample'].forEach(function (id) {
+  ['sampleOpen', 'sampleRemove', 'castSampleOpen', 'firstRunSample', 'homeSampleOpen'].forEach(function (id) {
     $(id).disabled = disabled;
   });
 }
 function openSample() {
+  var onHome = !$('home').hidden;
   if (sceneDirty && !window.confirm('Discard unsaved scene edits and open the sample scene?')) return Promise.resolve(null);
   sampleButtons(true);
   $('sampleStatus').textContent = 'Opening the sample scene…';
+  if (onHome) $('homeSampleStatus').textContent = $('sampleStatus').textContent;
   return fetchJson('/api/sample', {})
     .then(function (result) {
       sampleState = { sample: result.sample, can_make: true, why_not: null };
       location.hash = '#scenes';
+      $('homeSampleStatus').textContent = '';
       $('sampleStatus').textContent = result.made
         ? 'Made the sample scene and its two characters, Edie and Tomas.'
         : 'Opened the sample scene.';
@@ -1403,7 +1406,8 @@ function openSample() {
     })
     .catch(function (error) {
       $('sampleStatus').textContent = error.message;
-      if (location.hash !== '#scenes') $('referenceStatus').textContent = error.message;
+      if (onHome) $('homeSampleStatus').textContent = error.message;
+      else if (location.hash !== '#scenes') $('referenceStatus').textContent = error.message;
     })
     .then(function () {
       sampleButtons(false);
@@ -2188,7 +2192,7 @@ $('sceneRenderTicked').addEventListener('click', function () {
 $('sceneRenderMissing').addEventListener('click', function () {
   startSceneBatch(missingSceneLines).catch(showSceneError);
 });
-['sampleOpen', 'castSampleOpen', 'firstRunSample'].forEach(function (id) {
+['sampleOpen', 'castSampleOpen', 'firstRunSample', 'homeSampleOpen'].forEach(function (id) {
   $(id).addEventListener('click', function () {
     openSample();
   });

@@ -246,7 +246,7 @@ def diagnostics_text(report):
         setup = report["setup"]
         providers = setup["provider_profiles"]
         lines.extend((
-            "Connection for local apps: " + ("set up" if setup["local_connection"] else "not set up"),
+            "Other apps on this computer can find this Lab: " + ("yes" if setup["local_connection"] else "no"),
             "Provider profiles: " + ("could not read settings" if providers is None else "set up" if providers else "not set up"),
             "Speech recognition: " + ("installed" if setup["speech_recognition"] else "not installed"),
         ))
