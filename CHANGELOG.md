@@ -62,6 +62,7 @@ contributors. The Lab's code for them is its own.
 - `[softly] MIRA: Did you?` in a plain-text script is Mira's line with the direction "softly", not narration.
 - Two Lab services could listen on the same port.
 - A "not found" answer's sentence came wrapped in quotes.
+- **Stop** on a running clip could answer "I/O operation on closed file.", though the clip did stop.
 
 ### After updating
 

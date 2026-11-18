@@ -305,8 +305,10 @@ class DevToolsPage:
     def open(self, url, patience=(30, 60)):
         """Load the page and wait until its scripts have run. The first load in a fresh browser on a slow computer can stall
         (a CI runner once left it for 60 s with nothing to show), so a page that is not ready within the first wait is
-        loaded once more; one that never gets ready is reported with what the browser was showing."""
+        loaded once more; one that never gets ready is reported with what the browser was showing. The errors of a load that
+        did not get ready are kept in its note, not in `problems`: the page that came up is the one tested."""
         self.failed, self.requests = [], {}
+        earlier = len(self.problems)  # an earlier page's errors stay
         self.call("Network.enable")  # only while the page loads: it is what says which request failed
         notes = []
         try:
@@ -316,6 +318,7 @@ class DevToolsPage:
                     return self.wait_until("document.documentElement.classList.contains('workspace-ready')", timeout=seconds)
                 except AssertionError:
                     notes.append(f"load {attempt}, after {seconds} s: the browser answered {started}\n{self.look()}")
+                    del self.problems[earlier:]
             raise AssertionError(f"{url} was not ready after {len(patience)} loads\n" + "\n".join(notes))
         finally:
             try:
@@ -520,7 +523,7 @@ class OpenRetryTests(unittest.TestCase):
     def stand_in(self, address):
         """A page that says it is at `address`, is not ready the first time it is waited on, and notes what it is asked."""
         page = DevToolsPage.__new__(DevToolsPage)
-        page.failed, page.requests, page.asked = [], {}, []
+        page.failed, page.requests, page.asked, page.problems = [], {}, [], []
         waits = [AssertionError("not ready"), None]
 
         def wait_until(expression, timeout=60):
@@ -542,6 +545,23 @@ class OpenRetryTests(unittest.TestCase):
         page = self.stand_in("about:blank")
         page.open(self.URL, patience=(1, 1))
         self.assertEqual(page.asked, ["Network.enable", "Page.navigate", "Page.navigate", "Network.disable"])
+
+    def test_the_errors_of_a_load_that_did_not_get_ready_are_left_with_it(self):
+        """A CI runner refused one script on the first load, so the next script stopped on "generate is not defined" and the
+        page was loaded again. That error belongs to the broken load; the page that came up is the one tested. An earlier
+        page's errors stay."""
+        page = self.stand_in(self.URL)
+        page.problems.append("an earlier page's error")
+        not_ready_once = page.wait_until
+
+        def wait_until(expression, timeout=60):
+            if page.asked == ["Network.enable", "Page.navigate"]:
+                page.problems.append("ReferenceError: generate is not defined")
+            not_ready_once(expression, timeout)
+
+        page.wait_until = wait_until
+        page.open(self.URL, patience=(1, 1))
+        self.assertEqual(page.problems, ["an earlier page's error"])
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")

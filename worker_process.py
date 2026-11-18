@@ -374,12 +374,15 @@ class WorkerProcess:
             if pipe is not None:
                 try:
                     pipe.close()
-                except OSError:
+                except (OSError, ValueError):
                     pass
-        if self._log_file is not None:
+        # Stop closes the worker of a running clip while the request it ended can be closing it too. Only one of them takes
+        # the log file, so the other does not flush a file that is already closed.
+        with self._lifecycle_lock:
+            log_file, self._log_file = self._log_file, None
+        if log_file is not None:
             try:
-                self._log_file.flush()
-                self._log_file.close()
+                log_file.flush()
+                log_file.close()
             except OSError:
                 pass
-            self._log_file = None

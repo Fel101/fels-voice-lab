@@ -84,6 +84,48 @@ class WorkerTests(unittest.TestCase):
         self.assertFalse(worker.alive)
         self.assertFalse(process_is_running(runtime_pid))
 
+    def test_two_closes_at_once_both_end_without_an_error(self):
+        """Stop closes the worker of a running clip while the request it ended closes it too (a CI run answered Stop with
+        "I/O operation on closed file."). Only one of the two gets the log file to close."""
+        worker = self.new_fake_worker()
+        worker.start()
+        real = worker._log_file
+        entered, closed = threading.Event(), threading.Event()
+
+        class RacingLog:
+            flushes = 0
+
+            def flush(self):
+                RacingLog.flushes += 1
+                if RacingLog.flushes == 1:
+                    entered.set()
+                    closed.wait(1)  # the other close, had it got the file too, would close it meanwhile
+                real.flush()
+
+            def close(self):
+                real.close()
+                closed.set()
+
+        worker._log_file = RacingLog()
+        errors = []
+
+        def close():
+            try:
+                worker.close(force=True)
+            except Exception as error:
+                errors.append(error)
+
+        first = threading.Thread(target=close)
+        first.start()
+        self.assertTrue(entered.wait(15))
+        second = threading.Thread(target=close)
+        second.start()
+        second.join(15)
+        first.join(15)
+        self.assertEqual(errors, [])
+        self.assertTrue(real.closed)
+        self.assertIsNotNone(worker.returncode)
+
     def test_busy_http_request_is_rejected_without_queueing(self):
         marker = Path(tempfile.gettempdir()) / f"voice-lab-busy-{os.getpid()}-{time.time_ns()}.started"
         workers = []
