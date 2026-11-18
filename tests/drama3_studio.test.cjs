@@ -2,6 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+globalThis.LabText = require('./page_source.cjs').englishPageText();
 const source=fs.readFileSync(path.join(__dirname,'../drama3_studio.js'),'utf8');
 const modulePromise=import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 

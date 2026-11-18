@@ -554,7 +554,9 @@ class UninstallingFromThePageTests(unittest.TestCase):
 
     def test_the_page_offers_it_on_an_installed_card_and_asks_first(self):
         page = (ROOT / "voice_lab_studio.js").read_text(encoding="utf-8")
-        self.assertIn("uninstall=cardNode('button','','Uninstall…')", page)
+        self.assertIn("uninstall=cardNode('button','',LabText.t('studio.uninstall'))", page)
+        catalog = json.loads((ROOT / "locales" / "en.json").read_text(encoding="utf-8"))
+        self.assertEqual(catalog["messages"]["studio.uninstall"], "Uninstall…")
         self.assertIn("view.uninstallButton.hidden=missing||running||row.state==='not_integrated';", page)
         self.assertIn("{dry_run:true}", page[page.index("function planUninstall") :])
         html = (ROOT / "serve.html").read_text(encoding="utf-8")

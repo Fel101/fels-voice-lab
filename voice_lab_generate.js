@@ -73,11 +73,11 @@ function makeHistory(blob, body, meta) {
   var h = $('hist'); if (!h.querySelector('article')) { h.textContent = ''; }
   var url = URL.createObjectURL(blob), row = document.createElement('article'), title = document.createElement('div'); title.className = 'title';
   row.dataset.audioUrl=url;
-  var desc = document.createElement('span'); desc.textContent = body.engine + (body.mode ? ' / ' + body.mode : '') + ' / seed ' + (body.seed === undefined ? '—' : body.seed) + ': ' + body.text.slice(0,70);
-  var download = document.createElement('a'); download.href = url; download.download = body.engine + '-' + (body.mode || 'speech') + '-seed-' + (body.seed === undefined ? Date.now() : body.seed) + '.wav'; download.textContent = 'Save WAV';
+  var desc = document.createElement('span'); desc.textContent = LabText.t('studio.seed_2', {value: body.engine + (body.mode ? ' / ' + body.mode : ''), value2: body.seed === undefined ? '—' : body.seed, slice: body.text.slice(0,70)});
+  var download = document.createElement('a'); download.href = url; download.download = body.engine + '-' + (body.mode || 'speech') + '-seed-' + (body.seed === undefined ? Date.now() : body.seed) + '.wav'; download.textContent = LabText.t('studio.save_wav');
   title.appendChild(desc); title.appendChild(download); row.appendChild(title);
   var audio = document.createElement('audio'); audio.controls = true; audio.src = url; row.appendChild(audio);
-  var saveVoiceButton=document.createElement('button');saveVoiceButton.type='button';saveVoiceButton.textContent='Save as a reusable Cast voice';
+  var saveVoiceButton=document.createElement('button');saveVoiceButton.type='button';saveVoiceButton.textContent=LabText.t('studio.save_as_a_reusable_cast');
   saveVoiceButton.addEventListener('click',function(){VoiceLabWorkflows.openFromClip(blob,body);});row.appendChild(saveVoiceButton);
   var note = document.createElement('div'); note.className = 'meta'; note.textContent = meta; row.appendChild(note); h.insertBefore(row,h.firstChild);
   while(h.children.length>20){var old=h.lastElementChild;if(old.dataset.audioUrl)URL.revokeObjectURL(old.dataset.audioUrl);old.remove();}
@@ -91,7 +91,7 @@ function generate() {
   if ($('engine').value === 'kokoro' && !$('voice').options.length) {
     // A page that was open while Kokoro was installed has no voices to send. Read them again, once, then speak.
     $('go').disabled = true; $('reroll').disabled = true;
-    $('status').textContent = 'Reading the installed Kokoro voices...';
+    $('status').textContent = LabText.t('studio.reading_the_installed_kokoro_voices');
     VoiceLabWorkflows.refreshKokoroVoices().catch(function () {}).then(function () {
       $('go').disabled = false; $('reroll').disabled = false;
       requestSpeech();
@@ -101,7 +101,7 @@ function generate() {
   if ($('engine').value === 'phonon-31m-en' && !phononVoices.length) {
     // Same for Phonon: read the voices it installed, then speak (an empty list is refused with the install hint).
     $('go').disabled = true; $('reroll').disabled = true;
-    $('status').textContent = 'Reading the installed Phonon voices...';
+    $('status').textContent = LabText.t('studio.reading_the_installed_phonon_voices');
     refreshPhononVoices().catch(function () {}).then(function () {
       $('go').disabled = false; $('reroll').disabled = false;
       requestSpeech();
@@ -112,39 +112,39 @@ function generate() {
 }
 function requestSpeech() {
   var body = bodyForRequest();
-  if((body.engine==='orig'||body.engine==='turbo')&&body.clone&&!body.reference_path){$('err').textContent='Choose a voice recording, or turn cloning off to use the default voice.';return;}
+  if((body.engine==='orig'||body.engine==='turbo')&&body.clone&&!body.reference_path){$('err').textContent=LabText.t('studio.choose_a_voice_recording_or');return;}
   var historyBody=VoiceLabWorkflows.freezeRequest(body);
   $('go').disabled = true; $('reroll').disabled = true; $('stopWaiting').hidden = false; $('err').textContent = '';
   var started = performance.now(), request = {controller:new AbortController(), stopped:false};
   activeRequest = request;
   function waiting() {
-    $('status').textContent = 'Generating... ' + Math.round((performance.now() - started) / 1000) + ' s. The first request loads and warms the selected model.';
+    $('status').textContent = LabText.t('studio.generating_s_the_first_request', {round: Math.round((performance.now() - started) / 1000)});
   }
   waiting();
   var ticker = setInterval(waiting, 500);
   fetch('/api/speak', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
     signal:request.controller.signal}).then(function (r) {
     if (!r.ok) { return r.json().then(function (j) { throw new Error(j.error || r.status); }); }
-    var meta = r.headers.get('X-Audio-Seconds') + ' s audio / ' + r.headers.get('X-Gen-Seconds') + ' s generation';
+    var meta = r.headers.get('X-Audio-Seconds') + LabText.t('studio.s_audio') + r.headers.get('X-Gen-Seconds') + LabText.t('studio.s_generation');
     var actual = r.headers.get('X-Decode-Profile-Effective');
-    if (actual) { meta += ' / ' + (r.headers.get('X-Decode-Profile') || '') + ' requested, ' + actual + ' effective'; }
+    if (actual) { meta += ' / ' + (r.headers.get('X-Decode-Profile') || '') + LabText.t('studio.requested') + actual + LabText.t('studio.effective'); }
     var mode = r.headers.get('X-Generation-Mode'); if (mode) { meta += ' / ' + mode; }
     var backend = r.headers.get('X-Voice-Backend'); if (backend) { meta += ' / ' + backend; }
     var checkpoint = r.headers.get('X-Model-Checkpoint'); if (checkpoint) { meta += ' / ' + checkpoint; }
-    var revision = r.headers.get('X-Checkpoint-Revision'); if (revision) { meta += ' / revision ' + revision; }
-    var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += ' / effective sampling ' + sampling; }
+    var revision = r.headers.get('X-Checkpoint-Revision'); if (revision) { meta += LabText.t('studio.revision', {revision: revision}); }
+    var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += LabText.t('studio.effective_sampling', {sampling: sampling}); }
     var language = r.headers.get('X-Voice-Language'); if (language) { meta += ' / ' + language; }
     var speaker = r.headers.get('X-Voice-Speaker'); if (speaker) { meta += ' / ' + speaker; }
-    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += ' / voice recording cached: ' + cacheHit; }
+    var cacheHit = r.headers.get('X-Reference-Cache-Hit'); if (cacheHit) { meta += LabText.t('studio.voice_recording_cached', {cacheHit: cacheHit}); }
     var savedAsset = r.headers.get('X-Voice-Asset-Path');
-    if (savedAsset) { meta += ' / saved voice recording: ' + savedAsset; }
+    if (savedAsset) { meta += LabText.t('studio.saved_voice_recording_2', {savedAsset: savedAsset}); }
     return r.blob().then(function (blob) { return {blob:blob, meta:meta, savedAsset:savedAsset}; });
   }).then(function (result) {
     clearInterval(ticker);
     makeHistory(result.blob, historyBody, result.meta);
-    $('status').textContent = result.meta + ' / round trip ' + ((performance.now()-started)/1000).toFixed(1) + ' s';
+    $('status').textContent = LabText.t('studio.round_trip_s', {meta: result.meta, toFixed: ((performance.now()-started)/1000).toFixed(1)});
     var historySaved = persistHistory(result.blob, historyBody, result.meta).catch(function (error) {
-      $('status').textContent += ' / local history was not saved: ' + error.message;
+      $('status').textContent += LabText.t('studio.local_history_was_not_saved', {message: error.message});
     });
     if (result.savedAsset) {
       $('saveVoice').checked = false;
@@ -159,8 +159,7 @@ function requestSpeech() {
   }).catch(function (e) {
     clearInterval(ticker);
     if (request.stopped) {
-      $('status').textContent = 'Stopped waiting. If the model had started that line it finishes it, and your next request waits until it does: Stop under Model worker ends it at once.'
-        + (body.save_voice_as ? ' The reusable voice is still saved when it finishes.' : '');
+      $('status').textContent = LabText.t('studio.stopped_waiting_if_the_model', {value: body.save_voice_as ? ' The reusable voice is still saved when it finishes.' : ''});
     } else { $('err').textContent = e.message; $('status').textContent = ''; }
   }).then(function () {
     clearInterval(ticker);
@@ -186,7 +185,7 @@ function decodePcm16(encoded) {
 function stopStreamPlayback(state, showStatus) {
   if (!state || state.cancelled) { return; }
   state.cancelled = true;
-  if (showStatus !== false) { $('status').textContent='Stream cancelled; pending playback cleared.'; }
+  if (showStatus !== false) { $('status').textContent=LabText.t('studio.stream_cancelled_pending_playback_cleared'); }
   if (state.controller) { state.controller.abort(); }
   if (state.sources) {
     state.sources.forEach(function (source) { try { source.onended = null; source.stop(0); } catch (_) {} });
@@ -200,14 +199,14 @@ function streamGenerate() {
   if (activeStream) { return; }
   var body = bodyForRequest(), AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   var historyBody=VoiceLabWorkflows.freezeRequest(body);
-  if (!AudioContextCtor) { $('err').textContent = 'This browser does not support Web Audio streaming.'; return; }
+  if (!AudioContextCtor) { $('err').textContent = LabText.t('studio.this_browser_does_not_support'); return; }
   var state = {controller:new AbortController(), audioContext:null, sources:new Set(), cancelled:false,
     nextStart:0, sampleCount:0, expectedSequence:0, sampleRate:null, pcmParts:[],
     gapCount:0, gapSeconds:0, firstAudioMs:null, playbackStartMs:null, startEvent:null, complete:null};
   activeStream = state;
   ['go','reroll','stream','load','unload'].forEach(function(id){$(id).disabled=true;});
   $('stopStream').hidden=false; $('err').textContent='';
-  $('status').textContent='Loading the selected Qwen checkpoint if needed, then streaming generated PCM chunks.';
+  $('status').textContent=LabText.t('studio.loading_the_selected_qwen_checkpoint');
   var requestStarted = performance.now();
   function waitForBufferRoom() {
     return new Promise(/** @param {(value?: any) => void} resolve */ function(resolve) {
@@ -221,20 +220,20 @@ function streamGenerate() {
   function handleEvent(event) {
     if (event.type === 'start') {
       state.startEvent=event; state.sampleRate=event.sample_rate;
-      $('status').textContent='Native Qwen generator ready / service first byte '+Number(event.service_first_byte_s).toFixed(2)+' s';
+      $('status').textContent=LabText.t('studio.native_qwen_generator_ready_service', {toFixed: Number(event.service_first_byte_s).toFixed(2)});
       return Promise.resolve();
     }
-    if (event.type === 'error') { throw new Error(event.error || 'Streaming generation failed.'); }
+    if (event.type === 'error') { throw new Error(event.error || LabText.t('studio.streaming_generation_failed')); }
     if (event.type === 'complete') { state.complete=event; return Promise.resolve(); }
-    if (event.type !== 'audio') { throw new Error('Unknown streaming event: '+event.type); }
+    if (event.type !== 'audio') { throw new Error(LabText.t('studio.unknown_streaming_event', {type: event.type})); }
     return waitForBufferRoom().then(function(){
       if (state.cancelled) { return; }
       if (event.sample_format !== 'pcm_s16le' || event.sequence !== state.expectedSequence ||
           event.sample_start !== state.sampleCount || event.sample_rate !== state.sampleRate) {
-        throw new Error('The stream contains a discontinuous audio chunk. Playback was stopped.');
+        throw new Error(LabText.t('studio.the_stream_contains_a_discontinuous'));
       }
       var bytes=decodePcm16(event.data), count=event.sample_count;
-      if (bytes.length !== count*2 || !count) { throw new Error('The stream chunk byte count is invalid.'); }
+      if (bytes.length !== count*2 || !count) { throw new Error(LabText.t('studio.the_stream_chunk_byte_count')); }
       if (state.sampleCount===0) { state.firstAudioMs=performance.now()-requestStarted; }
       var now=state.audioContext.currentTime, startAt=Math.max(now+0.015,state.nextStart);
       if (state.sampleCount>0 && startAt-state.nextStart>0.025) {
@@ -251,8 +250,7 @@ function streamGenerate() {
       }
       state.nextStart=startAt+count/event.sample_rate;
       state.pcmParts.push(bytes); state.sampleCount+=count; state.expectedSequence++;
-      $('status').textContent='Native Qwen streaming / '+state.expectedSequence+' chunks / '
-        +(state.sampleCount/state.sampleRate).toFixed(2)+' s received / '+state.gapCount+' audio gaps';
+      $('status').textContent=LabText.t('studio.native_qwen_streaming_chunks_s', {expectedSequence: state.expectedSequence, toFixed: (state.sampleCount/state.sampleRate).toFixed(2), gapCount: state.gapCount});
     });
   }
   function drainLines(text, final) {
@@ -268,33 +266,27 @@ function streamGenerate() {
     var response=await fetch('/api/stream',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body),signal:state.controller.signal});
     if(!response.ok){var failure=await response.json();throw new Error(failure.error||response.status);}
-    if(!response.body||!response.body.getReader){throw new Error('This browser cannot read a progressive response body.');}
+    if(!response.body||!response.body.getReader){throw new Error(LabText.t('studio.this_browser_cannot_read_a'));}
     var reader=response.body.getReader(), decoder=new TextDecoder(), done=false;
     while(!done&&!state.cancelled){var part=await reader.read();done=part.done;
       await drainLines(decoder.decode(part.value||new Uint8Array(),{stream:!done}),done);}
     if(state.cancelled){return;}
-    if(!state.complete){throw new Error('The stream ended without a completion record.');}
+    if(!state.complete){throw new Error(LabText.t('studio.the_stream_ended_without_a'));}
     if(state.complete.sample_count!==state.sampleCount||state.complete.chunk_count!==state.expectedSequence){
-      throw new Error('The completion record does not match the audio chunks received.');}
+      throw new Error(LabText.t('studio.the_completion_record_does_not'));}
     while(!state.cancelled&&state.audioContext.currentTime<state.nextStart){await new Promise(function(resolve){setTimeout(resolve,25);});}
     if(state.cancelled){return;}
     var wav=new Blob([wavHeader(state.sampleRate,state.sampleCount)].concat(state.pcmParts),{type:'audio/wav'});
-    var completion=state.complete, meta='native faster-Qwen generator / generator first chunk '+Number(completion.generator_first_chunk_s).toFixed(2)+' s'
-      +' / service first byte '+Number(completion.service_first_byte_s).toFixed(2)+' s'
-      +' / service first audio '+Number(completion.service_first_audio_s).toFixed(2)+' s'
-      +' / browser playback start (estimated) '+((state.playbackStartMs-requestStarted)/1000).toFixed(2)+' s'
-      +' / audio gaps '+state.gapCount+' ('+state.gapSeconds.toFixed(2)+' s)'
-      +' / '+Number(completion.audio_seconds).toFixed(2)+' s audio / '+Number(completion.generation_total_s).toFixed(2)+' s generation'
-      +' / '+completion.chunk_count+' transport chunks';
+    var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {toFixed: Number(completion.generator_first_chunk_s).toFixed(2), toFixed2: Number(completion.service_first_byte_s).toFixed(2), toFixed3: Number(completion.service_first_audio_s).toFixed(2), toFixed4: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gapCount: state.gapCount, toFixed5: state.gapSeconds.toFixed(2), toFixed6: Number(completion.audio_seconds).toFixed(2), toFixed7: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
     if(completion.backend){meta+=' / '+completion.backend;}
     if(completion.checkpoint){meta+=' / '+completion.checkpoint;}
     if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / voice recording cached: '+completion.reference_cache_hit;}
     if(completion.saved_asset){meta+=' / saved voice recording: '+completion.saved_asset;}
     makeHistory(wav,historyBody,meta); $('status').textContent=meta;
-    persistHistory(wav,historyBody,meta).catch(function(error){$('status').textContent+=' / local history was not saved: '+error.message;});
+    persistHistory(wav,historyBody,meta).catch(function(error){$('status').textContent+=LabText.t('studio.local_history_was_not_saved', {message: error.message});});
     if(completion.saved_asset){$('qwenSaveVoice').checked=false;$('qwenReferenceText').value=body.text;loadReferences(completion.saved_asset);}
   })().catch(function(error){
-    if(error.name==='AbortError'||state.cancelled){$('status').textContent='Stream cancelled; pending playback cleared.';}
+    if(error.name==='AbortError'||state.cancelled){$('status').textContent=LabText.t('studio.stream_cancelled_pending_playback_cleared');}
     else {$('err').textContent=error.message;$('status').textContent='';stopStreamPlayback(state,false);}
   }).then(function(){
     if(state.audioContext&&state.audioContext.state!=='closed'){state.audioContext.close().catch(function(){});}
