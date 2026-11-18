@@ -210,42 +210,42 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="cloning">
-  <h2>Voice cloning</h2>
-  <p class="meta">Use a voice recording you may use to guide a local text-to-speech model. This creates performances from the clip; it does not train or fine-tune a model.</p>
+  <h2>{{ui:cloning.voice_cloning}}</h2>
+  <p class="meta">{{ui:cloning.use_a_voice_recording_you}}</p>
   <fieldset class="workflow-controls" id="cloneControls">
   <div class="cast-grid">
-    <label class="field">Name for this voice<input id="cloneName" type="text" maxlength="80" placeholder="Name this voice"></label>
-    <label class="field">Model<select id="cloneEngine"></select></label>
+    <label class="field">{{ui:cloning.name_for_this_voice}}<input id="cloneName" type="text" maxlength="80" placeholder="{{ui:cloning.name_this_voice}}"></label>
+    <label class="field">{{ui:cloning.model}}<select id="cloneEngine"></select></label>
   </div>
   <p class="meta" id="cloneModelHelp"></p>
-  <h3>1. Choose a recording</h3>
-  <div class="row"><label class="field">Upload your voice — browse files<input id="cloneFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
-    <button type="button" id="cloneMicStart">Record from the microphone</button><button type="button" id="cloneMicStop" hidden>Stop recording</button></div>
-  <p class="meta">WAV, FLAC, OGG, MP3 or M4A (M4A needs FFmpeg), up to 32 MB. Use a clean 6–30 second passage with one speaker. Files stay on this PC. Trim or clean longer recordings in Cast.</p>
-  <label class="field">Or use a saved voice recording<select id="cloneReference"></select></label>
-  <audio id="cloneSourcePlayer" controls preload="metadata" aria-label="Uploaded or recorded voice preview"></audio>
+  <h3>{{ui:cloning.1_choose_a_recording}}</h3>
+  <div class="row"><label class="field">{{ui:cloning.upload_your_voice_browse_files}}<input id="cloneFile" type="file" accept=".wav,.flac,.ogg,.mp3,.m4a,audio/wav,audio/flac,audio/ogg,audio/mpeg,audio/mp4"></label>
+    <button type="button" id="cloneMicStart">{{ui:cloning.record_from_the_microphone}}</button><button type="button" id="cloneMicStop" hidden>{{ui:cloning.stop_recording}}</button></div>
+  <p class="meta">{{ui:cloning.wav_flac_ogg_mp3_or}}</p>
+  <label class="field">{{ui:cloning.or_use_a_saved_voice}}<select id="cloneReference"></select></label>
+  <audio id="cloneSourcePlayer" controls preload="metadata" aria-label="{{ui:cloning.uploaded_or_recorded_voice_preview}}"></audio>
   <p class="meta" id="cloneSourceInfo" role="status"></p>
-  <label class="field">Exact words in the recording<textarea id="cloneTranscript" maxlength="1200" placeholder="Type the words you actually hear. Required except for VoxCPM2, which can clone without them."></textarea></label>
-  <div class="cast-grid"><label class="field">Where it comes from<input id="cloneOrigin" type="text" maxlength="1000" placeholder="For example: my own voice, recorded today"></label>
-    <label class="field">Who may use it, and how<input id="cloneAllowedUse" type="text" maxlength="1000" placeholder="Record the permission and any restrictions"></label></div>
-  <label><input id="clonePermission" type="checkbox"> I own this recording or have permission to clone this voice.</label>
-  <h3>2. Try the voice</h3>
-  <label class="field">New words to speak<textarea id="cloneText" maxlength="1200">The gate is open. Keep your lantern close, and follow me across the bridge.</textarea></label>
-  <label class="field" id="cloneDirectionWrap">Acting direction (optional)<input id="cloneDirection" type="text" maxlength="1000" placeholder="For example: calmly, with quiet confidence"></label>
-  <div class="cast-actions"><button class="go" type="button" id="cloneGenerate">Save the voice and hear it</button>
-    <button type="button" id="cloneSave">Save the recording only</button><a id="cloneOpenCast" href="#cast" hidden>Review and edit in Cast</a>
-    <button type="button" id="refreshReferenceLibrary">Refresh saved recordings</button></div>
+  <label class="field">{{ui:cloning.exact_words_in_the_recording}}<textarea id="cloneTranscript" maxlength="1200" placeholder="{{ui:cloning.type_the_words_you_actually}}"></textarea></label>
+  <div class="cast-grid"><label class="field">{{ui:cloning.where_it_comes_from}}<input id="cloneOrigin" type="text" maxlength="1000" placeholder="{{ui:cloning.for_example_my_own_voice}}"></label>
+    <label class="field">{{ui:cloning.who_may_use_it_and}}<input id="cloneAllowedUse" type="text" maxlength="1000" placeholder="{{ui:cloning.record_the_permission_and_any}}"></label></div>
+  <label><input id="clonePermission" type="checkbox"> {{ui:cloning.i_own_this_recording_or}}</label>
+  <h3>{{ui:cloning.2_try_the_voice}}</h3>
+  <label class="field">{{ui:cloning.new_words_to_speak}}<textarea id="cloneText" maxlength="1200">{{ui:cloning.the_gate_is_open_keep}}</textarea></label>
+  <label class="field" id="cloneDirectionWrap">{{ui:cloning.acting_direction_optional}}<input id="cloneDirection" type="text" maxlength="1000" placeholder="{{ui:cloning.for_example_calmly_with_quiet}}"></label>
+  <div class="cast-actions"><button class="go" type="button" id="cloneGenerate">{{ui:cloning.save_the_voice_and_hear}}</button>
+    <button type="button" id="cloneSave">{{ui:cloning.save_the_recording_only}}</button><a id="cloneOpenCast" href="#cast" hidden>{{ui:cloning.review_and_edit_in_cast}}</a>
+    <button type="button" id="refreshReferenceLibrary">{{ui:cloning.refresh_saved_recordings}}</button></div>
   </fieldset>
   <p class="meta" id="cloneStatus" role="status" aria-live="polite"></p>
-  <audio id="cloneResult" controls preload="none" aria-label="Cloned test performance" hidden></audio>
-  <p class="meta">Saving creates a named voice in Cast, not yet approved, and adds its recording to every Model studio recording picker. Listen before approving it in Cast; approval is never automatic. Test performances also appear in Perform lines.</p>
-  <details><summary>Finding permitted speech samples</summary>
-  <h3>Public speech samples</h3>
+  <audio id="cloneResult" controls preload="none" aria-label="{{ui:cloning.cloned_test_performance}}" hidden></audio>
+  <p class="meta">{{ui:cloning.saving_creates_a_named_voice}}</p>
+  <details><summary>{{ui:cloning.finding_permitted_speech_samples}}</summary>
+  <h3>{{ui:cloning.public_speech_samples}}</h3>
   <div class="model-grid">
-    <article class="model-card"><h3>Mozilla Common Voice</h3><p>Multilingual speech research datasets. Review the chosen dataset license and current Mozilla Data Collective use terms; a dataset listing does not establish individual voice-cloning permission. Many clips are MP3, which Cast accepts as it is.</p><p><a href="https://commonvoice.mozilla.org/dav/datasets" target="_blank" rel="noopener noreferrer">Browse datasets</a> · <a href="https://mozilladatacollective.com/terms/consumers" target="_blank" rel="noopener noreferrer">Read platform use terms</a></p></article>
-    <article class="model-card"><h3>Edinburgh CSTR VCTK</h3><p>English multi-speaker speech corpus with WAV recordings and transcripts. The dataset record specifies CC BY 4.0; retain attribution and note edits.</p><p><a href="https://datashare.ed.ac.uk/items/30e7453c-9ea8-48b4-8e18-f96d0dc62928" target="_blank" rel="noopener noreferrer">Open the VCTK dataset record</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0 terms</a></p></article>
+    <article class="model-card"><h3>{{ui:cloning.mozilla_common_voice}}</h3><p>{{ui:cloning.multilingual_speech_research_datasets_review}}</p><p><a href="https://commonvoice.mozilla.org/dav/datasets" target="_blank" rel="noopener noreferrer">{{ui:cloning.browse_datasets}}</a> · <a href="https://mozilladatacollective.com/terms/consumers" target="_blank" rel="noopener noreferrer">{{ui:cloning.read_platform_use_terms}}</a></p></article>
+    <article class="model-card"><h3>{{ui:cloning.edinburgh_cstr_vctk}}</h3><p>{{ui:cloning.english_multi_speaker_speech_corpus}}</p><p><a href="https://datashare.ed.ac.uk/items/30e7453c-9ea8-48b4-8e18-f96d0dc62928" target="_blank" rel="noopener noreferrer">{{ui:cloning.open_the_vctk_dataset_record}}</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">{{ui:cloning.cc_by_4_0_terms}}</a></p></article>
   </div>
-  <p class="meta">An audio license may not grant every voice-likeness, privacy, or publicity permission. For a recognizable person, prefer your own voice or a recording whose contributor explicitly permits voice cloning. Keep the source and license/permission details in the Cast origin and allowed-use fields.</p>
+  <p class="meta">{{ui:cloning.an_audio_license_may_not}}</p>
   </details>
 </section>
 
@@ -938,7 +938,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="row" id="bookDownloads"></div>
   </div>
 </section>
-<section class="card" id="library"><h2>Recent clips</h2><p class="meta">Your latest 20 studio generations in this browser. Character takes are saved separately in Perform lines and Scenes.</p><div class="hist" id="hist"><span class="meta">Generate a clip in Model studio to hear it here.</span></div></section>
+<section class="card" id="library"><h2>{{ui:library.recent_clips}}</h2><p class="meta">{{ui:library.your_latest_20_studio_generations}}</p><div class="hist" id="hist"><span class="meta">{{ui:library.generate_a_clip_in_model}}</span></div></section>
 <section class="card" id="models"><h2>{{ui:models.models_features}}</h2><p class="meta">{{ui:models.each_card_is_a_voice}}</p>
 <details><summary>{{ui:models.what_these_words_mean}}</summary><p class="meta">{{ui:models.each_card_s_facts_come}}</p></details>
 <p class="meta" id="modelsRam"></p><p class="meta" id="modelsDevice"></p>

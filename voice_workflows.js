@@ -15,22 +15,22 @@
   function json(url, body) { return global.fetchJson(url, body); }
   function selectedRow(select) { return rows.find(function (row) { return row.path === select.value; }); }
   function sourceDetails(row) {
-    if (!row) return 'No recording selected.';
-    return (row.source_label || row.source || 'Local recording') +
-      (row.duration_seconds ? ' · ' + row.duration_seconds.toFixed(2) + ' s' : '') +
-      (row.generation_engine_name ? '\nCreated with: ' + row.generation_engine_name : '') +
-      (row.engine_name ? '\nSaved voice uses: ' + row.engine_name : '') +
-      (row.identity_status ? '\nVoice status: ' + row.identity_status : '') +
-      (row.version ? '\nRecording version: ' + row.version : '') +
-      '\nOrigin: ' + (row.origin || 'Unknown — source not documented.') +
-      '\nAllowed use: ' + (row.allowed_use || 'Unknown — do not assume permission to clone or redistribute.') +
-      (row.description ? '\nDescription: ' + row.description : '') +
-      '\nFile: ' + (row.display_name || row.name);
+    if (!row) return LabText.t('studio.no_recording_selected');
+    return (row.source_label || row.source || LabText.t('studio.local_recording')) +
+      (row.duration_seconds ? ' · ' + row.duration_seconds.toFixed(2) + LabText.t('studio.s') : '') +
+      (row.generation_engine_name ? LabText.t('studio.created_with', {generation_engine_name: row.generation_engine_name}) : '') +
+      (row.engine_name ? LabText.t('studio.saved_voice_uses', {engine_name: row.engine_name}) : '') +
+      (row.identity_status ? LabText.t('studio.voice_status', {identity_status: row.identity_status}) : '') +
+      (row.version ? LabText.t('studio.recording_version', {version: row.version}) : '') +
+      LabText.t('studio.origin') + (row.origin || LabText.t('studio.unknown_source_not_documented')) +
+      LabText.t('studio.allowed_use') + (row.allowed_use || LabText.t('studio.unknown_do_not_assume_permission')) +
+      (row.description ? LabText.t('studio.description', {description: row.description}) : '') +
+      LabText.t('studio.file') + (row.display_name || row.name);
   }
   function label(row) {
     var peers=rows.filter(function(other){return row.character_id&&other.character_id===row.character_id;});
     var identities=Array.from(new Set(peers.map(function(other){return other.identity_id;})));
-    var identitySuffix=identities.length>1?' · '+(row.identity_label||'Voice'):'';
+    var identitySuffix=identities.length>1?' · '+(row.identity_label||LabText.t('studio.voice')):'';
     if(identities.length>1&&peers.some(function(other){return other.identity_id!==row.identity_id&&other.identity_label===row.identity_label&&other.engine_id===row.engine_id;}))
       identitySuffix+=' ['+String(row.identity_id).slice(0,6)+']';
     var multipleVersions=row.identity_id&&peers.filter(function(other){return other.identity_id===row.identity_id;}).length>1;
@@ -53,7 +53,7 @@
     select.textContent = ''; global.option(select, '', placeholder);
     var groups = {}, visible = visibleReferenceRows(before);
     visible.forEach(function (row) {
-      var group = row.character_id ? 'Saved character voices' : 'Local recordings and designs';
+      var group = row.character_id ? LabText.t('studio.saved_character_voices') : LabText.t('studio.local_recordings_and_designs');
       if (!groups[group]) { var node=document.createElement('optgroup');node.label=group;groups[group]=node;select.appendChild(node); }
       global.option(groups[group], row.path, label(row));
     });
@@ -61,16 +61,16 @@
   }
   function addReferenceFilters(container, select) {
     var filters=document.createElement('div');filters.className='reference-filters';
-    /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([['All recording versions',function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
+    /** @type {Array<[string, () => boolean, (value: boolean) => void]>} */ ([[LabText.t('studio.all_recording_versions'),function(){return showReferenceVersions;},function(value){showReferenceVersions=value;}]]).forEach(function(item,index){
       var wrap=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=item[1]();
-      input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',item[0]+' for '+select.id);
+      input.dataset.referenceFilter=String(index);input.setAttribute('aria-label',LabText.t('studio.for', {value: item[0], id: select.id}));
       input.addEventListener('change',function(){item[2](input.checked);
         /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('[data-reference-filter="'+index+'"]')).forEach(function(other){other.checked=input.checked;});render(rows);});
       wrap.append(input,document.createTextNode(' '+item[0]));filters.appendChild(wrap);
     });container.appendChild(filters);
   }
   function kokoroLabel(id) {
-    var languages={a:'American English',b:'British English',e:'Spanish',f:'French',h:'Hindi',i:'Italian',j:'Japanese',p:'Brazilian Portuguese',z:'Mandarin Chinese'};
+    var languages={a:LabText.t('studio.american_english'),b:LabText.t('studio.british_english'),e:LabText.t('studio.spanish'),f:LabText.t('studio.french'),h:LabText.t('studio.hindi'),i:LabText.t('studio.italian'),j:LabText.t('studio.japanese'),p:LabText.t('studio.brazilian_portuguese'),z:LabText.t('studio.mandarin_chinese')};
     var name=id.slice(3).replace(/_/g,' ');name=name.charAt(0).toUpperCase()+name.slice(1);
     return name+' · '+(languages[id.charAt(0)]||'Kokoro')+' ['+id+']';
   }
@@ -94,12 +94,12 @@
   function addReferenceTools(select) {
     var tools = document.createElement('div'); tools.className = 'reference-tools';
     var audio = document.createElement('audio'); audio.id = select.id + 'Audio'; audio.controls = true;
-    audio.preload = 'none'; audio.setAttribute('aria-label', 'Preview ' + select.parentElement.firstChild.textContent.trim());
-    var disclosure=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Source, use notes and recording details';
+    audio.preload = 'none'; audio.setAttribute('aria-label', LabText.t('studio.preview', {trim: select.parentElement.firstChild.textContent.trim()}));
+    var disclosure=document.createElement('details'),summary=document.createElement('summary');summary.textContent=LabText.t('studio.source_use_notes_and_recording');
     var details = document.createElement('p'); details.id = select.id + 'Details'; details.className = 'meta reference-details';disclosure.append(summary,details);
-    var button = document.createElement('button'); button.type = 'button'; button.textContent = 'Upload / record a new voice';
+    var button = document.createElement('button'); button.type = 'button'; button.textContent = LabText.t('studio.upload_record_a_new_voice');
     button.addEventListener('click', function () { openUpload(el('engine').value); });
-    var browse=document.createElement('a');browse.href='#cast';browse.textContent='Browse named voices';
+    var browse=document.createElement('a');browse.href='#cast';browse.textContent=LabText.t('studio.browse_named_voices');
     tools.append(audio, disclosure, browse, document.createTextNode(' · '), button);addReferenceFilters(tools,select);select.parentElement.insertAdjacentElement('afterend', tools);
     select.addEventListener('change', function () { updatePreview(select, true); });
   }
@@ -108,12 +108,12 @@
     if (!initialized) return;
     referenceSelectors.forEach(function (id) {
       var select = el(id), before = preferredPath || select.value;
-      fillReferenceSelector(select,before,'Choose a recording to preview or clone');
+      fillReferenceSelector(select,before,LabText.t('studio.choose_a_recording_to_preview'));
       if(select.value!==before&&global.VoiceLabLibrary)global.VoiceLabLibrary.clearStudioSelection();
       updatePreview(select, select.value !== before || !!preferredPath);
     });
     var selector = el('cloneReference'), previous = selector.value;
-    fillReferenceSelector(selector,previous,'Choose a saved recording, or upload above');
+    fillReferenceSelector(selector,previous,LabText.t('studio.choose_a_saved_recording_or'));
     fillCloneEngines();
   }
   // The first cloning model in the picker that this computer has installed, as the Models page last read it; when none is,
@@ -152,22 +152,22 @@
     var engine = el('cloneEngine').value, status = (global.engineRows || {})[engine];
     el('cloneDirectionWrap').hidden = engine === 'orig' || engine === 'turbo';
     var missing = !status || status.state !== 'not_installed' ? '' : (status.installation || {}).installer ?
-      'Not installed on this computer yet; press Install on its card in Models & features. ' :
-      'Not installed on this computer yet; Models & features says what it needs. ';
+      LabText.t('studio.not_installed_on_this_computer') :
+      LabText.t('studio.not_installed_on_this_computer_2');
     el('cloneModelHelp').textContent = missing + (engine === 'drama-3' ?
-      'Fish Audio: exact transcript required. Runs on CPU; a cold test can take several minutes. Fish license conditions apply.' :
-      engine === 'breeze-tts-2' ? 'Breeze: exact transcript required. Model and self-hosted outputs are non-commercial.' :
-      engine.indexOf('qwen') === 0 ? 'Qwen Base: type the exact words. Acting directions are experimental.' :
-      engine === 'voxcpm2' ? 'VoxCPM2: the words are optional when it clones. Acting directions are experimental.' :
-      engine === 'turbo' ? 'Chatterbox Turbo: the recording must be longer than 5 seconds. Put supported event tags in your new dialogue.' :
-      'Chatterbox Original: the recording gives the voice. Put only spoken dialogue in the test text.');
+      LabText.t('studio.fish_audio_exact_transcript_required') :
+      engine === 'breeze-tts-2' ? LabText.t('studio.breeze_exact_transcript_required_model') :
+      engine.indexOf('qwen') === 0 ? LabText.t('studio.qwen_base_type_the_exact') :
+      engine === 'voxcpm2' ? LabText.t('studio.voxcpm2_the_words_are_optional') :
+      engine === 'turbo' ? LabText.t('studio.chatterbox_turbo_the_recording_must') :
+      LabText.t('studio.chatterbox_original_the_recording_gives'));
   }
   function replaceSource(file) {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     sourceFile = file; sourceTerms = null; sourceUrl = URL.createObjectURL(file);
     el('cloneSourcePlayer').src = sourceUrl;
     el('cloneReference').value = '';
-    el('cloneSourceInfo').textContent = file.name + ' · ' + Math.round(file.size / 1024) + ' KB · listen and enter its transcript and permission below.';
+    el('cloneSourceInfo').textContent = LabText.t('studio.kb_listen_and_enter_its', {name: file.name, round: Math.round(file.size / 1024)});
     el('cloneTranscript').value = ''; el('cloneOrigin').value = ''; el('cloneAllowedUse').value = '';
     el('clonePermission').checked = false;
   }
@@ -190,19 +190,19 @@
     el('cloneName').value = body.save_voice_as || '';
     el('cloneTranscript').value = body.text || '';
     var parent = body._reference_provenance;
-    if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:'Where this recording came from was not recorded.',allowed_use:'Who may use the recording is unknown; check before you reuse or share it.'};
-    el('cloneOrigin').value = 'Generated locally with ' + body.engine + (parent && parent.origin ? '; source: ' + parent.origin : '');
+    if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:LabText.t('studio.where_this_recording_came_from'),allowed_use:LabText.t('studio.who_may_use_the_recording')};
+    el('cloneOrigin').value = LabText.t('studio.generated_locally_with', {engine: body.engine, value: parent && parent.origin ? '; source: ' + parent.origin : ''});
     el('cloneAllowedUse').value = (parent && parent.allowed_use ? parent.allowed_use + '; ' : '') +
-      (body.engine === 'breeze-tts-2' ? 'Non-commercial only; Breeze model/output terms apply.' :
-        body.engine === 'drama-3' ? 'Subject to Fish Audio Community License 1.0 and attribution requirements.' : 'Subject to the source model license and applicable voice rights.');
+      (body.engine === 'breeze-tts-2' ? LabText.t('studio.non_commercial_only_breeze_model') :
+        body.engine === 'drama-3' ? LabText.t('studio.subject_to_fish_audio_community') : LabText.t('studio.subject_to_the_source_model'));
     sourceTerms = {origin:el('cloneOrigin').value,allowed_use:el('cloneAllowedUse').value};
-    el('cloneStatus').textContent = 'Studio clip ready to save. Verify the proposed transcript against the audio, name the voice, and confirm permission. Nothing has been approved.';
+    el('cloneStatus').textContent = LabText.t('studio.studio_clip_ready_to_save');
   }
   function freezeRequest(body) {
     var snapshot = JSON.parse(JSON.stringify(body));
     if (body.reference_path && body.mode!=='design' && body.mode!=='custom_voice' && body.engine!=='kokoro') {
       var source = rows.find(function (row) { return row.path === body.reference_path; });
-      snapshot._reference_provenance = source ? {origin:source.origin || 'Unknown source',allowed_use:source.allowed_use || 'Who may use the recording is unknown; check before you reuse or share it.',
+      snapshot._reference_provenance = source ? {origin:source.origin || LabText.t('studio.unknown_source'),allowed_use:source.allowed_use || 'Who may use the recording is unknown; check before you reuse or share it.',
         reference_version_id:source.reference_version_id || null} : {origin:'Unknown source',allowed_use:'Who may use the recording is unknown; check before you reuse or share it.'};
     }
     return snapshot;
@@ -216,39 +216,39 @@
     var engine = el('cloneEngine').value, name = el('cloneName').value.trim();
     var transcript = el('cloneTranscript').value.trim(), origin = el('cloneOrigin').value.trim();
     var allowedUse = el('cloneAllowedUse').value.trim(), row = selectedRow(el('cloneReference'));
-    if (!name) throw new Error('Name the voice before saving.');
-    if (!el('clonePermission').checked || !origin || !allowedUse) throw new Error('Confirm your permission and record the origin and allowed use.');
-    if (cloneEngines.indexOf(engine) < 0) throw new Error('Choose a cloning model.');
+    if (!name) throw new Error(LabText.t('studio.name_the_voice_before_saving'));
+    if (!el('clonePermission').checked || !origin || !allowedUse) throw new Error(LabText.t('studio.confirm_your_permission_and_record'));
+    if (cloneEngines.indexOf(engine) < 0) throw new Error(LabText.t('studio.choose_a_cloning_model'));
     if (engine !== 'voxcpm2' && !transcript)
-      throw new Error('Add the exact words spoken in the recording. This model needs them.');
+      throw new Error(LabText.t('studio.add_the_exact_words_spoken'));
     if (sourceTerms) {
-      if (allowedUse.indexOf(sourceTerms.allowed_use) < 0) allowedUse += '; inherited: ' + sourceTerms.allowed_use;
+      if (allowedUse.indexOf(sourceTerms.allowed_use) < 0) allowedUse += LabText.t('studio.inherited', {allowed_use: sourceTerms.allowed_use});
       if (origin.indexOf(sourceTerms.origin) < 0) origin += '; source: ' + sourceTerms.origin;
     }
     var file = sourceFile;
     if (!file && row) {
       var response = await fetch(row.audio_url);
-      if (!response.ok) throw new Error('Could not read the chosen recording.');
+      if (!response.ok) throw new Error(LabText.t('studio.could_not_read_the_chosen'));
       file = new File([await response.blob()], row.name || 'reference.wav', {type:'audio/wav'});
       // Existing restrictions cannot be silently dropped while copying a library reference.
       if (row.allowed_use && allowedUse.indexOf(row.allowed_use) < 0) allowedUse += '; inherited: ' + row.allowed_use;
       if (row.origin && origin.indexOf(row.origin) < 0) origin += '; source: ' + row.origin;
     }
-    if (!file) throw new Error('Upload, record or choose a recording first.');
-    if (file.size > 32 * 1024 * 1024) throw new Error('The recording is larger than 32 MB.');
-    if (!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)) throw new Error('Choose WAV, FLAC, OGG, MP3 or M4A audio.');
+    if (!file) throw new Error(LabText.t('studio.upload_record_or_choose_a'));
+    if (file.size > 32 * 1024 * 1024) throw new Error(LabText.t('studio.the_recording_is_larger_than'));
+    if (!/\.(wav|flac|ogg|mp3|m4a)$/i.test(file.name)) throw new Error(LabText.t('studio.choose_wav_flac_ogg_mp3'));
     var decoded = await global.decodeBlob(file);
-    if (decoded.duration < 0.5 || decoded.duration > 60) throw new Error('Use a 0.5–60 second clip. Trim longer recordings in Cast first.');
-    if (engine === 'turbo' && decoded.duration <= 5) throw new Error('Turbo needs a recording longer than 5 seconds.');
-    if (global.bufferAnalysis(decoded).rms < 0.001) throw new Error('The recording is silent or too quiet.');
+    if (decoded.duration < 0.5 || decoded.duration > 60) throw new Error(LabText.t('studio.use_a_0_5_60'));
+    if (engine === 'turbo' && decoded.duration <= 5) throw new Error(LabText.t('studio.turbo_needs_a_recording_longer'));
+    if (global.bufferAnalysis(decoded).rms < 0.001) throw new Error(LabText.t('studio.the_recording_is_silent_or'));
     var key = name + '\n' + engine;
     if (!context || context.key !== key || !context.characterId) {
       context = {key:key};
-      var created = await json('/api/characters', {name:name, description:'Voice cloned from a recording in Voice cloning', tags:['cloning']});
+      var created = await json('/api/characters', {name:name, description:LabText.t('studio.voice_cloned_from_a_recording'), tags:['cloning']});
       context.characterId = created.character.id;
     }
     if (!context.identityId) {
-      var identity = await json('/api/characters/' + context.characterId + '/identities', {engine_id:engine,label:name,notes:'Listen before approving this voice.'});
+      var identity = await json('/api/characters/' + context.characterId + '/identities', {engine_id:engine,label:name,notes:LabText.t('studio.listen_before_approving_this_voice')});
       context.identityId = identity.identity.id;
     }
     // Hash actual bytes: retrying a failed generation reuses the saved immutable reference.
@@ -261,7 +261,7 @@
       var uploaded = await fetch('/api/identities/' + context.identityId + '/references', {method:'POST',
         headers:{'Content-Type':file.type || 'application/octet-stream','X-Reference-Metadata':metadataHeader(metadata)}, body:file});
       var saved = await uploaded.json();
-      if (!uploaded.ok) throw new Error(saved.error || 'Could not save the recording.');
+      if (!uploaded.ok) throw new Error(saved.error || LabText.t('studio.could_not_save_the_recording'));
       context.reference = saved.reference; context.signature = signature;
     }
     await global.refreshCast(context.characterId, context.identityId);
@@ -271,15 +271,15 @@
   }
   async function runClone(generate) {
     if (busy || recording) return;
-    if (generate && !el('cloneText').value.trim()) { el('cloneStatus').textContent = 'Enter the new words to speak.'; return; }
+    if (generate && !el('cloneText').value.trim()) { el('cloneStatus').textContent = LabText.t('studio.enter_the_new_words_to'); return; }
     busy = true; el('cloneSave').disabled = true; el('cloneGenerate').disabled = true;
     el('cloneControls').disabled = true;
-    el('cloneStatus').textContent = 'Checking and saving the recording…';
+    el('cloneStatus').textContent = LabText.t('studio.checking_and_saving_the_recording');
     try {
       var saved = await saveCandidate();
-      el('cloneStatus').textContent = 'Saved recording v' + saved.reference.version + '. Review it in Cast.';
+      el('cloneStatus').textContent = LabText.t('studio.saved_recording_v_review_it', {version: saved.reference.version});
       if (generate) {
-        el('cloneStatus').textContent = 'Recording saved. Making the test; the first request loads the model. Fish runs on CPU and can take several minutes.';
+        el('cloneStatus').textContent = LabText.t('studio.recording_saved_making_the_test');
         var engine = el('cloneEngine').value;
         var body = {identity_id:saved.identityId,reference_version_id:saved.reference.id,
           line_id:'cloning-test',text:el('cloneText').value,language:'English',settings:{},
@@ -288,14 +288,14 @@
         if (!result.ok) { var failure = await result.json(); throw new Error(failure.error || result.status); }
         if (resultUrl) URL.revokeObjectURL(resultUrl);
         resultUrl = URL.createObjectURL(await result.blob()); el('cloneResult').src = resultUrl; el('cloneResult').hidden = false;
-        el('cloneStatus').textContent = 'Test saved in Perform lines. Listen to the source and result; the voice is not approved until you approve it in Cast.';
+        el('cloneStatus').textContent = LabText.t('studio.test_saved_in_perform_lines');
       }
-    } catch (error) { el('cloneStatus').textContent = error.message + (context && context.reference ? ' Your saved recording is kept; trying again does not save it twice.' : ''); }
+    } catch (error) { el('cloneStatus').textContent = error.message + (context && context.reference ? LabText.t('studio.your_saved_recording_is_kept') : ''); }
     finally { busy = false; el('cloneControls').disabled = false; el('cloneSave').disabled = false; el('cloneGenerate').disabled = false; }
   }
   async function beginRecording() {
     if (recording || busy || el('cloneMicStart').disabled) return;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { el('cloneStatus').textContent = 'Microphone recording is unavailable in this browser. Upload a recording instead.'; return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { el('cloneStatus').textContent = LabText.t('studio.microphone_recording_is_unavailable_in'); return; }
     el('cloneMicStart').disabled = true; el('cloneSave').disabled = true; el('cloneGenerate').disabled = true;
     var revision=++recordingRevision;
     var stream, audio;
@@ -315,12 +315,12 @@
       source.connect(processor); processor.connect(mute); mute.connect(audio.destination);
       el('cloneMicStart').hidden = true; el('cloneMicStop').hidden = false;
       el('cloneSave').disabled = true; el('cloneGenerate').disabled = true;
-      el('cloneStatus').textContent = 'Recording locally… Stop when you finish. Recording stops automatically at 59 seconds.';
+      el('cloneStatus').textContent = LabText.t('studio.recording_locally_stop_when_you');
       recordingTimer = setTimeout(stopRecording, 59000);
     } catch (error) {
       if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
       if (audio) audio.close();
-      el('cloneStatus').textContent = 'Microphone could not start: ' + error.message;
+      el('cloneStatus').textContent = LabText.t('studio.microphone_could_not_start', {message: error.message});
     } finally { el('cloneMicStart').disabled = false; if (!recording) {el('cloneSave').disabled=false;el('cloneGenerate').disabled=false;} }
   }
   function stopRecording() {
@@ -333,7 +333,7 @@
     replaceSource(new File([blob], 'microphone-reference.wav', {type:'audio/wav'}));
     el('cloneMicStart').hidden = false; el('cloneMicStop').hidden = true;
     el('cloneSave').disabled = false; el('cloneGenerate').disabled = false;
-    el('cloneStatus').textContent = 'Recording ready. Listen, enter its words and permission, then save or clone.';
+    el('cloneStatus').textContent = LabText.t('studio.recording_ready_listen_enter_its');
   }
   // Read the installed Kokoro voices again into the voice picker, keeping what was chosen (af_heart, or the first, when nothing
   // was) and passing them on to the fixed-voice picker. Generate calls it when the picker is empty, so a page that was open
@@ -362,7 +362,7 @@
     el('refreshReferenceLibrary').addEventListener('click', function () { global.loadReferences(); });
     el('clone').addEventListener('change', function () { el('chatterboxReferenceWrap').hidden = !this.checked; });
     el('refreshKokoroVoices').addEventListener('click', async function () {
-      try { await refreshKokoroVoices(); el('status').textContent = 'Installed Kokoro speaker packs refreshed.'; }
+      try { await refreshKokoroVoices(); el('status').textContent = LabText.t('studio.installed_kokoro_speaker_packs_refreshed'); }
       catch (error) { el('err').textContent = error.message; }
     });
     global.addEventListener('beforeunload',function () { if (recording) recording.stream.getTracks().forEach(function (track) { track.stop(); }); });
