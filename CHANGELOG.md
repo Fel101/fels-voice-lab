@@ -10,6 +10,13 @@
   [Connect other apps](docs/CONNECT.md#the-other-apps-of-fels-studio).
 - **`GET /api/health`** has a `fels` block: the contract, the app's id `voice-lab`, its version and its suite API number, 1.
 - **`lab_cli.py` and the MCP server** look in the suite's address file first.
+- **Sharing the graphics card.** While a voice model is on the graphics card, the Lab holds the suite's GPU lock, shared
+  with the other apps. When NPC Forge wants the card to itself (its One model at a time switch), a request that would load
+  a model on the card answers `409` with `code` `gpu_busy` and names Forge, and a scene batch waits for the card. Models on
+  the CPU keep working. [Sharing the graphics card](docs/CONNECT.md#sharing-the-graphics-card).
+- **`POST /api/unload`** says what the Lab is doing when it answers `409`, in `doing`, and counts a whole scene spoken on
+  the graphics card as busy.
+- **`GET /api/gpu`** is new: who holds the graphics card, shared or alone. The page's header shows it as a light.
 
 ## 0.4.0 — 2026-11-18
 

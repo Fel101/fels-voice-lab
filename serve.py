@@ -366,6 +366,18 @@ def error_text(exc):
     return str(exc)
 
 
+def error_answer(exc):
+    """An error's JSON answer: its sentence, a code more exact than its status's when it has one (error_code), and any
+    fields of its own (answer_fields), such as the holder of the graphics card in a gpu_busy refusal."""
+    answer = {"error": error_text(exc)}
+    if isinstance(getattr(exc, "error_code", None), str):
+        answer["code"] = exc.error_code
+    fields = getattr(exc, "answer_fields", None)
+    if isinstance(fields, dict):
+        answer.update({key: value for key, value in fields.items() if key not in ("error", "code")})
+    return answer
+
+
 # What the queue (GET /api/queue) calls the work a route asks of the model worker.
 QUEUE_LABELS = {"/api/speak": "Clip", "/v1/audio/speech": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
                 "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
@@ -759,10 +771,7 @@ class Handler(BaseHTTPRequestHandler):
             status = error_status(exc)
             if status is None:
                 raise
-            answer = {"error": error_text(exc)}
-            if isinstance(getattr(exc, "error_code", None), str):  # a code more exact than its status's
-                answer["code"] = exc.error_code
-            return self._json(status, answer)
+            return self._json(status, error_answer(exc))
 
     def _place_in_line(self, route, req):
         """Where this request stands if it needs the model worker (job_queue.py). A JSON body's wait_seconds and

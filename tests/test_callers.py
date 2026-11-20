@@ -525,8 +525,8 @@ class Pool:
     def install_probe(self, entry):
         return {"installed": entry["id"] in self.installed}
 
-    def hold(self, reason):
-        self.calls.append(("hold", reason))
+    def hold(self, reason, doing=None):
+        self.calls.append(("hold", reason, doing))
 
     def unload_held(self):
         self.calls.append(("unload",))
@@ -544,7 +544,9 @@ class UninstallingFromThePageTests(unittest.TestCase):
         self.assertEqual(installer.uninstall_plan("kokoro")["remove"][0]["path"], ".venv-kokoro")
         done = installer.uninstall("kokoro")
         self.assertEqual(done["removed"], [".venv-kokoro"])
-        self.assertEqual(pool.calls, [("hold", "Kokoro 82M is being uninstalled"), ("unload",), ("release",)])
+        self.assertEqual(
+            pool.calls, [("hold", "Kokoro 82M is being uninstalled", "uninstalling Kokoro 82M"), ("unload",), ("release",)]
+        )
 
     def test_not_while_an_install_runs(self):
         installer = engine_install.EngineInstaller(Pool(set()), root=tempfile.gettempdir())

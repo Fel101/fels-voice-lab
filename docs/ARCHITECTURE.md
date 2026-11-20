@@ -34,6 +34,11 @@ a model worker           engine_worker.py in that model's own environment: .venv
   Forge and Altera carry too, unchanged: the suite folder, the address file `serve.py` writes there, `/api/health`'s `fels`
   block and the inbox. `tests/suite_vectors.json` holds the cases every app runs. Change it only together with the other
   apps ([Contributing](../CONTRIBUTING.md#fels-studio-the-shared-file-and-the-ports)).
+- **Two locks on the graphics card.** `worker_pool.EnginePool` takes `out\runtime-locks\model-residency.lock` while any
+  model is loaded, which keeps two copies of the Lab apart (NPC Forge 1.0 waits on it too). While the model is on the card
+  it also holds the suite's GPU lock shared (`fels_suite.GpuLock`); a load on the card while NPC Forge has the card to
+  itself is refused with `GpuBusy` (409, `gpu_busy`). `/api/unload` says what the Lab is doing when it is busy, and counts
+  a scene spoken on the card as busy until its last line ([Connect](CONNECT.md#sharing-the-graphics-card)).
 - **The device.** The service asks for `cpu` or `cuda` (`common.pick_device`: `runtime.local.json`, then an NVIDIA driver,
   then an AMD card that AMD's ROCm build of PyTorch has code for, then the CPU). A worker whose own PyTorch cannot use the card
   runs on the CPU and says so (`worker_runtime.usable_device`). On a computer with more than one AMD card, `common.py` sets

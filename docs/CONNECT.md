@@ -184,6 +184,38 @@ the **suite folder**, and never read each other's own folders.
 The four apps share these rules in one file, [fels_suite.py](../fels_suite.py), the same in each app, with its test cases in
 [tests/suite_vectors.json](../tests/suite_vectors.json).
 
+### Sharing the graphics card
+
+The apps share one **GPU lock** in the suite folder's `gpu\` folder. An app holds it while a model of its own stays on the
+graphics card, and lets go when the model is unloaded. Work on the CPU takes nothing.
+
+- **Shared, by default.** The Lab holds it shared while a voice model is loaded on the card, beside Altera's chat model or
+  NPC Forge's ComfyUI. A small voice model and a chat model fit on one card side by side, so nobody waits.
+- **Alone, only for NPC Forge's One model at a time.** With that switch on, Forge wants the card to itself before it makes
+  pictures. It writes `gpu\alone.json`, asks the Lab to unload (`POST /api/unload`, below), and waits until every shared
+  holder has let go. From the moment `alone.json` appears until Forge lets go, the Lab loads no new model on the card:
+  - A request that would load one is refused at once with `409` and `code` `gpu_busy`, even if it asked to wait in line.
+    `error` says who has the card, for example "NPC Forge is using the whole GPU for pictures (One model at a time) since
+    10:02. Try again when it is done.", and `holder` names the app (`app`, `pid`, `what` and `since`).
+  - A model already loaded keeps working until it is unloaded, so a scene being spoken finishes.
+  - A scene batch waits for the card by itself: its lines say "Waiting for the GPU" and go on when Forge is done.
+  - Models on the CPU, such as Phonon, keep working.
+- **`POST /api/unload`**, sent with no body or `{}`, unloads every model and lets go of the lock:
+  - `200` `{"ok": true}` when it is done, or when nothing was loaded.
+  - `409` with `code` `busy` while the Lab is in the middle of something. `doing` says what, as the end of the sentence
+    "Voice Lab is ...", for the asking app to show: `making a clip with Kokoro 82M`, `installing VoxCPM2`. Ask again a few
+    seconds later.
+  - A scene batch spoken with a model on the card counts as busy from its first line to its last: `doing` is
+    `speaking a scene, 12 of 40 lines`, so pictures never cut a scene in two. That answer comes at once, even with
+    `wait_seconds`. With no model on the card, a scene does not stop the unload.
+- **`GET /api/gpu`** says who holds the lock now: `holders` (each with `app`, `name`, `what`, `since`, `alone` and
+  `this_service`), `alone` (the app that has the card to itself or is clearing it, or null), `held` (whether a Lab model is
+  on the card) and `device`. The Lab's page shows the same in its header: "GPU free", "GPU in use: Voice Lab: Kokoro 82M and
+  Altera: a chat reply", or "GPU in use: NPC Forge, alone: pictures". Pointing at it says since when.
+
+Two copies of the Lab still keep out of each other's way with the Lab's own model lock, as before. NPC Forge 1.0 waits on
+that one, so it keeps working with this Lab.
+
 ## Local speech input
 
 Choose **Install speech recognition** in **System & backups**. The OpenAI-style API accepts files at

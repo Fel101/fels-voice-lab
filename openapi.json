@@ -233,7 +233,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -552,7 +552,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -584,6 +584,7 @@
         "tags": [
           "Service"
         ],
+        "description": "The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more.",
         "requestBody": {
           "required": false,
           "content": {
@@ -616,7 +617,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "A scene batch is being spoken with a model on the graphics card, from its first line to its last, or the worker has other work: `doing` says what the Lab is doing, as the end of \"Voice Lab is ...\" (`speaking a scene, 12 of 40 lines`), and `code` is `busy`; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -631,6 +632,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/gpu": {
+      "get": {
+        "operationId": "get_api_gpu",
+        "summary": "Say who holds the graphics card: the GPU lock the apps of Fel's Studio share.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "`device` (this service's, `cuda` or `cpu`), `held` (whether a model of this service is on the graphics card now), `holders` (each app holding the lock, oldest first: `app`, `name`, `pid`, `what` (the model or the work), `since`, `alone` and `this_service`) and `alone` (the app that has the card to itself or is clearing it for itself, with the same fields, or null). For showing only: a model load decides by the lock itself.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -708,7 +733,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1095,7 +1120,7 @@
             }
           },
           "409": {
-            "description": "`save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "`save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1201,7 +1226,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1438,7 +1463,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1514,7 +1539,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8747,7 +8772,7 @@
             }
           },
           "409": {
-            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting.",
+            "description": "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
             "content": {
               "application/json": {
                 "schema": {

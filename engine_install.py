@@ -263,7 +263,7 @@ class EngineInstaller:
             if self._running():
                 raise worker_pool.WorkerBusy(f"{self._running_name()} is already being installed.")
             if not tool:
-                self.pool.hold(f"{name} is being installed")
+                self.pool.hold(f"{name} is being installed", doing=f"installing {name}")
             try:
                 log_path = self._new_log(key)
                 log = log_path.open("wb")
@@ -385,7 +385,7 @@ class EngineInstaller:
         with self._lock:
             if self._running():
                 raise worker_pool.WorkerBusy(f"{self._running_name()} is being installed. Uninstall {name} when it has finished.")
-        self.pool.hold(f"{name} is being uninstalled")
+        self.pool.hold(f"{name} is being uninstalled", doing=f"uninstalling {name}")
         try:
             self.pool.unload_held()
             return engine_uninstall.run(self.pool.entries, key, self.root, self.pool.install_probe)

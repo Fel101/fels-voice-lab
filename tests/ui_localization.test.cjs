@@ -50,6 +50,10 @@ test('translated common errors keep an actionable sentence and use service text 
   assert.equal(helper('es', {}).error(error, 503), error.error);
   assert.equal(helper('es', {'error.model_not_installed': 'Instala el modelo.'}).error(error, 503), 'Instala el modelo.');
   assert.equal(helper('es', {}).error({}, 500), 500);
+  // Another app has the graphics card: English keeps the service's sentence, which names it; a translation says it in general.
+  const busy = {error: 'NPC Forge is using the whole GPU for pictures (One model at a time) since 10:02.', code: 'gpu_busy'};
+  assert.equal(helper('en', {}).error(busy, 409), busy.error);
+  assert.equal(helper('es', {'error.gpu_busy': 'Otra app tiene la GPU.'}).error(busy, 409), 'Otra app tiene la GPU.');
 });
 
 test('dates use a matching browser region and otherwise follow the page language', () => {

@@ -1,5 +1,6 @@
 /* The line for the model worker, on the page: each model request the page sends waits its turn under an id the page chose,
-   and the Model worker panel in the side bar says what runs and what waits for it, with Stop and Cancel. */
+   and the Model worker panel in the side bar says what runs and what waits for it, with Stop and Cancel. The GPU light in
+   the header says who holds the graphics card the apps of Fel's Studio share. */
 (function (global) {
   'use strict';
   // The routes that use the model worker (api_spec.WAITING_ROUTES). The page's own requests to them always wait in line.
@@ -138,9 +139,49 @@
       .then(function () { schedule(busy() ? 1000 : 8000); });
   }
 
+  // The GPU light in the header (GET /api/gpu): the graphics card the apps of Fel's Studio share. It says the card is free,
+  // which app holds it and for what (shared, or one app alone), and who wants it alone; the times are in its details. No
+  // light on a computer whose Lab runs on the CPU, unless another app holds the card.
+  function clock(stamp) {
+    var moment = new Date(stamp);
+    return isNaN(moment.getTime()) ? '' : moment.toLocaleTimeString(LabText.language, {hour:'2-digit', minute:'2-digit'});
+  }
+  function gpuLight(state) {
+    var holders = (state && state.holders) || [], alone = state && state.alone;
+    if (!state || (state.device !== 'cuda' && !holders.length && !alone)) return {hidden:true, state:'free', text:'', details:''};
+    var named = function (item) {
+      return LabText.t(item.alone ? 'shell.gpu_alone' : 'shell.gpu_holder', {app: item.name, work: item.what || '?'});
+    };
+    var waiting = alone && !holders.some(function (item) { return item.alone && item.app === alone.app && item.pid === alone.pid; });
+    var parts = [holders.length ? LabText.t('shell.gpu_in_use', {holders: LabText.list(holders.map(named))})
+      : LabText.t('shell.gpu_free')];
+    if (waiting) parts.push(LabText.t('shell.gpu_wants_alone', {app: alone.name}));
+    var details = holders.map(function (item) { return LabText.t('shell.gpu_since', {holder: named(item), time: clock(item.since)}); });
+    if (waiting) details.push(LabText.t('shell.gpu_wants_alone_since', {app: alone.name, time: clock(alone.since)}));
+    var kind = alone || holders.some(function (item) { return item.alone; }) ? 'alone' : holders.length ? 'shared' : 'free';
+    return {hidden:false, state:kind, text:parts.join(' · '), details:details.join('\n')};
+  }
+  function renderGpu(state) {
+    var light = el('gpuLight');
+    if (!light) return;
+    var shown = gpuLight(state);
+    light.hidden = shown.hidden;
+    light.dataset.state = shown.state;
+    light.title = shown.details;
+    if (el('gpuLightText')) el('gpuLightText').textContent = shown.text;
+    if (el('gpuLightDetails')) el('gpuLightDetails').textContent = shown.details ? ' ' + shown.details : '';
+  }
+  // Every four seconds while the page is in sight.
+  function pollGpu() {
+    if (global.document && global.document.hidden) { setTimeout(pollGpu, 2000); return; }
+    send.call(global, '/api/gpu').then(function (response) { return response.ok ? response.json() : null; })
+      .then(renderGpu).catch(function () {})
+      .then(function () { setTimeout(pollGpu, 4000); });
+  }
+
   global.fetch = fetchInLine;
-  global.VoiceLabQueue = {describe:describe, inLine:inLine, workerRoute:workerRoute, poll:poll, pending:function () {
-    return Object.keys(mine);
-  }};
+  global.VoiceLabQueue = {describe:describe, inLine:inLine, workerRoute:workerRoute, poll:poll, gpuLight:gpuLight,
+    pollGpu:pollGpu, pending:function () { return Object.keys(mine); }};
+  setTimeout(pollGpu, 0);
   schedule(0);
 })(window);

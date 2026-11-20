@@ -49,6 +49,7 @@ class Ticket:
         self.cancelled = False
         self.stop = None  # set by the owner while the ticket runs; it ends the work
         self.held_for = None  # an install's hold: what it is doing, for the refusals
+        self.doing = None  # an install's hold: what it is doing, as the end of "Voice Lab is ..."
         self.order = None
 
     def describe(self, now=None):

@@ -18,6 +18,7 @@ from local_ownership import LocalOwnership
 from job_queue import JobQueue, Ticket, WorkerBusy  # noqa: F401 (WorkerBusy is imported from here)
 import engine_checks
 import engine_devices
+import fels_suite
 
 LAB = Path(__file__).resolve().parent
 OUT = LAB / "out"
@@ -70,6 +71,28 @@ def read_catalog():
 # The pause between the parts of a long text that EnginePool.speak joins into one clip.
 PART_PAUSE_SECONDS = 0.25
 
+# What the Lab is doing, as the end of "Voice Lab is ...", for each kind of work in the line (job_queue.Ticket.what). The
+# other apps of Fel's Studio show it while they wait for the graphics card (POST /api/unload's refusal).
+DOING = {"Clip": "making a clip with {model}", "Live clip": "speaking a live clip with {model}",
+         "Take": "recording a take with {model}", "Load": "loading {model}", "Model test": "testing {model}",
+         "Voice recording": "preparing a voice recording for {model}", "Voice conversion": "converting a voice",
+         "Pronunciation preview": "previewing a pronunciation", "Drama studio take": "recording a Drama studio take",
+         "Device switch": "moving a model between the GPU and the CPU", "Unload": "unloading its models",
+         "Idle unload": "unloading a model it has not used for a while"}
+
+
+class GpuBusy(WorkerBusy):
+    """Another app of Fel's Studio has the graphics card to itself: NPC Forge, while its One model at a time switch is on
+    (contract 8). Refused at once, as a busy worker is, with code gpu_busy and the holder. A request that waits in line does
+    not wait for the card, so the line stays free for work on the CPU."""
+
+    error_code = "gpu_busy"
+
+    def __init__(self, holder):
+        sentence = fels_suite.holder_sentence(holder) if holder else "Another app has the graphics card to itself."
+        super().__init__(f"{sentence} Try again when it is done.")
+        self.answer_fields = {"holder": holder} if holder else {}
+
 
 def designs_voice(adapter, req):
     """Whether a speak request invents its voice from a description (design mode), which comes out differently each time.
@@ -100,7 +123,7 @@ class EnginePool:
                  catalog=None, worker_timeouts=None, idle_poll_seconds=30,
                  residency_lock_path=None, reference_roots=(), conversion_source_roots=(), media_guard=None,
                  check_store=None, install_probe=None, fingerprint_probe=None, ram_needs=None, ram_probe=None,
-                 device_store=None, build_probe=None):
+                 device_store=None, build_probe=None, gpu_lock=None):
         self.device = device
         self.catalog = catalog or read_catalog()
         self.entries = {entry["id"]: entry for entry in self.catalog["engines"]}
@@ -137,6 +160,9 @@ class EnginePool:
         # Model residency, not just individual calls, is exclusive across local services.
         lock_path = residency_lock_path or (OUT / "runtime-locks" / "model-residency.lock")
         self._residency = LocalOwnership(lock_path) if worker_factory is None or residency_lock_path else None
+        # The GPU lock of Fel's Studio (fels_suite.GpuLock), held shared while a model is on the graphics card, so NPC Forge's
+        # One model at a time knows to wait for it. The model lock above stays: it keeps two copies of the Lab apart.
+        self._gpu = gpu_lock if gpu_lock is not None else fels_suite.GpuLock("voice-lab") if worker_factory is None else None
         self._state_lock = threading.RLock()
         self._starting_workers = set()
         self._closed = threading.Event()
@@ -304,23 +330,26 @@ class EnginePool:
             requested_profile = load_params.get("profile")
             if requested_profile is None or record.get("profile") == requested_profile:
                 return record["worker"]
+        on_gpu = self._on_gpu(key, load_params)
+        if on_gpu:
+            self._take_gpu(key)
         if record:
             self._discard_locked(key, record["worker"], release_ownership=False)
         if self.workers:
             self._unload_locked(release_ownership=False)
+        if not on_gpu and self._gpu is not None:
+            self._gpu.release()  # the model before it was on the graphics card; this one is not
         try:
             if self.resource_check:
                 self.resource_check(key)
             worker = self._new_worker(key, entry)
         except Exception as exc:
-            if self._residency:
-                self._residency.release()
+            self._let_go()
             self._raise_with_install_pointer(entry, exc)
         with self._state_lock:
             if self._closed.is_set():
                 worker.close(force=True)
-                if self._residency:
-                    self._residency.release()
+                self._let_go()
                 raise WorkerUnavailable("Voice service is shutting down.")
             self._starting_workers.add(worker)
         try:
@@ -335,8 +364,8 @@ class EnginePool:
                 with self._state_lock:
                     self.workers[key] = {"worker": worker, "loaded": False,
                         "runtime_pid": failed_pid, "profile": None, "load_result": {}, "last_result": {}}
-            elif self._residency:
-                self._residency.release()
+            else:
+                self._let_go()
             self._last_error = {"engine": key, "message": "worker failed to start/load", "log": str(getattr(worker, "log_path", ""))}
             self._raise_with_install_pointer(entry, exc)
         with self._state_lock:
@@ -364,8 +393,68 @@ class EnginePool:
         with self._state_lock:
             if current and self.workers.get(key) is current and current["worker"] is worker:
                 del self.workers[key]
-        if release_ownership and not self.workers and self._residency:
+        if release_ownership and not self.workers:
+            self._let_go()
+
+    def _let_go(self):
+        """No model is loaded any more: let go of the model lock and of the GPU lock of Fel's Studio."""
+        if self._residency:
             self._residency.release()
+        if self._gpu is not None:
+            self._gpu.release()
+
+    def _on_gpu(self, key, load_params=None):
+        """Whether this engine's worker would put its model on the graphics card, so it holds the GPU lock while loaded."""
+        return (self.device == "cuda" and key not in engine_devices.CPU_ONLY and self.device_for(key) == "cuda"
+                and not (load_params or {}).get("cpu_only"))
+
+    def _take_gpu(self, key):
+        """Hold the GPU lock shared for this engine's model, or refuse at once with GpuBusy while another app has the card
+        to itself or is clearing it (gpu/alone.json). Held already, it only says which model is loaded now. A refusal
+        leaves loaded what was loaded, and lets go of the model lock when nothing is."""
+        if self._gpu is None or self._gpu.acquire(self.entries[key].get("name") or key, timeout=0):
+            return
+        holder = self._gpu.alone_wanted() or next((entry for entry in self._gpu.holders() if entry.get("alone")), None)
+        if not self.workers:
+            self._let_go()
+        raise GpuBusy(holder)
+
+    @property
+    def holds_gpu(self):
+        """True while a model of this service is on the graphics card, holding the GPU lock of Fel's Studio."""
+        return self._gpu is not None and self._gpu.held
+
+    def gpu_state(self):
+        """The GPU lock of Fel's Studio, for GET /api/gpu and the page's light: who holds it, shared or alone, who wants it
+        alone, and whether this service holds it."""
+        status = fels_suite.gpu_status(self._gpu.environ if self._gpu is not None else None)
+        here = (self._gpu.app, self._gpu.pid) if self._gpu is not None else None
+
+        def shown(item):
+            if item is None:
+                return None
+            entry = {key: item.get(key) for key in ("app", "pid", "what", "since")}
+            entry["alone"] = bool(item.get("alone", True))  # alone.json's entry is always alone
+            entry["name"] = fels_suite.short_name(item["app"])
+            entry["this_service"] = (item["app"], item["pid"]) == here
+            return entry
+
+        return {"device": self.device, "held": self.holds_gpu, "holders": [shown(item) for item in status["holders"]],
+                "alone": shown(status["alone"])}
+
+    def doing(self):
+        """What the model worker is doing now, as the end of "Voice Lab is ...", or None when it is free."""
+        running = self._queue.running
+        if running is None:
+            return None
+        if running.doing:
+            return running.doing
+        what = running.what or ""
+        model = (self.entries.get(running.engine) or {}).get("name") or "a model"
+        if running.priority == "low":
+            return f"speaking a line of a scene with {model}"
+        phrase = DOING.get(what)
+        return phrase.format(model=model) if phrase else f"busy with model work ({what or 'unnamed'})"
 
     @staticmethod
     def _refusal(running):
@@ -408,12 +497,14 @@ class EnginePool:
         for worker in owned:
             worker.close(force=True)
 
-    def hold(self, reason, request_id=None):
+    def hold(self, reason, request_id=None, doing=None):
         """Keep every load, test and clip out while something long changes what is installed, such as an install from the
         Models page. `reason` finishes the sentence "The model worker is busy while ..." in the refusals, and the queue shows it
-        to those waiting. Raises WorkerBusy at once when a request already holds the worker; release_hold() gives it back."""
+        to those waiting; `doing` finishes "Voice Lab is ..." (doing()). Raises WorkerBusy at once when a request already
+        holds the worker; release_hold() gives it back."""
         ticket = Ticket(request_id, "Install", can_stop=False)
         ticket.held_for = reason
+        ticket.doing = doing or "installing or removing a model"
         self._queue.take(ticket, 0, refusal=self._refusal)
         self._hold_ticket = ticket
 
@@ -787,8 +878,8 @@ class EnginePool:
                 if self.workers.get(key) is record:
                     del self.workers[key]
         self._last_unload = unloaded
-        if release_ownership and self._residency:
-            self._residency.release()
+        if release_ownership:
+            self._let_go()
 
     def unload_held(self):
         """Unload every model while hold() keeps the worker, as uninstalling one does before it deletes the model's files."""
@@ -860,5 +951,4 @@ class EnginePool:
             worker.close(force=True)
         for key, pid in scratch:
             drop_scratch(key, pid)
-        if self._residency:
-            self._residency.release()
+        self._let_go()

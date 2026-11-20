@@ -267,7 +267,19 @@ ROUTES = [
             "`supported_speakers` and `supported_languages`.",
       errors=((409, "The model worker is busy."), (500, ENGINE_FAILED), (503, ENGINE_NOT_INSTALLED))),
     R("POST", "/api/unload", "Service", "Unload every engine and free the GPU.",
-      body_kind="none", reply="`{\"ok\": true}`.", errors=((409, "The model worker is busy."),)),
+      body_kind="none", reply="`{\"ok\": true}`.",
+      errors=((409, "A scene batch is being spoken with a model on the graphics card, from its first line to its last, or "
+                    "the worker has other work: `doing` says what the Lab is doing, as the end of \"Voice Lab is ...\" "
+                    "(`speaking a scene, 12 of 40 lines`), and `code` is `busy`"),),
+      notes="The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model "
+            "at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn "
+            "in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the "
+            "unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more."),
+    R("GET", "/api/gpu", "Service", "Say who holds the graphics card: the GPU lock the apps of Fel's Studio share.",
+      reply="`device` (this service's, `cuda` or `cpu`), `held` (whether a model of this service is on the graphics card "
+            "now), `holders` (each app holding the lock, oldest first: `app`, `name`, `pid`, `what` (the model or the "
+            "work), `since`, `alone` and `this_service`) and `alone` (the app that has the card to itself or is clearing "
+            "it for itself, with the same fields, or null). For showing only: a model load decides by the lock itself."),
     R("POST", "/api/prepare-reference", "Service", "Prepare a reference recording for an engine so its first clone is quick.",
       body=(F("engine", "string", "An engine id that clones from a recording.", True),
             F("path", "string", "A recording inside the Lab's reference storage.", True),
@@ -1213,7 +1225,9 @@ WAIT_FIELDS = (
     F("wait_priority", "string", "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."),
 )
 WAIT_ERRORS = ((409, "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 "
-                     "requests already waiting."),
+                     "requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while "
+                     "another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, "
+                     "even with `wait_seconds`, and `holder` names that app, what it is doing and since when."),
                (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran."))
 WAITING_ROUTES = {"/api/engines/{engine_id}/check", "/api/load", "/api/unload", "/api/prepare-reference", "/api/speak",
                   "/api/stream", "/api/performance", "/api/kokoro/phonemize", "/api/convert"}

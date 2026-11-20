@@ -54,6 +54,7 @@ SHARED_NAMES = {
     "scenes.wav",
     "shell.fel_s_voice_lab",
     "shell.fel_s_voice_lab_2",
+    "shell.gpu_holder",
     "shell.v",
     "studio.breeze_tts_2",
     "studio.eager",

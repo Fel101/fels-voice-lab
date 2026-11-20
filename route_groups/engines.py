@@ -41,6 +41,17 @@ def own_language(identity):
     return found[0]
 
 
+def scene_doing(progress):
+    """What the Lab is doing while a scene batch renders, as the end of "Voice Lab is ...": "speaking a scene, 12 of 40
+    lines", and how many more batches wait after it."""
+    total = progress["total"]
+    text = f"speaking a scene, {progress['done']} of {total} line{'s' if total != 1 else ''}"
+    waiting = progress["waiting"]
+    if waiting:
+        text += f", with {waiting} more scene{'s' if waiting != 1 else ''} after it"
+    return text
+
+
 def register(router, lab):
     """The Service and Speaking rows of api_spec.ROUTES."""
     serve, engines, installer, cast = lab.serve, lab.engines, lab.installer, lab.cast
@@ -153,8 +164,26 @@ def register(router, lab):
     def unload(self, parsed, req):
         if self._no_query(parsed):
             return self._json(404, {"error": "not found"})
-        engines.unload()
-        self._json(200, {"ok": True})
+        # NPC Forge asks this before it takes the graphics card alone (contract 8). A scene spoken with a model on the card
+        # counts as busy from its first line to its last, so pictures never cut a scene in two. The refusal says what the
+        # Lab is doing, for the other app to show while it waits.
+        scene = lab.scenes.rendering_progress() if getattr(engines, "holds_gpu", False) else None
+        doing = scene_doing(scene) if scene else None
+        if doing is None:
+            try:
+                engines.unload()
+                return self._json(200, {"ok": True})
+            except job_queue.WorkerBusy:
+                doing = engines.doing() if hasattr(engines, "doing") else None
+                if not doing:
+                    raise
+        self._json(409, {"error": f"Voice Lab is {doing}. Try again when it is done.", "code": "busy", "doing": doing})
+
+    @router.get("/api/gpu")
+    def gpu(self, parsed, req):
+        if hasattr(engines, "gpu_state"):
+            return self._json(200, engines.gpu_state())
+        self._json(200, {"device": getattr(engines, "device", "cpu"), "held": False, "holders": [], "alone": None})
 
     @router.post("/api/load")
     def load(self, parsed, req):
@@ -228,7 +257,7 @@ def register(router, lab):
         try:
             wav, sr, info = engines.speak(req)
         except (ValueError, MemoryError, WorkerError) as exc:
-            return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
+            return self._json(serve.error_status(exc), serve.error_answer(exc))
         except Exception as exc:
             return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
         audio_body = synthetic_label.wav_bytes(wav, sr, engine_id=req.get("engine", engine_adapters.DEFAULT_ENGINE))
@@ -474,11 +503,11 @@ def register(router, lab):
             )
         except (ValueError, MemoryError) as exc:
             if not state["headers_sent"]:
-                return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
+                return self._json(serve.error_status(exc), serve.error_answer(exc))
             stream_error(str(exc))
         except WorkerError as exc:
             if not state["headers_sent"]:
-                return self._json(serve.error_status(exc), {"error": serve.error_text(exc)})
+                return self._json(serve.error_status(exc), serve.error_answer(exc))
             stream_error(str(exc))
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
             pass  # a disconnected consumer has already cleared its own pending browser audio

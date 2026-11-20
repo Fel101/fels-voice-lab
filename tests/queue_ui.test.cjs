@@ -153,3 +153,41 @@ test('the panel stays through the moment between two lines of a batch, and hides
   await look(free);await look(free);
   assert.equal(nodes.queuePanel.hidden,true);
 });
+
+// The GPU light in the header (GET /api/gpu): the graphics card the apps of Fel's Studio share.
+const since='2026-12-01T10:02:11Z';
+const lab={app:'voice-lab',name:'Voice Lab',pid:1,what:'Kokoro 82M',since,alone:false,this_service:true};
+const chat={app:'altera',name:'Altera',pid:2,what:'a chat reply',since,alone:false,this_service:false};
+const forge={app:'npc-forge',name:'NPC Forge',pid:3,what:'pictures',since,alone:true,this_service:false};
+
+test('the GPU light says the card is free, who shares it, or who has it alone, and the times are in its details',()=>{
+  const {queue}=page();
+  const light=state=>{const shown=queue.gpuLight(state);return [shown.hidden,shown.state,shown.text];};
+  assert.deepEqual(light({device:'cpu',held:false,holders:[],alone:null}),[true,'free','']);
+  assert.deepEqual(light(null),[true,'free','']);
+  assert.deepEqual(light({device:'cuda',held:false,holders:[],alone:null}),[false,'free','GPU free']);
+  assert.deepEqual(light({device:'cuda',held:true,holders:[lab,chat],alone:null}),
+    [false,'shared','GPU in use: Voice Lab: Kokoro 82M and Altera: a chat reply']);
+  assert.deepEqual(light({device:'cpu',held:false,holders:[forge],alone:forge}),
+    [false,'alone','GPU in use: NPC Forge, alone: pictures']);
+  const clearing=queue.gpuLight({device:'cuda',held:true,holders:[lab],alone:{...forge,alone:true}});
+  assert.deepEqual([clearing.state,clearing.text],['alone','GPU in use: Voice Lab: Kokoro 82M · NPC Forge wants the GPU alone']);
+  assert.match(clearing.details,/^Voice Lab: Kokoro 82M, since \d\d:\d\d.*\nNPC Forge has wanted the GPU alone since \d\d:\d\d/);
+});
+
+test('the page asks for the GPU light on its own timer and shows it in the header',async()=>{
+  const {nodes,calls,timers,context}=page();
+  for(const id of ['gpuLight','gpuLightText','gpuLightDetails'])nodes[id]=new (nodes.queuePanel.constructor)('span');
+  nodes.gpuLight.hidden=true;
+  context.VoiceLabQueue.pollGpu();
+  const asked=calls.at(-1);
+  assert.equal(asked.url,'/api/gpu');
+  asked.resolve(reply(200,{device:'cuda',held:true,holders:[lab],alone:null}));
+  await settle();await settle();
+  assert.equal(nodes.gpuLight.hidden,false);
+  assert.equal(nodes.gpuLight.dataset.state,'shared');
+  assert.equal(nodes.gpuLightText.textContent,'GPU in use: Voice Lab: Kokoro 82M');
+  assert.match(nodes.gpuLight.title,/^Voice Lab: Kokoro 82M, since \d\d:\d\d/);
+  assert.match(nodes.gpuLightDetails.textContent,/^ Voice Lab: Kokoro 82M, since/);
+  assert.equal(timers.at(-1).ms,4000);
+});

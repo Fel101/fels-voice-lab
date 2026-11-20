@@ -75,7 +75,8 @@ var LabText = (function () {
     var key = {
       model_not_installed: 'error.model_not_installed',
       ffmpeg_not_installed: 'error.ffmpeg_not_installed',
-      cancelled: 'error.cancelled'
+      cancelled: 'error.cancelled',
+      gpu_busy: 'error.gpu_busy'
     }[payload.code];
     // The English service text can carry more specific advice about this model or request.
     return language !== 'en' && Object.hasOwn(messages, key) ? t(key) : payload.error || fallback;

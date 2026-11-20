@@ -249,6 +249,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | POST | [`/api/engines/{engine_id}/device`](#post-api-engines-engine_id-device) | Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
 | POST | [`/api/unload`](#post-api-unload) | Unload every engine and free the GPU. |
+| GET | [`/api/gpu`](#get-api-gpu) | Say who holds the graphics card: the GPU lock the apps of Fel's Studio share. |
 | POST | [`/api/prepare-reference`](#post-api-prepare-reference) | Prepare a reference recording for an engine so its first clone is quick. |
 | GET | [`/api/performance/settings`](#get-api-performance-settings) | Describe the settings each engine's performance takes, and the languages its picker offers. |
 | GET | [`/api/queue`](#get-api-queue) | Say what the model worker is doing, and what waits for it, in order. |
@@ -307,7 +308,7 @@ Check that one engine can speak now: confirm its files, load it and speak one sh
 | Also answers | When |
 |---|---|
 | `400` | The engine is unknown, or is not a speech engine. |
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-engines-engine_id-install"></a>
@@ -395,7 +396,7 @@ Load an engine into memory ahead of its first use.
 |---|---|
 | `500` | The model is installed but could not load or run; `error` says what it reported. |
 | `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-unload"></a>
@@ -413,8 +414,18 @@ Unload every engine and free the GPU.
 
 | Also answers | When |
 |---|---|
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | A scene batch is being spoken with a model on the graphics card, from its first line to its last, or the worker has other work: `doing` says what the Lab is doing, as the end of "Voice Lab is ..." (`speaking a scene, 12 of 40 lines`), and `code` is `busy`; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
+
+The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more.
+
+<a id="get-api-gpu"></a>
+
+#### `GET /api/gpu`
+
+Say who holds the graphics card: the GPU lock the apps of Fel's Studio share.
+
+**Answer:** `200`, JSON. `device` (this service's, `cuda` or `cpu`), `held` (whether a model of this service is on the graphics card now), `holders` (each app holding the lock, oldest first: `app`, `name`, `pid`, `what` (the model or the work), `since`, `alone` and `this_service`) and `alone` (the app that has the card to itself or is clearing it for itself, with the same fields, or null). For showing only: a model load decides by the lock itself.
 
 <a id="post-api-prepare-reference"></a>
 
@@ -437,7 +448,7 @@ Prepare a reference recording for an engine so its first clone is quick.
 
 | Also answers | When |
 |---|---|
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="get-api-performance-settings"></a>
@@ -553,7 +564,7 @@ Speak text with one engine and answer with the finished WAV file.
 | `500` | The model is installed but could not load or run; `error` says what it reported. |
 | `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
-| `409` | `save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | `save_voice_as` names a voice that already exists (`code` `already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).
@@ -582,7 +593,7 @@ Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made.
 
 | Also answers | When |
 |---|---|
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Use `POST /api/speak` when you want a file.
@@ -634,7 +645,7 @@ Speak a line as a Cast voice, and save it as a take unless asked not to.
 | `404` | The identity, the recording or the voice named does not exist. |
 | `503` | The model is not installed (`code` `model_not_installed`). `error` begins by saying where to install it: Install on its Models & features card, or its launcher in the lab folder with the arguments that choose the model: `setup-kokoro.bat`, `setup-phonon.bat`, `setup-chatterbox.bat` (Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with `--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`. |
 | `504` | The engine did not answer in time. |
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.
@@ -656,7 +667,7 @@ Show the phonemes Kokoro would speak for a text.
 
 | Also answers | When |
 |---|---|
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot take is refused with a 400 before anything loads.
@@ -3012,7 +3023,7 @@ Say a recording again in another voice, with Chatterbox voice conversion.
 
 | Also answers | When |
 |---|---|
-| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. |
+| `409` | The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
 | `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
 
 <a id="post-api-conversion-uploads"></a>

@@ -125,6 +125,15 @@ def _chosen_take_ids(lines):
     return list(dict.fromkeys(item for item in found if isinstance(item, str) and ID_RE.fullmatch(item)))
 
 
+def _json_object(text):
+    """A JSON object from an answer's body, or {} when it is something else."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def canonical_json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -1047,6 +1056,20 @@ class SceneStore:
         with self._connect() as db:
             return db.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
 
+    def rendering_progress(self):
+        """The batch rendering now, or else the next to render, for what the Lab says it is doing: {"done", "total",
+        "waiting"}, its lines with nothing left to make, all its lines, and the other batches waiting. None when no batch is
+        rendering or waiting."""
+        with self._connect() as db:
+            jobs = [row[0] for row in db.execute(
+                "SELECT id FROM jobs WHERE status IN ('queued','running') ORDER BY status='queued',created_at,id")]
+            if not jobs:
+                return None
+            total, unfinished = db.execute(
+                "SELECT COUNT(DISTINCT line_id), COUNT(DISTINCT CASE WHEN status IN ('queued','running') THEN line_id END) "
+                "FROM job_rows WHERE job_id=?", (jobs[0],)).fetchone()
+        return {"done": total - unfinished, "total": total, "waiting": len(jobs) - 1}
+
     def list_jobs(self, scene_id):
         scene_id = self._validate_scene_id(scene_id)
         with self._connect() as db:
@@ -1642,7 +1665,13 @@ class SceneBatchRunner:
             except urllib.error.HTTPError as exc:
                 details = exc.read().decode("utf-8", "replace")[:1500]
                 if exc.code == 409:
-                    # Another service owns the model, or the line was full or too slow: try the row again shortly.
+                    # Another service owns the model, or the line was full or too slow: try the row again shortly. While
+                    # another app of Fel's Studio has the graphics card to itself (gpu_busy), the batch waits for it.
+                    answer = _json_object(details)
+                    if answer.get("code") == "gpu_busy":
+                        self.store._update_job_row(row_id, "queued", error="Waiting for the GPU: " + str(answer.get("error")))
+                        self._stop.wait(2)
+                        continue
                     self.store._update_job_row(row_id, "queued", error="Waiting for model ownership: " + details)
                     self._stop.wait(0.5)
                     continue
