@@ -1,0 +1,1219 @@
+{
+ "about": "The suite's shared test cases (contract 1, section 9). The same file in every repository, beside fels_suite.py: copy both unchanged, and run fels_suite.check_vectors on this file in the app's tests. voice-lab-0.4.0 and npc-forge-1.0.0 are real /api/health answers, taken on 2026-11-20 (the Lab's lab_id replaced; Forge with ComfyUI not running).",
+ "suite_version": "1.0",
+ "contract": 1,
+ "answers": {
+  "voice-lab-0.4.0": {
+   "status": "ready",
+   "busy": false,
+   "device": "cpu",
+   "workers": [],
+   "last_worker_error": null,
+   "last_unload": [],
+   "version": "0.4.0",
+   "app": "Fel's Voice Lab",
+   "lab_id": "0123456789abcdef"
+  },
+  "npc-forge-1.0.0": {
+   "online": false,
+   "error": "Cannot reach ComfyUI at http://127.0.0.1:8188. Is ComfyUI running? ([WinError 10061] No connection could be made because the target machine actively refused it)",
+   "missing": [],
+   "voice": {
+    "qwen": {
+     "installed": false,
+     "loaded": false
+    },
+    "breeze": {
+     "installed": false,
+     "loaded": false
+    },
+    "kokoro": {
+     "installed": false,
+     "loaded": false
+    },
+    "chatterbox": {
+     "installed": false,
+     "loaded": false
+    },
+    "voxcpm2": {
+     "installed": false,
+     "loaded": false
+    },
+    "qwen_custom": {
+     "installed": false,
+     "loaded": false
+    },
+    "chatterbox_original": {
+     "installed": false,
+     "loaded": false
+    },
+    "dramabox": {
+     "installed": false,
+     "loaded": false
+    },
+    "drama3": {
+     "installed": false,
+     "loaded": false
+    }
+   },
+   "gpu_rule": {
+    "one_model_at_a_time": true,
+    "loaded": null,
+    "last_switch": null,
+    "unload_idle_seconds": 120.0
+   },
+   "rig_3d": {
+    "blender": "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe",
+    "missing": []
+   },
+   "rig_library": {
+    "installed": false,
+    "name": "Universal Animation Library 1 and 2 (Standard), by Quaternius",
+    "licence": "CC0 1.0",
+    "url": "https://quaternius.com/packs/universalanimationlibrary.html",
+    "missing": [
+     "the animation library (run: python scripts/install_animations.py)"
+    ]
+   },
+   "rig_pose": {
+    "model": null,
+    "licence": null,
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "sharp_face": {
+    "upscaler": null,
+    "licence": null,
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "smooth_eyes": {
+    "model": null,
+    "missing": [
+     "LM Studio, running with its local server on"
+    ]
+   },
+   "match_hair": {
+    "model": null,
+    "licence": null,
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "clean_hands": {
+    "model": "sdpose_wholebody_fp16.safetensors",
+    "licence": "MIT (SDPose); its network started from Stable Diffusion 2 (CreativeML Open RAIL++-M, commercial use allowed)",
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "attach_head": {
+    "model": "sdpose_wholebody_fp16.safetensors",
+    "licence": "MIT (SDPose); its network started from Stable Diffusion 2 (CreativeML Open RAIL++-M, commercial use allowed)",
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "check_3d": {
+    "model": null,
+    "missing": [
+     "LM Studio, running with its local server on"
+    ]
+   },
+   "head_3d": {
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "best_3d": {
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "items": {
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "import_3d": {
+    "missing": [
+     "ComfyUI"
+    ]
+   },
+   "body_3d": {
+    "installed": false,
+    "missing": [
+     "the Body Designer (the bodydesigner folder next to npcgen)",
+     "the animation library (run: python scripts/install_animations.py)"
+    ],
+    "bases": [],
+    "skeletons": [
+     {
+      "id": "low",
+      "label": "Low (23 bones)",
+      "bones": 23,
+      "note": "Body, arms, legs and head: walking, standing and gestures. The hands move as one piece and the face is still."
+     },
+     {
+      "id": "medium",
+      "label": "Medium (60 bones)",
+      "bones": 60,
+      "note": "Adds three bones per finger, a jaw for talking, twist bones in the arms and a prop bone in each palm to hold things by."
+     }
+    ],
+    "faces": [
+     {
+      "id": "classic",
+      "label": "Classic",
+      "note": "The first face: faint brows joined by a band, no eyelashes, a simpler eye."
+     }
+    ],
+    "textures": [
+     {
+      "id": 2048,
+      "label": "2048 px",
+      "note": "The sharpest skin: about 16 MB of video memory for each character, before the engine compresses it."
+     },
+     {
+      "id": 1024,
+      "label": "1024 px",
+      "note": "A quarter of the memory (about 4 MB) and a softer skin."
+     },
+     {
+      "id": 512,
+      "label": "512 px",
+      "note": "The smallest (about 1 MB); the brows and the lips blur."
+     }
+    ],
+    "clothes": [],
+    "outers": [],
+    "hairs": [],
+    "marks": [],
+    "expressions": null,
+    "swinging": null,
+    "soft": null,
+    "bust": null,
+    "body_shape": null,
+    "clips": 85
+   }
+  },
+  "voice-lab-0.3.0": {
+   "version": "0.3.0",
+   "status": "ready",
+   "busy": false,
+   "device": "cpu",
+   "workers": []
+  },
+  "voice-lab-1.0.0": {
+   "status": "ready",
+   "busy": false,
+   "device": "cpu",
+   "workers": [],
+   "last_worker_error": null,
+   "last_unload": [],
+   "version": "1.0.0",
+   "app": "Fel's Voice Lab",
+   "lab_id": "0123456789abcdef",
+   "fels": {
+    "contract": 1,
+    "app": "voice-lab",
+    "version": "1.0.0",
+    "api": 1
+   }
+  },
+  "npc-forge-1.1.0": {
+   "online": false,
+   "error": "Cannot reach ComfyUI.",
+   "gpu_rule": {
+    "one_model_at_a_time": true
+   },
+   "fels": {
+    "contract": 1,
+    "app": "npc-forge",
+    "version": "1.1.0",
+    "api": 45
+   }
+  },
+  "altera-1.0.0": {
+   "ok": true,
+   "fels": {
+    "contract": 1,
+    "app": "altera",
+    "version": "1.0.0",
+    "api": 1
+   }
+  },
+  "another-program": {
+   "status": "ok",
+   "version": "2.1"
+  }
+ },
+ "default_suite_dir": [
+  {
+   "what": "Windows",
+   "platform": "win32",
+   "environ": {
+    "LOCALAPPDATA": "C:\\Data\\Local"
+   },
+   "home": "C:\\Home",
+   "expect": "C:\\Data\\Local\\Fels"
+  },
+  {
+   "what": "Windows without LOCALAPPDATA",
+   "platform": "win32",
+   "environ": {},
+   "home": "C:\\Home",
+   "expect": "C:\\Home\\AppData\\Local\\Fels"
+  },
+  {
+   "what": "Linux with XDG_STATE_HOME",
+   "platform": "linux",
+   "environ": {
+    "XDG_STATE_HOME": "/srv/state"
+   },
+   "home": "/home/a",
+   "expect": "/srv/state/fels"
+  },
+  {
+   "what": "Linux ignores a relative XDG_STATE_HOME",
+   "platform": "linux",
+   "environ": {
+    "XDG_STATE_HOME": "state"
+   },
+   "home": "/home/a",
+   "expect": "/home/a/.local/state/fels"
+  },
+  {
+   "what": "Linux",
+   "platform": "linux",
+   "environ": {},
+   "home": "/home/a",
+   "expect": "/home/a/.local/state/fels"
+  },
+  {
+   "what": "macOS",
+   "platform": "darwin",
+   "environ": {},
+   "home": "/Users/a",
+   "expect": "/Users/a/Library/Application Support/Fels"
+  }
+ ],
+ "health_block": [
+  {
+   "app": "voice-lab",
+   "version": "1.0.0",
+   "api": 1,
+   "expect": {
+    "contract": 1,
+    "app": "voice-lab",
+    "version": "1.0.0",
+    "api": 1
+   }
+  },
+  {
+   "app": "npc-forge",
+   "version": "1.1.0",
+   "api": 45,
+   "expect": {
+    "contract": 1,
+    "app": "npc-forge",
+    "version": "1.1.0",
+    "api": 45
+   }
+  }
+ ],
+ "identify": [
+  {
+   "what": "Voice Lab 1.0",
+   "answer": "$voice-lab-1.0.0",
+   "expect": "voice-lab"
+  },
+  {
+   "what": "Voice Lab 0.4.0, a real answer",
+   "answer": "$voice-lab-0.4.0",
+   "expect": "voice-lab"
+  },
+  {
+   "what": "Voice Lab 0.3.0",
+   "answer": "$voice-lab-0.3.0",
+   "expect": "voice-lab"
+  },
+  {
+   "what": "NPC Forge 1.0.0, a real answer",
+   "answer": "$npc-forge-1.0.0",
+   "expect": "npc-forge"
+  },
+  {
+   "what": "NPC Forge 1.1",
+   "answer": "$npc-forge-1.1.0",
+   "expect": "npc-forge"
+  },
+  {
+   "what": "Altera 1.0",
+   "answer": "$altera-1.0.0",
+   "expect": "altera"
+  },
+  {
+   "what": "another program",
+   "answer": "$another-program",
+   "expect": null
+  },
+  {
+   "what": "an answer that is not an object",
+   "answer": [
+    1,
+    2
+   ],
+   "expect": null
+  },
+  {
+   "what": "nothing answers",
+   "answer": null,
+   "expect": null
+  }
+ ],
+ "addresses": [
+  {
+   "what": "a running copy",
+   "app": "npc-forge",
+   "file": {
+    "contract": 1,
+    "app": "npc-forge",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8766",
+    "pid": 12345,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    12345
+   ],
+   "expect": true
+  },
+  {
+   "what": "a stale file: its process has gone",
+   "app": "npc-forge",
+   "file": {
+    "contract": 1,
+    "app": "npc-forge",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8766",
+    "pid": 12345,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [],
+   "expect": false
+  },
+  {
+   "what": "another app's file under this app's name",
+   "app": "voice-lab",
+   "file": {
+    "contract": 1,
+    "app": "npc-forge",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8766",
+    "pid": 12345,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    12345
+   ],
+   "expect": false
+  },
+  {
+   "what": "no address in it",
+   "app": "altera",
+   "file": {
+    "contract": 1,
+    "app": "altera",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": 8767,
+    "pid": 7,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    7
+   ],
+   "expect": false
+  },
+  {
+   "what": "a later contract still names an address",
+   "app": "altera",
+   "file": {
+    "contract": 2,
+    "app": "altera",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8767",
+    "pid": 7,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    7
+   ],
+   "expect": true
+  },
+  {
+   "what": "no file",
+   "app": "altera",
+   "file": null,
+   "alive": [],
+   "expect": false
+  }
+ ],
+ "find": [
+  {
+   "what": "NPC Forge 1.1 through its address file",
+   "app": "npc-forge",
+   "address": {
+    "contract": 1,
+    "app": "npc-forge",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8768",
+    "pid": 41,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    41
+   ],
+   "answers": {
+    "http://127.0.0.1:8768": "$npc-forge-1.1.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8768",
+    "source": "address-file",
+    "notes": []
+   }
+  },
+  {
+   "what": "NPC Forge 1.1 on its port, the address file stale",
+   "app": "npc-forge",
+   "address": {
+    "contract": 1,
+    "app": "npc-forge",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8768",
+    "pid": 41,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [],
+   "answers": {
+    "http://127.0.0.1:8768": "$npc-forge-1.1.0",
+    "http://127.0.0.1:8766": "$npc-forge-1.1.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8766",
+    "source": "port",
+    "notes": []
+   }
+  },
+  {
+   "what": "NPC Forge 1.0 where it used to be",
+   "app": "npc-forge",
+   "answers": {
+    "http://127.0.0.1:8765": "$npc-forge-1.0.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8765",
+    "source": "old-port",
+    "notes": []
+   }
+  },
+  {
+   "what": "Voice Lab on 8765 is never taken for NPC Forge",
+   "app": "npc-forge",
+   "answers": {
+    "http://127.0.0.1:8765": "$voice-lab-0.4.0"
+   },
+   "expect": {
+    "url": null,
+    "source": null,
+    "notes": [
+     "NPC Forge is not running."
+    ]
+   }
+  },
+  {
+   "what": "the address the person set is another app",
+   "app": "npc-forge",
+   "given": "http://127.0.0.1:8765",
+   "answers": {
+    "http://127.0.0.1:8765": "$voice-lab-1.0.0",
+    "http://127.0.0.1:8766": "$npc-forge-1.1.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8766",
+    "source": "port",
+    "notes": [
+     "That address is Voice Lab, not NPC Forge."
+    ]
+   }
+  },
+  {
+   "what": "the environment variable comes before the address file",
+   "app": "voice-lab",
+   "environ": {
+    "VOICE_LAB_URL": "http://127.0.0.1:8775/"
+   },
+   "address": {
+    "contract": 1,
+    "app": "voice-lab",
+    "name": "",
+    "version": "1.0.0",
+    "api": 1,
+    "url": "http://127.0.0.1:8765",
+    "pid": 9,
+    "instance": "3f9c0a1b2c3d4e5f",
+    "started": "2026-12-01T10:00:00Z"
+   },
+   "alive": [
+    9
+   ],
+   "answers": {
+    "http://127.0.0.1:8775": "$voice-lab-1.0.0",
+    "http://127.0.0.1:8765": "$voice-lab-1.0.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8775",
+    "source": "environment",
+    "notes": []
+   }
+  },
+  {
+   "what": "nothing answers at the address the person set",
+   "app": "voice-lab",
+   "given": "http://127.0.0.1:8775",
+   "answers": {
+    "http://127.0.0.1:8765": "$voice-lab-0.4.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:8765",
+    "source": "port",
+    "notes": [
+     "Nothing answers at http://127.0.0.1:8775, the address set for Voice Lab."
+    ]
+   }
+  },
+  {
+   "what": "an Altera set up before it moved keeps 5001",
+   "app": "altera",
+   "answers": {
+    "http://127.0.0.1:5001": "$altera-1.0.0"
+   },
+   "expect": {
+    "url": "http://127.0.0.1:5001",
+    "source": "old-port",
+    "notes": []
+   }
+  },
+  {
+   "what": "another program on Altera's port",
+   "app": "altera",
+   "answers": {
+    "http://127.0.0.1:8767": "$another-program"
+   },
+   "expect": {
+    "url": null,
+    "source": null,
+    "notes": [
+     "Altera is not running."
+    ]
+   }
+  }
+ ],
+ "inbox_names": [
+  {
+   "sender": "voice-slate",
+   "name": "Maya, take 3.voiceslate",
+   "now": "2026-12-01T10:02:11Z",
+   "expect": "20261201T100211Z-voice-slate-Maya-take-3.voiceslate"
+  },
+  {
+   "sender": "npc-forge",
+   "name": "Zoë the Smith.CHARX",
+   "now": "2026-12-01T10:02:11Z",
+   "expect": "20261201T100211Z-npc-forge-Zoë-the-Smith.charx"
+  },
+  {
+   "sender": "voice-slate",
+   "name": "..\\..\\x/y.voiceslate",
+   "now": "2026-12-01T10:02:11Z",
+   "expect": "20261201T100211Z-voice-slate-x-y.voiceslate"
+  },
+  {
+   "sender": "voice-slate",
+   "name": "!!!.voiceslate",
+   "now": "2026-12-01T10:02:11Z",
+   "expect": "20261201T100211Z-voice-slate-file.voiceslate"
+  },
+  {
+   "sender": "voice-slate",
+   "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.voiceslate",
+   "now": "2026-12-01T10:02:11Z",
+   "expect": "20261201T100211Z-voice-slate-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.voiceslate"
+  }
+ ],
+ "inbox_parse": [
+  {
+   "name": "20261201T100211Z-voice-slate-Maya-take-3.voiceslate",
+   "expect": [
+    "2026-12-01T10:02:11Z",
+    "voice-slate"
+   ]
+  },
+  {
+   "name": "20261201T100211Z-npc-forge-maya.charx",
+   "expect": [
+    "2026-12-01T10:02:11Z",
+    "npc-forge"
+   ]
+  },
+  {
+   "name": "20261201T100211Z-someone-else-x.voiceslate",
+   "expect": [
+    "2026-12-01T10:02:11Z",
+    null
+   ]
+  },
+  {
+   "name": "my clip.voiceslate",
+   "expect": [
+    null,
+    null
+   ]
+  }
+ ],
+ "inbox_list": [
+  {
+   "what": "files to take, another kind, too large, half-written",
+   "app": "voice-lab",
+   "kinds": [
+    ".voiceslate"
+   ],
+   "max_bytes": 100,
+   "files": [
+    [
+     "20261201T100211Z-voice-slate-b.voiceslate",
+     10
+    ],
+    [
+     "20261201T090000Z-voice-slate-a.VOICESLATE",
+     100
+    ],
+    [
+     ".20261201T100212Z-voice-slate-c-x.part",
+     5
+    ],
+    [
+     "notes.txt",
+     3
+    ],
+    [
+     "20261201T100213Z-voice-slate-big.voiceslate",
+     101
+    ]
+   ],
+   "expect": [
+    [
+     "20261201T090000Z-voice-slate-a.VOICESLATE",
+     "voice-slate",
+     null
+    ],
+    [
+     "20261201T100211Z-voice-slate-b.voiceslate",
+     "voice-slate",
+     null
+    ],
+    [
+     "20261201T100213Z-voice-slate-big.voiceslate",
+     "voice-slate",
+     "size"
+    ],
+    [
+     "notes.txt",
+     null,
+     "kind"
+    ]
+   ]
+  },
+  {
+   "what": "an empty inbox",
+   "app": "altera",
+   "kinds": [
+    ".charx",
+    ".png"
+   ],
+   "max_bytes": 100,
+   "files": [],
+   "expect": []
+  }
+ ],
+ "holders": [
+  {
+   "what": "two holders and a stale one; nobody wants the card alone",
+   "files": {
+    "voice-lab-11.json": {
+     "contract": 1,
+     "app": "voice-lab",
+     "pid": 11,
+     "what": "Kokoro 82M",
+     "since": "2026-12-01T10:02:11Z",
+     "alone": false
+    },
+    "altera-12.json": {
+     "contract": 1,
+     "app": "altera",
+     "pid": 12,
+     "what": "a chat reply",
+     "since": "2026-12-01T10:03:00Z",
+     "alone": false
+    },
+    "npc-forge-13.json": {
+     "contract": 1,
+     "app": "npc-forge",
+     "pid": 13,
+     "what": "Qwen-Image 2512",
+     "since": "2026-12-01T09:00:00Z",
+     "alone": false
+    }
+   },
+   "alive": [
+    11,
+    12
+   ],
+   "expect_holders": [
+    "voice-lab",
+    "altera"
+   ],
+   "expect_alone": null
+  },
+  {
+   "what": "NPC Forge wants the card alone",
+   "files": {},
+   "alone": {
+    "contract": 1,
+    "app": "npc-forge",
+    "pid": 13,
+    "what": "pictures",
+    "since": "2026-12-01T10:04:00Z"
+   },
+   "alive": [
+    13
+   ],
+   "expect_holders": [],
+   "expect_alone": "npc-forge"
+  },
+  {
+   "what": "a want from a process that has gone",
+   "files": {},
+   "alone": {
+    "contract": 1,
+    "app": "npc-forge",
+    "pid": 13,
+    "what": "pictures",
+    "since": "2026-12-01T10:04:00Z"
+   },
+   "alive": [],
+   "expect_holders": [],
+   "expect_alone": null
+  }
+ ],
+ "takers": {
+  "lab": {
+   "app": "voice-lab",
+   "pid": 1001
+  },
+  "altera": {
+   "app": "altera",
+   "pid": 1002
+  },
+  "forge": {
+   "app": "npc-forge",
+   "pid": 1003
+  },
+  "other-forge": {
+   "app": "npc-forge",
+   "pid": 1004
+  }
+ },
+ "locks": [
+  {
+   "what": "a voice model and a chat model share the card",
+   "steps": [
+    [
+     "lab",
+     "take",
+     "shared",
+     true
+    ],
+    [
+     "altera",
+     "take",
+     "shared",
+     true
+    ],
+    [
+     "lab",
+     "holders",
+     [
+      "voice-lab",
+      "altera"
+     ]
+    ]
+   ]
+  },
+  {
+   "what": "taking it alone waits for every shared holder",
+   "steps": [
+    [
+     "lab",
+     "take",
+     "shared",
+     true
+    ],
+    [
+     "forge",
+     "take",
+     "alone",
+     false
+    ],
+    [
+     "lab",
+     "release"
+    ],
+    [
+     "forge",
+     "take",
+     "alone",
+     true
+    ],
+    [
+     "forge",
+     "holders",
+     [
+      "npc-forge"
+     ]
+    ]
+   ]
+  },
+  {
+   "what": "a shared take waits while another app holds the card alone",
+   "steps": [
+    [
+     "forge",
+     "take",
+     "alone",
+     true
+    ],
+    [
+     "lab",
+     "take",
+     "shared",
+     false
+    ],
+    [
+     "forge",
+     "release"
+    ],
+    [
+     "lab",
+     "take",
+     "shared",
+     true
+    ]
+   ]
+  },
+  {
+   "what": "a shared take waits as soon as another app wants the card alone",
+   "steps": [
+    [
+     "forge",
+     "want_alone"
+    ],
+    [
+     "lab",
+     "take",
+     "shared",
+     false
+    ],
+    [
+     "forge",
+     "drop_alone"
+    ],
+    [
+     "lab",
+     "take",
+     "shared",
+     true
+    ]
+   ]
+  },
+  {
+   "what": "a want from a process that has gone is ignored",
+   "steps": [
+    [
+     "forge",
+     "want_alone"
+    ],
+    [
+     "forge",
+     "dies"
+    ],
+    [
+     "lab",
+     "take",
+     "shared",
+     true
+    ]
+   ]
+  },
+  {
+   "what": "a holder keeps its hold, and a second copy cannot want the card alone too",
+   "steps": [
+    [
+     "altera",
+     "take",
+     "shared",
+     true
+    ],
+    [
+     "forge",
+     "want_alone"
+    ],
+    [
+     "altera",
+     "take",
+     "shared",
+     true
+    ],
+    [
+     "other-forge",
+     "take",
+     "alone",
+     false
+    ],
+    [
+     "forge",
+     "drop_alone"
+    ],
+    [
+     "altera",
+     "release"
+    ],
+    [
+     "other-forge",
+     "take",
+     "alone",
+     true
+    ]
+   ]
+  }
+ ],
+ "unload_outside": [
+  {
+   "what": "LM Studio and Ollama each hold a model",
+   "servers": {
+    "GET http://127.0.0.1:1234/api/v0/models": {
+     "data": [
+      {
+       "id": "qwen3-8b",
+       "state": "loaded"
+      },
+      {
+       "id": "gemma-3-4b",
+       "state": "not-loaded"
+      }
+     ]
+    },
+    "GET http://127.0.0.1:11434/api/ps": {
+     "models": [
+      {
+       "name": "llama3.2:3b",
+       "model": "llama3.2:3b"
+      }
+     ]
+    },
+    "POST http://127.0.0.1:11434/api/generate": {}
+   },
+   "expect": [
+    [
+     "LM Studio",
+     [
+      "qwen3-8b"
+     ],
+     true,
+     false
+    ],
+    [
+     "Ollama",
+     [
+      "llama3.2:3b"
+     ],
+     true,
+     false
+    ]
+   ],
+   "expect_calls": [
+    [
+     "GET",
+     "http://127.0.0.1:1234/api/v0/models",
+     null
+    ],
+    [
+     "run",
+     [
+      "unload",
+      "--all"
+     ]
+    ],
+    [
+     "GET",
+     "http://127.0.0.1:11434/api/ps",
+     null
+    ],
+    [
+     "POST",
+     "http://127.0.0.1:11434/api/generate",
+     {
+      "model": "llama3.2:3b",
+      "keep_alive": 0
+     }
+    ]
+   ]
+  },
+  {
+   "what": "neither is running: nothing is started",
+   "servers": {},
+   "expect": [],
+   "expect_calls": [
+    [
+     "GET",
+     "http://127.0.0.1:1234/api/v0/models",
+     null
+    ],
+    [
+     "GET",
+     "http://127.0.0.1:11434/api/ps",
+     null
+    ]
+   ]
+  },
+  {
+   "what": "LM Studio runs with nothing loaded",
+   "servers": {
+    "GET http://127.0.0.1:1234/api/v0/models": {
+     "data": [
+      {
+       "id": "qwen3-8b",
+       "state": "not-loaded"
+      }
+     ]
+    }
+   },
+   "expect": [],
+   "expect_calls": [
+    [
+     "GET",
+     "http://127.0.0.1:1234/api/v0/models",
+     null
+    ],
+    [
+     "GET",
+     "http://127.0.0.1:11434/api/ps",
+     null
+    ]
+   ]
+  },
+  {
+   "what": "lms cannot be found",
+   "lms": false,
+   "servers": {
+    "GET http://127.0.0.1:1234/api/v0/models": {
+     "data": [
+      {
+       "id": "qwen3-8b",
+       "state": "loaded"
+      }
+     ]
+    }
+   },
+   "expect": [
+    [
+     "LM Studio",
+     [
+      "qwen3-8b"
+     ],
+     false,
+     true
+    ]
+   ]
+  },
+  {
+   "what": "lms fails",
+   "lms_exit": 1,
+   "servers": {
+    "GET http://127.0.0.1:1234/api/v0/models": {
+     "data": [
+      {
+       "id": "qwen3-8b",
+       "state": "loaded"
+      }
+     ]
+    }
+   },
+   "expect": [
+    [
+     "LM Studio",
+     [
+      "qwen3-8b"
+     ],
+     false,
+     true
+    ]
+   ]
+  },
+  {
+   "what": "Ollama does not answer the unload",
+   "servers": {
+    "GET http://127.0.0.1:11434/api/ps": {
+     "models": [
+      {
+       "name": "llama3.2:3b"
+      }
+     ]
+    }
+   },
+   "expect": [
+    [
+     "Ollama",
+     [
+      "llama3.2:3b"
+     ],
+     false,
+     true
+    ]
+   ]
+  }
+ ]
+}

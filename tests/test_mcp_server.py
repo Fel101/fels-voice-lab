@@ -505,7 +505,7 @@ class StartingTests(unittest.TestCase):
         (self.root / ".venv" / "Scripts" / "python.exe").write_bytes(b"")
         (self.root / ".venv" / "bin" / "python").write_bytes(b"")
         (self.root / "serve.py").write_text("", "utf-8")
-        self.environ = {"VOICE_LAB_ADDRESS_FILE": str(self.root / "service.json")}
+        self.environ = {"VOICE_LAB_ADDRESS_FILE": str(self.root / "service.json"), "FELS_SUITE_DIR": str(self.root / "suite")}
         self.started = []
         self.answers = {}
         self.enterContext(mock.patch.object(lab_address, "ask_health", lambda url, timeout=2.0: self.answers.get(url)))

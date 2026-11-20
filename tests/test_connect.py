@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import api_service  # noqa: E402
 from app_version import VERSION  # noqa: E402
 import desktop  # noqa: E402
+import fels_suite  # noqa: E402
 import lab_address  # noqa: E402
 import serve  # noqa: E402
 
@@ -28,6 +29,8 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(health["app"], "Fel's Voice Lab")
         self.assertEqual(health["lab_id"], lab_address.lab_id(serve.APP_ROOT, service.cast.root))
         self.assertTrue(lab_address.is_lab(health))
+        self.assertEqual(health["fels"], {"contract": 1, "app": "voice-lab", "version": VERSION, "api": 1})
+        self.assertEqual(fels_suite.identify(health), "voice-lab", "the other apps of Fel's Studio recognise it")
 
 
 class ConnectRouteTests(unittest.TestCase):

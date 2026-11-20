@@ -15,6 +15,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import fels_suite  # noqa: E402
 import lab_address  # noqa: E402
 import serve  # noqa: E402
 
@@ -70,12 +71,16 @@ class AddressFileTests(unittest.TestCase):
             self.assertIsNone(lab_address.read(self.path, alive=lambda pid: True), text)
 
     def test_the_lab_is_looked_for_in_order(self):
+        suite = {"FELS_SUITE_DIR": str(self.folder / "suite")}
+
         def find(given=None, environ=None):
-            return lab_address.find_url(given, environ or {}, path=self.path, alive=self.alive)
+            return lab_address.find_url(given, {**suite, **(environ or {})}, path=self.path, alive=self.alive)
 
         self.assertEqual(find(), ("http://127.0.0.1:8765", "the known address"))
         self.write("http://127.0.0.1:50003")
         self.assertEqual(find(), ("http://127.0.0.1:50003", "the address file"))
+        fels_suite.write_address("voice-lab", "http://127.0.0.1:50004", "1.0.0", 1, "a", suite, alive=self.alive)
+        self.assertEqual(find(), ("http://127.0.0.1:50004", "the suite's address file"))
         self.assertEqual(find(environ={"VOICE_LAB_URL": "http://127.0.0.1:9000"}), ("http://127.0.0.1:9000", "VOICE_LAB_URL"))
         self.assertEqual(
             find("http://127.0.0.1:9001", {"VOICE_LAB_URL": "http://127.0.0.1:9000"}), ("http://127.0.0.1:9001", "--url")

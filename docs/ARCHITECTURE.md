@@ -30,6 +30,10 @@ a model worker           engine_worker.py in that model's own environment: .venv
   a person's ahead of a scene batch's lines, when they sent `wait_seconds`, and are refused with 409 otherwise; any can be
   cancelled, and a running one is stopped by ending its worker's process. `serve.Handler._place_in_line` puts every request that
   needs the worker in line under its `X-Request-Id`, and the page's `voice_lab_queue.js` makes all of the page's ask to wait.
+- **The other apps of Fel's Studio** find the Lab through [fels_suite.py](../fels_suite.py), one file that Voice Slate, NPC
+  Forge and Altera carry too, unchanged: the suite folder, the address file `serve.py` writes there, `/api/health`'s `fels`
+  block and the inbox. `tests/suite_vectors.json` holds the cases every app runs. Change it only together with the other
+  apps ([Contributing](../CONTRIBUTING.md#fels-studio-the-shared-file-and-the-ports)).
 - **The device.** The service asks for `cpu` or `cuda` (`common.pick_device`: `runtime.local.json`, then an NVIDIA driver,
   then an AMD card that AMD's ROCm build of PyTorch has code for, then the CPU). A worker whose own PyTorch cannot use the card
   runs on the CPU and says so (`worker_runtime.usable_device`). On a computer with more than one AMD card, `common.py` sets

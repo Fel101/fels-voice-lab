@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### For the other apps of Fel's Studio
+
+- **One folder for the four apps.** The Lab writes its address where Voice Slate, NPC Forge and Altera look for it,
+  `apps\voice-lab.json` in the suite folder (`%LOCALAPPDATA%\Fels`, or wherever `FELS_SUITE_DIR` points), and makes the
+  inbox where they can leave files for it. Its own address file stays, for tools from 0.4.0.
+  [Connect other apps](docs/CONNECT.md#the-other-apps-of-fels-studio).
+- **`GET /api/health`** has a `fels` block: the contract, the app's id `voice-lab`, its version and its suite API number, 1.
+- **`lab_cli.py` and the MCP server** look in the suite's address file first.
+
 ## 0.4.0 — 2026-11-18
 
 **From 0.3.0, download `FelsVoiceLab-Setup-0.4.0.exe` and run it.** It says it will update 0.3.0 to 0.4.0, keeps your

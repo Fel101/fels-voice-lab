@@ -175,7 +175,9 @@ ROUTES = [
     R("GET", "/api/health", "Service", "Say whether the service is ready, and which version it is.",
       reply="`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry "
             "per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab "
-            "from something else on the port) and `lab_id` (the same for every service of one Lab folder and library)."),
+            "from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` "
+            "(`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, "
+            "fels_suite.py)."),
     R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
       reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
             "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "

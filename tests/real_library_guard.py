@@ -12,10 +12,17 @@ that hold the user's work or to open one of its databases:
 
 Reading is allowed. Folders outside that list, such as out/workers, are scratch space and are not guarded. A child process
 started by a test is not covered; give it a temporary --state-root.
+
+The suite folder of Fel's Studio (fels_suite.py) is shared by every app on this computer: it holds their address files and
+inboxes. The test run gets a temporary one of its own, through FELS_SUITE_DIR, which the services and tools it starts
+inherit; it is removed when the run ends.
 """
+import atexit
 import os
+import shutil
 import socketserver
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -117,6 +124,9 @@ def install():
     if _installed:
         return False
     _installed = True
+    suite = tempfile.mkdtemp(prefix="fels-suite-tests-")
+    os.environ["FELS_SUITE_DIR"] = suite
+    atexit.register(shutil.rmtree, suite, True)
     sys.addaudithook(_hook)
     _let_shutdown_return_before_serving()
     return True

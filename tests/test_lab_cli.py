@@ -601,9 +601,13 @@ class CommandLineTests(CliCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("is ready", result.stdout)
 
-    # The Lab's own modules the tool imports, which follow the same two rules: where the address file is (lab_address.py)
-    # and the app's name (app_version.py).
-    LAB_MODULES = {"lab_address": ROOT / "lab_address.py", "app_version": ROOT / "app_version.py"}
+    # The Lab's own modules the tool imports, which follow the same two rules: where the address file is (lab_address.py),
+    # the app's name (app_version.py) and the suite's address file (fels_suite.py).
+    LAB_MODULES = {
+        "lab_address": ROOT / "lab_address.py",
+        "app_version": ROOT / "app_version.py",
+        "fels_suite": ROOT / "fels_suite.py",
+    }
 
     def test_it_imports_nothing_but_the_standard_library(self):
         allowed = set(sys.stdlib_module_names) | set(self.LAB_MODULES)

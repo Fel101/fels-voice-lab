@@ -80,6 +80,27 @@ worker ownership and export correctness. Never add personal audio as a fixture.
 Contributions should be yours to license under the project's MIT terms; preserve
 third-party licenses for borrowed code and document its source and modifications.
 
+## Fel's Studio: the shared file and the ports
+
+The Lab is one of the four apps of Fel's Studio. `fels_suite.py` and `tests/suite_vectors.json` are the suite's, the same in
+every app's repository: do not change them here. A change goes into the suite's contract first, then into every app's copy
+at once. `tests/test_fels_suite.py` runs the shared cases, and the test run gets its own temporary suite folder
+(`FELS_SUITE_DIR`, set by `tests/real_library_guard.py`), so it never touches the one the apps on this computer use.
+
+The ports the apps use. An example in the docs that needs some other port uses 8775.
+
+| What | Port |
+|---|---|
+| Voice Lab | 8765 |
+| NPC Forge | 8766 |
+| Altera | 8767 (5001 before) |
+| A second copy of NPC Forge | 8768 |
+| Voice Lab's MCP server over HTTP | 8769 |
+| Altera's own voice service | 8770 |
+| ComfyUI | 8188 |
+| LM Studio | 1234 |
+| Ollama | 11434 |
+
 ## Translate the Lab
 
 Use `locales/en.json` as the source. Copy it to `locales/<language-tag>.json`

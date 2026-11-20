@@ -84,7 +84,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port) and `lab_id` (the same for every service of one Lab folder and library).",
+            "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` (`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, fels_suite.py).",
             "content": {
               "application/json": {
                 "schema": {

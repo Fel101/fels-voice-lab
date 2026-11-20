@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 
 from desktop import DesktopBackend
+import fels_suite
 from worker_pool import process_is_running
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +25,8 @@ class DesktopTests(unittest.TestCase):
             # The session folder, the service log and the address file go in the temporary folder, and the service skips its
             # sweep of out/, so the run leaves the real out/ folder and this user's address file as it found them.
             address = Path(temp, "service.json")
-            environment = mock.patch.dict(os.environ, {"VOICE_LAB_ADDRESS_FILE": str(address)})
+            suite = {"FELS_SUITE_DIR": str(Path(temp, "suite"))}
+            environment = mock.patch.dict(os.environ, {"VOICE_LAB_ADDRESS_FILE": str(address), **suite})
             environment.start()
             self.addCleanup(environment.stop)
             backend = DesktopBackend(root=ROOT, state_root=temp, python=sys.executable, device="cpu",
@@ -34,6 +36,8 @@ class DesktopTests(unittest.TestCase):
                 url = backend.start(timeout=45)
                 ready = json.loads((backend.session / "ready.json").read_text("utf-8"))
                 self.assertEqual(json.loads(address.read_text("utf-8"))["url"], url, "other programs find it")
+                self.assertEqual(fels_suite.read_address("voice-lab", suite)["url"], url, "and the other apps of the suite")
+                self.assertTrue(fels_suite.inbox_dir("voice-lab", suite).is_dir(), "Voice Slate can hand it clips")
                 with urllib.request.urlopen(url + "/api/health", timeout=10) as response:
                     health = json.load(response)
                 self.assertEqual(health["workers"], [])
@@ -73,6 +77,7 @@ class DesktopTests(unittest.TestCase):
                 backend.close()
             self.assertFalse(process_is_running(ready["pid"]))
             self.assertFalse(address.exists(), "a service that stops takes its address away")
+            self.assertFalse(fels_suite.address_path("voice-lab", suite).exists())
             self.assertIsNotNone(backend.process.returncode)
             backend.close()  # Repeated close is harmless.
 

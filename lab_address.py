@@ -3,8 +3,9 @@
 The service listens on 127.0.0.1:8765, the known port, unless told otherwise; when another program has that port, it takes a
 free one (serve.bind_service). Every service writes its address, version and process id to one file for this Windows user,
 the same wherever the Lab is installed and outside the Lab's folder, unless a running service is named there already, and
-removes it when it stops. A file left by a process that has gone is ignored. tools/lab_cli.py looks for the Lab in this order:
---url, the VOICE_LAB_URL environment variable, the address file, the known address (find_url).
+removes it when it stops. A file left by a process that has gone is ignored. It also writes the address file every app of
+Fel's Studio reads (fels_suite.py). tools/lab_cli.py looks for the Lab in this order: --url, the VOICE_LAB_URL environment
+variable, the suite's address file, this file, the known address (find_url).
 
 Standard library only, and Python 3.8 or later, so that lab_cli.py runs on any Python.
 """
@@ -18,6 +19,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+import fels_suite
 from app_version import APP_NAME
 
 KNOWN_PORT = 8765
@@ -133,12 +135,16 @@ def remove(*, pid=None, path=None):
 
 
 def find_url(given=None, environ=None, *, default=KNOWN_URL, path=None, alive=process_alive):
-    """(the address to use, where it came from): --url, VOICE_LAB_URL, the address file, or the known address."""
+    """(the address to use, where it came from): --url, VOICE_LAB_URL, the suite's address file (fels_suite.py), the Lab's
+    own address file, or the known address."""
     environ = os.environ if environ is None else environ
     if given:
         return given, "--url"
     if environ.get("VOICE_LAB_URL"):
         return environ["VOICE_LAB_URL"], "VOICE_LAB_URL"
+    entry = fels_suite.read_address("voice-lab", environ, alive=alive)
+    if entry:
+        return entry["url"], "the suite's address file"
     entry = read(path or address_file(environ), alive=alive)
     if entry:
         return entry["url"], "the address file"

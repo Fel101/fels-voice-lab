@@ -35,11 +35,12 @@ import soundfile as sf
 import job_queue
 from routes import Router
 import route_groups
+import fels_suite
 import lab_address
 import library_backup
 import updates
 from self_update import SelfUpdate
-from app_version import APP_NAME, VERSION
+from app_version import APP_NAME, SUITE_API, VERSION
 from housekeeping import run_startup_sweep
 from request_log import NullRequestLog, RequestLog, new_request_id
 from runtime_folders import migrate_program_folders
@@ -407,6 +408,7 @@ class Lab:
         self.lab_id = lab_address.lab_id(APP_ROOT, self.library_root)
         self.address_note = None
         self.in_address_file = False
+        self.in_suite_file = False  # the address file of Fel's Studio names this service (fels_suite.py)
         self._drama, self._drama_lock = [], threading.Lock()
         self._live, self._live_lock = None, threading.Lock()
         self._automation, self._automation_lock = None, threading.Lock()
@@ -950,6 +952,16 @@ def main():
         lab.in_address_file = lab_address.write(url, version=VERSION, root=APP_ROOT)
     except OSError as exc:  # other programs then look on the known port; the Lab itself works as before
         request_log.event(f"startup: the address file could not be written: {exc}")
+    # The suite folder of Fel's Studio (fels_suite.py, contract 1): the address the other apps read, and the inbox where Voice
+    # Slate hands over its clips.
+    suite_problem = fels_suite.suite_dir_problem()
+    if suite_problem:
+        request_log.event(f"startup: {suite_problem}")
+    try:
+        lab.in_suite_file = fels_suite.write_address("voice-lab", url, VERSION, SUITE_API, lab.lab_id)
+        fels_suite.inbox_dir("voice-lab", make=True)
+    except OSError as exc:  # the other apps then look on the known port
+        request_log.event(f"startup: the suite folder could not be written: {exc}")
     request_log.start(APP_NAME, VERSION, port=server.server_address[1], device=device, state_root=state_root)
     for note in PAGE_TEXT.skipped_catalogs:
         request_log.event(f"startup: {note}")
@@ -993,6 +1005,8 @@ def main():
         server.server_close()
         if lab.in_address_file:
             lab_address.remove()
+        if lab.in_suite_file:
+            fels_suite.remove_address("voice-lab")
         request_log.event("stopped")
         request_log.close()
 

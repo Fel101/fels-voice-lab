@@ -9,7 +9,8 @@ each with a Copy button, so nothing needs typing.
 
 [Claude Code](#claude-code) · [Other MCP apps](#other-mcp-apps) · [What the tools do](#what-the-tools-do) ·
 [When the Lab is closed](#when-the-lab-is-closed) · [Apps that use OpenAI's speech API](#apps-that-use-openais-speech-api) ·
-[The command-line tool](#the-command-line-tool) · [Your own programs](#your-own-programs)
+[The command-line tool](#the-command-line-tool) · [Your own programs](#your-own-programs) ·
+[The other apps of Fel's Studio](#the-other-apps-of-fels-studio)
 
 ## Claude Code
 
@@ -89,7 +90,7 @@ and when the service stops, the window closes and says so.
 
 To use only a Lab that is already open, add `--no-start` at the end of the line: then a call to a closed Lab says how to open
 it. The server looks for the Lab where the command-line tool does: `--url`, the `VOICE_LAB_URL` environment variable, the
-Lab's address file, then `http://127.0.0.1:8765` ([the basics](API.md#the-basics)). With `--url` it never starts the Lab
+suite's address file, the Lab's address file, then `http://127.0.0.1:8765` ([the basics](API.md#the-basics)). With `--url` it never starts the Lab
 itself.
 
 When something goes wrong, the server writes what happened to its standard error, which the app keeps with its own logs,
@@ -157,6 +158,31 @@ Invoke-WebRequest -Method Post -Uri http://127.0.0.1:8765/api/speak -ContentType
 ```
 
 [The API guide](API.md) describes every call, its errors and their codes.
+
+## The other apps of Fel's Studio
+
+Fel's Voice Lab is one of four free apps that work together: Fel's Voice Slate records voices, Fel's NPC Forge makes game
+characters, and Fel's Altera is a companion to chat with. They find each other through one folder for this Windows user,
+the **suite folder**, and never read each other's own folders.
+
+- **Where it is:** `%LOCALAPPDATA%\Fels`. To keep it somewhere else, such as another drive, set the `FELS_SUITE_DIR`
+  environment variable to a full path once, then start the apps again:
+
+  ```powershell
+  setx FELS_SUITE_DIR D:\Fels
+  ```
+
+  If that folder cannot be made, for example because its drive is gone, the apps use the usual folder and the Lab's log
+  says so.
+- **`apps\voice-lab.json`** names the running Lab: its address (`url`), `version`, `api` number and process (`pid`). The Lab
+  writes it when its service starts and removes it when it stops; a file whose process has gone is ignored. The Lab's own
+  address file stays too, for tools from 0.4.0.
+- **`inbox\voice-lab\`** is where another app leaves a file for the Lab. The Lab makes it when it starts.
+- **`GET /api/health`** carries a `fels` block, `{"contract": 1, "app": "voice-lab", "version": "...", "api": 1}`, so an app
+  can tell the Lab from another app on the same port.
+
+The four apps share these rules in one file, [fels_suite.py](../fels_suite.py), the same in each app, with its test cases in
+[tests/suite_vectors.json](../tests/suite_vectors.json).
 
 ## Local speech input
 

@@ -12,12 +12,14 @@ service answers `GET /api/openapi.json` with it.
 
 **Address.** `http://127.0.0.1:8765`, the known port: the Lab's window, `serve.bat` and `serve.py` all listen there. When
 another program has that port, the Lab takes a free one and says so on **System & backups**, under **Connect other apps**;
-`serve.py --port 8770` asks for another port, and `--port 0` for any free one. Every running Lab service also writes its
+`serve.py --port 8775` asks for another port, and `--port 0` for any free one. Every running Lab service also writes its
 address to the address file, `%LOCALAPPDATA%\FelsVoiceLabService\service.json` (`url`, `version`, `pid`, `root` and
 `started_at`), and removes it when it stops; a file whose process has gone is stale and is ignored. When several Labs run, it
-names the one that started first. A program should look for the Lab in this order, as the command-line tool does: an address
-it was given, the `VOICE_LAB_URL` environment variable, the address file, then `http://127.0.0.1:8765`.
-`GET /api/health` answers with `"app": "Fel's Voice Lab"`, so a program can tell the Lab from something else on the port.
+names the one that started first. It also writes `apps\voice-lab.json` in the suite folder that the apps of Fel's Studio
+share ([Connect other apps](CONNECT.md#the-other-apps-of-fels-studio)). A program should look for the Lab in this order, as
+the command-line tool does: an address it was given, the `VOICE_LAB_URL` environment variable, the suite's address file, the
+Lab's address file, then `http://127.0.0.1:8765`. `GET /api/health` answers with `"app": "Fel's Voice Lab"` and
+`"fels": {"contract": 1, "app": "voice-lab", ...}`, so a program can tell the Lab from something else on the port.
 
 **Local only.** The service listens on 127.0.0.1. A request whose `Host` is not `127.0.0.1` or `localhost`, or that a web page
 from another site made (it carries a foreign `Origin`, or a `Sec-Fetch-Site` other than `same-origin` or `none`), gets `403`;
@@ -259,7 +261,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 
 Say whether the service is ready, and which version it is.
 
-**Answer:** `200`, JSON. `status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port) and `lab_id` (the same for every service of one Lab folder and library).
+**Answer:** `200`, JSON. `status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` (`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, fels_suite.py).
 
 <a id="get-api-info"></a>
 

@@ -36,6 +36,11 @@ class WhatIsGuardedTests(unittest.TestCase):
     def test_the_guard_is_in_place_before_any_test_runs(self):
         self.assertFalse(real_library_guard.install())
 
+    def test_the_suite_folder_of_this_computer_is_swapped_for_a_temporary_one(self):
+        suite = Path(os.environ["FELS_SUITE_DIR"])
+        self.assertEqual(Path(tempfile.gettempdir()).resolve(), suite.resolve().parent)
+        self.assertTrue(suite.name.startswith("fels-suite-tests-"))
+
     def test_everything_under_data_and_the_library_outputs_is_guarded(self):
         for name in ("data", "data/cast/cast.sqlite3", "data/voices/a.wav", "out/scenes/x/y.wav",
                      "out/comparisons/run.json", "out/m5/run.json", "out/exports/package-1/manifest.json",
