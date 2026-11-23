@@ -51,6 +51,7 @@ from engine_devices import EngineDeviceStore
 from engine_install import EngineInstaller
 from cast_store import CastStore, decode_audio
 from scene_store import SceneBatchRunner, SceneStore, SUPPORTED_LANGUAGES
+from slate_inbox import SlateInbox
 from evaluation_store import EvaluationStore
 from ui_localization import PAGE_TEXT
 from ui_preferences import UiPreferences
@@ -421,6 +422,7 @@ class Lab:
         self.address_note = None
         self.in_address_file = False
         self.in_suite_file = False  # the address file of Fel's Studio names this service (fels_suite.py)
+        self.inbox = SlateInbox()  # the clips Voice Slate hands over, waiting in the suite's inbox (slate_inbox.py)
         self._drama, self._drama_lock = [], threading.Lock()
         self._live, self._live_lock = None, threading.Lock()
         self._automation, self._automation_lock = None, threading.Lock()
@@ -971,15 +973,26 @@ def main():
         fels_suite.inbox_dir("voice-lab", make=True)
     except OSError as exc:  # the other apps then look on the known port
         request_log.event(f"startup: the suite folder could not be written: {exc}")
+    # Contract 6: the receiver looks in its inbox when it starts. The Cast page lists the files; nothing is imported here.
+    waiting = lab.inbox.count()
+    inbox_note = None
+    if waiting:
+        inbox_note = (
+            "1 file waits in the inbox: open Cast library to see it."
+            if waiting == 1
+            else f"{waiting} files wait in the inbox: open Cast library to see them."
+        )
     request_log.start(APP_NAME, VERSION, port=server.server_address[1], device=device, state_root=state_root)
     for note in PAGE_TEXT.skipped_catalogs:
         request_log.event(f"startup: {note}")
-    for note in (*folder_notes, *evaluations.migration_notes, *([address_note] if address_note else [])):
+    for note in (*folder_notes, *evaluations.migration_notes, *(extra for extra in (address_note, inbox_note) if extra)):
         request_log.event(f"startup: {note}")
     print(f"Fel's Voice Lab on {url}  (version {VERSION}, device: {device}, "
           f"free RAM {free_ram_gb():.1f} GB, log {request_log.path})", flush=True)
     if address_note:
         print(address_note, flush=True)
+    if inbox_note:
+        print(inbox_note, flush=True)
     if not args.no_cleanup:
         threading.Thread(target=run_startup_sweep, args=(OUT, request_log), kwargs={"keep": [request_log.path]},
                          name="startup-sweep", daemon=True).start()

@@ -1961,6 +1961,27 @@
     "cast.stopping_after_current_take": " (stopping after this take)",
     "cast.slate_clip_registered": "This clip is already in Cast.",
     "cast.slate_clip_imported": "The clip is in Cast.",
+    "cast.inbox_nothing_is_imported": "Voice Slate sent these with Send to Voice Lab. Nothing is imported until you preview a clip and import it. Imported and dismissed files go to the Recycle Bin.",
+    "cast.inbox_from_voice_slate": {
+      "one": "{count} clip from Voice Slate",
+      "other": "{count} clips from Voice Slate"
+    },
+    "cast.inbox_waiting": {
+      "one": "{count} file waiting in the inbox",
+      "other": "{count} files waiting in the inbox"
+    },
+    "cast.inbox_sent": "sent {time}",
+    "cast.inbox_draft": "(an unchecked draft from speech recognition)",
+    "cast.inbox_preview": "Preview",
+    "cast.inbox_dismiss": "Dismiss",
+    "cast.inbox_close_preview": "Close",
+    "cast.inbox_dismissed": "{name} was dismissed. Its file is in the Recycle Bin.",
+    "cast.inbox_refused_kind": "Voice Lab takes only .voiceslate files from Voice Slate here. Dismiss this file.",
+    "cast.inbox_refused_size": "This file is {file_size}, larger than a Voice Slate clip can be. Dismiss it.",
+    "cast.inbox_refused_unreadable": "The file could not be read. Another program may have it open; the list tries again by itself.",
+    "cast.inbox_refused_clip": "Not imported: {problem} Keep the clip again in Voice Slate and send it once more, or dismiss this file.",
+    "cast.inbox_not_cleared": "Its file could not go to the Recycle Bin, so it stays in the list. Dismiss it there.",
+    "cast.inbox_gone": "That clip is no longer in the inbox. It may have been imported or dismissed in another window.",
     "cast.error_not_known": "unknown error",
     "cast.nothing_else": "nothing else",
     "cast.saved_equal_blend": " · saved equal speaker blend.",

@@ -17,6 +17,11 @@
 - **`POST /api/unload`** says what the Lab is doing when it answers `409`, in `doing`, and counts a whole scene spoken on
   the graphics card as busy.
 - **`GET /api/gpu`** is new: who holds the graphics card, shared or alone. The page's header shows it as a light.
+- **Clips from Voice Slate wait in the inbox.** Voice Slate's Send to Voice Lab puts a `.voiceslate` clip in the Lab's
+  inbox, and **Cast library** shows it within ten seconds of the page getting focus, with **Preview** and **Dismiss**.
+  It is imported as a candidate only when you press **Import as candidate**, and the file then goes to the Recycle Bin.
+  A file that fails a check is listed with the reason. [The Voice Slate guide](docs/RECORDER_BRIDGE.md).
+- **`GET /api/inbox`, `POST /api/inbox/{inbox_file}/import` and `POST /api/inbox/{inbox_file}/dismiss`** are new.
 
 ## 0.4.0 — 2026-11-18
 

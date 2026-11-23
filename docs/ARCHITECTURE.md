@@ -34,6 +34,10 @@ a model worker           engine_worker.py in that model's own environment: .venv
   Forge and Altera carry too, unchanged: the suite folder, the address file `serve.py` writes there, `/api/health`'s `fels`
   block and the inbox. `tests/suite_vectors.json` holds the cases every app runs. Change it only together with the other
   apps ([Contributing](../CONTRIBUTING.md#fels-studio-the-shared-file-and-the-ports)).
+- **The inbox.** [slate_inbox.py](../slate_inbox.py) lists what waits in `inbox\voice-lab\` and checks each
+  `.voiceslate` file once, with `slate_bundle.read_bundle` as the Cast page's file box does, until the file changes. The
+  routes in `route_groups/cast.py` import through the same function as the file box, then hand the file to
+  `fels_suite.inbox_done`, which sends it to the Recycle Bin.
 - **Two locks on the graphics card.** `worker_pool.EnginePool` takes `out\runtime-locks\model-residency.lock` while any
   model is loaded, which keeps two copies of the Lab apart (NPC Forge 1.0 waits on it too). While the model is on the card
   it also holds the suite's GPU lock shared (`fels_suite.GpuLock`); a load on the card while NPC Forge has the card to

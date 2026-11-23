@@ -1,11 +1,11 @@
 """The Cast and its voice recordings (cast_store.py): characters and their voices, reference recordings and their versions,
-transcript suggestions, pronunciations, retiring and purging; and the lists of references and saved voices the page
-reads (reference_catalog.py)."""
+transcript suggestions, pronunciations, retiring and purging; the lists of references and saved voices the page reads
+(reference_catalog.py); and Voice Slate's clips, picked by hand or waiting in the inbox (slate_bundle.py, slate_inbox.py)."""
 
 import base64
 import json
 from threading import Lock
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote
 
 from cast_store import MAX_UPLOAD_BYTES, PRESET_VOICE_ENGINES, REFERENCE_ENGINES
 import engine_adapters
@@ -14,6 +14,7 @@ from reference_catalog import list_references, list_voice_library, resolve_refer
 import transcript_suggest
 from recorder_import import import_clip
 from slate_bundle import MAX_BUNDLE_BYTES, read_bundle
+from slate_inbox import NotCleared, NotWaiting
 
 
 def add_voice(engines, cast, character_id, req):
@@ -48,32 +49,89 @@ def register(router, lab):
 
     slate_import_lock = Lock()
 
-    @router.post("/api/cast/slate-clip/preview")
-    def preview_slate_clip(self, parsed, req):
-        clip = read_bundle(self._read_body(MAX_BUNDLE_BYTES), accept_asr_draft=True)
-        self._json(200, {"clip": clip.summary(), "engines": sorted(REFERENCE_ENGINES & engines.api_entries.keys())})
+    def cloning_engines():
+        return sorted(REFERENCE_ENGINES & engines.api_entries.keys())
 
-    @router.post("/api/cast/slate-clip/import")
-    def register_slate_clip(self, parsed, req):
-        params = parse_qs(parsed.query)
-        character = params.get("character", [""])[0]
-        engine = params.get("engine_id", [""])[0]
+    def import_slate_clip(raw, *, character, engine, create_character, accept_draft, reviewed, changed):
+        """Check a .voiceslate file's bytes and import its clip as a candidate: the file box and the inbox both come here.
+        `reviewed` is the sidecar hash the person previewed, if any; `changed` is the sentence when the clip differs."""
         if engine not in REFERENCE_ENGINES or engine not in engines.api_entries:
             raise ValueError("Choose a model that can use a voice recording.")
-        clip = read_bundle(self._read_body(MAX_BUNDLE_BYTES), accept_asr_draft=params.get("accept_draft") == ["1"])
-        reviewed = params.get("sidecar_sha256")
-        if reviewed is not None and reviewed != [clip.sidecar_sha256]:
-            raise ValueError("The clip changed after preview. Pick the handoff file again to review it.")
+        clip = read_bundle(raw, accept_asr_draft=accept_draft)
+        if reviewed is not None and reviewed != clip.sidecar_sha256:
+            raise ValueError(changed)
         with slate_import_lock:
             result = import_clip(
                 clip,
                 character=character,
                 engine_id=engine,
-                create_character=params.get("create_character") == ["1"],
+                create_character=create_character,
                 store=cast,
                 identity_check=False,
             )
-        self._json(201, {key: result[key] for key in ("status", "character_id", "identity_id", "reference_id", "warnings")})
+        return {key: result[key] for key in ("status", "character_id", "identity_id", "reference_id", "warnings")}
+
+    @router.post("/api/cast/slate-clip/preview")
+    def preview_slate_clip(self, parsed, req):
+        clip = read_bundle(self._read_body(MAX_BUNDLE_BYTES), accept_asr_draft=True)
+        self._json(200, {"clip": clip.summary(), "engines": cloning_engines()})
+
+    @router.post("/api/cast/slate-clip/import")
+    def register_slate_clip(self, parsed, req):
+        params = parse_qs(parsed.query)
+        reviewed = params.get("sidecar_sha256")
+        answer = import_slate_clip(
+            self._read_body(MAX_BUNDLE_BYTES),
+            character=params.get("character", [""])[0],
+            engine=params.get("engine_id", [""])[0],
+            create_character=params.get("create_character") == ["1"],
+            accept_draft=params.get("accept_draft") == ["1"],
+            reviewed=reviewed[0] if reviewed else None,
+            changed="The clip changed after preview. Pick the handoff file again to review it.",
+        )
+        self._json(201, answer)
+
+    # The inbox (slate_inbox.py): files Voice Slate hands over wait there until the person imports or dismisses them.
+    @router.get("/api/inbox")
+    def inbox_list(self, parsed, req):
+        self._json(200, {"files": lab.inbox.waiting(), "engines": cloning_engines(), "folder": str(lab.inbox.folder())})
+
+    def waiting_name(inbox_file):
+        name = unquote(inbox_file)
+        if not name or name.startswith(".") or "/" in name or "\\" in name:
+            raise NotWaiting(f"{name or 'That file'} is not a file in the inbox.")
+        return name
+
+    @router.post("/api/inbox/{inbox_file}/import")
+    def inbox_import(self, parsed, req, inbox_file):
+        entry, raw = lab.inbox.read(waiting_name(inbox_file))
+        for key in ("create_character", "accept_draft"):
+            if not isinstance(req.get(key, False), bool):
+                raise ValueError(f"{key} must be true or false.")
+        reviewed = req.get("sidecar_sha256")
+        if reviewed is not None and not isinstance(reviewed, str):
+            raise ValueError("sidecar_sha256 must be the hash from GET /api/inbox.")
+        answer = import_slate_clip(
+            raw,
+            character=req.get("character") if isinstance(req.get("character"), str) else "",
+            engine=req.get("engine_id") if isinstance(req.get("engine_id"), str) else "",
+            create_character=req.get("create_character", False),
+            accept_draft=req.get("accept_draft", False),
+            reviewed=reviewed,
+            changed="The clip changed after preview. Preview it again before you import it.",
+        )
+        try:
+            lab.inbox.clear(entry)
+            answer["cleared"] = True
+        except NotCleared as exc:
+            answer["cleared"] = False
+            answer["warnings"] = [*answer["warnings"], f"The clip is in Cast, but its file stays in the inbox: {exc}"]
+        self._json(201, answer)
+
+    @router.post("/api/inbox/{inbox_file}/dismiss")
+    def inbox_dismiss(self, parsed, req, inbox_file):
+        lab.inbox.dismiss(waiting_name(inbox_file))
+        self._json(200, {"ok": True})
 
     @router.get("/api/references")
     def reference_list(self, parsed, req):

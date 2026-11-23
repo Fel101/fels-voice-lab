@@ -204,8 +204,9 @@ does not generate speech or approve the voice.
 In the editor, record or import a voice recording, look at its waveform and edits, enter
 its **Exact words in the recording**, **Where it comes from** and **Who may use it, and
 how**, then **Approve this version**. A saved version never changes: a new recording or
-edit makes another version. The file you imported is kept apart from the edited versions. Voice Slate clip imports are documented in
-[the bridge guide](RECORDER_BRIDGE.md).
+edit makes another version. The file you imported is kept apart from the edited versions. Clips sent with Voice Slate's
+**Send to Voice Lab** wait at the top of **Cast library**: **Preview** one, then **Import as candidate**, or **Dismiss**
+it. Voice Slate clip imports are documented in [the bridge guide](RECORDER_BRIDGE.md).
 
 ### Perform lines
 

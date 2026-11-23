@@ -790,6 +790,9 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 |---|---|---|
 | POST | [`/api/cast/slate-clip/preview`](#post-api-cast-slate-clip-preview) | Check a Voice Slate handoff file without saving it. |
 | POST | [`/api/cast/slate-clip/import`](#post-api-cast-slate-clip-import) | Import a kept Voice Slate clip as a candidate. |
+| GET | [`/api/inbox`](#get-api-inbox) | List the clips Voice Slate handed over, waiting in the inbox. |
+| POST | [`/api/inbox/{inbox_file}/import`](#post-api-inbox-inbox_file-import) | Import a waiting clip as a candidate, then clear it from the inbox. |
+| POST | [`/api/inbox/{inbox_file}/dismiss`](#post-api-inbox-inbox_file-dismiss) | Send a waiting file to the Recycle Bin without importing it. |
 | GET | [`/api/cast`](#get-api-cast) | List every character with its voices and their recordings. |
 | POST | [`/api/characters`](#post-api-characters) | Create a character. |
 | POST | [`/api/characters/{character_id}`](#post-api-characters-character_id) | Rename a character or change its description. |
@@ -848,6 +851,62 @@ Import a kept Voice Slate clip as a candidate.
 | `413` | The bundle exceeds the upload limit. |
 
 The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies them. A master recording stays in Slate and an imported reference still needs Cast approval.
+
+<a id="get-api-inbox"></a>
+
+#### `GET /api/inbox`
+
+List the clips Voice Slate handed over, waiting in the inbox.
+
+**Answer:** `200`, JSON. `files`, oldest first, at most 200: each file's `name`, `sender` (an app id such as `voice-slate`, or null), `sender_name`, `sent` (UTC, from the file name, or null), `size` in bytes and `state`. `ready` comes with `clip`, the same summary as `POST /api/cast/slate-clip/preview`; `checking` means not checked yet; `refused` comes with `code` (`kind`, `size`, `clip` or `unreadable`) and `problem`, a sentence. Also `engines` (the models that can use a recording) and `folder` (where the inbox is).
+
+The inbox is `inbox\voice-lab\` in the folder of Fel's Studio (`%LOCALAPPDATA%\Fels\`, or `FELS_SUITE_DIR`). The service makes it when it starts; Voice Slate offers Send to Voice Lab only when it exists. Each file is checked once as the file box checks a picked one, and again when it changes. One listing checks new files for about 1.5 s, and the next one goes on. Nothing is imported until a caller asks.
+
+<a id="post-api-inbox-inbox_file-import"></a>
+
+#### `POST /api/inbox/{inbox_file}/import`
+
+Import a waiting clip as a candidate, then clear it from the inbox.
+
+| Path parameter | Meaning |
+|---|---|
+| `inbox_file` | A file's `name` from `GET /api/inbox`, percent-encoded. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `character` (required) | string | The Cast character name or ID. |
+| `engine_id` (required) | string | A model from the listing's `engines`. |
+| `create_character` | boolean | Create the character when the name is new. |
+| `accept_draft` | boolean | Send true only after the person accepted an unchecked transcript draft. |
+| `sidecar_sha256` | string | The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is refused. |
+
+**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to the Recycle Bin.
+
+| Also answers | When |
+|---|---|
+| `400` | The clip, its kind or size, or the requested assignment is invalid. |
+| `404` | The file is no longer in the inbox. |
+
+The same check and import as `POST /api/cast/slate-clip/import`. After the import the file goes to the Recycle Bin (it is deleted outside Windows). If that fails, the clip is still in Cast, `cleared` is false and a warning says why; importing it again changes nothing.
+
+<a id="post-api-inbox-inbox_file-dismiss"></a>
+
+#### `POST /api/inbox/{inbox_file}/dismiss`
+
+Send a waiting file to the Recycle Bin without importing it.
+
+| Path parameter | Meaning |
+|---|---|
+| `inbox_file` | A file's `name` from `GET /api/inbox`, percent-encoded. |
+
+**Answer:** `200`, JSON. `{"ok": true}`.
+
+| Also answers | When |
+|---|---|
+| `404` | The file is no longer in the inbox. |
+| `500` | Windows could not move it to the Recycle Bin; the sentence says why. |
+
+Any listed file can be dismissed, refused ones too. It is deleted outside Windows.
 
 <a id="get-api-cast"></a>
 

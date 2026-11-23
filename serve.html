@@ -61,6 +61,12 @@ main { max-width:1440px; padding:0 28px 60px; display:grid; grid-template-column
 .gpu-dot { width:9px; height:9px; border-radius:50%; border:2px solid var(--accent); flex:none; }
 .gpu-light[data-state="shared"] .gpu-dot { background:var(--accent); }
 .gpu-light[data-state="alone"] .gpu-dot { background:#c98a12; border-color:#c98a12; }
+.nav-count { margin-left:8px; font-size:.75rem; font-weight:650; color:var(--accent); background:var(--soft); padding:1px 8px; border-radius:999px; }
+.nav-count[hidden] { display:none; }
+.inbox-list { list-style:none; padding:0; margin:12px 0 0; }
+.inbox-item { border-top:1px solid var(--line); padding:10px 0 4px; }
+.inbox-item > p { margin:2px 0; }
+.inbox-item .cast-actions { margin:8px 0; }
 .workspace-nav { display:flex; flex-direction:column; gap:5px; align-self:start; position:sticky; top:20px; margin:28px 0; }
 .workspace-nav a { padding:11px 14px; border-radius:9px; color:var(--muted); text-decoration:none; font-weight:550; }
 .workspace-nav a:hover { background:var(--soft); color:var(--fg); }
@@ -199,7 +205,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </style><script id="pageText" type="application/json">__PAGE_TEXT_JSON__</script><script src="/voice_lab_i18n.js"></script><script src="/theme.js" defer></script></head><body><main>
 <header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">|||</span><div><h1>{{ui:shell.fel_s_voice_lab}}</h1><p class="sub">{{ui:shell.character_voices_from_first_idea}}</p></div></div><div class="header-tools"><span class="gpu-light" id="gpuLight" data-state="free" hidden><span class="gpu-dot" aria-hidden="true"></span><span id="gpuLightText"></span><span class="visually-hidden" id="gpuLightDetails"></span></span><a class="update-badge" id="updateBadge" href="#system" hidden></a><button type="button" class="update-now" id="updateNowHeader" hidden>{{ui:shell.update_now}}</button><span class="local-badge">{{ui:shell.local_production_studio}}</span><label class="theme-control" for="themeChoice">{{ui:shell.theme}}<select id="themeChoice"><option value="system">{{ui:shell.system}}</option><option value="light">{{ui:shell.light}}</option><option value="dark">{{ui:shell.dark}}</option><option value="forest">{{ui:shell.forest}}</option></select></label><div class="page-language"><label class="theme-control" for="languageChoice">{{ui:language.label}}<select id="languageChoice" aria-describedby="languageHint">__PAGE_LANGUAGE_OPTIONS__</select></label><small class="theme-status" id="languageHint">{{ui:language.reload_hint}}</small></div><span id="languageStatus" class="theme-status" role="status" aria-live="polite"></span><span id="themeStatus" class="theme-status" role="status" aria-live="polite"></span></div></header>
 <div class="workflow-note update-notice" id="updateNotice" role="status" hidden><strong id="updateNoticeTitle"></strong><p id="updateNoticeText"></p><ul id="updateNoticeAdvice" class="update-advice"></ul><div class="cast-actions"><a id="updateNoticeLink" href="#" target="_blank" rel="noopener noreferrer" hidden></a><button type="button" id="updateNoticeClose">{{ui:shell.close_this_note}}</button></div></div>
-<nav class="workspace-nav" aria-label="{{ui:shell.workspaces}}"><span class="eyebrow">{{ui:shell.create_produce}}</span><a href="#home">{{ui:shell.home}}</a><a href="#studio">{{ui:shell.model_studio}}</a><a href="#cloning">{{ui:shell.voice_cloning}}</a><a href="#cast">{{ui:shell.cast_library}}</a><a href="#perform">{{ui:shell.perform_lines}}</a><a href="#projects">{{ui:shell.projects}}</a><a href="#audio-tools">{{ui:shell.audio_tools}}</a><a href="#automation">{{ui:shell.automation}}</a><a href="#scenes">{{ui:shell.scenes_batch}}</a><a href="#books">{{ui:shell.stories_audiobooks}}</a><a href="#conversion">{{ui:shell.voice_conversion}}</a><a href="/compare" class="nav-secondary">{{ui:shell.compare_rate}}</a><a href="#library">{{ui:shell.recent_clips}}</a><a href="#models">{{ui:shell.models_features}}</a><a href="#system">{{ui:shell.system_backups}}</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">{{ui:shell.model_worker}}</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
+<nav class="workspace-nav" aria-label="{{ui:shell.workspaces}}"><span class="eyebrow">{{ui:shell.create_produce}}</span><a href="#home">{{ui:shell.home}}</a><a href="#studio">{{ui:shell.model_studio}}</a><a href="#cloning">{{ui:shell.voice_cloning}}</a><a href="#cast">{{ui:shell.cast_library}}<span class="nav-count" id="inboxNavCount" hidden><span aria-hidden="true" id="inboxNavNumber"></span><span class="visually-hidden" id="inboxNavWords"></span></span></a><a href="#perform">{{ui:shell.perform_lines}}</a><a href="#projects">{{ui:shell.projects}}</a><a href="#audio-tools">{{ui:shell.audio_tools}}</a><a href="#automation">{{ui:shell.automation}}</a><a href="#scenes">{{ui:shell.scenes_batch}}</a><a href="#books">{{ui:shell.stories_audiobooks}}</a><a href="#conversion">{{ui:shell.voice_conversion}}</a><a href="/compare" class="nav-secondary">{{ui:shell.compare_rate}}</a><a href="#library">{{ui:shell.recent_clips}}</a><a href="#models">{{ui:shell.models_features}}</a><a href="#system">{{ui:shell.system_backups}}</a><div class="queue-panel" id="queuePanel" hidden><span class="eyebrow">{{ui:shell.model_worker}}</span><div id="queueItems"></div><p class="meta" id="queueError" role="alert"></p></div></nav>
 
 
 <section class="card" id="home">
@@ -264,8 +270,14 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 </section>
 
 <section class="card" id="cast">
-  <h2>{{ui:cast.cast_library}}</h2>
+  <h2 id="castTitle" tabindex="-1">{{ui:cast.cast_library}}</h2>
   <p class="meta">{{ui:cast.listen_to_your_saved_voices}}</p>
+  <div class="workflow-note" id="slateInbox" hidden>
+    <h3 id="slateInboxTitle" tabindex="-1"></h3>
+    <p class="meta">{{ui:cast.inbox_nothing_is_imported}}</p>
+    <ul class="inbox-list" id="slateInboxList"></ul>
+  </div>
+  <p class="meta" id="slateInboxStatus" role="status" aria-live="polite"></p>
   <div class="workflow-note" id="castEmpty" hidden><p>{{ui:cast.no_characters_yet}} <a href="#cast" id="castCreateFirst">{{ui:cast.create_a_character}}</a> {{ui:cast.or}} <a href="#cloning">{{ui:cast.start_with_a_voice_recording}}</a>.</p></div>
   <div id="castBrowsing" hidden>
   <div class="row">
@@ -282,13 +294,13 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <summary>{{ui:cast.import_from_voice_slate}}</summary>
     <p class="meta">{{ui:cast.in_voice_slate_use_save}}</p>
     <label class="field compact">{{ui:cast.voice_slate_handoff}}<input id="slateBundle" type="file" accept=".voiceslate"></label>
-    <form id="slateImportForm" hidden>
+    <div id="slateFormHome"><form id="slateImportForm" hidden>
       <p class="meta" id="slateClipDetails" style="white-space:pre-line"></p>
       <div class="row"><label class="field compact">{{ui:cast.character_name_creates_one_if}}<input id="slateCharacter" maxlength="80" required></label>
         <label class="field compact">{{ui:cast.cloning_model}}<select id="slateEngine" required></select></label></div>
       <label id="slateDraftLabel" hidden><input id="slateAcceptDraft" type="checkbox"> {{ui:cast.i_understand_that_the_transcript}}</label>
-      <button type="submit" id="slateImportGo">{{ui:cast.import_as_candidate}}</button>
-    </form>
+      <div class="cast-actions"><button type="submit" id="slateImportGo">{{ui:cast.import_as_candidate}}</button><button type="button" id="slateImportCancel" hidden>{{ui:cast.inbox_close_preview}}</button></div>
+    </form></div>
     <p class="meta" id="slateImportStatus" role="status" aria-live="polite"></p>
   </details>
   <details id="castEditor"><summary>{{ui:cast.create_or_edit_a_character}}</summary>

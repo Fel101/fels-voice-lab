@@ -89,6 +89,8 @@ PATH_PARAMS = {
                   "[A-Za-z0-9][A-Za-z0-9._-]{0,89}", "panel-20261025T120000Z-1a2b3c4d"),
     "engine_id": ("An engine id from `GET /api/catalog`.", "[a-z0-9][a-z0-9.-]{0,80}", "kokoro"),
     "preview_file": ("The file name in a preview answer's `audio_url`, without its `.wav`.", "[A-Za-z0-9._-]+", "preview"),
+    "inbox_file": ("A file's `name` from `GET /api/inbox`, percent-encoded.", "(?:[A-Za-z0-9._~!'()*-]|%[0-9A-Fa-f]{2}){1,512}",
+                   "20261201T100211Z-voice-slate-Maya-take-3.voiceslate"),
     "request_id": ("A request's id: the `X-Request-Id` it sent, or the one its answer names; an entry of `GET /api/queue`.",
                    "[A-Za-z0-9._-]{1,64}", "take-1a2b3c"),
 }
@@ -499,6 +501,35 @@ ROUTES = [
       notes="The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies "
             "them. A master recording stays in Slate and an imported reference still needs Cast approval.",
       errors=((400, "The clip or requested assignment is invalid."), (413, "The bundle exceeds the upload limit."))),
+    R("GET", "/api/inbox", "Cast", "List the clips Voice Slate handed over, waiting in the inbox.",
+      reply="`files`, oldest first, at most 200: each file's `name`, `sender` (an app id such as `voice-slate`, or null), "
+            "`sender_name`, `sent` (UTC, from the file name, or null), `size` in bytes and `state`. `ready` comes with "
+            "`clip`, the same summary as `POST /api/cast/slate-clip/preview`; `checking` means not checked yet; `refused` "
+            "comes with `code` (`kind`, `size`, `clip` or `unreadable`) and `problem`, a sentence. Also `engines` (the "
+            "models that can use a recording) and `folder` (where the inbox is).",
+      notes="The inbox is `inbox\\voice-lab\\` in the folder of Fel's Studio (`%LOCALAPPDATA%\\Fels\\`, or "
+            "`FELS_SUITE_DIR`). The service makes it when it starts; Voice Slate offers Send to Voice Lab only when it exists. "
+            "Each file is checked once as the file box checks a picked one, and again when it changes. One listing checks "
+            "new files for about 1.5 s, and the next one goes on. Nothing is imported until a caller asks."),
+    R("POST", "/api/inbox/{inbox_file}/import", "Cast", "Import a waiting clip as a candidate, then clear it from the inbox.",
+      status=201, body=(F("character", "string", "The Cast character name or ID.", True),
+        F("engine_id", "string", "A model from the listing's `engines`.", True),
+        F("create_character", "boolean", "Create the character when the name is new."),
+        F("accept_draft", "boolean", "Send true only after the person accepted an unchecked transcript draft."),
+        F("sidecar_sha256", "string", "The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is "
+                                      "refused.")),
+      reply="`status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to "
+            "the Recycle Bin.",
+      notes="The same check and import as `POST /api/cast/slate-clip/import`. After the import the file goes to the "
+            "Recycle Bin (it is deleted outside Windows). If that fails, the clip is still in Cast, `cleared` is false and "
+            "a warning says why; importing it again changes nothing.",
+      errors=((400, "The clip, its kind or size, or the requested assignment is invalid."),
+              (404, "The file is no longer in the inbox."))),
+    R("POST", "/api/inbox/{inbox_file}/dismiss", "Cast", "Send a waiting file to the Recycle Bin without importing it.",
+      body_kind="none", reply="`{\"ok\": true}`.",
+      notes="Any listed file can be dismissed, refused ones too. It is deleted outside Windows.",
+      errors=((404, "The file is no longer in the inbox."),
+              (500, "Windows could not move it to the Recycle Bin; the sentence says why."))),
     R("GET", "/api/cast", "Cast", "List every character with its voices and their recordings.",
       reply="`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each "
             "identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, "

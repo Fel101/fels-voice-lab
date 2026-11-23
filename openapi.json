@@ -2076,6 +2076,183 @@
         }
       }
     },
+    "/api/inbox": {
+      "get": {
+        "operationId": "get_api_inbox",
+        "summary": "List the clips Voice Slate handed over, waiting in the inbox.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "The inbox is `inbox\\voice-lab\\` in the folder of Fel's Studio (`%LOCALAPPDATA%\\Fels\\`, or `FELS_SUITE_DIR`). The service makes it when it starts; Voice Slate offers Send to Voice Lab only when it exists. Each file is checked once as the file box checks a picked one, and again when it changes. One listing checks new files for about 1.5 s, and the next one goes on. Nothing is imported until a caller asks.",
+        "responses": {
+          "200": {
+            "description": "`files`, oldest first, at most 200: each file's `name`, `sender` (an app id such as `voice-slate`, or null), `sender_name`, `sent` (UTC, from the file name, or null), `size` in bytes and `state`. `ready` comes with `clip`, the same summary as `POST /api/cast/slate-clip/preview`; `checking` means not checked yet; `refused` comes with `code` (`kind`, `size`, `clip` or `unreadable`) and `problem`, a sentence. Also `engines` (the models that can use a recording) and `folder` (where the inbox is).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/inbox/{inbox_file}/import": {
+      "post": {
+        "operationId": "post_api_inbox_inbox_file_import",
+        "summary": "Import a waiting clip as a candidate, then clear it from the inbox.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "The same check and import as `POST /api/cast/slate-clip/import`. After the import the file goes to the Recycle Bin (it is deleted outside Windows). If that fails, the clip is still in Cast, `cleared` is false and a warning says why; importing it again changes nothing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "character": {
+                    "type": "string",
+                    "description": "The Cast character name or ID."
+                  },
+                  "engine_id": {
+                    "type": "string",
+                    "description": "A model from the listing's `engines`."
+                  },
+                  "create_character": {
+                    "type": "boolean",
+                    "description": "Create the character when the name is new."
+                  },
+                  "accept_draft": {
+                    "type": "boolean",
+                    "description": "Send true only after the person accepted an unchecked transcript draft."
+                  },
+                  "sidecar_sha256": {
+                    "type": "string",
+                    "description": "The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is refused."
+                  }
+                },
+                "required": [
+                  "character",
+                  "engine_id"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "inbox_file",
+            "in": "path",
+            "required": true,
+            "description": "A file's `name` from `GET /api/inbox`, percent-encoded.",
+            "example": "20261201T100211Z-voice-slate-Maya-take-3.voiceslate",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[A-Za-z0-9._~!'()*-]|%[0-9A-Fa-f]{2}){1,512}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to the Recycle Bin.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The clip, its kind or size, or the requested assignment is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The file is no longer in the inbox.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/inbox/{inbox_file}/dismiss": {
+      "post": {
+        "operationId": "post_api_inbox_inbox_file_dismiss",
+        "summary": "Send a waiting file to the Recycle Bin without importing it.",
+        "tags": [
+          "Cast"
+        ],
+        "description": "Any listed file can be dismissed, refused ones too. It is deleted outside Windows.",
+        "parameters": [
+          {
+            "name": "inbox_file",
+            "in": "path",
+            "required": true,
+            "description": "A file's `name` from `GET /api/inbox`, percent-encoded.",
+            "example": "20261201T100211Z-voice-slate-Maya-take-3.voiceslate",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[A-Za-z0-9._~!'()*-]|%[0-9A-Fa-f]{2}){1,512}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{\"ok\": true}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The file is no longer in the inbox.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Windows could not move it to the Recycle Bin; the sentence says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/cast": {
       "get": {
         "operationId": "get_api_cast",

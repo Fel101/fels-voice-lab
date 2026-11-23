@@ -508,78 +508,275 @@ function stopPerformanceSet(){
 }
 function loadPronunciations(characterId){fetchJson('/api/pronunciations?character_id='+encodeURIComponent(characterId)).then(function(result){$('pronunciationList').textContent=(result.pronunciations||[]).map(function(item){return item.source+' → '+item.replacement;}).join(' · ')||LabText.t('cast.no_pronunciation_entries_yet');});}
 
-// The selected file is posted only to this Lab. Preview makes no Cast entry.
-var slateBundleFile = null, slateReviewedSidecar = null;
-function postSlateBundle(path, file) {
-  return fetch('/api/cast/slate-clip/' + path, {
-    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
-  }).then(async function (response) {
-    var result = await response.json();
-    if (!response.ok) throw new Error(result.error || LabText.t('cast.could_not_read_the_voice'));
+// A Voice Slate clip comes from a file picked here or from the inbox, where Voice Slate's Send to Voice Lab puts it (suite
+// contract 6). Both are checked by this Lab only, and one form previews and imports either. Preview makes no Cast entry.
+/** @type {{file?: File, inbox?: string, button?: HTMLElement} | null} */
+var slateSource = null;
+var slateReviewedSidecar = null;
+function slateAnswer(response) {
+  return response.json().then(function (result) {
+    if (!response.ok) throw new Error(LabText.error(result, LabText.t('cast.could_not_read_the_voice')));
     return result;
   });
 }
-$('slateBundle').addEventListener('change', function () {
-  var file = this.files && this.files[0];
-  slateBundleFile = file || null;
+function postSlateBundle(path, file) {
+  return fetch('/api/cast/slate-clip/' + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
+  }).then(slateAnswer);
+}
+function postInbox(name, action, body) {
+  return fetch('/api/inbox/' + encodeURIComponent(name) + '/' + action, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
+  }).then(slateAnswer);
+}
+function slateStatus(source) {
+  return source && source.inbox ? $('slateInboxStatus') : $('slateImportStatus');
+}
+// Show a checked clip in the form: what it is, the speaker's name to start from, the models and the draft question.
+function showSlateClip(clip, engines) {
+  var picker = $('slateEngine'), draft = clip.transcript_status === 'asr_draft';
+  slateReviewedSidecar = clip.sidecar_sha256;
+  $('slateClipDetails').textContent = [
+    clip.file + ' · ' + Number(clip.seconds).toFixed(2) + ' s',
+    clip.transcript,
+    LabText.t('cast.origin', {origin: clip.origin}),
+    LabText.t('cast.allowed_use', {allowed_use: clip.allowed_use}),
+  ].concat(clip.warnings).join('\n');
+  $('slateCharacter').value = clip.speaker || '';
+  picker.textContent = '';
+  engines.forEach(function (engine) {
+    option(picker, engine, sceneModelName(engine));
+  });
+  $('slateAcceptDraft').checked = false;
+  $('slateDraftLabel').hidden = !draft;
+  $('slateAcceptDraft').required = draft;
+  $('slateImportGo').disabled = false;
+  $('slateImportForm').hidden = false;
+}
+// Put the form back under the file box and close it. An inbox clip's Preview button says it is closed again.
+function closeSlateForm() {
+  var source = slateSource;
+  slateSource = null;
   slateReviewedSidecar = null;
   $('slateImportForm').hidden = true;
+  $('slateImportCancel').hidden = true;
+  $('slateFormHome').appendChild($('slateImportForm'));
+  if (source && source.button) source.button.setAttribute('aria-expanded', 'false');
+}
+$('slateBundle').addEventListener('change', function () {
+  var file = this.files && this.files[0];
+  closeSlateForm();
+  slateSource = file ? {file: file} : null;
+  var source = slateSource;
   $('slateImportStatus').textContent = file ? LabText.t('cast.checking_the_clip_and_its') : '';
-  $('slateAcceptDraft').checked = false;
-  $('slateImportGo').disabled = false;
   if (!file) return;
   postSlateBundle('preview', file).then(function (result) {
-    if (slateBundleFile !== file) return;
-    var clip = result.clip,
-      picker = $('slateEngine'),
-      draft = clip.transcript_status === 'asr_draft';
-    slateReviewedSidecar = clip.sidecar_sha256;
-    $('slateClipDetails').textContent = [
-      clip.file + ' · ' + Number(clip.seconds).toFixed(2) + ' s',
-      clip.transcript,
-      LabText.t('cast.origin', {origin: clip.origin}),
-      LabText.t('cast.allowed_use', {allowed_use: clip.allowed_use}),
-    ].concat(clip.warnings).join('\n');
-    $('slateCharacter').value = clip.speaker || '';
-    picker.textContent = '';
-    result.engines.forEach(function (engine) {
-      option(picker, engine, sceneModelName(engine));
-    });
-    $('slateDraftLabel').hidden = !draft;
-    $('slateAcceptDraft').required = draft;
-    $('slateImportForm').hidden = false;
+    if (slateSource !== source) return;
+    showSlateClip(result.clip, result.engines);
     $('slateImportStatus').textContent = LabText.t('cast.the_kept_wav_hash_and');
   }).catch(function (error) {
-    if (slateBundleFile === file) $('slateImportStatus').textContent = error.message;
+    if (slateSource === source) $('slateImportStatus').textContent = error.message;
   });
+});
+$('slateImportCancel').addEventListener('click', function () {
+  var source = slateSource;
+  closeSlateForm();
+  if (source && source.button) source.button.focus();
 });
 $('slateImportForm').addEventListener('submit', function (event) {
   event.preventDefault();
-  var file = slateBundleFile;
-  if (!file || !slateReviewedSidecar) return;
-  var query = new URLSearchParams({
-    character: $('slateCharacter').value.trim(),
-    engine_id: $('slateEngine').value,
-    create_character: '1',
-    sidecar_sha256: slateReviewedSidecar,
-    accept_draft: $('slateAcceptDraft').checked ? '1' : '0',
-  });
+  var source = slateSource;
+  if (!source || !slateReviewedSidecar) return;
+  var character = $('slateCharacter').value.trim(), engine = $('slateEngine').value, draft = $('slateAcceptDraft').checked;
+  var request;
+  if (source.file) {
+    request = postSlateBundle('import?' + new URLSearchParams({
+      character: character, engine_id: engine, create_character: '1',
+      sidecar_sha256: slateReviewedSidecar, accept_draft: draft ? '1' : '0',
+    }), source.file);
+  } else {
+    request = postInbox(source.inbox, 'import', {
+      character: character, engine_id: engine, create_character: true,
+      sidecar_sha256: slateReviewedSidecar, accept_draft: draft,
+    });
+  }
   $('slateImportGo').disabled = true;
-  $('slateImportStatus').textContent = LabText.t('cast.importing_the_kept_clip');
-  postSlateBundle('import?' + query, file).then(function (result) {
-    if (slateBundleFile !== file) return;
-    slateBundleFile = null;
-    slateReviewedSidecar = null;
-    $('slateBundle').value = '';
-    $('slateImportForm').hidden = true;
-    $('slateImportStatus').textContent =
-      LabText.t('cast.review_the_recording_and_approve', {import_status: result.status === 'already_registered' ? LabText.t('cast.slate_clip_registered') : LabText.t('cast.slate_clip_imported')});
+  slateStatus(source).textContent = LabText.t('cast.importing_the_kept_clip');
+  request.then(function (result) {
+    if (slateSource !== source) return;
+    var done = LabText.t('cast.review_the_recording_and_approve', {import_status: result.status === 'already_registered' ? LabText.t('cast.slate_clip_registered') : LabText.t('cast.slate_clip_imported')});
+    if (source.inbox && result.cleared === false) done += ' ' + LabText.t('cast.inbox_not_cleared');
+    if (source.inbox && result.cleared !== false) removeInboxItem(source.inbox);
+    closeSlateForm();
+    if (source.file) $('slateBundle').value = '';
+    slateStatus(source).textContent = done;
     $('castEditor').open = true;
     return refreshCast(result.character_id, result.identity_id);
   }).catch(function (error) {
-    if (slateBundleFile === file) {
-      $('slateImportStatus').textContent = error.message;
+    if (slateSource === source) {
+      slateStatus(source).textContent = error.message;
       $('slateImportGo').disabled = false;
     }
   });
 });
+
+// The inbox. The page looks when it gets focus and every 10 seconds while it is shown, never more often (contract 6).
+var INBOX_SECONDS = 10;
+var inboxLooked = 0, inboxTimer = null, inboxLooking = false, inboxEngines = [], inboxNames = [], inboxItemCount = 0;
+function inboxSignature(file) {
+  return [file.state, file.size, file.sent, file.code || '', file.problem || '', file.clip ? file.clip.sidecar_sha256 : ''].join('|');
+}
+// The speaker of a checked clip; otherwise the name the sender gave, without the time and sender the inbox put before it.
+function inboxFileLabel(file) {
+  if (file.clip) return file.clip.speaker || file.clip.file;
+  var given = file.sender ? file.name.replace(/^\d{8}T\d{6}Z-/, '') : file.name;
+  return file.sender && given.startsWith(file.sender + '-') ? given.slice(file.sender.length + 1) : file.name;
+}
+function inboxRefusal(file) {
+  if (file.code === 'kind') return LabText.t('cast.inbox_refused_kind');
+  if (file.code === 'size') return LabText.t('cast.inbox_refused_size', {file_size: formatBytes(file.size)});
+  if (file.code === 'unreadable') return LabText.t('cast.inbox_refused_unreadable');
+  return LabText.t('cast.inbox_refused_clip', {problem: file.problem});
+}
+function inboxItem(file) {
+  var item = document.createElement('li'), id = 'inboxItem' + (++inboxItemCount);
+  item.className = 'inbox-item';
+  item.dataset.name = file.name;
+  item.dataset.signature = inboxSignature(file);
+  var head = document.createElement('p'), who = document.createElement('strong');
+  head.id = id;
+  who.textContent = inboxFileLabel(file);
+  var facts = [];
+  if (file.clip) facts.push(Number(file.clip.seconds).toFixed(1) + ' s');
+  if (file.sent) facts.push(LabText.t('cast.inbox_sent', {time: LabText.dateTime(new Date(file.sent))}));
+  facts.push(formatBytes(file.size));
+  head.append(who, ' · ' + facts.join(' · '));
+  var words = document.createElement('p');
+  words.className = 'meta';
+  if (file.state === 'ready') {
+    words.textContent = '“' + file.clip.transcript + '”' + (file.clip.transcript_status === 'asr_draft' ? ' ' + LabText.t('cast.inbox_draft') : '');
+  } else if (file.state === 'checking') {
+    words.textContent = LabText.t('cast.checking_the_clip_and_its');
+  } else {
+    words.textContent = inboxRefusal(file);
+  }
+  var actions = document.createElement('div');
+  actions.className = 'cast-actions';
+  if (file.state === 'ready') {
+    var preview = document.createElement('button');
+    preview.type = 'button';
+    preview.textContent = LabText.t('cast.inbox_preview');
+    preview.setAttribute('aria-describedby', id);
+    preview.setAttribute('aria-expanded', 'false');
+    preview.addEventListener('click', function () { previewInboxClip(file, item, preview); });
+    actions.append(preview);
+  }
+  var dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.textContent = LabText.t('cast.inbox_dismiss');
+  dismiss.setAttribute('aria-describedby', id);
+  dismiss.addEventListener('click', function () { dismissInboxFile(file, dismiss); });
+  actions.append(dismiss);
+  item.append(head, words, actions);
+  return item;
+}
+function previewInboxClip(file, item, button) {
+  if (slateSource && slateSource.inbox === file.name) {
+    closeSlateForm();
+    return;
+  }
+  closeSlateForm();
+  slateSource = {inbox: file.name, button: button};
+  showSlateClip(file.clip, inboxEngines);
+  $('slateImportCancel').hidden = false;
+  item.appendChild($('slateImportForm'));
+  button.setAttribute('aria-expanded', 'true');
+  $('slateInboxStatus').textContent = '';
+  $('slateCharacter').focus();
+}
+function dismissInboxFile(file, button) {
+  var focused = button === document.activeElement;  // before the button is disabled, which can take the focus from it
+  button.disabled = true;
+  postInbox(file.name, 'dismiss').then(function () {
+    removeInboxItem(file.name, focused);
+    $('slateInboxStatus').textContent = LabText.t('cast.inbox_dismissed', {name: inboxFileLabel(file)});
+  }).catch(function (error) {
+    button.disabled = false;
+    $('slateInboxStatus').textContent = error.message;
+  });
+}
+function inboxItemFor(name) {
+  return [...$('slateInboxList').children].find(function (item) {
+    return item instanceof HTMLElement && item.dataset.name === name;
+  });
+}
+// Take a file off the list at once after its import or Dismiss; the next look agrees. The focus moves on to the next file,
+// or to the list's heading when it was the last.
+function removeInboxItem(name, focused) {
+  var item = inboxItemFor(name);
+  if (!item) return;
+  var hadFocus = focused || item.contains(document.activeElement) || Boolean(slateSource && slateSource.inbox === name);
+  if (slateSource && slateSource.inbox === name) closeSlateForm();
+  var next = item.nextElementSibling || item.previousElementSibling;
+  item.remove();
+  inboxNames = inboxNames.filter(function (other) { return other !== name; });
+  showInboxCount();
+  if (!hadFocus) return;
+  var target = next && next.querySelector('button');
+  if (target instanceof HTMLElement) target.focus();
+  else if (inboxNames.length) $('slateInboxTitle').focus();
+  else $('castTitle').focus();
+}
+function showInboxCount() {
+  var count = inboxNames.length;
+  var fromSlate = inboxNames.every(function (name) { return /^\d{8}T\d{6}Z-voice-slate-.+\.voiceslate$/i.test(name); });
+  $('slateInbox').hidden = count === 0;
+  $('slateInboxTitle').textContent = LabText.plural(fromSlate ? 'cast.inbox_from_voice_slate' : 'cast.inbox_waiting', count);
+  $('inboxNavCount').hidden = count === 0;
+  $('inboxNavNumber').textContent = String(count);
+  $('inboxNavWords').textContent = ', ' + LabText.plural('cast.inbox_waiting', count);
+}
+function renderInbox(answer) {
+  var list = $('slateInboxList'), files = answer.files || [];
+  inboxEngines = answer.engines || [];
+  inboxNames = files.map(function (file) { return file.name; });
+  [...list.children].forEach(function (item) {
+    if (!(item instanceof HTMLElement) || inboxNames.indexOf(item.dataset.name) >= 0) return;
+    if (slateSource && slateSource.inbox === item.dataset.name) {
+      closeSlateForm();
+      $('slateInboxStatus').textContent = LabText.t('cast.inbox_gone');
+    }
+    item.remove();
+  });
+  files.forEach(function (file, index) {
+    var item = inboxItemFor(file.name);
+    // An open preview keeps its place: its form may hold what the person typed.
+    var open = Boolean(slateSource && slateSource.inbox === file.name);
+    if (!item || (item.dataset.signature !== inboxSignature(file) && !open)) {
+      var fresh = inboxItem(file);
+      if (item) item.replaceWith(fresh);
+      item = fresh;
+    }
+    if (list.children[index] !== item) list.insertBefore(item, list.children[index] || null);
+  });
+  showInboxCount();
+}
+function lookInInbox() {
+  clearTimeout(inboxTimer);
+  inboxTimer = null;
+  if (document.visibilityState === 'hidden' || inboxLooking) return;
+  var wait = inboxLooked + INBOX_SECONDS * 1000 - Date.now();
+  if (wait > 0) {
+    inboxTimer = setTimeout(lookInInbox, wait);
+    return;
+  }
+  inboxLooking = true;
+  inboxLooked = Date.now();
+  fetchJson('/api/inbox').then(renderInbox).catch(function () {}).then(function () {
+    inboxLooking = false;
+    inboxTimer = setTimeout(lookInInbox, INBOX_SECONDS * 1000);
+  });
+}
+window.addEventListener('focus', lookInInbox);
+document.addEventListener('visibilitychange', lookInInbox);
+lookInInbox();

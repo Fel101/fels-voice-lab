@@ -177,7 +177,10 @@ the **suite folder**, and never read each other's own folders.
 - **`apps\voice-lab.json`** names the running Lab: its address (`url`), `version`, `api` number and process (`pid`). The Lab
   writes it when its service starts and removes it when it stops; a file whose process has gone is ignored. The Lab's own
   address file stays too, for tools from 0.4.0.
-- **`inbox\voice-lab\`** is where another app leaves a file for the Lab. The Lab makes it when it starts.
+- **`inbox\voice-lab\`** is where another app leaves a file for the Lab. The Lab makes it when it starts. Voice Slate's
+  **Send to Voice Lab** puts a `.voiceslate` clip there, and **Cast library** lists it until you import it or dismiss
+  it; both send the file to the Recycle Bin. Nothing is imported without you. A program reads the same list with
+  `GET /api/inbox` ([the Voice Slate guide](RECORDER_BRIDGE.md#send-to-voice-lab-the-inbox)).
 - **`GET /api/health`** carries a `fels` block, `{"contract": 1, "app": "voice-lab", "version": "...", "api": 1}`, so an app
   can tell the Lab from another app on the same port.
 

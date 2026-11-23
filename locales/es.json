@@ -1961,6 +1961,27 @@
     "cast.stopping_after_current_take": " (se detendrá después de esta toma)",
     "cast.slate_clip_registered": "Este clip ya está en el reparto de voces.",
     "cast.slate_clip_imported": "El clip se añadió al reparto de voces.",
+    "cast.inbox_nothing_is_imported": "Voice Slate los envió con Enviar a Voice Lab. No se importa nada hasta que previsualices un clip y lo importes. Los archivos importados y descartados van a la Papelera de reciclaje.",
+    "cast.inbox_from_voice_slate": {
+      "one": "{count} clip de Voice Slate",
+      "other": "{count} clips de Voice Slate"
+    },
+    "cast.inbox_waiting": {
+      "one": "{count} archivo en la bandeja de entrada",
+      "other": "{count} archivos en la bandeja de entrada"
+    },
+    "cast.inbox_sent": "enviado el {time}",
+    "cast.inbox_draft": "(un borrador sin revisar del reconocimiento de voz)",
+    "cast.inbox_preview": "Previsualizar",
+    "cast.inbox_dismiss": "Descartar",
+    "cast.inbox_close_preview": "Cerrar",
+    "cast.inbox_dismissed": "Se descartó {name}. Su archivo está en la Papelera de reciclaje.",
+    "cast.inbox_refused_kind": "Aquí Voice Lab solo acepta archivos .voiceslate de Voice Slate. Descarta este archivo.",
+    "cast.inbox_refused_size": "Este archivo ocupa {file_size}, más de lo que puede ocupar un clip de Voice Slate. Descártalo.",
+    "cast.inbox_refused_unreadable": "No se pudo leer el archivo. Puede que otro programa lo tenga abierto; la lista lo vuelve a intentar sola.",
+    "cast.inbox_refused_clip": "No se importó: {problem} Vuelve a guardar el clip en Voice Slate y envíalo otra vez, o descarta este archivo.",
+    "cast.inbox_not_cleared": "Su archivo no pudo ir a la Papelera de reciclaje, así que sigue en la lista. Descártalo ahí.",
+    "cast.inbox_gone": "Ese clip ya no está en la bandeja de entrada. Puede que se importara o se descartara en otra ventana.",
     "cast.error_not_known": "error desconocido",
     "cast.nothing_else": "nada más",
     "cast.saved_equal_blend": " · mezcla de voces guardada en partes iguales.",

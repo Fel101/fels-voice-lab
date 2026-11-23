@@ -1227,3 +1227,94 @@ class ModelHelpPageTests(unittest.TestCase):
                 if page is not None:
                     page.close()
                 server.close()
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class InboxPageTests(unittest.TestCase):
+    """Voice Slate's Send to Voice Lab puts a clip in the suite's inbox (contract 6). The Cast page shows it within ten seconds
+    of getting focus and imports it only when the person presses Import; a refused file can only be dismissed."""
+
+    def test_a_clip_in_the_inbox_shows_on_the_cast_page_and_imports_as_a_candidate(self):
+        import datetime
+
+        import fels_suite
+        from slate_inbox import SlateInbox
+        from tests.test_inbox import contract_clip
+
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            root = Path(temp)
+            environ = {"FELS_SUITE_DIR": str(root / "suite")}
+            fels_suite.inbox_dir("voice-lab", environ, make=True)
+            cleared = []
+            server = FlowServer(root)
+            server.server.RequestHandlerClass.lab.inbox = SlateInbox(environ, discard=cleared.append)
+            page = None
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#cast")
+                page.wait_until("document.getElementById('slateInbox').hidden && document.getElementById('inboxNavCount').hidden")
+                time.sleep(1)  # the page has looked once; the next look waits for its ten seconds
+
+                raw = contract_clip()
+                sent = datetime.datetime(2026, 12, 1, 10, 2, 11, tzinfo=datetime.timezone.utc)
+                clip = fels_suite.inbox_write("voice-lab", "voice-slate", "Maya, take 3.voiceslate", raw, environ, now=sent)
+                wrong = clip.with_name("20261201T100500Z-voice-slate-song.mp3")
+                wrong.write_bytes(b"ID3")
+                focused = time.monotonic()
+                page.evaluate("window.dispatchEvent(new Event('focus'))")
+                page.wait_until("document.querySelectorAll('#slateInboxList li').length === 2", timeout=15)
+                self.assertLess(time.monotonic() - focused, 10.5)
+                # A file that is not a clip turns "clips from Voice Slate" into "files"; the menu says how many wait.
+                self.assertEqual(page.evaluate("document.getElementById('slateInboxTitle').textContent"),
+                                 "2 files waiting in the inbox")
+                self.assertEqual(page.evaluate("document.getElementById('inboxNavCount').textContent"),
+                                 "2, 2 files waiting in the inbox")
+                item = f'#slateInboxList li[data-name="{clip.name}"]'
+                refused = f'#slateInboxList li[data-name="{wrong.name}"]'
+                self.assertIn("The lantern swung once", page.evaluate(f"document.querySelector('{item}').textContent"))
+                self.assertEqual(page.evaluate(f"[...document.querySelectorAll('{refused} button')].map((b) => b.textContent)"),
+                                 ["Dismiss"])
+                self.assertEqual(page.evaluate(f"document.querySelector('{refused} strong').textContent"), "song.mp3")
+                self.assertIn("only .voiceslate files", page.evaluate(f"document.querySelector('{refused}').textContent"))
+
+                # Preview opens the import form under the clip, with the speaker's name to start from. Nothing is in Cast yet.
+                page.click(f"{item} button")
+                page.wait_until(f"document.getElementById('slateImportForm').closest('li') === document.querySelector('{item}')")
+                self.assertEqual(page.evaluate("document.activeElement.id"), "slateCharacter")
+                self.assertEqual(page.evaluate("document.getElementById('slateCharacter').value"), "maya")
+                self.assertEqual(page.evaluate(f"document.querySelector('{item} button').getAttribute('aria-expanded')"), "true")
+                self.assertEqual(server.cast.list_cast(), [])
+                page.set_value("#slateCharacter", "Maya")
+                page.click("#slateImportGo")
+                page.wait_until("document.getElementById('slateInboxStatus').textContent.startsWith('The clip is in Cast.')")
+                (character,) = server.cast.list_cast()
+                self.assertEqual((character["name"], character["identities"][0]["status"]), ("Maya", "candidate"))
+                self.assertEqual(cleared, [str(clip)])
+                self.assertEqual(page.evaluate("document.querySelectorAll('#slateInboxList li').length"), 1)
+                self.assertEqual(page.evaluate("document.getElementById('slateImportForm').closest('li')"), None)
+                self.assertEqual(page.evaluate("document.getElementById('slateInboxTitle').textContent"),
+                                 "1 file waiting in the inbox")
+
+                page.evaluate(f"document.querySelector('{refused} button').focus()")  # as a real click or the keyboard leaves it
+                page.click(f"{refused} button")
+                page.wait_until("document.getElementById('slateInbox').hidden && document.getElementById('inboxNavCount').hidden")
+                self.assertEqual(cleared, [str(clip), str(wrong)])
+                self.assertIn("Recycle Bin", page.evaluate("document.getElementById('slateInboxStatus').textContent"))
+                self.assertEqual(page.evaluate("document.activeElement.id"), "castTitle")
+
+                # The file box still previews and imports a picked file: the same clip again changes nothing.
+                picked = root / "picked.voiceslate"
+                picked.write_bytes(raw)
+                page.evaluate("document.querySelector('#cast details:has(#slateBundle)').open = true")
+                page.set_files("#slateBundle", picked)
+                page.wait_until("!document.getElementById('slateImportForm').hidden")
+                self.assertEqual(page.evaluate("document.getElementById('slateImportForm').parentElement.id"), "slateFormHome")
+                page.set_value("#slateCharacter", "Maya")
+                page.click("#slateImportGo")
+                page.wait_until("document.getElementById('slateImportStatus').textContent.startsWith('This clip is already in Cast.')")
+                self.assertEqual(len(server.cast.list_cast()), 1)
+                self.assertEqual(page.problems, [])
+            finally:
+                if page is not None:
+                    page.close()
+                server.close()
