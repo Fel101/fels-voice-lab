@@ -17,7 +17,7 @@ import json
 import re
 from dataclasses import dataclass, replace
 
-from app_version import APP_NAME, VERSION
+from app_version import APP_NAME, SUITE_API, VERSION
 
 OPENAPI_VERSION = "3.1.0"
 # The codes an error answer carries beside its message (serve.ERROR_CODES), for a program to act on.
@@ -53,6 +53,9 @@ class Route:
     headers: tuple = ()        # Field: response headers worth knowing
     errors: tuple = ()         # (status, when) pairs beyond the usual 400 and 404
     notes: str = ""            # more Markdown for the reference
+    metadata: tuple = ()       # Field: members of the base64url JSON in the X-Reference-Metadata header
+    suite: bool = False        # part of the Lab's suite API, which the other apps of Fel's Studio rely on (SUITE_ROUTES)
+    answer: tuple = ()         # (name, type) pairs: the JSON answer's fields a suite route keeps (ANSWER_TYPES)
 
 
 def F(name, type, doc, required=False):
@@ -171,6 +174,15 @@ ENGINE_NOT_INSTALLED = ("The model is not installed (`code` `model_not_installed
                         "(Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `setup-qwen.bat` with "
                         "`--model` and the Qwen3-TTS model, `setup-voxcpm.bat`, `setup-breeze.bat` or `setup-drama3.bat`.")
 ENGINE_FAILED = "The model is installed but could not load or run; `error` says what it reported."
+# What the X-Reference-Metadata header of a recording's upload holds.
+REFERENCE_METADATA = (
+    F("filename", "string", "The recording's file name; its ending says the format. Default `reference.wav`."),
+    F("transcript", "string", "The exact words spoken in it, up to 1200 characters. Models that clone with the words need "
+                              "them."),
+    F("origin", "string", "Where the recording came from, up to 1000 characters.", True),
+    F("allowed_use", "string", "Who may use it, and for what, up to 1000 characters.", True),
+    F("edits", "object", "Trim, sample rate, channel and noise reduction, as `POST /api/references/{reference_id}/versions` "
+                         "takes them."))
 
 ROUTES = [
     # ---------------------------------------------------------------- Service
@@ -179,7 +191,10 @@ ROUTES = [
             "per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab "
             "from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` "
             "(`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, "
-            "fels_suite.py)."),
+            "fels_suite.py).",
+      suite=True,
+      answer=(("status", "string"), ("busy", "boolean"), ("version", "string"), ("app", "string"), ("lab_id", "string"),
+              ("fels.contract", "integer"), ("fels.app", "string"), ("fels.version", "string"), ("fels.api", "integer"))),
     R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
       reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
             "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "
@@ -276,7 +291,8 @@ ROUTES = [
       notes="The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model "
             "at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn "
             "in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the "
-            "unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more."),
+            "unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more.",
+      suite=True, answer=(("ok", "boolean"),)),
     R("GET", "/api/gpu", "Service", "Say who holds the graphics card: the GPU lock the apps of Fel's Studio share.",
       reply="`device` (this service's, `cuda` or `cpu`), `held` (whether a model of this service is on the graphics card "
             "now), `holders` (each app holding the lock, oldest first: `app`, `name`, `pid`, `what` (the model or the "
@@ -327,7 +343,13 @@ ROUTES = [
             "Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its "
             "model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's "
             "and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, "
-            "since only the loaded checkpoint reports them. Nothing is loaded to answer."),
+            "since only the loaded checkpoint reports them. Nothing is loaded to answer.",
+      suite=True,
+      answer=(("voices[].name", "string"), ("voices[].aliases", "string[]"), ("voices[].kind", "string"),
+              ("voices[].model", "string"), ("voices[].model_name", "string"), ("voices[].label", "string"),
+              ("voices[].languages", "string[]"), ("voices[].takes_direction", "boolean"), ("voices[].ready", "boolean"),
+              ("voices[].why_not", "string|null"), ("voices[].character", "string"), ("voices[].identity_id", "string"),
+              ("voices[].status", "string"), ("voices[].voice_id", "string"))),
     R("POST", "/api/speak", "Speaking", "Speak text with one engine and answer with the finished WAV file.",
       body=(F("text", "string", "What to say, 1 to 10,000 characters. " + LONG_TEXT, True),
             F("engine", "string", "An engine id from `GET /api/catalog` whose `integration.service_api` is true. "
@@ -364,7 +386,8 @@ ROUTES = [
               (504, "The engine did not answer in time.")),
       notes="Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and "
             "name it in the 400. To keep what you generate as a Cast take, use "
-            "[`POST /api/performance`](#post-api-performance)."),
+            "[`POST /api/performance`](#post-api-performance).",
+      suite=True),
     R("POST", "/api/stream", "Speaking", "Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made.",
       body=(F("text", "string", "What to say, 1 to 1200 characters.", True),
             F("engine", "string", "A Qwen3-TTS engine id.", True),
@@ -424,7 +447,8 @@ ROUTES = [
               (409, "The model worker is busy."),
               (503, ENGINE_NOT_INSTALLED),
               (504, "The engine did not answer in time.")),
-      notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does."),
+      notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.",
+      suite=True),
     R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text.",
       body=(F("text", "string", "1 to 1200 characters.", True), F("language", "string", "Default `English`.")),
       reply="`language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.",
@@ -462,7 +486,8 @@ ROUTES = [
               (503, "The voice's model is not installed (`model_not_installed`), or the format is made by FFmpeg, which is "
                     "not installed or cannot make it (`ffmpeg_not_installed`).")),
       notes="Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this "
-            "computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes."),
+            "computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.",
+      suite=True),
     R("POST", "/v1/audio/transcriptions", "OpenAI-style", "Transcribe a local audio file.", body_kind="multipart",
       body=(F("file", "binary", "A local audio upload, up to 25 MiB.", True),
             F("model", "string", "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model.", True),
@@ -540,7 +565,43 @@ ROUTES = [
     R("POST", "/api/characters", "Cast", "Create a character.", status=201,
       body=(F("name", "string", "1 to 80 characters.", True), F("description", "string", "Up to 2000 characters."),
             F("tags", "string[]", "Up to 40 characters each.")),
-      reply="`character`, as in `GET /api/cast`."),
+      reply="`character`, as in `GET /api/cast`.",
+      suite=True,
+      answer=(("character.id", "string"), ("character.name", "string"), ("character.description", "string"),
+              ("character.tags", "string[]"), ("character.identities", "array"))),
+    R("POST", "/api/characters/from-design", "Cast",
+      "Design a voice from words and keep it as a new character's voice, ready to speak by the character's name.",
+      status=201,
+      body=(F("name", "string", "The new character's name, 1 to 80 characters. The voice is called by it.", True),
+            F("voice_description", "string", "The voice to invent, in words, up to 1000 characters: `A warm, low voice, "
+                                             "unhurried and a little hoarse.`", True),
+            F("text", "string", "The sample line the voice is designed with, up to 400 characters, which becomes its voice "
+                                "recording with these words as the transcript. Default: a short English line."),
+            F("engine", "string", "The model that designs the voice: `qwen3-tts-1.7b-voice-design` (the default), `voxcpm2` "
+                                  "or `breeze-tts-2`."),
+            F("clone_engine", "string", "The model that speaks the voice afterwards, from its recording. Default, for a "
+                                        "Qwen design: the first installed of Qwen3-TTS 1.7B Base, 0.6B Base, Chatterbox "
+                                        "Turbo, VoxCPM2 and Chatterbox 500M; for the others, the design model itself."),
+            F("language", "string", "Qwen VoiceDesign: the language of the sample line. Default `English`."),
+            F("seed", "integer", "The design's random seed. Default 42.")),
+      reply="`voice`: the new voice as `GET /api/voices` lists it, with `ready` true and `name`, the character's name; "
+            "`character_id`; `reference_id`, its recording; `engine`, the model that designed it; and `clone_engine`, the "
+            "one that speaks it.",
+      errors=((409, "A character of that name is in the Cast already (`already_exists`)."),
+              (500, ENGINE_FAILED),
+              (503, "The design model, or the model that speaks the voice afterwards, is not installed "
+                    "(`model_not_installed`): `error` says which.")),
+      notes="One call does what the page does when a designed clip is kept as a Cast voice: the design model speaks the "
+            "sample line, the clip is kept as the voice's recording with its origin and allowed use (the design model's "
+            "terms, as for `save_voice_as`), and the voice is approved. It then sounds the same in every clip, through "
+            "`POST /v1/audio/speech`, `POST /api/speak` or `POST /api/performance`, by its name. Nothing is saved when the "
+            "design fails. The first call loads the design model, which can take minutes: send `wait_seconds`. A voice "
+            "saved with `save_voice_as` of `POST /api/speak` is a recording under `data/voices`, not a Cast voice.",
+      suite=True,
+      answer=(("voice.name", "string"), ("voice.aliases", "string[]"), ("voice.kind", "string"), ("voice.model", "string"),
+              ("voice.character", "string"), ("voice.identity_id", "string"), ("voice.status", "string"),
+              ("voice.ready", "boolean"), ("voice.why_not", "string|null"), ("character_id", "string"),
+              ("reference_id", "string"), ("engine", "string"), ("clone_engine", "string"))),
     R("POST", "/api/characters/{character_id}", "Cast", "Rename a character or change its description.",
       body=(F("name", "string", "1 to 80 characters. Leave out to keep it."),
             F("description", "string", "Up to 2000 characters. Leave out to keep it.")),
@@ -557,7 +618,10 @@ ROUTES = [
             F("default_direction", "string", "CustomVoice: the delivery instruction to use when a line gives none.")),
       reply="`identity`. A new voice is a `candidate` until it is approved.",
       notes="A cloning voice has no recording yet: upload one with "
-            "[`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references)."),
+            "[`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references).",
+      suite=True,
+      answer=(("identity.id", "string"), ("identity.engine_id", "string"), ("identity.label", "string"),
+              ("identity.status", "string"), ("identity.kind", "string"), ("identity.references", "array"))),
     R("POST", "/api/identities/{identity_id}/update", "Cast",
       "Rename a voice, change its notes or Kokoro voice, or approve or reject it.",
       body=(F("label", "string", "1 to 80 characters."), F("notes", "string", "Up to 2000 characters."),
@@ -566,7 +630,10 @@ ROUTES = [
             F("engine_options", "object", "Kokoro: `{\"voice\": \"af_heart\"}`. Preset voices cannot change.")),
       reply="`identity`.",
       notes="Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another "
-            "approved voice of the same character and engine back to `candidate`."),
+            "approved voice of the same character and engine back to `candidate`.",
+      suite=True,
+      answer=(("identity.id", "string"), ("identity.status", "string"), ("identity.approved_reference_id", "string|null"),
+              ("identity.references[].id", "string"))),
     R("POST", "/api/identities/{identity_id}/references", "Cast", "Upload a recording for a cloning voice and save it as a "
                                                                   "voice recording.",
       status=201, body_kind="audio",
@@ -576,7 +643,12 @@ ROUTES = [
             "base64url-encoded JSON: `{\"filename\": \"nell.wav\", \"transcript\": \"...\", \"origin\": \"...\", "
             "\"allowed_use\": \"...\", \"edits\": {\"start_seconds\": 0.5, \"end_seconds\": 9.0, \"target_sample_rate\": "
             "24000, \"channel\": \"mono\", \"noise_reduction\": {\"enabled\": false}}}`. `filename` sets the format; `edits` "
-            "is optional. The saved reference is 0.5 to 60 seconds."),
+            "is optional. The saved reference is 0.5 to 60 seconds.",
+      metadata=REFERENCE_METADATA,
+      suite=True,
+      answer=(("reference.id", "string"), ("reference.version", "integer"), ("reference.transcript", "string"),
+              ("reference.origin", "string"), ("reference.allowed_use", "string"), ("reference.duration_seconds", "number"),
+              ("reference.audio_url", "string"))),
     R("POST", "/api/identities/{identity_id}/references/preview", "Cast",
       "Process a recording the way an upload would, and return the result without saving anything.",
       body_kind="audio", reply_kind="wav",
@@ -869,16 +941,46 @@ ROUTES = [
             F("identity_id", "string", "The Cast voice to export."), F("include_media", "boolean", "Include the book cover."),
             F("include_voices", "boolean", "Include approved project references."),
             F("author", "string", "Optional name of the voice-file author."), F("permission", "boolean", "Confirm permission to share a cloned voice and its recording.")),
-      reply="An archive with a local ZIP download URL."),
+      reply="`archive`: its `id`, `kind`, `files` (how many it holds) and `download`, the path of "
+            "`GET /api/portable/{delivery_id}.zip` that answers it.",
+      notes="A voice file (`persona`) carries the voice's approved recording and a short take of it as an audition: make "
+            "one with `POST /api/performance` first, or the export says so. A voice designed from words needs no "
+            "`permission`; one cloned from a person's recording does.",
+      suite=True,
+      answer=(("archive.id", "string"), ("archive.kind", "string"), ("archive.files", "integer"),
+              ("archive.download", "string"))),
     R("POST", "/api/portable/preview", "Production", "Verify a portable ZIP without importing it.", body_kind="archive",
-      reply="Source voices, included assets, and archive SHA-256."),
+      reply="`archive`: its `kind`, `title`, `author`, `voices` (each with `label`, `engine_id`, `kind`, `model_installed`, "
+            "and for a voice with a recording its `sample`: `source_type` (`designed` or `recording`), `origin`, "
+            "`allowed_use` and `transcript`), `assets` and `archive_sha256`, which the import needs.",
+      suite=True,
+      answer=(("archive.kind", "string"), ("archive.title", "string"), ("archive.voices[].label", "string"),
+              ("archive.voices[].engine_id", "string"), ("archive.voices[].kind", "string"),
+              ("archive.voices[].model_installed", "boolean"), ("archive.voices[].sample.source_type", "string"),
+              ("archive.voices[].sample.origin", "string"), ("archive.voices[].sample.allowed_use", "string"),
+              ("archive.archive_sha256", "string"))),
     R("POST", "/api/portable/voice-preview", "Production", "Play a verified archive voice sample without importing.",
       body_kind="archive", query=(F("asset", "string", "Source voice sample asset.", True),),
       reply_kind="wav", reply="The verified WAV in the supplied archive."),
     R("POST", "/api/portable/import", "Production", "Import the exact portable ZIP previewed locally.", body_kind="archive", status=201,
-      reply="New project or candidate IDs. Send X-Reference-Metadata with base64url JSON containing archive_sha256, voices, permission and include_media."),
+      reply="`imported`: for a voice file, `kind` (`persona`) and `identity`, the new voice as in `GET /api/cast`, a "
+            "`candidate` until it is approved; for a project, the new project's ids.",
+      metadata=(F("archive_sha256", "string", "The `archive_sha256` of `POST /api/portable/preview` for these exact bytes.",
+                  True),
+                F("permission", "boolean", "True once the person has seen the recording's origin and allowed use; needed "
+                                           "for a voice that carries a recording."),
+                F("character_id", "string", "A voice file: add the voice to this character instead of a new one."),
+                F("archive_voice_id", "string", "A project archive: import only this one of its voices."),
+                F("voices", "object", "A project archive: which Cast voice speaks for each of its voices."),
+                F("include_media", "boolean", "A project archive: also import its cover and other files."),
+                F("import_voice_samples", "boolean", "A project archive: also import its voices' recordings.")),
+      notes="Send the file's bytes as the body, and the fields below as base64url-encoded JSON in the "
+            "`X-Reference-Metadata` header.",
+      suite=True,
+      answer=(("imported.kind", "string"), ("imported.identity.id", "string"), ("imported.identity.status", "string"),
+              ("imported.identity.references[].id", "string"))),
     R("GET", "/api/portable/{delivery_id}.zip", "Production", "Read a portable ZIP.", reply_kind="file",
-      reply="The generated local archive."),
+      reply="The generated local archive.", suite=True),
     R("POST", "/api/audio-tools/sound", "Production", "Create a seeded procedural sound effect.", status=201,
       body=(F("description", "string", "Description naming one supported sound.", True), F("seconds", "number", "Length in seconds."),
             F("seed", "integer", "Repeatable sound seed.")), reply="Audio and sound receipt."),
@@ -1261,7 +1363,7 @@ WAIT_ERRORS = ((409, "The model worker is busy and the request sent no `wait_sec
                      "even with `wait_seconds`, and `holder` names that app, what it is doing and since when."),
                (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran."))
 WAITING_ROUTES = {"/api/engines/{engine_id}/check", "/api/load", "/api/unload", "/api/prepare-reference", "/api/speak",
-                  "/api/stream", "/api/performance", "/api/kokoro/phonemize", "/api/convert"}
+                  "/api/stream", "/api/performance", "/api/kokoro/phonemize", "/api/convert", "/api/characters/from-design"}
 
 
 def _waits(route):
@@ -1314,6 +1416,128 @@ def groups_in_use(routes):
     return [(name, intro) for name, intro in GROUPS if name in seen]
 
 
+# ------------------------------------------------------------------------------------------------ the suite API
+
+# The types an answer field of a suite route may have: a JSON type, `string[]` for a list of text, and `|null` after a type for
+# a field that may be null.
+ANSWER_TYPES = ("string", "integer", "number", "boolean", "object", "array", "string[]")
+
+
+def suite_routes():
+    """The routes of the Lab's suite API (contract 11 of Fel's Studio): what NPC Forge, Altera and other programs may rely on.
+    Their fields keep their names, types and meanings until SUITE_API goes up; tests/suite_api_<SUITE_API>.json holds them."""
+    return [route for route in ROUTES if route.suite]
+
+
+def answer_type(kind):
+    """An answer field's JSON Schema."""
+    base, _, null = kind.partition("|")
+    schema = {"type": "array", "items": {"type": "string"}} if base == "string[]" else {"type": base}
+    if null:
+        schema["type"] = [schema["type"], "null"]
+    return schema
+
+
+def answer_schema(answer):
+    """The JSON Schema of a suite route's answer, from its dotted field names: `fels.api`, `voices[].name` (each item of the
+    list `voices`)."""
+    root = {"type": "object", "properties": {}}
+    for name, kind in answer:
+        node, parts = root, name.split(".")
+        for index, part in enumerate(parts):
+            listed = part.endswith("[]")
+            field = part[:-2] if listed else part
+            members = node.setdefault("properties", {})
+            if index == len(parts) - 1 and not listed:
+                members[field] = answer_type(kind)
+                break
+            if listed:
+                node = members.setdefault(field, {"type": "array", "items": {"type": "object"}})["items"]
+            else:
+                node = members.setdefault(field, {"type": "object"})
+    return root
+
+
+def _fields_snapshot(fields):
+    return {item.name: {"type": item.type, "required": item.required} for item in fields}
+
+
+def suite_snapshot():
+    """What the suite API's routes take and answer, as tests/suite_api_<SUITE_API>.json keeps it: for each route its success
+    status, its request (what kind of body, path parameters and their patterns, query, JSON and metadata fields) and its
+    answer (what kind, its JSON fields with their types, and its headers)."""
+    routes = {}
+    for route in suite_routes():
+        body_kind = route.body_kind if route.body or route.body_kind != "json" or route.metadata else "none"
+        routes[key(route)] = {
+            "status": route.status,
+            "request": {
+                "kind": "none" if route.method == "GET" else body_kind,
+                "path": {name: PATH_PARAMS[name][1] for name in path_names(route.path)},
+                "query": _fields_snapshot(route.query),
+                "fields": _fields_snapshot(route.body),
+                "metadata": _fields_snapshot(route.metadata),
+            },
+            "answer": {"kind": route.reply_kind, "fields": dict(route.answer),
+                       "headers": [item.name for item in route.headers]},
+        }
+    return {
+        "suite_api": SUITE_API,
+        "about": "The routes of Voice Lab's suite API and their fields, written by tools/build_api_docs.py from api_spec.py. "
+                 "The other apps of Fel's Studio rely on them; tests/test_suite_api.py fails when they change "
+                 "(docs/CONNECT.md, For Fel's other apps).",
+        "routes": routes,
+    }
+
+
+def suite_changes(frozen, current):
+    """How the suite API `current` differs from the snapshot `frozen`, as (breaking, added): two lists of sentences. A change
+    that breaks a program written for `frozen` needs a new SUITE_API; an addition does not, since a program ignores a field
+    it does not know and need not send a new optional one."""
+    breaking, added = [], []
+    old_routes, new_routes = frozen.get("routes", {}), current.get("routes", {})
+    for route, old in old_routes.items():
+        new = new_routes.get(route)
+        if new is None:
+            breaking.append(f"{route} is no longer in the suite API.")
+            continue
+        if new["status"] != old["status"]:
+            breaking.append(f"{route} answers {new['status']} instead of {old['status']}.")
+        for part, label in (("request", "takes"), ("answer", "answers")):
+            if new[part]["kind"] != old[part]["kind"]:
+                breaking.append(f"{route} {label} {new[part]['kind']} instead of {old[part]['kind']}.")
+        if new["request"]["path"] != old["request"]["path"]:
+            breaking.append(f"{route} takes other path parameters.")
+        for part, what in (("query", "query parameter"), ("fields", "field"), ("metadata", "X-Reference-Metadata field")):
+            was, now = old["request"][part], new["request"][part]
+            for name, field in was.items():
+                if name not in now:
+                    breaking.append(f"{route} no longer takes the {what} {name}.")
+                elif now[name]["type"] != field["type"]:
+                    breaking.append(f"{route} takes {name} as {now[name]['type']} instead of {field['type']}.")
+                elif now[name]["required"] and not field["required"]:
+                    breaking.append(f"{route} needs {name} now.")
+            for name, field in now.items():
+                if name in was:
+                    continue
+                if field["required"]:
+                    breaking.append(f"{route} needs a new field, {name}.")
+                else:
+                    added.append(f"{route} takes a new {what}, {name}.")
+        was, now = old["answer"]["fields"], new["answer"]["fields"]
+        for name, kind in was.items():
+            if name not in now:
+                breaking.append(f"{route} no longer answers {name}.")
+            elif now[name] != kind:
+                breaking.append(f"{route} answers {name} as {now[name]} instead of {kind}.")
+        added += [f"{route} answers a new field, {name}." for name in now if name not in was]
+        was, now = old["answer"]["headers"], new["answer"]["headers"]
+        breaking += [f"{route} no longer sends the header {name}." for name in was if name not in now]
+        added += [f"{route} sends a new header, {name}." for name in now if name not in was]
+    added += [f"{route} is new in the suite API." for route in new_routes if route not in old_routes]
+    return breaking, added
+
+
 # ------------------------------------------------------------------------------------------------ OpenAPI
 
 _MEDIA = {"json": "application/json", "wav": "audio/wav", "ndjson": "application/x-ndjson", "csv": "text/csv",
@@ -1355,9 +1579,18 @@ def _operation(route):
         parameters.append({"name": item.name, "in": "query", "required": item.required, "description": item.doc,
                            "schema": _schema(item.type)})
     operation = {"operationId": operation_id(route), "summary": route.summary, "tags": [route.group]}
+    if route.suite:
+        operation["x-fels-suite-api"] = SUITE_API
     if route.notes:
         operation["description"] = route.notes
-    if route.body_kind == "audio":
+    if route.metadata:
+        parameters.append({"name": "X-Reference-Metadata", "in": "header", "required": True,
+                           "description": "Base64url-encoded JSON: " + ", ".join(
+                               f"`{item.name}`" + ("" if item.required else " (optional)") for item in route.metadata) + ".",
+                           "schema": {"type": "string", "contentEncoding": "base64url",
+                                      "contentMediaType": "application/json",
+                                      "contentSchema": _fields_schema(route.metadata)}})
+    elif route.body_kind == "audio":
         parameters.append({"name": "X-Reference-Metadata", "in": "header", "required": True,
                            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and "
                                           "optional `edits`.", "schema": {"type": "string"}})
@@ -1378,7 +1611,7 @@ def _operation(route):
         success["content"] = {kind: {"schema": {"type": shape}} for kind, shape in (
             ("application/json", "object"), ("text/plain", "string"), ("text/vtt", "string"))}
     elif route.reply_kind == "json":
-        success["content"] = {media: {"schema": {"type": "object"}}}
+        success["content"] = {media: {"schema": answer_schema(route.answer) if route.answer else {"type": "object"}}}
     else:
         success["content"] = {media: {"schema": {"type": "string", "format": "binary"}}}
     if route.headers:
@@ -1407,6 +1640,7 @@ def build_openapi():
                            "a JSON object with an `error` message. See docs/API.md for the conventions, the speaking calls "
                            "and the command-line tool.",
             "license": {"name": "MIT", "identifier": "MIT"},
+            "x-fels-suite-api": SUITE_API,
         },
         "servers": [{"url": DEFAULT_URL, "description": "The default port. `serve.py --port` changes it."}],
         "tags": [{"name": name, "description": intro} for name, intro in groups_in_use(public)],
@@ -1460,7 +1694,8 @@ def _section(route):
     if route.body_kind == "audio":
         lines += ["**Request:** the recording's bytes, and an `X-Reference-Metadata` header.", ""]
     elif route.body_kind == "archive":
-        lines += ["**Request:** file bytes (`application/octet-stream`).", ""]
+        lines += ["**Request:** file bytes (`application/octet-stream`)"
+                  + (", and an `X-Reference-Metadata` header." if route.metadata else "."), ""]
     elif route.body_kind == "multipart":
         lines += ["**Request:** a `multipart/form-data` file upload.", ""]
         lines += _table(["Request field", "Type", "Meaning"],
@@ -1472,7 +1707,17 @@ def _section(route):
                          for item in route.body]) + [""]
     reply = {"json": "JSON", "wav": "`audio/wav`", "ndjson": "`application/x-ndjson`", "csv": "`text/csv`",
              "audio": "audio", "transcript": "JSON or caption text", "html": "HTML", "javascript": "JavaScript", "file": "a file"}[route.reply_kind]
+    if route.metadata:
+        lines += _table(["`X-Reference-Metadata` field", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.metadata]) + [""]
     lines += [f"**Answer:** `{route.status}`, {reply}." + (f" {route.reply}" if route.reply else ""), ""]
+    if route.suite:
+        lines += [f"**Suite API {SUITE_API}:** the other apps of Fel's Studio rely on this route. Its fields keep their "
+                  "names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).",
+                  ""]
+    if route.answer:
+        lines += _table(["Answer field", "Type"], [(f"`{name}`", kind) for name, kind in route.answer]) + [""]
     if route.headers:
         lines += _table(["Answer header", "Meaning"], [(f"`{item.name}`", item.doc) for item in route.headers]) + [""]
     if route.errors:

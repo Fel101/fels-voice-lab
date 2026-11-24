@@ -105,7 +105,9 @@ appearance before the page paints. `ui_preferences.py` saves the page language, 
   group's `register(router, lab)` in [route_groups/](../route_groups/) with `@router.get(path)` or `@router.post(path)` and the
   same path (a new group is a new module, listed in `GROUPS`), then
   `.venv\Scripts\python.exe tools\build_api_docs.py` to write `docs/API.md` and `openapi.json`. The service will not start
-  with a row and no function, or a function and no row.
+  with a row and no function, or a function and no row. A row with `suite=True` is part of the suite API, which NPC Forge
+  and Altera rely on: its fields are in `tests/suite_api_<N>.json`, and the tool adds to that file but will not break it
+  without a new `SUITE_API` in [app_version.py](../app_version.py) ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 - **An engine:** an entry in `catalog/engines.json` with its own environment, an adapter in its family's module in
   [engine_adapters/](../engine_adapters/) (a new family is a new module, listed in `FAMILIES`), and an installer.
   [engine_adapters/base.py](../engine_adapters/base.py) lists every answer an adapter can give, with the one most engines

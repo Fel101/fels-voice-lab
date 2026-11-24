@@ -62,6 +62,13 @@ with a row that has no function or a function that has no row, and `tests/test_a
 (`--check` only reports). `/api/speak` stays one blocking call that answers a whole WAV file, and
 `tests/test_api_contract.py` holds it to that.
 
+The rows marked `suite=True` are the suite API, which the other apps of Fel's Studio rely on
+([For Fel's other apps](docs/CONNECT.md#for-fels-other-apps)). `tests/suite_api_<N>.json` keeps their fields, and
+`tests/test_suite_api.py` fails when one changes. `build_api_docs.py` adds a new route or field to that file, but refuses a
+change that would break a program written for it: a field renamed, removed, retyped or newly required. Such a change needs a
+new `SUITE_API` in `app_version.py` and a CHANGELOG line. `tools/suite_api_check.py` runs the four sequences of calls against
+a running Lab with real models.
+
 Lint with `ruff check .`. Format the files you add with `ruff format`: `ruff format --check .` runs in CI too, and skips the
 older files listed in `ruff.toml` until someone reworks one, reformats it and takes it off the list.
 

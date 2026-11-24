@@ -1,0 +1,697 @@
+{
+  "suite_api": 1,
+  "about": "The routes of Voice Lab's suite API and their fields, written by tools/build_api_docs.py from api_spec.py. The other apps of Fel's Studio rely on them; tests/test_suite_api.py fails when they change (docs/CONNECT.md, For Fel's other apps).",
+  "routes": {
+    "GET /api/health": {
+      "status": 200,
+      "request": {
+        "kind": "none",
+        "path": {},
+        "query": {},
+        "fields": {},
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "status": "string",
+          "busy": "boolean",
+          "version": "string",
+          "app": "string",
+          "lab_id": "string",
+          "fels.contract": "integer",
+          "fels.app": "string",
+          "fels.version": "string",
+          "fels.api": "integer"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/unload": {
+      "status": 200,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "wait_seconds": {
+            "type": "number",
+            "required": false
+          },
+          "wait_priority": {
+            "type": "string",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "ok": "boolean"
+        },
+        "headers": []
+      }
+    },
+    "GET /api/voices": {
+      "status": 200,
+      "request": {
+        "kind": "none",
+        "path": {},
+        "query": {},
+        "fields": {},
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "voices[].name": "string",
+          "voices[].aliases": "string[]",
+          "voices[].kind": "string",
+          "voices[].model": "string",
+          "voices[].model_name": "string",
+          "voices[].label": "string",
+          "voices[].languages": "string[]",
+          "voices[].takes_direction": "boolean",
+          "voices[].ready": "boolean",
+          "voices[].why_not": "string|null",
+          "voices[].character": "string",
+          "voices[].identity_id": "string",
+          "voices[].status": "string",
+          "voices[].voice_id": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/speak": {
+      "status": 200,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "text": {
+            "type": "string",
+            "required": true
+          },
+          "engine": {
+            "type": "string",
+            "required": false
+          },
+          "voice": {
+            "type": "string",
+            "required": false
+          },
+          "speed": {
+            "type": "number",
+            "required": false
+          },
+          "language": {
+            "type": "string",
+            "required": false
+          },
+          "voice_description": {
+            "type": "string",
+            "required": false
+          },
+          "mode": {
+            "type": "string",
+            "required": false
+          },
+          "reference_path": {
+            "type": "string",
+            "required": false
+          },
+          "reference_text": {
+            "type": "string",
+            "required": false
+          },
+          "direction": {
+            "type": "string",
+            "required": false
+          },
+          "seed": {
+            "type": "integer",
+            "required": false
+          },
+          "temperature": {
+            "type": "number",
+            "required": false
+          },
+          "duration_delta": {
+            "type": "number",
+            "required": false
+          },
+          "save_voice_as": {
+            "type": "string",
+            "required": false
+          },
+          "wait_seconds": {
+            "type": "number",
+            "required": false
+          },
+          "wait_priority": {
+            "type": "string",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "wav",
+        "fields": {},
+        "headers": [
+          "X-Gen-Seconds",
+          "X-Audio-Seconds",
+          "X-First-Chunk",
+          "X-Generation-Mode",
+          "X-Voice-Backend",
+          "X-Model-Checkpoint",
+          "X-Checkpoint-Revision",
+          "X-Voice-Asset-Path",
+          "X-Parts"
+        ]
+      }
+    },
+    "POST /api/performance": {
+      "status": 200,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "identity_id": {
+            "type": "string",
+            "required": false
+          },
+          "voice": {
+            "type": "string",
+            "required": false
+          },
+          "text": {
+            "type": "string",
+            "required": true
+          },
+          "keep_take": {
+            "type": "boolean",
+            "required": false
+          },
+          "line_id": {
+            "type": "string",
+            "required": false
+          },
+          "reference_version_id": {
+            "type": "string",
+            "required": false
+          },
+          "language": {
+            "type": "string",
+            "required": false
+          },
+          "direction": {
+            "type": "string",
+            "required": false
+          },
+          "settings": {
+            "type": "object",
+            "required": false
+          },
+          "use_pronunciations": {
+            "type": "boolean",
+            "required": false
+          },
+          "idempotency_key": {
+            "type": "string",
+            "required": false
+          },
+          "identity_snapshot": {
+            "type": "object",
+            "required": false
+          },
+          "wait_seconds": {
+            "type": "number",
+            "required": false
+          },
+          "wait_priority": {
+            "type": "string",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "wav",
+        "fields": {},
+        "headers": [
+          "X-Take-Id",
+          "X-Take-Kept",
+          "X-Parts",
+          "X-Cast-Character",
+          "X-Cast-Identity",
+          "X-Cast-Line-Id",
+          "X-Gen-Seconds",
+          "X-Audio-Seconds",
+          "X-Voice-Backend",
+          "X-Model-Checkpoint",
+          "X-Checkpoint-Revision",
+          "X-Generation-Mode",
+          "X-Idempotent-Replay"
+        ]
+      }
+    },
+    "POST /v1/audio/speech": {
+      "status": 200,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "input": {
+            "type": "string",
+            "required": true
+          },
+          "voice": {
+            "type": "string",
+            "required": true
+          },
+          "model": {
+            "type": "string",
+            "required": false
+          },
+          "response_format": {
+            "type": "string",
+            "required": false
+          },
+          "speed": {
+            "type": "number",
+            "required": false
+          },
+          "instructions": {
+            "type": "string",
+            "required": false
+          },
+          "stream_format": {
+            "type": "string",
+            "required": false
+          },
+          "wait_seconds": {
+            "type": "number",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "audio",
+        "fields": {},
+        "headers": [
+          "X-Audio-Seconds",
+          "X-Parts"
+        ]
+      }
+    },
+    "POST /api/characters": {
+      "status": 201,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "description": {
+            "type": "string",
+            "required": false
+          },
+          "tags": {
+            "type": "string[]",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "character.id": "string",
+          "character.name": "string",
+          "character.description": "string",
+          "character.tags": "string[]",
+          "character.identities": "array"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/characters/from-design": {
+      "status": 201,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "voice_description": {
+            "type": "string",
+            "required": true
+          },
+          "text": {
+            "type": "string",
+            "required": false
+          },
+          "engine": {
+            "type": "string",
+            "required": false
+          },
+          "clone_engine": {
+            "type": "string",
+            "required": false
+          },
+          "language": {
+            "type": "string",
+            "required": false
+          },
+          "seed": {
+            "type": "integer",
+            "required": false
+          },
+          "wait_seconds": {
+            "type": "number",
+            "required": false
+          },
+          "wait_priority": {
+            "type": "string",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "voice.name": "string",
+          "voice.aliases": "string[]",
+          "voice.kind": "string",
+          "voice.model": "string",
+          "voice.character": "string",
+          "voice.identity_id": "string",
+          "voice.status": "string",
+          "voice.ready": "boolean",
+          "voice.why_not": "string|null",
+          "character_id": "string",
+          "reference_id": "string",
+          "engine": "string",
+          "clone_engine": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/characters/{character_id}/identities": {
+      "status": 201,
+      "request": {
+        "kind": "json",
+        "path": {
+          "character_id": "[a-f0-9]{32}"
+        },
+        "query": {},
+        "fields": {
+          "engine_id": {
+            "type": "string",
+            "required": true
+          },
+          "label": {
+            "type": "string",
+            "required": true
+          },
+          "notes": {
+            "type": "string",
+            "required": false
+          },
+          "voice": {
+            "type": "string",
+            "required": false
+          },
+          "speaker": {
+            "type": "string",
+            "required": false
+          },
+          "language": {
+            "type": "string",
+            "required": false
+          },
+          "default_direction": {
+            "type": "string",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "identity.id": "string",
+          "identity.engine_id": "string",
+          "identity.label": "string",
+          "identity.status": "string",
+          "identity.kind": "string",
+          "identity.references": "array"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/identities/{identity_id}/update": {
+      "status": 200,
+      "request": {
+        "kind": "json",
+        "path": {
+          "identity_id": "[a-f0-9]{32}"
+        },
+        "query": {},
+        "fields": {
+          "label": {
+            "type": "string",
+            "required": false
+          },
+          "notes": {
+            "type": "string",
+            "required": false
+          },
+          "status": {
+            "type": "string",
+            "required": false
+          },
+          "reference_version_id": {
+            "type": "string",
+            "required": false
+          },
+          "engine_options": {
+            "type": "object",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "identity.id": "string",
+          "identity.status": "string",
+          "identity.approved_reference_id": "string|null",
+          "identity.references[].id": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/identities/{identity_id}/references": {
+      "status": 201,
+      "request": {
+        "kind": "audio",
+        "path": {
+          "identity_id": "[a-f0-9]{32}"
+        },
+        "query": {},
+        "fields": {},
+        "metadata": {
+          "filename": {
+            "type": "string",
+            "required": false
+          },
+          "transcript": {
+            "type": "string",
+            "required": false
+          },
+          "origin": {
+            "type": "string",
+            "required": true
+          },
+          "allowed_use": {
+            "type": "string",
+            "required": true
+          },
+          "edits": {
+            "type": "object",
+            "required": false
+          }
+        }
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "reference.id": "string",
+          "reference.version": "integer",
+          "reference.transcript": "string",
+          "reference.origin": "string",
+          "reference.allowed_use": "string",
+          "reference.duration_seconds": "number",
+          "reference.audio_url": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/portable/export": {
+      "status": 201,
+      "request": {
+        "kind": "json",
+        "path": {},
+        "query": {},
+        "fields": {
+          "kind": {
+            "type": "string",
+            "required": true
+          },
+          "id": {
+            "type": "string",
+            "required": false
+          },
+          "identity_id": {
+            "type": "string",
+            "required": false
+          },
+          "include_media": {
+            "type": "boolean",
+            "required": false
+          },
+          "include_voices": {
+            "type": "boolean",
+            "required": false
+          },
+          "author": {
+            "type": "string",
+            "required": false
+          },
+          "permission": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "archive.id": "string",
+          "archive.kind": "string",
+          "archive.files": "integer",
+          "archive.download": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/portable/preview": {
+      "status": 200,
+      "request": {
+        "kind": "archive",
+        "path": {},
+        "query": {},
+        "fields": {},
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "archive.kind": "string",
+          "archive.title": "string",
+          "archive.voices[].label": "string",
+          "archive.voices[].engine_id": "string",
+          "archive.voices[].kind": "string",
+          "archive.voices[].model_installed": "boolean",
+          "archive.voices[].sample.source_type": "string",
+          "archive.voices[].sample.origin": "string",
+          "archive.voices[].sample.allowed_use": "string",
+          "archive.archive_sha256": "string"
+        },
+        "headers": []
+      }
+    },
+    "POST /api/portable/import": {
+      "status": 201,
+      "request": {
+        "kind": "archive",
+        "path": {},
+        "query": {},
+        "fields": {},
+        "metadata": {
+          "archive_sha256": {
+            "type": "string",
+            "required": true
+          },
+          "permission": {
+            "type": "boolean",
+            "required": false
+          },
+          "character_id": {
+            "type": "string",
+            "required": false
+          },
+          "archive_voice_id": {
+            "type": "string",
+            "required": false
+          },
+          "voices": {
+            "type": "object",
+            "required": false
+          },
+          "include_media": {
+            "type": "boolean",
+            "required": false
+          },
+          "import_voice_samples": {
+            "type": "boolean",
+            "required": false
+          }
+        }
+      },
+      "answer": {
+        "kind": "json",
+        "fields": {
+          "imported.kind": "string",
+          "imported.identity.id": "string",
+          "imported.identity.status": "string",
+          "imported.identity.references[].id": "string"
+        },
+        "headers": []
+      }
+    },
+    "GET /api/portable/{delivery_id}.zip": {
+      "status": 200,
+      "request": {
+        "kind": "none",
+        "path": {
+          "delivery_id": "[a-f0-9]{32}"
+        },
+        "query": {},
+        "fields": {},
+        "metadata": {}
+      },
+      "answer": {
+        "kind": "file",
+        "fields": {},
+        "headers": []
+      }
+    }
+  }
+}

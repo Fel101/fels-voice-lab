@@ -35,6 +35,9 @@ class Adapter:
     takes_direction = False  # a take of it may carry an acting direction
     clone_check = False  # its Test clones the bundled clip, so the evaluation compares the voices
     saves_designs = False  # a take that designs a voice may be kept as a voice recording (save_voice_as)
+    # A model that designs voices: the models that speak its designs afterwards, cloning the clip it made, best first
+    # (POST /api/characters/from-design takes the first one installed).
+    design_speakers = ()
     streams = False  # it streams its audio as it speaks (POST /api/stream)
     fixed_voices = False  # a voice of it is one or more of the model's fixed voice packs (identity_options)
     sample_voices = None  # the two preset voices of the sample scene's characters, for the one model that has it

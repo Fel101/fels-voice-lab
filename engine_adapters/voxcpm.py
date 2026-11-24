@@ -44,6 +44,7 @@ class VoxCPM2(Adapter):
     }
     takes_direction = True
     saves_designs = True
+    design_speakers = ("voxcpm2",)  # it clones its own designs
     # Its model card lists 30 languages; the scene picker allows only English.
     upstream_languages = (
         "Arabic",

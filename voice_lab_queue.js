@@ -12,7 +12,8 @@
     'Load':LabText.t('shell.a_model_is_loading'), 'Unload':LabText.t('shell.the_model_is_unloading'), 'Model test':LabText.t('shell.a_model_is_being_tested'),
     'Voice conversion':LabText.t('shell.a_voice_is_being_converted'), 'Voice recording':LabText.t('shell.a_voice_recording_is_being'),
     'Pronunciation preview':LabText.t('shell.a_pronunciation_is_being_previewed'), 'Drama studio take':LabText.t('shell.a_drama_studio_take_is'),
-    'Device switch':LabText.t('shell.the_model_is_moving_to'), 'Idle unload':LabText.t('shell.an_idle_model_is_unloading')};
+    'Device switch':LabText.t('shell.the_model_is_moving_to'), 'Idle unload':LabText.t('shell.an_idle_model_is_unloading'),
+    'Voice design':LabText.t('shell.a_voice_is_being_designed')};
   var send = global.fetch, mine = {}, count = 0, timer = null, last = null, failure = '', failureUntil = 0, quiet = 0;
 
   /** @param {string} id @returns {any} */

@@ -25,6 +25,8 @@ FAMILIES = (
 )
 # The engine a speak or load request that names none gets.
 DEFAULT_ENGINE = "kokoro"
+# The engine that designs a voice from words when a request names none (POST /api/characters/from-design).
+DEFAULT_DESIGNER = "qwen3-tts-1.7b-voice-design"
 
 
 def _load():

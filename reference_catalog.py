@@ -77,6 +77,22 @@ def _reference_generation(reference, identity_takes, takes_by_id):
     return None, None
 
 
+def design_provenance(engine, result, model):
+    """Where a voice designed from words came from and who may use it: `origin`, `allowed_use`, and the checkpoint, its
+    revision and the licence they rest on. The origin's opening words mark a designed voice (portable_projects._is_design),
+    so its voice file needs no permission of a person."""
+    profile = license_profile(engine, model, {})
+    checkpoint = result.get("checkpoint") or model.get("checkpoint") or "unrecorded checkpoint"
+    revision = result.get("checkpoint_revision") or model.get("local_revision") or "unrecorded revision"
+    return {
+        "origin": f"Original synthetic voice design via {engine}; {checkpoint} revision {revision}.",
+        "allowed_use": f"{profile['weights_license']} {profile['output_use']}",
+        "checkpoint": checkpoint,
+        "checkpoint_revision": revision,
+        "license": profile,
+    }
+
+
 def save_designed_reference(path, audio, request, result, model):
     """Save one new design WAV and its provenance together, never overwriting.
 
@@ -86,18 +102,16 @@ def save_designed_reference(path, audio, request, result, model):
     path = Path(path)
     sidecar = path.with_suffix(".json")
     engine = request["engine"]
-    profile = license_profile(engine, model, {})
-    checkpoint = result.get("checkpoint") or model.get("checkpoint") or "unrecorded checkpoint"
-    revision = result.get("checkpoint_revision") or model.get("local_revision") or "unrecorded revision"
+    made = design_provenance(engine, result, model)
     metadata = {
         "schema": "voice-lab/designed-reference-v1",
         "label": str(request["save_voice_as"]).rsplit("/", 1)[-1],
         "description": str(request.get("voice_description") or ""),
         "transcript": str(request.get("text") or ""),
-        "origin": f"Original synthetic voice design via {engine}; {checkpoint} revision {revision}.",
-        "allowed_use": f"{profile['weights_license']} {profile['output_use']}",
-        "engine_id": engine, "checkpoint": checkpoint, "checkpoint_revision": revision,
-        "license": profile, "audio_sha256": hashlib.sha256(audio).hexdigest(),
+        "origin": made["origin"],
+        "allowed_use": made["allowed_use"],
+        "engine_id": engine, "checkpoint": made["checkpoint"], "checkpoint_revision": made["checkpoint_revision"],
+        "license": made["license"], "audio_sha256": hashlib.sha256(audio).hexdigest(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     encoded = (json.dumps(metadata, ensure_ascii=False, indent=2) + "\n").encode("utf-8")

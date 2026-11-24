@@ -887,6 +887,7 @@
     "shell.a_drama_studio_take_is": "se está haciendo una toma de estudio Drama",
     "shell.the_model_is_moving_to": "el modelo se está moviendo a otro dispositivo",
     "shell.an_idle_model_is_unloading": "un modelo inactivo está descargando",
+    "shell.a_voice_is_being_designed": "se está diseñando una voz",
     "shell.a_scene_batch_is_rendering": "una lote de escenas se está renderizando",
     "shell.is_running": "{request} en curso",
     "shell.waiting_next_in_line": "Esperando: siguiente en la fila",

@@ -322,7 +322,17 @@ class OpenApiTests(unittest.TestCase):
                 self.assertEqual(operation["summary"], row.summary)
                 self.assertEqual(operation["tags"], [row.group])
                 self.assertEqual(operation.get("description", ""), row.notes)
+                # The suite API's routes say so, for a program that keeps a copy of openapi.json to check its calls.
+                self.assertEqual(operation.get("x-fels-suite-api"), api_spec.SUITE_API if row.suite else None)
                 parameters = operation.get("parameters", [])
+                headers = {item["name"]: item for item in parameters if item["in"] == "header"}
+                if row.metadata:
+                    described = headers["X-Reference-Metadata"]["schema"]
+                    self.assertEqual((described["contentEncoding"], described["contentMediaType"]),
+                                     ("base64url", "application/json"))
+                    self.assertEqual(list(described["contentSchema"]["properties"]), [item.name for item in row.metadata])
+                    self.assertEqual(described["contentSchema"].get("required", []),
+                                     [item.name for item in row.metadata if item.required])
                 self.assertEqual([(item["name"], item["required"], item["description"], item["schema"])
                                   for item in parameters if item["in"] == "query"],
                                  [(item.name, item.required, item.doc, schema_of(item.type)) for item in row.query])
@@ -347,7 +357,7 @@ class OpenApiTests(unittest.TestCase):
                     self.assertEqual(body["content"], {
                         "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
                     })
-                    self.assertNotIn("X-Reference-Metadata", [item["name"] for item in parameters if item["in"] == "header"])
+                    self.assertEqual("X-Reference-Metadata" in headers, bool(row.metadata))
                 else:
                     self.assertNotIn("requestBody", operation)
                 responses = operation["responses"]
@@ -364,8 +374,9 @@ class OpenApiTests(unittest.TestCase):
                 if row.reply_kind == "transcript":
                     self.assertEqual(set(success["content"]), {"application/json", "text/plain", "text/vtt"})
                 else:
+                    json_schema = api_spec.answer_schema(row.answer) if row.answer else {"type": "object"}
                     self.assertEqual(success["content"],
-                                     {media[row.reply_kind]: {"schema": {"type": "object"} if row.reply_kind == "json"
+                                     {media[row.reply_kind]: {"schema": json_schema if row.reply_kind == "json"
                                                               else {"type": "string", "format": "binary"}}})
                 self.assertEqual({name: item["description"] for name, item in success.get("headers", {}).items()},
                                  {item.name: item.doc for item in row.headers})

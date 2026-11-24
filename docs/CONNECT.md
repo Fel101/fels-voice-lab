@@ -219,6 +219,101 @@ graphics card, and lets go when the model is unloaded. Work on the CPU takes not
 Two copies of the Lab still keep out of each other's way with the Lab's own model lock, as before. NPC Forge 1.0 waits on
 that one, so it keeps working with this Lab.
 
+### For Fel's other apps
+
+NPC Forge, Altera and any other program on this computer use the Lab through one set of calls, **suite API 1**. The
+[API guide](API.md) marks each of them "Suite API 1", and `openapi.json` marks them with `x-fels-suite-api`. Their fields
+keep their names and types until the number in `/api/health`'s `fels.api` goes up, with a CHANGELOG line. New fields may
+appear in an answer: ignore the ones you do not know.
+
+Before the first call, find the Lab (its address file, then port 8765) and check that `/api/health` answers
+`"fels": {"app": "voice-lab", "api": 1, ...}`. A call that makes speech waits for the model, and the first one loads it,
+which can take minutes: send `wait_seconds` (up to 3600) so the call waits its turn instead of answering `409` at once.
+
+**1. Speak with a voice by name.** `GET /api/voices` lists the voices. Use one whose `ready` is true; when it is false,
+`why_not` says what the person must do first.
+
+```
+POST /v1/audio/speech
+{"voice": "af_heart", "input": "Hello there.", "response_format": "wav"}
+```
+
+The answer is the WAV file; WAV needs no FFmpeg. For an acting direction, with a voice whose `takes_direction` is true, send
+`instructions`, or use `POST /api/speak` with `{"voice": "Maya", "text": "...", "direction": "Quietly, as if tired."}`, which
+also answers a WAV file. Nothing is kept in the Lab's library.
+
+**2. Design a voice from words and keep it as a Cast voice.** One call designs the voice, keeps the clip as its voice
+recording and approves it:
+
+```
+POST /api/characters/from-design
+{"name": "Maya Okafor", "voice_description": "A warm, low voice, unhurried and a little hoarse.",
+ "text": "I have walked these roads for twenty years, and I still find new ones.", "wait_seconds": 1800}
+```
+
+It answers `201` with `voice`, as `GET /api/voices` lists it, ready to speak by `voice.name`, the character's name (step
+1). `text`, the line the voice is designed with, is optional. It needs Qwen3-TTS VoiceDesign, which designs the voice, and a
+model that clones from a recording, which speaks it afterwards: Qwen3-TTS 1.7B Base (or 0.6B Base), else Chatterbox Turbo,
+VoxCPM2 or Chatterbox 500M; `clone_engine` in the answer says which. When one is missing, `503` with `model_not_installed`
+names it, and the person installs it in **Models & features**. `409` with `already_exists` means a character of that name is in
+Cast already: speak with its voice by name instead. `save_voice_as` of `POST /api/speak` keeps a recording under
+`data/voices`, which is not a Cast voice.
+
+**3. A Cast voice from a recording your app has.** Only with the consent of the person whose voice it is:
+
+1. `POST /api/characters` with `{"name": "Tobin"}`: the answer's `character.id`.
+2. `POST /api/characters/{character_id}/identities` with `{"engine_id": "qwen3-tts-1.7b-base", "label": "Recorded"}`: the
+   answer's `identity.id`, a candidate voice.
+3. `POST /api/identities/{identity_id}/references` with the recording's bytes (WAV, FLAC, Ogg, MP3 or M4A, 0.5 to 60 seconds)
+   as the body, and the `X-Reference-Metadata` header: base64url-encoded JSON with `filename`, `transcript` (the exact
+   words), `origin` and `allowed_use`. The Lab keeps the last two with the recording. The answer's `reference.id`.
+4. `POST /api/identities/{identity_id}/update` with `{"status": "approved", "reference_version_id": "<reference.id>"}`. The
+   voice is ready, and `GET /api/voices` names it after the character when it is the character's only voice.
+
+```python
+import base64, json
+
+terms = {"filename": "tobin.wav", "transcript": "The exact words.", "origin": "Recorded by Tobin, 2026-12-01.",
+         "allowed_use": "Tobin's game only."}
+header = base64.urlsafe_b64encode(json.dumps(terms).encode("utf-8")).decode("ascii").rstrip("=")
+```
+
+**4. A voice file out of one Lab and into another.** On the Lab with the voice:
+
+1. `POST /api/performance` with `{"identity_id": "...", "text": "A short line.", "line_id": "audition"}`: a take, which the
+   voice file carries as its audition.
+2. `POST /api/portable/export` with `{"kind": "persona", "identity_id": "..."}`, and `"permission": true` for a voice cloned
+   from a person's recording, once that person agreed to share it: the answer's `archive.id`.
+3. `GET /api/portable/{archive.id}.zip`: the voice file.
+
+On the other Lab:
+
+1. `POST /api/portable/preview` with the file's bytes: `archive.voices`, each with its `sample`'s `origin` and
+   `allowed_use`, and `archive.archive_sha256`. Show where the voice came from and what it may be used for, and ask.
+2. After the person's yes, `POST /api/portable/import` with the same bytes and the `X-Reference-Metadata` header holding
+   `{"archive_sha256": "...", "permission": true}`. The answer's `imported.identity` is a candidate voice of a new character
+   named as in the file; add `character_id` to put it on a character of your choice.
+3. `POST /api/identities/{identity_id}/update` with `{"status": "approved", "reference_version_id": "..."}`, the id of
+   `imported.identity.references[0]`.
+
+**Free the graphics card** with `POST /api/unload` ([Sharing the graphics card](#sharing-the-graphics-card)).
+
+**Check all four** against a running Lab with `tools\suite_api_check.py`. It uses a preset voice, designs a voice, clones a
+clip of the preset voice (never a person's), carries a voice file in and out, and holds every answer to the fields suite
+API 1 promises. It needs Kokoro, Qwen3-TTS VoiceDesign and a model that clones (Qwen3-TTS 1.7B Base, or Chatterbox Turbo)
+installed; `--clone-engine` chooses another. At the end it purges the
+characters it made, named "Suite check" and a short code, unless you add `--keep`. `--to` carries the voice file into a
+second Lab.
+
+```powershell
+.venv\Scripts\python.exe tools\suite_api_check.py
+```
+
+**In your app's tests,** keep a copy of the Lab's `openapi.json`, from its folder or from `GET /api/openapi.json`, and check
+your calls against the operations marked `x-fels-suite-api`. Copy it again when you move to a newer Lab: when suite API 1
+is all you use, nothing in it changes but new fields. The Lab's `tests\suite_api_1.json` lists the same routes and fields,
+shorter.
+
 ## Local speech input
 
 Choose **Install speech recognition** in **System & backups**. The OpenAI-style API accepts files at

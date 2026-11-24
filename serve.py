@@ -382,7 +382,8 @@ def error_answer(exc):
 # What the queue (GET /api/queue) calls the work a route asks of the model worker.
 QUEUE_LABELS = {"/api/speak": "Clip", "/v1/audio/speech": "Clip", "/api/stream": "Live clip", "/api/performance": "Take", "/api/load": "Load",
                 "/api/unload": "Unload", "/api/engines/{engine_id}/check": "Model test", "/api/convert": "Voice conversion",
-                "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview"}
+                "/api/prepare-reference": "Voice recording", "/api/kokoro/phonemize": "Pronunciation preview",
+                "/api/characters/from-design": "Voice design"}
 
 
 class Lab:

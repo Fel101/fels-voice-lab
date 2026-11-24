@@ -1,20 +1,161 @@
 """The Cast and its voice recordings (cast_store.py): characters and their voices, reference recordings and their versions,
 transcript suggestions, pronunciations, retiring and purging; the lists of references and saved voices the page reads
-(reference_catalog.py); and Voice Slate's clips, picked by hand or waiting in the inbox (slate_bundle.py, slate_inbox.py)."""
+(reference_catalog.py); Voice Slate's clips, picked by hand or waiting in the inbox (slate_bundle.py, slate_inbox.py); and a
+character whose voice is designed from words, in one call for the other apps of Fel's Studio."""
 
 import base64
 import json
 from threading import Lock
 from urllib.parse import parse_qs, unquote
 
-from cast_store import MAX_UPLOAD_BYTES, PRESET_VOICE_ENGINES, REFERENCE_ENGINES
+from cast_store import MAX_UPLOAD_BYTES, PRESET_VOICE_ENGINES, REFERENCE_ENGINES, REFERENCE_POLICIES
 import engine_adapters
+from lab_errors import NotInstalled
 from performance_settings import performance_controls
-from reference_catalog import list_references, list_voice_library, resolve_reference_audio
+from reference_catalog import design_provenance, list_references, list_voice_library, resolve_reference_audio
+import synthetic_label
 import transcript_suggest
 from recorder_import import import_clip
 from slate_bundle import MAX_BUNDLE_BYTES, read_bundle
 from slate_inbox import NotCleared, NotWaiting
+import voice_names
+
+# A voice designed from words (POST /api/characters/from-design): the models that design one, each adapter naming the models
+# that speak its designs afterwards (Adapter.design_speakers).
+DESIGNERS = engine_adapters.engines_where("saves_designs")
+# The line a designed voice says when the request gives none: about eight seconds, which a cloning model takes well.
+DESIGN_LINE = (
+    "Hello. This is the voice I will speak with from now on: clear and steady, whatever the line may be, and "
+    "the same every time."
+)
+MAX_DESIGN_WORDS = 1000  # characters of the description
+MAX_DESIGN_LINE = 400
+DESIGN_LABEL = "Designed"
+
+
+class NameTaken(ValueError):
+    """A character of that name is in the Cast already: 409, already_exists."""
+
+    status_code = 409
+    error_code = "already_exists"
+
+
+def _text(req, name, limit, *, required=False):
+    """A request's text field, stripped; None when it is missing and not required."""
+    value = req.get(name)
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
+        raise ValueError(f"{name} must be text of 1 to {limit:,} characters.")
+    return value.strip()
+
+
+def _name_taken(cast, name):
+    wanted = name.casefold()
+    return any(
+        not character.get("retired") and character["name"].strip().casefold() == wanted for character in cast.list_cast()
+    )
+
+
+def _taken_sentence(name):
+    return f"There is already a character called {name} in Cast. Speak with its voice by name, or choose another name."
+
+
+def _model_name(engines, engine_id):
+    return engines.api_entries.get(engine_id, {}).get("name", engine_id)
+
+
+def design_speaker(engines, designer, asked):
+    """The model that speaks a voice designed with `designer`: `asked` when given, else the first installed of
+    its adapter's design_speakers. NotInstalled names the model to install when none is."""
+    if asked is not None:
+        if not isinstance(asked, str) or asked not in REFERENCE_ENGINES or asked not in engines.api_entries:
+            raise ValueError(
+                "clone_engine must be a model that clones from a voice recording: "
+                + ", ".join(sorted(REFERENCE_ENGINES & engines.api_entries.keys()))
+                + "."
+            )
+        if not voice_names.model_installed(engines, asked):
+            raise NotInstalled(voice_names.not_installed(engines.api_entries[asked]))
+        return asked
+    choices = [engine for engine in engine_adapters.get(designer).design_speakers if engine in engines.api_entries]
+    for engine in choices:
+        if voice_names.model_installed(engines, engine):
+            return engine
+    first = _model_name(engines, choices[0]) if choices else "a model that clones from a voice recording"
+    raise NotInstalled(
+        f"A voice designed with {_model_name(engines, designer)} is spoken afterwards by a model that clones from a "
+        f"recording, and none is installed. Open Models & features and press Install on the card of {first}."
+    )
+
+
+def design_character(lab, req, lock):
+    """POST /api/characters/from-design: design a voice from words, keep the clip as a new character's voice recording, and
+    approve it, so the voice speaks by the character's name. The checks come first, then the clip, which takes the model
+    worker; nothing is saved unless the clip makes a voice recording the speaking model takes."""
+    engines, cast = lab.engines, lab.cast
+    if not isinstance(req, dict):
+        raise ValueError("Send a JSON object.")
+    name = _text(req, "name", 80, required=True)
+    words = _text(req, "voice_description", MAX_DESIGN_WORDS, required=True)
+    line = _text(req, "text", MAX_DESIGN_LINE) or DESIGN_LINE
+    designer = req.get("engine", engine_adapters.DEFAULT_DESIGNER)
+    designers = sorted(DESIGNERS & engines.api_entries.keys())
+    if designer not in designers:
+        raise ValueError("engine must be a model that designs voices: " + ", ".join(designers) + ".")
+    if not voice_names.model_installed(engines, designer):
+        raise NotInstalled(voice_names.not_installed(engines.api_entries[designer]))
+    speaker = design_speaker(engines, designer, req.get("clone_engine"))
+    if _name_taken(cast, name):
+        raise NameTaken(_taken_sentence(name))
+    design = {"engine": designer, "mode": "design", "text": line, "voice_description": words}
+    for key in ("language", "seed"):
+        if key in req:
+            design[key] = req[key]
+    samples, rate, info = engines.speak(design)
+    audio = synthetic_label.wav_bytes(samples, rate, engine_id=designer)
+    made = design_provenance(designer, info, engines.entries.get(designer, {}))
+    # The clip must be a voice recording the speaking model takes (its length, mainly) before anything is kept.
+    decoded, source_rate, seconds, _ = cast._decode_audio(audio, "designed-voice.wav")
+    cast._make_reference(decoded, source_rate, seconds, {}, REFERENCE_POLICIES[speaker]["max_seconds"], speakers=cast.speakers)
+    with lock:
+        if _name_taken(cast, name):  # another request took it while the clip was made
+            raise NameTaken(_taken_sentence(name))
+        character = cast.create_character(name, "")
+        try:
+            notes = f"Designed from words with {_model_name(engines, designer)}: {words}"
+            identity = cast.create_identity(character["id"], speaker, DESIGN_LABEL, {}, notes[:2000])
+            reference = cast.add_reference(
+                identity["id"],
+                "designed-voice.wav",
+                audio,
+                transcript=line,
+                origin=made["origin"],
+                allowed_use=made["allowed_use"],
+            )
+            cast.update_identity(identity["id"], {"status": "approved", "reference_version_id": reference["id"]})
+        except BaseException:
+            _discard(cast, character["id"])
+            raise
+    voice = next(
+        item for item in voice_names.public(voice_names.list_voices(cast, engines)) if item.get("identity_id") == identity["id"]
+    )
+    return {
+        "voice": voice,
+        "character_id": character["id"],
+        "reference_id": reference["id"],
+        "engine": designer,
+        "clone_engine": speaker,
+    }
+
+
+def _discard(cast, character_id):
+    """Take back a character made for a designed voice that could not be kept. Its failure is not the one to report."""
+    try:
+        cast.retire("character", character_id, reason="Its designed voice could not be kept.")
+        cast.purge("character", character_id, reason="Its designed voice could not be kept.", confirm=True)
+    except Exception:
+        pass
 
 
 def add_voice(engines, cast, character_id, req):
@@ -172,6 +313,13 @@ def register(router, lab):
     @router.post("/api/characters")
     def create_character(self, parsed, req):
         self._json(201, {"character": cast.create_character(req.get("name"), req.get("description", ""), req.get("tags"))})
+
+    design_lock = Lock()
+
+    @router.post("/api/characters/from-design")
+    def character_from_design(self, parsed, req):
+        self._note(engine=req.get("engine", engine_adapters.DEFAULT_DESIGNER) if isinstance(req, dict) else None)
+        self._json(201, design_character(lab, req, design_lock))
 
     @router.post("/api/characters/{character_id}")
     def update_character(self, parsed, req, character_id):

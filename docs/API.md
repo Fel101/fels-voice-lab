@@ -264,6 +264,20 @@ Say whether the service is ready, and which version it is.
 
 **Answer:** `200`, JSON. `status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` (`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, fels_suite.py).
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `status` | string |
+| `busy` | boolean |
+| `version` | string |
+| `app` | string |
+| `lab_id` | string |
+| `fels.contract` | integer |
+| `fels.app` | string |
+| `fels.version` | string |
+| `fels.api` | integer |
+
 <a id="get-api-info"></a>
 
 #### `GET /api/info`
@@ -412,6 +426,12 @@ Unload every engine and free the GPU.
 
 **Answer:** `200`, JSON. `{"ok": true}`.
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `ok` | boolean |
+
 | Also answers | When |
 |---|---|
 | `409` | A scene batch is being spoken with a model on the graphics card, from its first line to its last, or the worker has other work: `doing` says what the Lab is doing, as the end of "Voice Lab is ..." (`speaking a scene, 12 of 40 lines`), and `code` is `busy`; or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
@@ -516,6 +536,25 @@ List every voice a program can speak with by name.
 
 **Answer:** `200`, JSON. `voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `voices[].name` | string |
+| `voices[].aliases` | string[] |
+| `voices[].kind` | string |
+| `voices[].model` | string |
+| `voices[].model_name` | string |
+| `voices[].label` | string |
+| `voices[].languages` | string[] |
+| `voices[].takes_direction` | boolean |
+| `voices[].ready` | boolean |
+| `voices[].why_not` | string\|null |
+| `voices[].character` | string |
+| `voices[].identity_id` | string |
+| `voices[].status` | string |
+| `voices[].voice_id` | string |
+
 A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.
 
 <a id="post-api-speak"></a>
@@ -544,6 +583,8 @@ Speak text with one engine and answer with the finished WAV file.
 | `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, `audio/wav`. The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is finished; there is no streaming and no partial answer. Other engine-specific fields are listed under each engine's `capabilities` in `GET /api/catalog`.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 
 | Answer header | Meaning |
 |---|---|
@@ -622,6 +663,8 @@ Speak a line as a Cast voice, and save it as a take unless asked not to.
 | `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
 
 **Answer:** `200`, `audio/wav`. The clip's 16-bit WAV file, in one response. The call blocks until the clip is finished, and saved when kept.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 
 | Answer header | Meaning |
 |---|---|
@@ -703,6 +746,8 @@ Speak text as OpenAI's speech API does, in one of the Lab's voices.
 | `wait_seconds` | number | How long to wait in line while the model worker is busy, at most 3600. Default 600 here, since apps send a reply sentence by sentence. |
 
 **Answer:** `200`, audio. The clip in the format asked for: `audio/mpeg`, `audio/ogg`, `audio/aac`, `audio/flac`, `audio/wav` or `audio/pcm`. Every format with room for it carries the AI-generated label; `pcm` and `aac` have none. No take is kept.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 
 | Answer header | Meaning |
 |---|---|
@@ -795,6 +840,7 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 | POST | [`/api/inbox/{inbox_file}/dismiss`](#post-api-inbox-inbox_file-dismiss) | Send a waiting file to the Recycle Bin without importing it. |
 | GET | [`/api/cast`](#get-api-cast) | List every character with its voices and their recordings. |
 | POST | [`/api/characters`](#post-api-characters) | Create a character. |
+| POST | [`/api/characters/from-design`](#post-api-characters-from-design) | Design a voice from words and keep it as a new character's voice, ready to speak by the character's name. |
 | POST | [`/api/characters/{character_id}`](#post-api-characters-character_id) | Rename a character or change its description. |
 | POST | [`/api/characters/{character_id}/identities`](#post-api-characters-character_id-identities) | Add a voice to a character. |
 | POST | [`/api/identities/{identity_id}/update`](#post-api-identities-identity_id-update) | Rename a voice, change its notes or Kokoro voice, or approve or reject it. |
@@ -930,6 +976,63 @@ Create a character.
 
 **Answer:** `201`, JSON. `character`, as in `GET /api/cast`.
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `character.id` | string |
+| `character.name` | string |
+| `character.description` | string |
+| `character.tags` | string[] |
+| `character.identities` | array |
+
+<a id="post-api-characters-from-design"></a>
+
+#### `POST /api/characters/from-design`
+
+Design a voice from words and keep it as a new character's voice, ready to speak by the character's name.
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `name` (required) | string | The new character's name, 1 to 80 characters. The voice is called by it. |
+| `voice_description` (required) | string | The voice to invent, in words, up to 1000 characters: `A warm, low voice, unhurried and a little hoarse.` |
+| `text` | string | The sample line the voice is designed with, up to 400 characters, which becomes its voice recording with these words as the transcript. Default: a short English line. |
+| `engine` | string | The model that designs the voice: `qwen3-tts-1.7b-voice-design` (the default), `voxcpm2` or `breeze-tts-2`. |
+| `clone_engine` | string | The model that speaks the voice afterwards, from its recording. Default, for a Qwen design: the first installed of Qwen3-TTS 1.7B Base, 0.6B Base, Chatterbox Turbo, VoxCPM2 and Chatterbox 500M; for the others, the design model itself. |
+| `language` | string | Qwen VoiceDesign: the language of the sample line. Default `English`. |
+| `seed` | integer | The design's random seed. Default 42. |
+| `wait_seconds` | number | Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`. |
+| `wait_priority` | string | `normal` (the default), or `low` to wait behind the others, as a scene batch's lines do. |
+
+**Answer:** `201`, JSON. `voice`: the new voice as `GET /api/voices` lists it, with `ready` true and `name`, the character's name; `character_id`; `reference_id`, its recording; `engine`, the model that designed it; and `clone_engine`, the one that speaks it.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `voice.name` | string |
+| `voice.aliases` | string[] |
+| `voice.kind` | string |
+| `voice.model` | string |
+| `voice.character` | string |
+| `voice.identity_id` | string |
+| `voice.status` | string |
+| `voice.ready` | boolean |
+| `voice.why_not` | string\|null |
+| `character_id` | string |
+| `reference_id` | string |
+| `engine` | string |
+| `clone_engine` | string |
+
+| Also answers | When |
+|---|---|
+| `500` | The model is installed but could not load or run; `error` says what it reported. |
+| `503` | The design model, or the model that speaks the voice afterwards, is not installed (`model_not_installed`): `error` says which. |
+| `409` | A character of that name is in the Cast already (`already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when. |
+| `499` | The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran. |
+
+One call does what the page does when a designed clip is kept as a Cast voice: the design model speaks the sample line, the clip is kept as the voice's recording with its origin and allowed use (the design model's terms, as for `save_voice_as`), and the voice is approved. It then sounds the same in every clip, through `POST /v1/audio/speech`, `POST /api/speak` or `POST /api/performance`, by its name. Nothing is saved when the design fails. The first call loads the design model, which can take minutes: send `wait_seconds`. A voice saved with `save_voice_as` of `POST /api/speak` is a recording under `data/voices`, not a Cast voice.
+
 <a id="post-api-characters-character_id"></a>
 
 #### `POST /api/characters/{character_id}`
@@ -969,6 +1072,17 @@ Add a voice to a character.
 
 **Answer:** `201`, JSON. `identity`. A new voice is a `candidate` until it is approved.
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `identity.id` | string |
+| `identity.engine_id` | string |
+| `identity.label` | string |
+| `identity.status` | string |
+| `identity.kind` | string |
+| `identity.references` | array |
+
 A cloning voice has no recording yet: upload one with [`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references).
 
 <a id="post-api-identities-identity_id-update"></a>
@@ -991,6 +1105,15 @@ Rename a voice, change its notes or Kokoro voice, or approve or reject it.
 
 **Answer:** `200`, JSON. `identity`.
 
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `identity.id` | string |
+| `identity.status` | string |
+| `identity.approved_reference_id` | string\|null |
+| `identity.references[].id` | string |
+
 Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another approved voice of the same character and engine back to `candidate`.
 
 <a id="post-api-identities-identity_id-references"></a>
@@ -1005,7 +1128,27 @@ Upload a recording for a cloning voice and save it as a voice recording.
 
 **Request:** the recording's bytes, and an `X-Reference-Metadata` header.
 
+| `X-Reference-Metadata` field | Type | Meaning |
+|---|---|---|
+| `filename` | string | The recording's file name; its ending says the format. Default `reference.wav`. |
+| `transcript` | string | The exact words spoken in it, up to 1200 characters. Models that clone with the words need them. |
+| `origin` (required) | string | Where the recording came from, up to 1000 characters. |
+| `allowed_use` (required) | string | Who may use it, and for what, up to 1000 characters. |
+| `edits` | object | Trim, sample rate, channel and noise reduction, as `POST /api/references/{reference_id}/versions` takes them. |
+
 **Answer:** `201`, JSON. `reference`: the saved version with its quality readings and `audio_url`.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `reference.id` | string |
+| `reference.version` | integer |
+| `reference.transcript` | string |
+| `reference.origin` | string |
+| `reference.allowed_use` | string |
+| `reference.duration_seconds` | number |
+| `reference.audio_url` | string |
 
 | Also answers | When |
 |---|---|
@@ -2407,7 +2550,18 @@ Create a portable archive.
 | `author` | string | Optional name of the voice-file author. |
 | `permission` | boolean | Confirm permission to share a cloned voice and its recording. |
 
-**Answer:** `201`, JSON. An archive with a local ZIP download URL.
+**Answer:** `201`, JSON. `archive`: its `id`, `kind`, `files` (how many it holds) and `download`, the path of `GET /api/portable/{delivery_id}.zip` that answers it.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `archive.id` | string |
+| `archive.kind` | string |
+| `archive.files` | integer |
+| `archive.download` | string |
+
+A voice file (`persona`) carries the voice's approved recording and a short take of it as an audition: make one with `POST /api/performance` first, or the export says so. A voice designed from words needs no `permission`; one cloned from a person's recording does.
 
 <a id="post-api-portable-preview"></a>
 
@@ -2417,7 +2571,22 @@ Verify a portable ZIP without importing it.
 
 **Request:** file bytes (`application/octet-stream`).
 
-**Answer:** `200`, JSON. Source voices, included assets, and archive SHA-256.
+**Answer:** `200`, JSON. `archive`: its `kind`, `title`, `author`, `voices` (each with `label`, `engine_id`, `kind`, `model_installed`, and for a voice with a recording its `sample`: `source_type` (`designed` or `recording`), `origin`, `allowed_use` and `transcript`), `assets` and `archive_sha256`, which the import needs.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `archive.kind` | string |
+| `archive.title` | string |
+| `archive.voices[].label` | string |
+| `archive.voices[].engine_id` | string |
+| `archive.voices[].kind` | string |
+| `archive.voices[].model_installed` | boolean |
+| `archive.voices[].sample.source_type` | string |
+| `archive.voices[].sample.origin` | string |
+| `archive.voices[].sample.allowed_use` | string |
+| `archive.archive_sha256` | string |
 
 <a id="post-api-portable-voice-preview"></a>
 
@@ -2439,9 +2608,30 @@ Play a verified archive voice sample without importing.
 
 Import the exact portable ZIP previewed locally.
 
-**Request:** file bytes (`application/octet-stream`).
+**Request:** file bytes (`application/octet-stream`), and an `X-Reference-Metadata` header.
 
-**Answer:** `201`, JSON. New project or candidate IDs. Send X-Reference-Metadata with base64url JSON containing archive_sha256, voices, permission and include_media.
+| `X-Reference-Metadata` field | Type | Meaning |
+|---|---|---|
+| `archive_sha256` (required) | string | The `archive_sha256` of `POST /api/portable/preview` for these exact bytes. |
+| `permission` | boolean | True once the person has seen the recording's origin and allowed use; needed for a voice that carries a recording. |
+| `character_id` | string | A voice file: add the voice to this character instead of a new one. |
+| `archive_voice_id` | string | A project archive: import only this one of its voices. |
+| `voices` | object | A project archive: which Cast voice speaks for each of its voices. |
+| `include_media` | boolean | A project archive: also import its cover and other files. |
+| `import_voice_samples` | boolean | A project archive: also import its voices' recordings. |
+
+**Answer:** `201`, JSON. `imported`: for a voice file, `kind` (`persona`) and `identity`, the new voice as in `GET /api/cast`, a `candidate` until it is approved; for a project, the new project's ids.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
+
+| Answer field | Type |
+|---|---|
+| `imported.kind` | string |
+| `imported.identity.id` | string |
+| `imported.identity.status` | string |
+| `imported.identity.references[].id` | string |
+
+Send the file's bytes as the body, and the fields below as base64url-encoded JSON in the `X-Reference-Metadata` header.
 
 <a id="get-api-portable-delivery_id-zip"></a>
 
@@ -2454,6 +2644,8 @@ Read a portable ZIP.
 | `delivery_id` | A saved delivery or audition ID. |
 
 **Answer:** `200`, a file. The generated local archive.
+
+**Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 
 <a id="post-api-audio-tools-sound"></a>
 
@@ -3301,7 +3493,9 @@ Every route `serve.py` answers is a row in `api_spec.py`, either documented or m
 dispatch is built from that table (`routes.py`): `serve.py` registers one function for each row and will not start with a row
 that no function answers, or a function for a route with no row. A path parameter is matched with the pattern the table gives
 it. `tests/test_api_docs.py` checks the same, that a request made from each row's examples reaches that row, and that
-`openapi.json` and the reference above are what the table gives. After you change the table, write both again:
+`openapi.json` and the reference above are what the table gives. The routes marked "Suite API 1" also keep their fields in
+`tests/suite_api_1.json`, and `tests/test_suite_api.py` fails when one changes
+([For Fel's other apps](CONNECT.md#for-fels-other-apps)). After you change the table, write them again:
 
 ```powershell
 .venv\Scripts\python.exe tools\build_api_docs.py

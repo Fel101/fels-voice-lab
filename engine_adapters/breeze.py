@@ -32,6 +32,7 @@ class Breeze(Adapter):
     takes_transcript = True
     takes_direction = True
     saves_designs = True
+    design_speakers = ("breeze-tts-2",)  # it clones its own designs
     acted_markup = "round"  # it acts (laugh), (sigh) and (cough) instead of saying them (word_timing.py)
     languages = frozenset({"English"})  # Only English has been verified on the local service path.
     # Its documentation says Chinese was checked locally (the language matrix).

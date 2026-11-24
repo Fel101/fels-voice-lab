@@ -184,6 +184,10 @@ class QwenVoiceDesign(Qwen):
     engine_id = "qwen3-tts-1.7b-voice-design"
     mode = "design"
     saves_designs = True  # a design take, or stream, may be kept as a voice recording (save_voice_as)
+    # It clones nothing, so the Base checkpoints speak its designs, as on the page (voice_workflows.js); else another
+    # installed model whose clips anyone may use: Chatterbox (MIT) or VoxCPM2 (Apache-2.0). Never Breeze (non-commercial)
+    # or Drama 3 (conditions; it clones on the CPU only) unasked.
+    design_speakers = ("qwen3-tts-1.7b-base", "qwen3-tts-0.6b-base", "turbo", "voxcpm2", "orig")
 
     def check_mode_request(self, req):
         if not str(req.get("voice_description", "")).strip():

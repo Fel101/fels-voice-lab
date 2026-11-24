@@ -8,7 +8,8 @@
     "license": {
       "name": "MIT",
       "identifier": "MIT"
-    }
+    },
+    "x-fels-suite-api": 1
   },
   "servers": [
     {
@@ -82,13 +83,48 @@
         "tags": [
           "Service"
         ],
+        "x-fels-suite-api": 1,
         "responses": {
           "200": {
             "description": "`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` (`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, fels_suite.py).",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "busy": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "app": {
+                      "type": "string"
+                    },
+                    "lab_id": {
+                      "type": "string"
+                    },
+                    "fels": {
+                      "type": "object",
+                      "properties": {
+                        "contract": {
+                          "type": "integer"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "api": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -584,6 +620,7 @@
         "tags": [
           "Service"
         ],
+        "x-fels-suite-api": 1,
         "description": "The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more.",
         "requestBody": {
           "required": false,
@@ -611,7 +648,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               }
             }
@@ -896,6 +938,7 @@
         "tags": [
           "Speaking"
         ],
+        "x-fels-suite-api": 1,
         "description": "A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.",
         "responses": {
           "200": {
@@ -903,7 +946,68 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "voices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "model_name": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "languages": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "takes_direction": {
+                            "type": "boolean"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "why_not": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "character": {
+                            "type": "string"
+                          },
+                          "identity_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "voice_id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -921,6 +1025,7 @@
         "tags": [
           "Speaking"
         ],
+        "x-fels-suite-api": 1,
         "description": "Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and name it in the 400. To keep what you generate as a Cast take, use [`POST /api/performance`](#post-api-performance).",
         "requestBody": {
           "required": true,
@@ -1258,6 +1363,7 @@
         "tags": [
           "Speaking"
         ],
+        "x-fels-suite-api": 1,
         "description": "See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.",
         "requestBody": {
           "required": true,
@@ -1571,6 +1677,7 @@
         "tags": [
           "OpenAI-style"
         ],
+        "x-fels-suite-api": 1,
         "description": "Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.",
         "requestBody": {
           "required": true,
@@ -2284,6 +2391,7 @@
         "tags": [
           "Cast"
         ],
+        "x-fels-suite-api": 1,
         "requestBody": {
           "required": true,
           "content": {
@@ -2320,7 +2428,202 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "character": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "identities": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/characters/from-design": {
+      "post": {
+        "operationId": "post_api_characters_from_design",
+        "summary": "Design a voice from words and keep it as a new character's voice, ready to speak by the character's name.",
+        "tags": [
+          "Cast"
+        ],
+        "x-fels-suite-api": 1,
+        "description": "One call does what the page does when a designed clip is kept as a Cast voice: the design model speaks the sample line, the clip is kept as the voice's recording with its origin and allowed use (the design model's terms, as for `save_voice_as`), and the voice is approved. It then sounds the same in every clip, through `POST /v1/audio/speech`, `POST /api/speak` or `POST /api/performance`, by its name. Nothing is saved when the design fails. The first call loads the design model, which can take minutes: send `wait_seconds`. A voice saved with `save_voice_as` of `POST /api/speak` is a recording under `data/voices`, not a Cast voice.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The new character's name, 1 to 80 characters. The voice is called by it."
+                  },
+                  "voice_description": {
+                    "type": "string",
+                    "description": "The voice to invent, in words, up to 1000 characters: `A warm, low voice, unhurried and a little hoarse.`"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "The sample line the voice is designed with, up to 400 characters, which becomes its voice recording with these words as the transcript. Default: a short English line."
+                  },
+                  "engine": {
+                    "type": "string",
+                    "description": "The model that designs the voice: `qwen3-tts-1.7b-voice-design` (the default), `voxcpm2` or `breeze-tts-2`."
+                  },
+                  "clone_engine": {
+                    "type": "string",
+                    "description": "The model that speaks the voice afterwards, from its recording. Default, for a Qwen design: the first installed of Qwen3-TTS 1.7B Base, 0.6B Base, Chatterbox Turbo, VoxCPM2 and Chatterbox 500M; for the others, the design model itself."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Qwen VoiceDesign: the language of the sample line. Default `English`."
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "The design's random seed. Default 42."
+                  },
+                  "wait_seconds": {
+                    "type": "number",
+                    "description": "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead of the 409 answered at once without it. See `GET /api/queue`."
+                  },
+                  "wait_priority": {
+                    "type": "string",
+                    "description": "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."
+                  }
+                },
+                "required": [
+                  "name",
+                  "voice_description"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "`voice`: the new voice as `GET /api/voices` lists it, with `ready` true and `name`, the character's name; `character_id`; `reference_id`, its recording; `engine`, the model that designed it; and `clone_engine`, the one that speaks it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "voice": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "aliases": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "character": {
+                          "type": "string"
+                        },
+                        "identity_id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "why_not": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "reference_id": {
+                      "type": "string"
+                    },
+                    "engine": {
+                      "type": "string"
+                    },
+                    "clone_engine": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The model is installed but could not load or run; `error` says what it reported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The design model, or the model that speaks the voice afterwards, is not installed (`model_not_installed`): `error` says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A character of that name is in the Cast already (`already_exists`); or the model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, even with `wait_seconds`, and `holder` names that app, what it is doing and since when.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -2395,6 +2698,7 @@
         "tags": [
           "Cast"
         ],
+        "x-fels-suite-api": 1,
         "description": "A cloning voice has no recording yet: upload one with [`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references).",
         "requestBody": {
           "required": true,
@@ -2459,7 +2763,32 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "engine_id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "references": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2477,6 +2806,7 @@
         "tags": [
           "Cast"
         ],
+        "x-fels-suite-api": 1,
         "description": "Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another approved voice of the same character and engine back to `candidate`.",
         "requestBody": {
           "required": false,
@@ -2529,7 +2859,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "approved_reference_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2547,6 +2907,7 @@
         "tags": [
           "Cast"
         ],
+        "x-fels-suite-api": 1,
         "description": "Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, base64url-encoded JSON: `{\"filename\": \"nell.wav\", \"transcript\": \"...\", \"origin\": \"...\", \"allowed_use\": \"...\", \"edits\": {\"start_seconds\": 0.5, \"end_seconds\": 9.0, \"target_sample_rate\": 24000, \"channel\": \"mono\", \"noise_reduction\": {\"enabled\": false}}}`. `filename` sets the format; `edits` is optional. The saved reference is 0.5 to 60 seconds.",
         "requestBody": {
           "required": true,
@@ -2575,9 +2936,40 @@
             "name": "X-Reference-Metadata",
             "in": "header",
             "required": true,
-            "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and optional `edits`.",
+            "description": "Base64url-encoded JSON: `filename` (optional), `transcript` (optional), `origin`, `allowed_use`, `edits` (optional).",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "contentEncoding": "base64url",
+              "contentMediaType": "application/json",
+              "contentSchema": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "description": "The recording's file name; its ending says the format. Default `reference.wav`."
+                  },
+                  "transcript": {
+                    "type": "string",
+                    "description": "The exact words spoken in it, up to 1200 characters. Models that clone with the words need them."
+                  },
+                  "origin": {
+                    "type": "string",
+                    "description": "Where the recording came from, up to 1000 characters."
+                  },
+                  "allowed_use": {
+                    "type": "string",
+                    "description": "Who may use it, and for what, up to 1000 characters."
+                  },
+                  "edits": {
+                    "type": "object",
+                    "description": "Trim, sample rate, channel and noise reduction, as `POST /api/references/{reference_id}/versions` takes them."
+                  }
+                },
+                "required": [
+                  "origin",
+                  "allowed_use"
+                ]
+              }
             }
           }
         ],
@@ -2587,7 +2979,35 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "reference": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        },
+                        "transcript": {
+                          "type": "string"
+                        },
+                        "origin": {
+                          "type": "string"
+                        },
+                        "allowed_use": {
+                          "type": "string"
+                        },
+                        "duration_seconds": {
+                          "type": "number"
+                        },
+                        "audio_url": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -5664,6 +6084,8 @@
         "tags": [
           "Production"
         ],
+        "x-fels-suite-api": 1,
+        "description": "A voice file (`persona`) carries the voice's approved recording and a short take of it as an audition: make one with `POST /api/performance` first, or the export says so. A voice designed from words needs no `permission`; one cloned from a person's recording does.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5709,11 +6131,30 @@
         },
         "responses": {
           "201": {
-            "description": "An archive with a local ZIP download URL.",
+            "description": "`archive`: its `id`, `kind`, `files` (how many it holds) and `download`, the path of `GET /api/portable/{delivery_id}.zip` that answers it.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "archive": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "files": {
+                          "type": "integer"
+                        },
+                        "download": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -5731,6 +6172,7 @@
         "tags": [
           "Production"
         ],
+        "x-fels-suite-api": 1,
         "requestBody": {
           "required": true,
           "content": {
@@ -5744,11 +6186,61 @@
         },
         "responses": {
           "200": {
-            "description": "Source voices, included assets, and archive SHA-256.",
+            "description": "`archive`: its `kind`, `title`, `author`, `voices` (each with `label`, `engine_id`, `kind`, `model_installed`, and for a voice with a recording its `sample`: `source_type` (`designed` or `recording`), `origin`, `allowed_use` and `transcript`), `assets` and `archive_sha256`, which the import needs.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "archive": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "voices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "engine_id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "model_installed": {
+                                "type": "boolean"
+                              },
+                              "sample": {
+                                "type": "object",
+                                "properties": {
+                                  "source_type": {
+                                    "type": "string"
+                                  },
+                                  "origin": {
+                                    "type": "string"
+                                  },
+                                  "allowed_use": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "archive_sha256": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -5813,6 +6305,8 @@
         "tags": [
           "Production"
         ],
+        "x-fels-suite-api": 1,
+        "description": "Send the file's bytes as the body, and the fields below as base64url-encoded JSON in the `X-Reference-Metadata` header.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5824,13 +6318,94 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-Reference-Metadata",
+            "in": "header",
+            "required": true,
+            "description": "Base64url-encoded JSON: `archive_sha256`, `permission` (optional), `character_id` (optional), `archive_voice_id` (optional), `voices` (optional), `include_media` (optional), `import_voice_samples` (optional).",
+            "schema": {
+              "type": "string",
+              "contentEncoding": "base64url",
+              "contentMediaType": "application/json",
+              "contentSchema": {
+                "type": "object",
+                "properties": {
+                  "archive_sha256": {
+                    "type": "string",
+                    "description": "The `archive_sha256` of `POST /api/portable/preview` for these exact bytes."
+                  },
+                  "permission": {
+                    "type": "boolean",
+                    "description": "True once the person has seen the recording's origin and allowed use; needed for a voice that carries a recording."
+                  },
+                  "character_id": {
+                    "type": "string",
+                    "description": "A voice file: add the voice to this character instead of a new one."
+                  },
+                  "archive_voice_id": {
+                    "type": "string",
+                    "description": "A project archive: import only this one of its voices."
+                  },
+                  "voices": {
+                    "type": "object",
+                    "description": "A project archive: which Cast voice speaks for each of its voices."
+                  },
+                  "include_media": {
+                    "type": "boolean",
+                    "description": "A project archive: also import its cover and other files."
+                  },
+                  "import_voice_samples": {
+                    "type": "boolean",
+                    "description": "A project archive: also import its voices' recordings."
+                  }
+                },
+                "required": [
+                  "archive_sha256"
+                ]
+              }
+            }
+          }
+        ],
         "responses": {
           "201": {
-            "description": "New project or candidate IDs. Send X-Reference-Metadata with base64url JSON containing archive_sha256, voices, permission and include_media.",
+            "description": "`imported`: for a voice file, `kind` (`persona`) and `identity`, the new voice as in `GET /api/cast`, a `candidate` until it is approved; for a project, the new project's ids.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "identity": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "references": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -5848,6 +6423,7 @@
         "tags": [
           "Production"
         ],
+        "x-fels-suite-api": 1,
         "parameters": [
           {
             "name": "delivery_id",

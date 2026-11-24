@@ -22,6 +22,15 @@
   It is imported as a candidate only when you press **Import as candidate**, and the file then goes to the Recycle Bin.
   A file that fails a check is listed with the reason. [The Voice Slate guide](docs/RECORDER_BRIDGE.md).
 - **`GET /api/inbox`, `POST /api/inbox/{inbox_file}/import` and `POST /api/inbox/{inbox_file}/dismiss`** are new.
+- **Suite API 1.** The calls NPC Forge, Altera and other programs make to the Lab are one marked set, and keep their fields
+  until the suite API number goes up. The API guide marks them, `openapi.json` marks them with `x-fels-suite-api` and
+  describes their answers' fields, and `tests/suite_api_1.json` keeps them.
+  [For Fel's other apps](docs/CONNECT.md#for-fels-other-apps) gives the calls for four tasks.
+- **`POST /api/characters/from-design`** is new: it designs a voice from words and keeps it as a new character's voice,
+  approved and ready to speak by the character's name, in one call.
+- **`tools/suite_api_check.py`** runs those four tasks against a running Lab and says whether each one works.
+- **The API guide** lists the `X-Reference-Metadata` fields of a recording's upload and of `POST /api/portable/import`,
+  and what the voice-file routes answer.
 
 ## 0.4.0 — 2026-11-18
 

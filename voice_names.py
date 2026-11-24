@@ -32,7 +32,8 @@ def identity_languages(identity, adapter):
     return sorted(adapter.languages) if adapter is not None and adapter.languages else ["English"]
 
 
-def _not_installed(entry):
+def not_installed(entry):
+    """The sentence of a voice whose model is not installed: what to press to install it."""
     return f"{entry.get('name', entry['id'])} is not installed. Open Models & features and press Install on its card."
 
 
@@ -55,7 +56,7 @@ def cast_voices(characters, entries, installed):
             why = None
             missing = not installed(identity["engine_id"])
             if missing:
-                why = _not_installed(entry)
+                why = not_installed(entry)
             elif identity["kind"] == "reference":
                 recordings = {item["id"]: item for item in identity.get("references", [])}
                 approved_recording = recordings.get(identity.get("approved_reference_id"))
@@ -104,7 +105,7 @@ def preset_voices(entries, installed, loaded_info=None):
                     "languages": list(voice["languages"]),
                     "takes_direction": bool(adapter.takes_direction),
                     "ready": ready,
-                    "why_not": None if ready else _not_installed(entry),
+                    "why_not": None if ready else not_installed(entry),
                     "_request": {"engine": model, **voice["request"]},
                     "_missing_model": not ready,
                 }
