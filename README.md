@@ -258,10 +258,9 @@ Browser mode, without the desktop window:
 
 Open `http://127.0.0.1:8765/`. Closing a browser tab does not stop a foreground service. The desktop
 window listens on the same address; when this Lab is already running there, started by `serve.bat`, the window opens on it
-and leaves it running when it closes. Other programs on this computer find the Lab there too: **Connect other apps** on
-**System & backups** shows the address, a command that tests it, the line that gives Claude Code, or another app that uses
-MCP, the Lab's voices, and the address for apps that use OpenAI's speech API ([connecting other apps](docs/CONNECT.md),
-[the API guide](docs/API.md)).
+and leaves it running when it closes. Open **System & backups → Connected apps → Connect other programs** for the Lab's
+address and test command, the settings for Claude Code and other MCP apps, and the address for apps that use OpenAI's
+speech API. See [connecting other apps](docs/CONNECT.md) and [the API guide](docs/API.md).
 Read [desktop and state behavior](docs/SETUP.md).
 
 ## Roadmap

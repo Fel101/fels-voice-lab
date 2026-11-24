@@ -9,6 +9,7 @@ from urllib.parse import parse_qs
 from app_version import APP_NAME, REPOSITORY, VERSION
 from common import LAB, ram_report
 import export_panel
+import fels_suite
 import housekeeping
 import lab_address
 import library_backup
@@ -132,6 +133,22 @@ def register(router, lab):
                 "openai_base": f"{url}/v1",
             },
         )
+
+    @router.get("/api/system/connected-apps")
+    def connected_apps(self, parsed, req):
+        apps = {}
+        for app in ("npc-forge", "altera"):
+            found = fels_suite.find_app(app)
+            health = found["health"]
+            version = None
+            if health is not None:
+                block = health.get("fels")
+                # The legacy Forge 1.0 health signature identifies its release without a version field.
+                version = block.get("version") if isinstance(block, dict) else "1.0.0"
+            # Unsuccessful discovery ends with a generic status that the page already shows in its own language.
+            notes = found["notes"] if found["url"] else found["notes"][:-1]
+            apps[app] = {"url": found["url"], "version": version, "notes": notes}
+        self._json(200, {"apps": apps, "suite_problem": fels_suite.suite_dir_problem()})
 
     @router.post("/api/system/connect/port")
     def connect_port(self, parsed, req):

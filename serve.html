@@ -178,6 +178,7 @@ pre { white-space:pre-wrap; }
 .install-dialog h3 { margin:0 0 8px; font-size:1.1rem; }
 .install-plan { max-height:min(55vh,520px); overflow:auto; } .install-plan p { max-width:80ch; }
 .connect-url { font-size:1.05rem; user-select:all; overflow-wrap:anywhere; } .connect-port { align-items:center; } .connect-port input { width:9ch; }
+.connected-apps-note { white-space:pre-line; overflow-wrap:anywhere; }
 .install-log { margin:12px 0; padding:8px 10px; height:16em; overflow:auto; font-size:.8rem; white-space:pre-wrap; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
 .table-wrap { overflow-x:auto; margin:12px 0; }
 .facts { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 18px; margin:14px 0; }
@@ -1013,7 +1014,22 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <dl class="facts" id="systemFacts"></dl>
 <div class="cast-actions"><button type="button" id="openLabFolder">{{ui:system.open_the_lab_s_folder}}</button></div>
 <p class="meta" id="openLabFolderStatus" role="status"></p>
-<h3>{{ui:system.connect_other_apps}}</h3>
+<section id="connectedApps" aria-labelledby="connectedAppsTitle">
+<h3 id="connectedAppsTitle">{{ui:system.connected_apps}}</h3>
+<button type="button" id="connectedAppsRefresh">{{ui:system.refresh_connections}}</button>
+<p id="connectedAppsStatus" class="meta" role="status"></p>
+<dl class="facts">
+<dt>{{ui:system.npc_forge_name}}</dt><dd>{{ui:system.forge_uses_lab_voices}} <span id="forgeConnection"></span> <code id="forgeAddress" hidden></code> <a id="forgeSetup" href="https://github.com/Fel101/fels-npc-forge#quick-start" target="_blank" rel="noopener noreferrer" hidden>{{ui:system.npc_forge_setup}}</a></dd>
+<dt>{{ui:system.altera_name}}</dt><dd>{{ui:system.altera_uses_lab_voices}} <span id="alteraConnection"></span> <code id="alteraAddress" hidden></code> <a id="alteraSetup" href="https://github.com/Fel101/Altera#start-in-five-minutes" target="_blank" rel="noopener noreferrer" hidden>{{ui:system.altera_setup}}</a></dd>
+<dt>{{ui:system.voice_slate_name}}</dt><dd>{{ui:system.slate_clips_wait}} <span id="connectedSlateCount"></span> <a href="#cast">{{ui:system.open_cast_library}}</a> · <a href="https://github.com/Fel101/fels-voice-slate" target="_blank" rel="noopener noreferrer">{{ui:system.get_voice_slate}}</a></dd>
+</dl>
+<details id="connectedAppsNotes" hidden><summary>{{ui:system.connection_details}}</summary>
+<p id="connectedAppsNotesText" class="meta connected-apps-note"></p>
+</details>
+<details id="connectedGpu"><summary>{{ui:system.gpu_details}}</summary>
+<p class="meta connected-apps-note" id="connectedGpuState">{{ui:system.checking_gpu}}</p>
+</details>
+<details id="connectSettings"><summary>{{ui:system.connect_other_programs}}</summary>
 <p class="meta">{{ui:system.while_the_lab_is_open}}</p>
 <p><code id="connectUrl" class="connect-url"></code></p>
 <p class="meta" id="connectNote" role="status" hidden></p>
@@ -1029,6 +1045,8 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <div class="cast-actions connect-port"><label for="connectPort">{{ui:system.port_for_the_lab_s}}</label><input type="number" id="connectPort" min="0" max="65535" step="1" inputmode="numeric"><button type="button" id="connectPortSave">{{ui:system.save}}</button></div>
 <p class="meta">{{ui:system.8765_is_where_other_programs}}</p>
 <p class="meta" id="connectPortStatus" role="status"></p>
+</details>
+</section>
 <h3>{{ui:system.updates}}</h3>
 <p class="meta" id="updateStatus" role="status">{{ui:system.this_is_version}} __APP_VERSION__.</p>
 <div class="cast-actions"><button type="button" id="updateCheck">{{ui:system.check_for_updates}}</button><button type="button" class="go" id="updateNow" hidden>{{ui:system.update_now}}</button><a id="updateRelease" href="#" target="_blank" rel="noopener noreferrer" hidden>{{ui:system.what_s_new_in_it}}</a></div>

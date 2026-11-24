@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from unittest import mock
 
@@ -20,6 +21,36 @@ import desktop  # noqa: E402
 import fels_suite  # noqa: E402
 import lab_address  # noqa: E402
 import serve  # noqa: E402
+
+
+def stand_in_app(case, health):
+    """A suite app serving its public health answer on a free port."""
+    payload = json.dumps(health).encode("utf-8")
+
+    class StandIn(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != "/api/health":
+                return self.send_error(404)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), StandIn)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def stop():
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    case.addCleanup(stop)
+    return f"http://127.0.0.1:{server.server_address[1]}"
 
 
 class HealthTests(unittest.TestCase):
@@ -80,6 +111,26 @@ class ConnectRouteTests(unittest.TestCase):
         status, _headers, raw = self.service.request("POST", "/api/system/connect/port", {"port": 80})
         self.assertEqual(status, 400)
         self.assertIn("1024 to 65535", json.loads(raw)["error"])
+
+    def test_discovery_reports_the_configured_folder_problem_and_legacy_forge(self):
+        self.enterContext(
+            mock.patch.dict(
+                os.environ,
+                {
+                    "FELS_SUITE_DIR": "relative",
+                    "LOCALAPPDATA": str(self.root),
+                    "XDG_STATE_HOME": str(self.root),
+                    "NPCFORGE_URL": "",
+                    "ALTERA_URL": "",
+                },
+            )
+        )
+        old_forge = json.loads((ROOT / "tests" / "suite_vectors.json").read_text("utf-8"))["answers"]["npc-forge-1.0.0"]
+        self.enterContext(mock.patch.object(fels_suite, "ask_health", {"http://127.0.0.1:8765": old_forge}.get))
+        answer = self.service.get_json("/api/system/connected-apps")
+        self.assertEqual(answer["apps"]["npc-forge"], {"url": "http://127.0.0.1:8765", "version": "1.0.0", "notes": []})
+        self.assertEqual(answer["apps"]["altera"], {"url": None, "version": None, "notes": []})
+        self.assertIn("which is not a full path", answer["suite_problem"])
 
 
 class JoiningTests(unittest.TestCase):

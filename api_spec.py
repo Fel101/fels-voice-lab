@@ -1336,7 +1336,7 @@ ROUTES = [
       body_kind="none", reply="`{\"ok\": true}`."),
     R("POST", "/api/system/open-folder", "Page helpers", "Show the Lab's folder in File Explorer.", internal=True,
       body_kind="none", reply="`folder`: the folder's path."),
-    R("GET", "/api/system/connect", "Page helpers", "Say where other programs reach this service, for Connect other apps.",
+    R("GET", "/api/system/connect", "Page helpers", "Say where other programs reach this service, for Connected apps.",
       internal=True,
       reply="`url` (this service), `known_url` (where programs look first), `note` (why this service is not there, or null), "
             "`in_address_file` (whether the address file names it), `address_file`, `window_port` (what the desktop window "
@@ -1344,6 +1344,9 @@ ROUTES = [
             "version, on GitHub), `mcp` (`name`, `claude_code`: the line that adds this Lab's MCP server to Claude Code, and "
             "`settings`: its `mcpServers` entry for other apps), `connect_guide` (docs/CONNECT.md of this version) and "
             "`openai_base` (the base address for apps that speak to OpenAI's speech API)."),
+    R("GET", "/api/system/connected-apps", "Page helpers", "Find NPC Forge and Altera in the order Fel's Studio uses.",
+      internal=True, reply="`apps` by app id, each with `url` and `version` (or null) and discovery `notes`. "
+                           "`suite_problem` is a note when the configured suite folder could not be used, otherwise null."),
     R("POST", "/api/system/connect/port", "Page helpers", "Choose the port the desktop window's service asks for, from the next "
                                                           "time the window opens.",
       internal=True, body=(F("port", "integer", "0 for any free port, or 1024 to 65535; 8765 is the default.", True),),

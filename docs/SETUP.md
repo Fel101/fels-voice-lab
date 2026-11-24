@@ -96,8 +96,8 @@ requirements in a separate environment, or, when nothing else has been installed
 again. Never replace working AMD/model pins by running a generic `pip install --upgrade`.
 
 The shortcut starts a dedicated window and a hidden backend on `127.0.0.1:8765`, or on a free port when another program
-has that one (**Connect other apps** on **System & backups** says so). **Port for the Lab's window** there changes the port,
-or sets 0 for any free port; it is kept in `desktop.local.json` and used the next time the window opens. Closing that window
+has that one. Open **System & backups → Connected apps → Connect other programs** to see the address. **Port for the Lab's
+window** changes the port or sets 0 for any free port. The window reads it from `desktop.local.json` the next time it opens. Closing that window
 cancels its work and stops its backend/children. Closing just an inner studio panel does not close the app. When this Lab
 is already running on the window's port with the same library, started by `serve.bat`, the window opens on that service
 instead of starting a second one, leaves it running when it closes, and closes itself if that service stops. A Lab of

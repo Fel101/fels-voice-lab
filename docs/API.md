@@ -3483,7 +3483,8 @@ These serve the Lab's own pages. They can change at any time and are not part of
 | GET | `/api/update/notice` | What the last update, undo or Update now left for the page to say. |
 | POST | `/api/update/notice/dismiss` | Forget the notice once the page has shown it. |
 | POST | `/api/system/open-folder` | Show the Lab's folder in File Explorer. |
-| GET | `/api/system/connect` | Say where other programs reach this service, for Connect other apps. |
+| GET | `/api/system/connect` | Say where other programs reach this service, for Connected apps. |
+| GET | `/api/system/connected-apps` | Find NPC Forge and Altera in the order Fel's Studio uses. |
 | POST | `/api/system/connect/port` | Choose the port the desktop window's service asks for, from the next time the window opens. |
 | GET | `/api/drama3/*` | Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its `audio`, `metadata` and `package`. |
 | GET | `/api/drama3/info` | The Drama runtime's capabilities, sources and jobs. |

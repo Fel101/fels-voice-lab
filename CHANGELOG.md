@@ -4,6 +4,9 @@
 
 ### Changed
 
+- **Connected apps.** Open **System & backups** to find NPC Forge and Altera, see how many Voice Slate clips are waiting
+  in Cast, and check who is using the graphics card. The Lab's address and copy buttons are under **Connect other programs**.
+
 - **Licence badges.** Cast voices and takes show the stricter of the model's licence and the saved recording's allowed
   use. Rate each recording version in **Edit voice**. `GET /api/voices`, Cast and take responses, and export manifests
   include the rating and reason. `POST /api/identities/{identity_id}/update` can save the recording's rating.

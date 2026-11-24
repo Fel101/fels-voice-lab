@@ -4,8 +4,8 @@ Fel's Voice Lab can be the voice of other programs on this computer: an assistan
 uses MCP, apps that can use OpenAI's speech API with another server, the command-line tool, and your own scripts. Everything stays on this computer. Programs on other computers cannot
 reach the Lab, and a web page from another site cannot use it.
 
-In the Lab, **System & backups** has **Connect other apps**. It shows the lines on this page with this computer's real paths,
-each with a Copy button, so nothing needs typing.
+In the Lab, open **System & backups → Connected apps → Connect other programs**. It shows the lines on this page with this
+computer's real paths, each with a Copy button, so nothing needs typing.
 
 [Claude Code](#claude-code) · [Other MCP apps](#other-mcp-apps) · [What the tools do](#what-the-tools-do) ·
 [When the Lab is closed](#when-the-lab-is-closed) · [Apps that use OpenAI's speech API](#apps-that-use-openais-speech-api) ·
@@ -14,7 +14,7 @@ each with a Copy button, so nothing needs typing.
 
 ## Claude Code
 
-1. In the Lab, open **System & backups** and press **Copy the Claude Code line** under **Connect other apps**.
+1. Under **Connect other programs**, press **Copy the Claude Code line**.
 2. Paste it into a command window (PowerShell or Command Prompt) and press Enter. It looks like this, with your paths:
 
    ```powershell
@@ -101,7 +101,7 @@ and a service it started writes `service.log` in the server's folder under `out\
 Many chat and assistant apps can send text to any server that answers like OpenAI's speech API. The Lab answers that way,
 on this computer:
 
-1. In the Lab, press **Copy the OpenAI-style address** under **Connect other apps**. It is `http://127.0.0.1:8765/v1`
+1. In the Lab, press **Copy the OpenAI-style address** under **Connect other programs**. It is `http://127.0.0.1:8765/v1`
    unless the Lab is on another port.
 2. In the app's speech settings, choose OpenAI (or "OpenAI-compatible"), paste the address as the base address (API base
    URL), and type any key: the Lab does not check it.
@@ -165,6 +165,10 @@ Fel's Voice Lab is one of four free apps that work together: Fel's Voice Slate r
 characters, and Fel's Altera is a companion to chat with. They find each other through one folder for this Windows user,
 the **suite folder**, and never read each other's own folders.
 
+**Connected apps** shows the version and address of NPC Forge and Altera when they answer. Start either app and choose
+**Refresh connections** to check again. **Open Cast library** takes you to the Voice Slate clips waiting to be reviewed.
+Open **GPU details** to see which app is using the card, what it is doing, and when it started.
+
 - **Where it is:** `%LOCALAPPDATA%\Fels`. To keep it somewhere else, such as another drive, set the `FELS_SUITE_DIR`
   environment variable to a full path once, then start the apps again:
 
@@ -172,8 +176,8 @@ the **suite folder**, and never read each other's own folders.
   setx FELS_SUITE_DIR D:\Fels
   ```
 
-  If that folder cannot be made, for example because its drive is gone, the apps use the usual folder and the Lab's log
-  says so.
+  If that folder cannot be made, for example because its drive is gone, the apps use the usual folder. The Lab shows the
+  reason under **Connected apps → Connection details** and writes it to the log.
 - **`apps\voice-lab.json`** names the running Lab: its address (`url`), `version`, `api` number and process (`pid`). The Lab
   writes it when its service starts and removes it when it stops; a file whose process has gone is ignored. The Lab's own
   address file stays too, for tools from 0.4.0.

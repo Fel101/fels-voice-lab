@@ -171,12 +171,15 @@
     light.title = shown.details;
     if (el('gpuLightText')) el('gpuLightText').textContent = shown.text;
     if (el('gpuLightDetails')) el('gpuLightDetails').textContent = shown.details ? ' ' + shown.details : '';
+    var panelState = el('connectedGpuState');
+    if (panelState) panelState.textContent = shown.details || shown.text
+      || LabText.t(state ? 'system.lab_runs_on_cpu' : 'system.could_not_check_gpu');
   }
   // Every four seconds while the page is in sight.
   function pollGpu() {
     if (global.document && global.document.hidden) { setTimeout(pollGpu, 2000); return; }
     send.call(global, '/api/gpu').then(function (response) { return response.ok ? response.json() : null; })
-      .then(renderGpu).catch(function () {})
+      .then(renderGpu).catch(function () { renderGpu(null); })
       .then(function () { setTimeout(pollGpu, 4000); });
   }
 

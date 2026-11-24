@@ -65,7 +65,10 @@ SHARED_NAMES = {
     "studio.top_k",
     "studio.top_p",
     "studio.voxcpm2",
+    "system.altera_name",
     "system.ffmpeg",
+    "system.npc_forge_name",
+    "system.voice_slate_name",
 }
 
 

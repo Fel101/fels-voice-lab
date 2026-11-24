@@ -10119,6 +10119,7 @@
     "GET /api/references",
     "GET /api/scenes/{scene_id}/preview",
     "GET /api/system/connect",
+    "GET /api/system/connected-apps",
     "GET /api/update/notice",
     "GET /api/updates",
     "GET /api/voice-library",

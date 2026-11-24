@@ -711,7 +711,10 @@ folder** shows the Lab's folder in File Explorer.
 or feature request, **Show the report** lets you review the exact text before copying it. The report counts your saved work
 and says whether local app connections, provider profiles and speech recognition are set up.
 
-**Connect other apps** shows the address where programs on this computer, such as your own scripts, can make the Lab speak
+**Connected apps** shows the version and address of NPC Forge and Altera, the Voice Slate clips waiting in Cast, and who
+is using the graphics card. After starting Forge or Altera, choose **Refresh connections** to check again.
+
+**Connect other programs** shows the address where programs on this computer, such as your own scripts, can make the Lab speak
 while it is open: `http://127.0.0.1:8765` unless another program has that port, and then it says why and which port the Lab
 took. **Copy the address** and **Copy the test command** put them on the clipboard; the test command, pasted into a command
 window, prints the Lab's health. Programs on other computers cannot reach it. **Copy the Claude Code line** copies the

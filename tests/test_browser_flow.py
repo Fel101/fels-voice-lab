@@ -1252,6 +1252,69 @@ class ModelHelpPageTests(unittest.TestCase):
 
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
+class ConnectedAppsPageTests(unittest.TestCase):
+    def test_system_shows_verified_apps_the_slate_count_and_gpu_details(self):
+        import fels_suite
+        from tests.test_connect import stand_in_app
+        from tests.test_inbox import contract_clip
+
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True)))
+        environ = {"FELS_SUITE_DIR": str(root / "suite"), "NPCFORGE_URL": "", "ALTERA_URL": ""}
+        self.enterContext(mock.patch.dict(os.environ, environ))
+        # All test services listen on free ports. Keep any apps running on this computer out of the test.
+        self.enterContext(mock.patch.dict(fels_suite.APPS, {
+            app: {**fels_suite.APPS[app], "port": None, "old_ports": ()} for app in ("npc-forge", "altera")
+        }))
+        server = FlowServer(root)
+        self.addCleanup(server.close)
+        forge = stand_in_app(self, {"fels": fels_suite.health_block("npc-forge", "1.1.2", 45), "online": False})
+        altera = stand_in_app(self, {"fels": fels_suite.health_block("altera", "1.0.1", 1)})
+        fels_suite.write_address("npc-forge", forge, "1.1.0", 45, "forge", environ)
+        fels_suite.write_address("altera", altera, "1.0.0", 1, "altera", environ)
+        fels_suite.inbox_dir("voice-lab", environ, make=True)
+        fels_suite.inbox_write("voice-lab", "voice-slate", "Maya.voiceslate", contract_clip(), environ)
+        forge_gpu = {"app": "npc-forge", "name": "NPC Forge", "pid": os.getpid(), "what": "pictures",
+                     "since": "2026-11-23T16:10:00Z", "alone": True}
+        server.engines.gpu_state = lambda: {"device": "cpu", "held": False, "holders": [forge_gpu], "alone": forge_gpu}
+
+        page = DevToolsPage(BROWSER)
+        self.addCleanup(page.close)
+        page.open(server.base + "/#system")
+        page.wait_until("document.getElementById('forgeConnection').textContent.includes('1.1.2')")
+        self.assertEqual(page.evaluate("document.getElementById('forgeAddress').textContent"), forge)
+        self.assertTrue(page.evaluate("document.getElementById('forgeSetup').hidden"))
+        self.assertIn("1.0.1", page.evaluate("document.getElementById('alteraConnection').textContent"))
+        self.assertEqual(page.evaluate("document.getElementById('alteraAddress').textContent"), altera)
+        page.wait_until("document.getElementById('connectedSlateCount').textContent === '1 clip waiting.'")
+        page.wait_until("document.getElementById('connectedGpuState').textContent.includes('NPC Forge, alone: pictures')")
+
+        page.evaluate("document.querySelector('#connectedGpu summary').focus()")
+        page.press(" ", "Space", 32)
+        self.assertTrue(page.evaluate("document.getElementById('connectedGpu').open"))
+        self.assertIn("since", page.evaluate("document.getElementById('connectedGpuState').textContent"))
+        self.assertTrue(page.evaluate("document.getElementById('connectSettings').matches(':not([open])')"))
+        page.screenshot("connected-apps", "#connectedApps")
+
+        fels_suite.remove_address("npc-forge", environ)
+        # A live address that really serves a different app must not be displayed as Altera.
+        fels_suite.write_address("altera", server.base, "1.0.0", 1, "altera", environ)
+        page.evaluate("document.getElementById('connectedAppsRefresh').focus()")
+        page.press(" ", "Space", 32)
+        page.wait_until("!document.getElementById('forgeSetup').hidden && !document.getElementById('alteraSetup').hidden")
+        self.assertTrue(page.evaluate("document.getElementById('forgeAddress').hidden && document.getElementById('alteraAddress').hidden"))
+        for app, words in (("forge", "game character dialogue"), ("altera", "spoken replies from your companions")):
+            self.assertIn(words, page.evaluate(f"document.getElementById('{app}Connection').parentElement.textContent"))
+            self.assertIn("Start the app", page.evaluate(f"document.getElementById('{app}Connection').textContent"))
+            self.assertIn("https://github.com/Fel101/", page.evaluate(f"document.getElementById('{app}Setup').href"))
+        server.engines.gpu_state = lambda: {"device": "cpu", "held": False, "holders": [], "alone": None}
+        page.wait_until("document.getElementById('connectedGpuState').textContent.includes('runs on the CPU')")
+        page.screenshot("connected-apps-offline", "#connectedApps")
+        page.click('#connectedApps a[href="#cast"]')
+        page.wait_until("!document.getElementById('slateInbox').hidden && window.location.hash === '#cast'")
+        self.assertEqual(page.problems, [])
+
+
+@unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class InboxPageTests(unittest.TestCase):
     """Voice Slate's Send to Voice Lab puts a clip in the suite's inbox (contract 6). The Cast page shows it within ten seconds
     of getting focus and imports it only when the person presses Import; a refused file can only be dismissed."""
@@ -1291,6 +1354,7 @@ class InboxPageTests(unittest.TestCase):
                                  "2 files waiting in the inbox")
                 self.assertEqual(page.evaluate("document.getElementById('inboxNavCount').textContent"),
                                  "2, 2 files waiting in the inbox")
+                self.assertEqual(page.evaluate("document.getElementById('connectedSlateCount').textContent"), "1 clip waiting.")
                 item = f'#slateInboxList li[data-name="{clip.name}"]'
                 refused = f'#slateInboxList li[data-name="{wrong.name}"]'
                 self.assertIn("The lantern swung once", page.evaluate(f"document.querySelector('{item}').textContent"))
@@ -1316,6 +1380,7 @@ class InboxPageTests(unittest.TestCase):
                 self.assertEqual(page.evaluate("document.getElementById('slateImportForm').closest('li')"), None)
                 self.assertEqual(page.evaluate("document.getElementById('slateInboxTitle').textContent"),
                                  "1 file waiting in the inbox")
+                self.assertEqual(page.evaluate("document.getElementById('connectedSlateCount').textContent"), "0 clips waiting.")
 
                 page.evaluate(f"document.querySelector('{refused} button').focus()")  # as a real click or the keyboard leaves it
                 page.click(f"{refused} button")

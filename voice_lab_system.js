@@ -437,6 +437,37 @@ function saveConnectPort(){
     systemNote('connectPortStatus',(result.window_port===0 ? LabText.t('system.window_free_port') : LabText.t('system.window_specific_port', {port: result.window_port})),false);
   }).catch(function(e){systemNote('connectPortStatus',e.message,true);});
 }
+// Discovery runs separately from the Lab's own address and copy buttons.
+var connectedAppsRequest = null;
+function renderConnectedApp(prefix, app) {
+  var address = $(prefix+'Address');
+  var setup = $(prefix+'Setup');
+  address.textContent = app?.url || '';
+  address.hidden = !app?.url;
+  setup.hidden = !!app?.url;
+  $(prefix+'Connection').textContent = app?.url
+    ? (app.version ? LabText.t('system.connected_version', {version: app.version}) : LabText.t('system.connected'))
+    : app ? LabText.t('system.start_app_to_connect') : '';
+}
+function refreshConnectedApps() {
+  if (connectedAppsRequest) return connectedAppsRequest;
+  systemNote('connectedAppsStatus', LabText.t('system.checking_connected_apps'), false);
+  connectedAppsRequest = fetchJson('/api/system/connected-apps').then(function (answer) {
+    renderConnectedApp('forge', answer.apps['npc-forge']);
+    renderConnectedApp('altera', answer.apps.altera);
+    var notes = $('connectedAppsNotesText');
+    notes.textContent = [answer.suite_problem, ...Object.values(answer.apps).flatMap(function (app) { return app.notes; })]
+      .filter(Boolean).join('\n');
+    $('connectedAppsNotes').hidden = !notes.textContent;
+    systemNote('connectedAppsStatus', '', false);
+  }).catch(function () {
+    renderConnectedApp('forge', null);
+    renderConnectedApp('altera', null);
+    $('connectedAppsNotes').hidden = true;
+    systemNote('connectedAppsStatus', LabText.t('system.could_not_check_connected_apps'), true);
+  }).finally(function () { connectedAppsRequest = null; });
+  return connectedAppsRequest;
+}
 // Install speech recognition.
 var asrInstallTimer = null;
 async function refreshAsrInstall() {
@@ -473,7 +504,7 @@ $('systemAsrInstall').addEventListener('click', async function () {
     $('systemAsrState').textContent = error.message;
   }
 });
-function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall(),refreshAsrInstall(),refreshConnect()]);}
+function refreshSystemPage(){return Promise.all([refreshSystem(false),refreshBackups(),pollFfmpegInstall(),refreshAsrInstall(),refreshConnect(),refreshConnectedApps()]);}
 $('systemRefresh').addEventListener('click',function(){refreshSystemPage();});
 $('systemCopy').addEventListener('click',function(){copyDiagnostics();});
 $('systemFfmpegCheck').addEventListener('click',function(){refreshSystem(true);});
@@ -494,6 +525,7 @@ $('updateClose').addEventListener('click',closeUpdateNow);
 $('updateDialog').addEventListener('cancel',function(event){if(updateNowState.closing)event.preventDefault();});
 $('updateNoticeClose').addEventListener('click',dismissUpdateNotice);
 $('openLabFolder').addEventListener('click',openLabFolder);
+$('connectedAppsRefresh').addEventListener('click',refreshConnectedApps);
 $('connectCopy').addEventListener('click',function(){copyConnect('url');});
 $('connectCopyTest').addEventListener('click',function(){copyConnect('test');});
 $('connectCopyMcp').addEventListener('click',function(){copyConnect('mcp');});

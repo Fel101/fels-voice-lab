@@ -753,9 +753,10 @@ function removeInboxItem(name, focused) {
 }
 function showInboxCount() {
   var count = inboxNames.length;
-  var fromSlate = inboxNames.every(function (name) { return /^\d{8}T\d{6}Z-voice-slate-.+\.voiceslate$/i.test(name); });
+  var slateCount = inboxNames.filter(function (name) { return /^\d{8}T\d{6}Z-voice-slate-.+\.voiceslate$/i.test(name); }).length;
   $('slateInbox').hidden = count === 0;
-  $('slateInboxTitle').textContent = LabText.plural(fromSlate ? 'cast.inbox_from_voice_slate' : 'cast.inbox_waiting', count);
+  $('slateInboxTitle').textContent = LabText.plural(slateCount === count ? 'cast.inbox_from_voice_slate' : 'cast.inbox_waiting', count);
+  $('connectedSlateCount').textContent = LabText.plural('system.slate_clips_waiting', slateCount);
   $('inboxNavCount').hidden = count === 0;
   $('inboxNavNumber').textContent = String(count);
   $('inboxNavWords').textContent = ', ' + LabText.plural('cast.inbox_waiting', count);
