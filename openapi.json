@@ -3306,7 +3306,7 @@
         ],
         "responses": {
           "201": {
-            "description": "`reference`.",
+            "description": "`reference`. It keeps the take's licence rating (`licence_rating`), unless `allowed_use` is given or the take's own recording has no rating yet.",
             "content": {
               "application/json": {
                 "schema": {

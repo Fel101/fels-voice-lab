@@ -364,6 +364,9 @@ class FromDesignTests(StandInLabTest):
             ("Maya", "cast", SPEAKER, True, "approved"),
         )
         self.assertEqual((answer["engine"], answer["clone_engine"]), (DESIGNER, SPEAKER))
+        # No person is in a designed voice's recording, so its badge comes from the models, both Apache-2.0 here.
+        self.assertEqual(voice["licence"]["rating"], "yes")
+        self.assertIn("The recording was designed with Qwen3-TTS 1.7B VoiceDesign", voice["licence"]["reason"])
         # The model was asked to design, with only the fields a design takes.
         self.assertEqual(
             service.engines.requests,

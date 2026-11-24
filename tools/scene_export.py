@@ -225,7 +225,11 @@ def load_takes(root, scene):
                     db.execute("SELECT rating FROM recording_licences WHERE reference_id=?", (take["reference_version_id"],)).fetchone()
                     if recording_ratings and take["reference_version_id"] else None
                 )
-                take["licence"] = take_licence(take, rating["rating"] if rating else None)
+                recording = (
+                    db.execute("SELECT origin FROM reference_versions WHERE id=?", (take["reference_version_id"],)).fetchone()
+                    if take["reference_version_id"] else None
+                )
+                take["licence"] = take_licence(take, rating["rating"] if rating else None, recording["origin"] if recording else None)
                 for source, target in (
                     ("settings_json", "settings"), ("model_json", "model"),
                     ("provenance_json", "provenance"),

@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from voice_lab import serve
 from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab.output_license import DESIGN_ORIGIN
 from voice_lab.worker_pool import read_catalog
 
 
@@ -87,6 +88,45 @@ class CastStoreTests(unittest.TestCase):
         self.assertEqual(reopened.get_identity(self.identity["id"])["approved_reference_id"], original["id"])
         self.assertEqual([row["version"] for row in reopened.get_character(self.character["id"])
                           ["identities"][0]["references"]], [2, 1])
+
+    def test_a_designed_recording_gives_its_voice_and_takes_the_design_models_rating(self):
+        identity_id = self.identity["id"]
+        designed = self.add_reference(origin=f"{DESIGN_ORIGIN}qwen3-tts-1.7b-voice-design; fixture revision.",
+                                      allowed_use="Apache-2.0")
+        self.store.update_identity(identity_id, {"status": "approved", "reference_version_id": designed["id"]})
+        voice = self.store.get_identity(identity_id)
+        self.assertEqual(voice["licence"]["rating"], "yes")
+        self.assertIn("designed with Qwen3-TTS 1.7B VoiceDesign", voice["licence"]["reason"])
+        self.assertIsNone(voice["licence_rating"])  # nothing is saved: the rating comes from the catalog
+        generation = self.store.get_generation_identity(identity_id)
+        self.assertEqual(generation["licence"], voice["licence"])
+        take = self.store.create_take(generation, line_id="designed", text="Hello.", spoken_text="Hello.",
+                                      language="English", direction="", settings={},
+                                      model={"backend": "fixture", "checkpoint_revision": "fixture"},
+                                      wav=TakeWaveformCheckTests.speech(1.0), sample_rate=24_000, generation_info={})
+        self.assertEqual(take["licence"], voice["licence"])
+        self.assertEqual(self.store.take_summaries_for([take["id"]])[take["id"]]["licence"], voice["licence"])
+        # A non-commercial design model makes a non-commercial recording; a rating saved in Cast still wins.
+        breeze = self.add_reference(origin=f"{DESIGN_ORIGIN}breeze-tts-2; fixture revision.", allowed_use="Research")
+        self.store.update_identity(identity_id, {"status": "approved", "reference_version_id": breeze["id"]})
+        self.assertEqual(self.store.get_identity(identity_id)["licence"]["rating"], "no")
+        self.store.update_identity(identity_id, {"licence_rating": "conditions"})
+        self.assertEqual(self.store.get_identity(identity_id)["licence"]["rating"], "conditions")
+
+    def test_a_trimmed_recording_keeps_its_rating_until_its_terms_change(self):
+        identity_id = self.identity["id"]
+        original = self.add_reference(allowed_use="Commercial use permitted")
+        self.store.update_identity(identity_id, {
+            "status": "approved", "reference_version_id": original["id"], "licence_rating": "yes",
+        })
+        trimmed = self.store.add_reference_version(original["id"], {"start_seconds": 0.1, "end_seconds": 0.8})
+        self.assertEqual(trimmed["licence_rating"], "yes")
+        self.store.update_identity(identity_id, {"status": "approved", "reference_version_id": trimmed["id"]})
+        self.assertEqual(self.store.get_identity(identity_id)["licence"]["rating"], "yes")
+        retold = self.store.add_reference_version(trimmed["id"], {"origin": "Recorded by someone else"})
+        restricted = self.store.add_reference_version(trimmed["id"], {"allowed_use": "Personal projects only."})
+        self.assertIsNone(retold["licence_rating"])
+        self.assertIsNone(restricted["licence_rating"])
 
     def test_licence_migration_and_a_rating_for_each_recording(self):
         identity_id = self.identity["id"]
@@ -214,6 +254,17 @@ class TakeWaveformCheckTests(unittest.TestCase):
         self.store.update_identity(identity, {"status": "approved", "reference_version_id": changed["id"], "licence_rating": "no"})
         self.assertEqual(self.store.get_identity(identity)["licence"]["rating"], "no")
         self.assertEqual(self.store.get_take(edit["id"])["licence"]["rating"], "conditions")
+
+    def test_a_recording_made_from_a_take_keeps_the_takes_rating(self):
+        take = self.save(self.speech(1.0))
+        identity, recording = take["identity_id"], take["reference_version_id"]
+        unrated = self.store.add_reference_from_take(identity, take["id"])
+        self.assertIsNone(unrated["licence_rating"])  # the take's own recording has no rating yet, so Cast still asks
+        self.store.update_identity(identity, {"licence_reference_id": recording, "licence_rating": "conditions"})
+        rated = self.store.add_reference_from_take(identity, take["id"])
+        self.assertEqual(rated["licence_rating"], "conditions")
+        other_use = self.store.add_reference_from_take(identity, take["id"], allowed_use="Personal projects only.")
+        self.assertIsNone(other_use["licence_rating"])
 
     def test_batch_rows_read_stored_checks_for_many_takes(self):
         clean = self.save(self.speech(1.0))

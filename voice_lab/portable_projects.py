@@ -17,6 +17,7 @@ from voice_lab import dubbing
 from voice_lab import engine_adapters
 from voice_lab.cast_store import MAX_REFERENCE_TEXT, REFERENCE_POLICIES, TRANSCRIPT_ENGINES
 from voice_lab.model_facts import output_use
+from voice_lab.output_license import designer_of
 from voice_lab.reference_catalog import _choose_audition
 from voice_lab import synthetic_label
 from voice_lab.book_store import Books, metadata, milliseconds, pronunciations
@@ -217,7 +218,7 @@ def _voice(cast, ident, files, audio):
 
 def _is_design(reference):
     # The Lab's saved voice-design workflow records this provenance with the source WAV.
-    return reference["origin"].startswith("Original synthetic voice design via ")
+    return designer_of(reference["origin"]) is not None
 
 
 def _include_audition(cast, identity, files):

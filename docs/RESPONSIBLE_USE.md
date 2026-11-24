@@ -25,7 +25,8 @@ origin and allowed use before approving it in Cast.
 The model and the recording can each set terms for the audio you make. Cast voices and takes
 show the stricter rating, with a reason on the badge. Rate each recording version in **Edit voice**.
 A cloned voice stays **Not cleared** unless you rate the recording or its model already restricts it
-to non-commercial use.
+to non-commercial use. A voice designed from words has no person in it, so it takes the rating of the
+model that designed it.
 
 | Badge | What it means |
 |---|---|

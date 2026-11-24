@@ -155,8 +155,9 @@ def decode_audio(source_bytes, filename, *, what="Reference", max_seconds=None, 
 AUDIO_SUFFIXES = SUPPORTED_AUDIO
 MAX_EXTERNAL_REPORT = 200
 RETIREMENT_KINDS = ("character", "identity", "reference", "take")
-_TAKE_SELECT = ("SELECT t.*,c.name AS character_name,i.label AS identity_label,i.engine_id,rc.rating AS recording_rating "
-                "FROM takes t JOIN characters c ON c.id=t.character_id JOIN identities i ON i.id=t.identity_id "
+_TAKE_SELECT = ("SELECT t.*,c.name AS character_name,i.label AS identity_label,i.engine_id,rc.rating AS recording_rating,"
+                "rv.origin AS recording_origin FROM takes t JOIN characters c ON c.id=t.character_id "
+                "JOIN identities i ON i.id=t.identity_id LEFT JOIN reference_versions rv ON rv.id=t.reference_version_id "
                 "LEFT JOIN recording_licences rc ON rc.reference_id=t.reference_version_id")
 _REFERENCE_SELECT = ("SELECT r.*,rc.rating AS licence_rating FROM reference_versions r "
                      "LEFT JOIN recording_licences rc ON rc.reference_id=r.id")
@@ -854,8 +855,10 @@ class CastStore:
         return output.getvalue(), metrics
 
     def add_reference(self, identity_id, filename, source_bytes, *, transcript="", origin="", allowed_use="",
-                      edits=None, parent_reference_id=None, parent_take_id=None):
+                      edits=None, parent_reference_id=None, parent_take_id=None, licence_rating=None):
         identity_id = _validate_id(identity_id, "identity id")
+        if licence_rating is not None and licence_rating not in LICENCE_RATINGS:
+            raise ValueError("Choose a licence rating for the voice recording.")
         identity = self._row("SELECT * FROM identities WHERE id=?", (identity_id,))
         if identity is None:
             raise KeyError("Voice identity not found.")
@@ -915,6 +918,8 @@ class CastStore:
                      metrics["duration_seconds"], metrics["peak_dbfs"], metrics["rms_dbfs"], metrics["clipped_samples"],
                      origin, allowed_use, parent_reference_id, parent_take_id,
                      json.dumps(edit_record, ensure_ascii=False), stamp))
+                if licence_rating is not None:
+                    db.execute("INSERT INTO recording_licences(reference_id,rating) VALUES(?,?)", (ref_id, licence_rating))
         except Exception:
             source_path.unlink(missing_ok=True)
             audio_path.unlink(missing_ok=True)
@@ -980,6 +985,11 @@ class CastStore:
                      metrics["channels"], metrics["duration_seconds"], metrics["peak_dbfs"], metrics["rms_dbfs"],
                      metrics["clipped_samples"], origin, allowed_use, reference_id, previous["parent_take_id"],
                      json.dumps(edit, ensure_ascii=False), stamp))
+                # Trimming or cleaning a recording does not change who may use it, so the rating follows unless its
+                # origin or allowed use changed.
+                if origin == previous["origin"] and allowed_use == previous["allowed_use"]:
+                    db.execute("INSERT INTO recording_licences(reference_id,rating) "
+                               "SELECT ?,rating FROM recording_licences WHERE reference_id=?", (ref_id, reference_id))
         except Exception:
             audio_path.unlink(missing_ok=True)
             ref_dir.rmdir()
@@ -1014,7 +1024,8 @@ class CastStore:
         elif reference_version_id is not None:
             raise ValueError("This voice is one of a model's preset voices, so it does not use a voice recording.")
         identity["reference"] = reference
-        identity["licence"] = voice_licence(row["engine_id"], row["kind"], (reference or {}).get("licence_rating"))
+        identity["licence"] = voice_licence(row["engine_id"], row["kind"], (reference or {}).get("licence_rating"),
+                                            (reference or {}).get("origin"))
         return identity
 
     def add_reference_from_take(self, identity_id, take_id, *, transcript=None, edits=None, origin=None, allowed_use=None):
@@ -1045,11 +1056,15 @@ class CastStore:
                 raise ValueError("The source take's reference provenance is inconsistent.")
             if parent["allowed_use"] not in requested_use:
                 requested_use = f"{requested_use}; inherited restriction: {parent['allowed_use']}"
+        # The take's rating covers its model and its own recording. A rating that is not known yet stays unset, so Cast asks
+        # for one; so does a recording given another allowed use.
+        inherited = take["licence"]["rating"]
         return self.add_reference(
             identity_id, f"take-{take_id}.wav", source,
             transcript=transcript if transcript is not None else take.get("spoken_text", take["text"]),
             origin=derived_origin, allowed_use=requested_use, edits=edits,
             parent_reference_id=parent_version_id, parent_take_id=take_id,
+            licence_rating=None if str(allowed_use or "").strip() or inherited == "unclear" else inherited,
         )
 
     def get_reference(self, reference_id):
@@ -1302,7 +1317,7 @@ class CastStore:
     @staticmethod
     def _take_dict(row, reader):
         result = dict(row)
-        result["licence"] = take_licence(result, result.pop("recording_rating"))
+        result["licence"] = take_licence(result, result.pop("recording_rating"), result.pop("recording_origin"))
         for field, key in (("settings_json", "settings"), ("model_json", "model"), ("provenance_json", "provenance")):
             result[key] = json.loads(result.pop(field))
         result["waveform_checks"] = _stored_waveform_checks(result.pop("waveform_checks_json"))
@@ -1617,13 +1632,14 @@ class CastStore:
             reader = RetirementReader(db)
             for chunk, marks in _in_chunks(ids):
                 for row in db.execute(
-                    f"SELECT t.id,t.waveform_checks_json,t.loudness_json,t.reference_version_id,i.engine_id,rc.rating "
+                    f"SELECT t.id,t.waveform_checks_json,t.loudness_json,t.reference_version_id,i.engine_id,rc.rating,rv.origin "
                     f"FROM takes t JOIN identities i ON i.id=t.identity_id "
+                    f"LEFT JOIN reference_versions rv ON rv.id=t.reference_version_id "
                     f"LEFT JOIN recording_licences rc ON rc.reference_id=t.reference_version_id WHERE t.id IN ({marks})", chunk
                 ):
                     found[row["id"]] = {"waveform_checks": _stored_waveform_checks(row["waveform_checks_json"]),
                                         "loudness": loudness.stored(row["loudness_json"]),
-                                        "licence": take_licence(row, row["rating"]),
+                                        "licence": take_licence(row, row["rating"], row["origin"]),
                                         "retirement": reader.state("take", row["id"]), "purged": False}
                 for (purged_id,) in db.execute(
                         f"SELECT target_id FROM purged_items WHERE target_kind='take' AND target_id IN ({marks})", chunk).fetchall():
@@ -1672,7 +1688,8 @@ class CastStore:
                     active = [ref for ref in ident["references"] if not ref["retired"]]
                     recording = next((ref for ref in active if ref["id"] == approved), active[0] if active else {})
                     ident["licence_rating"] = recording.get("licence_rating")
-                    ident["licence"] = voice_licence(ident["engine_id"], ident["kind"], ident["licence_rating"])
+                    ident["licence"] = voice_licence(ident["engine_id"], ident["kind"], ident["licence_rating"],
+                                                     recording.get("origin"))
                     item["identities"].append(ident)
                 result.append(item)
         return result

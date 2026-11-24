@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 import soundfile as sf
 
-from voice_lab.output_license import license_profile
+from voice_lab.output_license import DESIGN_ORIGIN, license_profile
 
 
 AUDIO_TYPES = {".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg"}
@@ -85,7 +85,7 @@ def design_provenance(engine, result, model):
     checkpoint = result.get("checkpoint") or model.get("checkpoint") or "unrecorded checkpoint"
     revision = result.get("checkpoint_revision") or model.get("local_revision") or "unrecorded revision"
     return {
-        "origin": f"Original synthetic voice design via {engine}; {checkpoint} revision {revision}.",
+        "origin": f"{DESIGN_ORIGIN}{engine}; {checkpoint} revision {revision}.",
         "allowed_use": f"{profile['weights_license']} {profile['output_use']}",
         "checkpoint": checkpoint,
         "checkpoint_revision": revision,

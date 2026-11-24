@@ -15,8 +15,10 @@
   in Cast, and check who is using the graphics card. The Lab's address and copy buttons are under **Connect other programs**.
 
 - **Licence badges.** Cast voices and takes show the stricter of the model's licence and the saved recording's allowed
-  use. Rate each recording version in **Edit voice**. `GET /api/voices`, Cast and take responses, and export manifests
-  include the rating and reason. `POST /api/identities/{identity_id}/update` can save the recording's rating.
+  use. Rate each recording version in **Edit voice**. A voice designed from words takes its design model's rating, a
+  recording made from a take takes the take's, and a trimmed recording keeps its own. `GET /api/voices`, Cast and take
+  responses, and export manifests include the rating and reason. `POST /api/identities/{identity_id}/update` can save
+  the recording's rating.
 
 - **Model support levels.** Every model card says Supported, Works or Experimental and what the level means. **Which
   model fits?** can show only release-tested models. `GET /api/catalog` includes `support` and the `support_note` for

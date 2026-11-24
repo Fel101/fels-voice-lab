@@ -682,7 +682,8 @@ ROUTES = [
             F("edits", "object", "Trim, rate and channel edits, as for an upload."),
             F("origin", "string", "Default: a note naming the take."),
             F("allowed_use", "string", "Added to the take's own terms, which always carry over.")),
-      reply="`reference`."),
+      reply="`reference`. It keeps the take's licence rating (`licence_rating`), unless `allowed_use` is given or the "
+            "take's own recording has no rating yet."),
     R("POST", "/api/references/{reference_id}/versions", "Cast",
       "Save a new version of a reference recording with a different transcript or trim.", status=201,
       body=(F("transcript", "string", "Up to 1200 characters. Default: the current one."),

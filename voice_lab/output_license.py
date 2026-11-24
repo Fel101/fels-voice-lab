@@ -11,6 +11,9 @@ from voice_lab import engine_adapters
 from voice_lab.worker_pool import read_catalog
 
 LICENCE_RATINGS = ("yes", "conditions", "unclear", "no")
+# How a designed recording's origin begins (reference_catalog.design_provenance writes it). No person is in such a recording,
+# so its terms are those of the model that designed it.
+DESIGN_ORIGIN = "Original synthetic voice design via "
 
 
 @lru_cache(maxsize=1)
@@ -32,21 +35,35 @@ def worst_licence(*licences):
     return {"rating": rating, "reason": " ".join(reasons)}
 
 
-def voice_licence(engine_id, kind, recording_rating=None):
+def designer_of(origin):
+    """The model id a designed recording's origin names, or None for any other recording."""
+    if not isinstance(origin, str) or not origin.startswith(DESIGN_ORIGIN):
+        return None
+    return origin[len(DESIGN_ORIGIN):].split(";", 1)[0].strip() or None
+
+
+def recording_licence(rating=None, origin=None):
+    """A recording's own rating: the one saved in Cast, else its design model's for a designed recording, else unclear."""
+    if rating:
+        return {"rating": rating, "reason": "The recording's allowed use was rated in Cast."}
+    designer = designer_of(origin)
+    if designer:
+        model = model_licence(designer)
+        name = _model_entries().get(designer, {}).get("name", designer)
+        return {"rating": model["rating"], "reason": f"The recording was designed with {name}: {model['reason']}"}
+    return {"rating": "unclear", "reason": "The recording's allowed use has no rating yet. Review it and save a rating in Cast."}
+
+
+def voice_licence(engine_id, kind, recording_rating=None, recording_origin=None):
     model = model_licence(engine_id, preset=kind in {"preset_voice", "fixed_voice"})
     if kind != "reference":
         return model
-    recording = {
-        "rating": recording_rating or "unclear",
-        "reason": ("The recording's allowed use was rated in Cast." if recording_rating else
-                   "The recording's allowed use has no rating yet. Review it and save a rating in Cast."),
-    }
-    return worst_licence(model, recording)
+    return worst_licence(model, recording_licence(recording_rating, recording_origin))
 
 
-def take_licence(take, recording_rating):
+def take_licence(take, recording_rating, recording_origin=None):
     kind = "reference" if take["reference_version_id"] else "preset_voice"
-    return voice_licence(take["engine_id"], kind, recording_rating)
+    return voice_licence(take["engine_id"], kind, recording_rating, recording_origin)
 
 ENGINE_LICENSE_NOTES = {}
 # The engines whose adapters say (engine_adapters/).

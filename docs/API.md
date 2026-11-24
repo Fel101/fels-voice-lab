@@ -1232,7 +1232,7 @@ Save a take as a new reference recording for a cloning voice.
 | `origin` | string | Default: a note naming the take. |
 | `allowed_use` | string | Added to the take's own terms, which always carry over. |
 
-**Answer:** `201`, JSON. `reference`.
+**Answer:** `201`, JSON. `reference`. It keeps the take's licence rating (`licence_rating`), unless `allowed_use` is given or the take's own recording has no rating yet.
 
 <a id="post-api-references-reference_id-versions"></a>
 

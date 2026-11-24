@@ -1,7 +1,10 @@
 """Export receipts keep each model's own terms apart from the application's MIT licence."""
 import unittest
 
-from voice_lab.output_license import LICENCE_RATINGS, license_profile, model_licence, voice_licence, worst_licence
+from voice_lab.output_license import (
+    DESIGN_ORIGIN, LICENCE_RATINGS, designer_of, license_profile, model_licence, voice_licence, worst_licence,
+)
+from voice_lab.reference_catalog import design_provenance
 from voice_lab.worker_pool import read_catalog
 
 
@@ -11,6 +14,21 @@ class OutputLicenseTests(unittest.TestCase):
             with self.subTest(engine=entry["id"]):
                 self.assertIn(entry["licence"]["rating"], LICENCE_RATINGS)
                 self.assertTrue(entry["licence"]["reason"])
+
+    def test_a_designed_recording_is_rated_by_the_model_that_designed_it(self):
+        origin = design_provenance("qwen3-tts-1.7b-voice-design", {}, {})["origin"]
+        self.assertEqual(designer_of(origin), "qwen3-tts-1.7b-voice-design")
+        for other in ("My own recording", "", None, DESIGN_ORIGIN):
+            self.assertIsNone(designer_of(other))
+        designed = voice_licence("turbo", "reference", None, origin)
+        self.assertEqual(designed["rating"], "yes")
+        self.assertIn("The recording was designed with Qwen3-TTS 1.7B VoiceDesign: Qwen3-TTS uses Apache-2.0.",
+                      designed["reason"])
+        self.assertEqual(voice_licence("turbo", "reference", None, f"{DESIGN_ORIGIN}breeze-tts-2; x")["rating"], "no")
+        self.assertEqual(voice_licence("turbo", "reference", None, f"{DESIGN_ORIGIN}unknown-model; x")["rating"], "unclear")
+        # A rating saved in Cast is the recording's own, and wins over the design model's.
+        self.assertEqual(voice_licence("turbo", "reference", "conditions", origin)["rating"], "conditions")
+        self.assertEqual(voice_licence("turbo", "reference", None, "My own recording")["rating"], "unclear")
 
     def test_worst_recording_or_model_rating_wins(self):
         for engine, ratings in {

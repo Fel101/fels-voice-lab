@@ -213,8 +213,11 @@ it. Voice Slate clip imports are documented in [the bridge guide](RECORDER_BRIDG
 Cast cards and take rows show the stricter of the model's licence and the recording's allowed use.
 For a cloned voice, open **Edit voice**, select the saved recording version, read **Who may use it,
 and how**, then choose a **Recording licence rating** and press **Save licence rating**. Until you
-choose a rating, the recording is **Not cleared**. Review each new version separately. Existing takes
-follow the rating of the version they used, including when you change that rating.
+choose a rating, a recording of a person is **Not cleared**. A voice designed from words takes the
+rating of the model that designed it, and a recording made from a take takes the take's rating. A
+trimmed or cleaned version keeps its recording's rating; a version with another origin or allowed use
+needs its own. Existing takes follow the rating of the version they used, including when you change
+that rating.
 
 | Badge | What it says |
 |---|---|
