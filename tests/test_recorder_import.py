@@ -279,6 +279,19 @@ class ValidationTests(BridgeCase):
         record = json.loads((Path(report["folder"]) / "recorder-import.json").read_text(encoding="utf-8"))
         self.assertEqual(record["recorder_clip"]["transcript_status"], "asr_draft", "the status is kept, not hidden")
 
+    def test_a_transcript_status_that_is_not_text_is_a_warning_like_any_unknown_status(self):
+        # A list or an object once raised TypeError (a set lookup) that nothing caught, and the inbox list broke on it.
+        sidecars = {}
+        for label, status in (("list", ["typed"]), ("object", {"status": "typed"}), ("number", 3), ("missing", None)):
+            with self.subTest(status=label):
+                def change(s, status=status):
+                    s.pop("transcript_status") if status is None else s.update(transcript_status=status)
+                sidecars[label] = self.make(stem=f"20261020-161204_mic_st{label}", clip_id=f"st{label}", change=change)
+                clip = load_clip(sidecars[label])
+                self.assertIn(f"transcript_status {status!r} is not one Voice Slate documents", clip.warnings)
+                self.assertEqual(clip.summary()["transcript_status"], "")
+        self.assertEqual(self.register(sidecars["list"])["status"], "registered")
+
     def test_the_schema_prefix_decides_what_is_read(self):
         def v1(data):
             data["schema"] = "voice-recorder-clip-v1"

@@ -97,6 +97,12 @@ class SlateInbox:
                 "code": "unreadable",
                 "problem": "The file could not be read. Another program may have it open.",
             }
+        except Exception as exc:  # a fault in the check itself: one file must never stop the whole list from showing
+            answer = {
+                "state": "refused",
+                "code": "clip",
+                "problem": f"Voice Lab could not check this file ({type(exc).__name__}: {exc}). Dismiss it from the list.",
+            }
         self._checked[entry["name"]] = (key, answer)
         return answer
 

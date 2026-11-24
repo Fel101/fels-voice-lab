@@ -19,6 +19,13 @@
   model fits?** can show only release-tested models. `GET /api/catalog` includes `support` and the `support_note` for
   experimental models. The real-model smoke run can check all Supported models with `--supported`.
 
+### Fixed
+
+- A Voice Slate clip whose sidecar was edited by hand could fail with a server error instead of a reason: a
+  `transcript_status` that is a list or an object, or in a `.voiceslate` file a number of more than 4,300 digits. The
+  first is now a warning, as an unknown status is, and the second is refused. A file in the inbox that the check cannot
+  handle is listed as refused, so the other files still show.
+
 ### For the other apps of Fel's Studio
 
 - **One folder for the four apps.** The Lab writes its address where Voice Slate, NPC Forge and Altera look for it,

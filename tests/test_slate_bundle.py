@@ -56,6 +56,19 @@ class SlateHandoffTests(ExportPanelBase):
             with self.subTest(name=invalid), self.assertRaisesRegex(ClipRefused, "portable"):
                 read_bundle(as_bundle(wav, json.dumps(evil).encode("utf-8")))
 
+    def test_a_sidecar_python_cannot_read_or_a_status_that_is_not_text_is_never_a_crash(self):
+        # Both once escaped read_bundle as TypeError or ValueError, which the inbox and the Cast routes do not catch.
+        for status in (["typed"], {"status": "typed"}):
+            with self.subTest(status=status):
+                clip = read_bundle(sample_bundle(transcript_status=status))
+                self.assertIn(f"transcript_status {status!r} is not one Voice Slate documents", clip.warnings)
+                self.assertEqual(clip.summary()["transcript_status"], "")
+        with zipfile.ZipFile(io.BytesIO(sample_bundle())) as archive:
+            sidecar, wav = archive.read("clip.json"), archive.read("clip.wav")
+        for label, extra in (("a number of 5000 digits", b"9" * 5000), ("nesting too deep", b"[" * 100_000 + b"]" * 100_000)):
+            with self.subTest(label), self.assertRaisesRegex(ClipRefused, "Could not read the .voiceslate file"):
+                read_bundle(as_bundle(wav, sidecar[:-1] + b', "extra": ' + extra + b"}"))
+
     def test_import_preview_draft_confirmation_and_repeat(self):
         self.start_server()
         raw = sample_bundle(transcript_status="asr_draft")

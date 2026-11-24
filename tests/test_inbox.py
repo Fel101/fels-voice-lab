@@ -128,6 +128,36 @@ class InboxListTests(InboxCase):
         self.assertIn("the file changed after Voice Slate kept it.", listed["changed.voiceslate"]["problem"])
         self.assertTrue(listed["no-consent.voiceslate"]["problem"].startswith("Consent_confirmed is not true"))
 
+    def test_one_file_the_check_cannot_handle_never_stops_the_list(self):
+        # A sidecar whose transcript_status was a list once raised TypeError in the check, and the whole list answered 500.
+        self.send(contract_clip(transcript_status=["typed"]), "odd-status.voiceslate")
+        broken = contract_clip(transcript="A clip the check fails on.")
+        self.send(broken, "broken.voiceslate")
+        self.send(contract_clip(), "fine.voiceslate")
+        real = slate_inbox.read_bundle
+
+        def check(raw, **options):
+            if raw == broken:
+                raise TypeError("a fault in the check")
+            return real(raw, **options)
+
+        with mock.patch.object(slate_inbox, "read_bundle", side_effect=check) as checked:
+            listed = {item["name"].split("-voice-slate-")[-1]: item for item in self.inbox.waiting()}
+            self.inbox.waiting()
+        self.assertEqual(checked.call_count, 3, "each file is checked once, the failed one too")
+        self.assertEqual(listed["fine.voiceslate"]["state"], "ready")
+        odd = listed["odd-status.voiceslate"]
+        self.assertEqual((odd["state"], odd["clip"]["transcript_status"]), ("ready", ""))
+        self.assertIn("transcript_status ['typed'] is not one Voice Slate documents", odd["clip"]["warnings"])
+        self.assertEqual(
+            {key: listed["broken.voiceslate"][key] for key in ("state", "code", "problem")},
+            {
+                "state": "refused",
+                "code": "clip",
+                "problem": "Voice Lab could not check this file (TypeError: a fault in the check). Dismiss it from the list.",
+            },
+        )
+
     def test_each_file_is_checked_once_until_it_changes(self):
         sent = self.send(contract_clip())
         with mock.patch.object(slate_inbox, "read_bundle", wraps=slate_inbox.read_bundle) as check:
