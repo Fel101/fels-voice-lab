@@ -152,7 +152,6 @@ exclude = [
     "tools/backup_library.py",
     "tools/build_api_docs.py",
     "tools/check_repo.py",
-    "tools/create_icon.py",
     "tools/dataset_workbench.py",
     "tools/install_chatterbox.py",
     "tools/install_drama3.py",

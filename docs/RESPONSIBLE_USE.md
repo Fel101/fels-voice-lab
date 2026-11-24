@@ -1,42 +1,57 @@
-# Responsible use and publication
+# Responsible use
 
-Use recordings you made yourself or whose speaker and rights holder permit
-the proposed cloning and distribution. Keep the exact transcript, origin,
-permission evidence and allowed uses with the voice recording, which never changes once saved.
-An approval checkbox records a human decision; it cannot verify ownership.
+Fel's Studio helps you record voices with permission and make fictional characters. This guide
+covers voice recordings, generated speech, model licences and the other apps' content rules.
 
-Do not use this software for deceptive impersonation, fraud, non-consensual
-sexual content, harassment, or unlawful collection/distribution of personal
-voice data. Get appropriate permission before using a recognizable person's
-voice. A movie clip or publicly accessible video is not automatically licensed
-for cloning or redistribution. Model output may resemble a real person or
-repeat an instruction; listen and review before release.
+## Record and clone with consent
 
-Check the model's own terms, the source recording's license and the intended
-use. Breeze's non-commercial limits and Fish's commercial/hosted-service terms
-remain even though this application is MIT. Re-cloning through another engine
-does not remove a reference's restrictions. Keep Chatterbox's watermark and
-Fish attribution where applicable. See [the license inventory](../THIRD_PARTY_NOTICES.md).
+Use your own voice or a recording whose speaker and rights holder have agreed to the proposed
+cloning and distribution. Get that agreement in writing and keep it. Record the transcript,
+origin and allowed uses with each Cast recording. Cast keeps each saved version intact.
+A consent checkbox records your decision. Keep the signed permission separately.
 
-This repository includes no voice recordings. Its one generated example,
-`docs/demo/kokoro-demo.mp3`, uses only Kokoro's own Apache-2.0 preset voices, and its
-manifest says how it was made. If you publish demos, use newly consented recordings or
-appropriately licensed synthetic presets, review all accompanying terms, and disclose
-synthetic speech where required. Do not upload private consent records as demos.
+Keep characters and companions fictional. Do not use a real person's identity or likeness
+as a character, or use a voice to impersonate, defraud or harass someone. Public audio from a
+film, podcast or video still needs permission for cloning or redistribution. Listen before
+release in case the model sounds like a real person or reads an instruction aloud.
+Do not make non-consensual sexual content or collect or distribute voice recordings unlawfully.
 
-Every audio file the Lab makes is labelled inside it as AI-generated speech: its comment
-tag names the model and the Lab and carries the IPTC digital source type for media made by
-a trained model. Your own reference recordings are never labelled. Keep the label when you
-publish. A tag is easy to strip, so it does not replace telling listeners, and it is not a
-watermark; Chatterbox's own Perth watermark is a separate mark inside the sound. Rules for
-labelling synthetic audio vary: the EU AI Act, for example, has transparency obligations
-for AI-generated audio (Article 50) that may apply to you or to what you publish. Check
-what applies where you are.
+A portable voice file can contain a cloned voice's approved recording and a generated audition.
+Export only if the permission covers sharing those files. When you import a voice, review its
+origin and allowed use before approving it in Cast.
 
-This page identifies publishing risks and license obligations; it does not
-certify compliance with every jurisdiction, third-party claim, or future use.
-Obtain legal advice before a commercial hosted deployment or a disputed voice use.
+## Read the licence badges
 
-A portable voice file can contain a cloned voice's approved voice recording and a generated audition. Export only
-when the recorded permission covers sharing the file. Review the recorded source and allowed use before importing.
-Voice files arrive as candidates for your own review in Cast.
+The model and the recording can each set terms for the audio you make. Cast voices and takes
+show the stricter rating, with a reason on the badge. Rate each recording version in **Edit voice**.
+A cloned voice stays **Not cleared** unless you rate the recording or its model already restricts it
+to non-commercial use.
+
+| Badge | What it means |
+|---|---|
+| ✓ **Commercial use allowed** | The recorded permissions and model terms allow commercial use. Keep any required notices. |
+| ! **Allowed, with conditions** | Check the conditions before publishing, selling or hosting the audio. |
+| ? **Not cleared** | A licence or recording rating is missing or unclear. Phonon's catalog voices have this badge. |
+| ✕ **Non-commercial only** | Use the audio only for non-commercial work. Breeze TTS 2 has this badge. |
+
+Check the original terms for your use, including Fish Audio's commercial and hosted-service conditions.
+The MIT licence covers the Lab's own code. A recording's restrictions still apply when another model
+clones it. Keep Chatterbox's watermark and Fish attribution where applicable.
+[Third-party terms](../THIRD_PARTY_NOTICES.md) · [Voice assets and sharing](VOICE_ASSET_RIGHTS.md)
+
+## Label what you make
+
+The Lab labels generated speech inside the audio file with the model name and the IPTC digital
+source type. Keep that label when you publish and tell listeners the voice is synthetic. When you
+share generated pictures or character assets from the suite, keep their AI-generated labels too.
+Chatterbox's Perth watermark is embedded separately in the sound.
+
+The [Lab's demo clips](../README.md#hear-it) use Kokoro presets or voices designed from descriptions.
+Their manifests list the models and settings used. Check the terms for any examples you share,
+and keep private recordings and consent documents out of demos and bug reports.
+
+## Add-ons and kids mode
+
+Fel's Studio add-ons are separate downloads and follow the core apps' responsible-use rules.
+The separate 18+ add-on is for adults only. Altera's kids mode adds guardrails for chat.
+Use parental controls and supervision separately.

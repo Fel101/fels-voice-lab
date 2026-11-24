@@ -74,6 +74,7 @@ personal paths or replace pinned GPU packages from an environment inventory.
 
 Read [third-party/model terms](THIRD_PARTY_NOTICES.md) and [responsible use](docs/RESPONSIBLE_USE.md).
 Original MIT application code does not supersede model or reference restrictions.
-Drama GPU cloning remains disabled following an observed Vulkan device loss and
-Windows VIDEO_TDR_FAILURE; no driver/timeout workaround is supplied. Human review
-of words, likeness, acting and intended-language quality remains required.
+Drama studio and cloning use the CPU after a local Vulkan device-loss incident caused
+Windows `VIDEO_TDR_FAILURE`. Built with Fish Audio.
+
+Human review of words, likeness, acting and intended-language quality remains required.

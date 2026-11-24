@@ -52,6 +52,10 @@ a change alters what one of them shows, close the Lab and run `.venv\Scripts\pyt
 Kokoro, Microsoft Edge or Google Chrome, and FFmpeg, works in a library of its own in a temporary folder, and writes the six
 pictures into `docs/images/`. Look at them before you commit them.
 
+The app icon comes from `assets/voice-lab.svg`, the Lab's design from the Fel's Studio icon family. To regenerate
+`assets/voice-lab.ico`, install `PySide6-Essentials` in a separate development environment and run
+`python tools/create_icon.py` from that environment. Commit the SVG and ICO together.
+
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is a one-page map of the processes, the environments and which file decides what.
 
 The HTTP API is one table, `api_spec.py`: the service's dispatch is built from it (`routes.py`), and `docs/API.md` and

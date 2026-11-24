@@ -1,10 +1,23 @@
 # Fel's Voice Lab
 
-A local studio for character voices on Windows. Design or clone a voice, approve it as a character
-in your Cast, act dialogue with it, render whole scenes as batches, compare takes blind, and export
-production audio with a checksummed manifest. It runs on your own computer: the service listens only
-on `127.0.0.1`, and the model workers run offline, so nothing is downloaded while you generate. Other apps on the same
-computer can speak with its voices too: Claude Code and other apps that use MCP, and apps that use OpenAI's speech API.
+Make character dialogue for an audio drama or narrate a book on your Windows PC. Design a voice from a description or
+clone a recording you have permission to use, save the voice in your Cast, and turn scripts into audio you can review and export.
+
+> **Part of Fel's Studio.** Four free apps that run on your own PC and work together. [Voice Slate](https://github.com/Fel101/fels-voice-slate)
+> records voices with consent, [Voice Lab](https://github.com/Fel101/fels-voice-lab) designs and clones voices,
+> [NPC Forge](https://github.com/Fel101/fels-npc-forge) makes characters for games, and [Altera](https://github.com/Fel101/Altera)
+> lets you talk with them. Each one also works on its own.
+
+**Start with Kokoro 82M** for ready-made voices, even without a graphics card. Kokoro, Chatterbox Turbo and the three
+Qwen3-TTS 1.7B models (VoiceDesign, Base and CustomVoice) are tested for every release. See the [model table](#models)
+for support levels and licence badges.
+
+**Connect your apps.** Game makers can give NPC Forge characters a Cast voice, and Altera can use Cast voices for replies.
+Chat apps can use the [OpenAI-style speech route](docs/CONNECT.md#apps-that-use-openais-speech-api), and assistants like
+Claude Code can connect through [MCP](docs/CONNECT.md#claude-code). See [Connected apps](docs/CONNECT.md#the-other-apps-of-fels-studio)
+for the suite setup.
+
+[Quick start](#quick-start) · [Hear a sample](#hear-it) · [Responsible use](docs/RESPONSIBLE_USE.md)
 
 ## Quick start
 
@@ -169,28 +182,21 @@ package back and checks every hash, the captions, and each file's codec and leng
 - **Connect other apps:** an MCP server for Claude Code and other MCP apps, an OpenAI-style speech route, a documented
   local HTTP API and a small command-line tool ([connecting other apps](docs/CONNECT.md)).
 - **Page language:** English, or Spanish as a draft not yet checked by a speaker.
-- **Other tools:** voice conversion, consent-aware import of clips kept by
-  [Fel's Voice Slate](https://github.com/Fel101/fels-voice-slate), the companion recorder, and dataset
-  preparation. Nothing here trains or fine-tunes a model.
+- **Other tools:** voice conversion, [importing clips from Voice Slate](docs/RECORDER_BRIDGE.md), and dataset preparation.
+  Nothing here trains or fine-tunes a model.
 
 ## Models
 
-Integrated families are Kokoro, Phonon 31M English, Chatterbox Original/Turbo/VC, Breeze TTS 2, Qwen3-TTS
-VoiceDesign/Base/CustomVoice, VoxCPM2 and Fish Audio Drama 3. *Integrated* means the adapter and the
-interface exist. The **Models & features** page says whether a family is *installed* (its
-environment and pinned files are on disk) and *usable* (a test on your device loaded it and it
-spoke one sentence), shows how much free RAM each family needs, and can install every one of them for you (the Qwen3-TTS
-models, VoxCPM2 and Breeze TTS 2 only on a computer with a graphics card, an NVIDIA card or an AMD Radeon). Each card says
-in plain words whether the model needs a graphics card, whether it clones a voice, its languages and what its audio may be
-used for. In **Which model fits?**, you can show only the models tested for every release.
-Which languages and devices were actually tried is written down in
-[capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
+In **Models & features → Which model fits?**, filter by language, voice cloning, whether you need a graphics card, and
+whether the model is tested for every release. Each model card shows what the model needs, what its audio may be used for,
+and how to install and test it on your PC. See [capabilities and limits](MODEL_CAPABILITIES.md) and the
+[language screen](docs/LANGUAGE_MATRIX.md) for the devices and languages tried.
 
 - **Supported** models are tested for every release on the Lab's test GPU and on the CPU where they run.
 - **Works** models are tested when they change.
 - **Experimental** models may break or have limits. Their cards explain what to watch for.
 
-| Model | Support level | Model licence |
+| Model | Support level | Output licence badge |
 |---|---|---|
 | Kokoro 82M | Supported | ✓ Commercial use allowed |
 | Phonon 31M English | Experimental | ? Not cleared for catalog voices |
@@ -205,18 +211,8 @@ Which languages and devices were actually tried is written down in
 | VoxCPM2 2B | Works | ✓ Commercial use allowed |
 | Fish Audio Drama 3 (35B MoE / Q4_K) | Experimental | ! Allowed, with conditions |
 
-Drama studio and all Drama cloning use CPU after a local Vulkan device-loss incident. Experimental
-short GPU design is an opt-in local configuration; do not enable GPU cloning. Previous-take editing,
-speaker stems and native word timing are not exposed by the pinned backend. Built with Fish Audio.
-
-Kokoro presets are licensed model speaker packs, not uploaded recordings. Phonon's 37 preset voices
-come from a repository that states no licence, so ask Gradium before you publish audio made with one.
-See [voice assets and redistribution](docs/VOICE_ASSET_RIGHTS.md) before publishing recordings,
-generated voices or model files with your project.
-
-Voices belong to people. Clone only recordings you made yourself or whose speaker and rights holder
-allow it, keep the transcript, origin and permission with each reference, and do not use the
-software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBLE_USE.md) says more.
+Cast voices and takes use the stricter of the model licence and the recording's allowed use. Review the
+[licence badges and consent guidance](docs/RESPONSIBLE_USE.md) before sharing your audio.
 
 ## Other ways to set it up
 
@@ -314,6 +310,6 @@ passing contract tests do not establish voice quality on every device/language.
 adapted components. Model licensing is separate: Breeze weights/self-hosted outputs
 are non-commercial, and Drama has conditional commercial and hosted-service terms.
 Check the full upstream licenses and recording permissions for your use. No model
-weights or voice recordings are bundled. The one generated sample, the demo above, is
-Kokoro's own preset voices (Apache-2.0), described in its manifest. No affiliation with
+weights or source voice recordings are bundled. The [two demos](#hear-it) use Kokoro presets
+or voices designed from descriptions, with the models and settings listed in their manifests. No affiliation with
 or endorsement by the model publishers is implied.
