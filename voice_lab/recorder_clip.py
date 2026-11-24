@@ -76,7 +76,8 @@ class RecorderClip:
 
     @property
     def transcript_status(self):
-        return str(self.data.get("transcript_status") or "")
+        status = self.data.get("transcript_status")
+        return status if isinstance(status, str) else ""
 
     @property
     def origin(self):
@@ -205,7 +206,7 @@ def load_clip(sidecar, *, accept_asr_draft=False):
         else:
             problems.append("the transcript is the speech recognizer's unreviewed draft (asr_draft); correct it in "
                             "Voice Slate and keep the clip again, or accept the draft explicitly")
-    elif status not in TRANSCRIPT_STATUSES:
+    elif not isinstance(status, str) or status not in TRANSCRIPT_STATUSES:   # a list or object is not hashable
         warnings.append(f"transcript_status {status!r} is not one Voice Slate documents")
 
     export, master = data.get("export"), data.get("master")

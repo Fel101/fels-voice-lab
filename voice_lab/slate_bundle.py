@@ -31,7 +31,12 @@ def read_bundle(raw, *, accept_asr_draft=False):
                     files[entry.filename] = source.read(limit + 1)
                 if len(files[entry.filename]) > limit:
                     raise ClipRefused("The Voice Slate handoff contains an oversized member.")
-        sidecar = json.loads(files["clip.json"].decode("utf-8-sig"))
+        try:
+            sidecar = json.loads(files["clip.json"].decode("utf-8-sig"))
+        except (ValueError, RecursionError) as exc:
+            # Not UTF-8, not JSON, or a number with more digits than Python reads (a plain ValueError). Caught here, not
+            # below, where ValueError would also catch load_clip's ClipRefused and hide its reasons.
+            raise ClipRefused("Could not read the .voiceslate file or its sidecar.") from exc
         if not isinstance(sidecar, dict) or not isinstance(sidecar.get("export"), dict):
             raise ClipRefused("The Voice Slate sidecar has no export information.")
         if sidecar.get("schema") not in ("voice-recorder-clip-v1", "voice-recorder-clip-v2"):
@@ -56,5 +61,5 @@ def read_bundle(raw, *, accept_asr_draft=False):
             kept.write_bytes(files["clip.wav"])
             path.write_bytes(files["clip.json"])
             return load_clip(path, accept_asr_draft=accept_asr_draft)
-    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError, UnicodeError) as exc:
         raise ClipRefused("Could not read the .voiceslate file or its sidecar.") from exc
