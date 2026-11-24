@@ -1,7 +1,4 @@
-"""Install an engine from the Models page: the plan, the running install, the routes, and the RAM each card shows.
-
-Every install here runs a stand-in script in a private folder. Nothing is downloaded, nothing is installed, and no model is loaded.
-"""
+"""Install, stop and retry from the Models page, using private folders and stand-in packages and model files."""
 
 import importlib
 import json
@@ -140,13 +137,13 @@ class InstallerCase(unittest.TestCase):
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             job = self.installer.snapshot()
-            if job is None or job["state"] != "running":
+            if job is None or job["state"] not in engine_install.ACTIVE:
                 return
             time.sleep(0.05)
 
     def finished(self):
         job = self.installer.snapshot()
-        return job if job and job["state"] != "running" else None
+        return job if job and job["state"] not in engine_install.ACTIVE else None
 
     def argv(self):
         return (self.root / "argv.txt").read_text("utf-8")
@@ -477,6 +474,93 @@ class InstallTests(InstallerCase):
     def test_closing_with_nothing_running_does_nothing(self):
         self.installer.close()
         self.assertIsNone(self.installer.snapshot())
+
+
+class StopInstallerTests(InstallerCase):
+    def test_each_installer_stops_and_retries_at_its_mutating_and_long_running_steps(self):
+        from tests.fixtures.interruptible_model_install import BLOCK, MODEL, write_launcher
+        from tools import install_drama3 as drama
+
+        for key, spec in engine_install.INSTALLERS.items():
+            script, *args = (spec,) if isinstance(spec, str) else spec
+            family = Path(script).stem.removeprefix("install_")
+            if key == "chatterbox-vc":
+                continue  # Same script and arguments as the original Chatterbox install.
+            middle = ("unpack", "unpacking") if family == "drama3" else ("pip", "packages")
+            for gate, phase in (("download", "downloading"), middle, ("check", "checking")):
+                with self.subTest(model=key, phase=phase):
+                    root = self.root / f"{key}-{gate}"
+                    root.mkdir()
+                    stub = root / "start.py"
+                    write_launcher(stub, family)
+                    installer = EngineInstaller(self.pool, root=root, python=sys.executable,
+                                                scripts={key: (stub.name, *args)})
+                    self.installed = False
+                    (root / "hold").write_text(gate, "ascii")
+                    ready = root / ("download-ready" if gate == "download" else f"{gate}.pid")
+
+                    def complete():
+                        current = installer.snapshot()
+                        return current if current["ended_at"] else None
+
+                    try:
+                        job = installer.start(key)
+                        def reached():
+                            current = installer.snapshot()
+                            self.assertNotEqual(current["state"], "failed", current)
+                            return ready.is_file() and (gate == "download" or ready.stat().st_size)
+
+                        self.wait_until(reached, f"{key} to reach {gate}")
+                        pid = int(ready.read_text("ascii")) if gate != "download" else None
+                        if gate == "check":
+                            # Presence probes may already report a complete install while the check is still running.
+                            self.installed = True
+                        stopping = installer.stop(key, job["id"])
+                        self.assertEqual((stopping["state"], stopping["phase"]), ("stopping", phase))
+                        if gate == "pip":
+                            self.assertTrue(worker_pool.process_is_running(pid))
+                            self.assertTrue(self.pool.busy)
+                            self.assertEqual(installer.stop(key, job["id"])["state"], "stopping")
+                            with self.assertRaises(WorkerBusy):
+                                installer.start(key)
+                            (root / "continue").touch()
+                        stopped = self.wait_until(complete, f"{key} to stop")
+                        self.assertEqual(stopped["state"], "stopped", stopped)
+                        self.assertFalse(self.pool.busy)
+                        if pid is not None:
+                            self.wait_until(lambda: not worker_pool.process_is_running(pid), "the installer child to exit")
+                        if gate == "download":
+                            if family == "drama3":
+                                ranges = root / "out" / "drama3" / "models" / (drama.MODEL + ".ranges.json")
+                                self.assertEqual(json.loads(ranges.read_text("utf-8")), [0])
+                            else:
+                                self.assertEqual((root / "checkpoint/model.bin.partial").read_bytes(), MODEL[:BLOCK])
+                        (root / "continue").touch()
+                        previous_requests = (root / "requests").read_text("utf-8").splitlines() if gate != "pip" else []
+                        resumed = installer.start(key)
+                        self.assertNotEqual(resumed["id"], job["id"])
+                        with self.assertRaises(WorkerBusy):
+                            installer.stop(key, job["id"])
+                        done = self.wait_until(complete, f"{key} to finish on retry")
+                        self.assertEqual(done["state"], "finished", done)
+                        self.assertFalse((root / "out" / "install" / f"{key}.resume.json").exists())
+                        if family == "drama3":
+                            receipt = json.loads((root / "out/drama3/installation.json").read_text("utf-8"))
+                            self.assertIn("speech_check", receipt)
+                            self.assertEqual(Path(receipt["model_path"]).read_bytes(), MODEL)
+                        else:
+                            self.assertTrue((root / "receipt").is_file())
+                            self.assertEqual((root / "packages-completed").read_bytes(), b"done\n")
+                            self.assertEqual((root / "checkpoint/model.bin").read_bytes(), MODEL)
+                        after = (root / "requests").read_text("utf-8").splitlines()[len(previous_requests):]
+                        if gate == "download":
+                            expected = f"{drama.MODEL} bytes={BLOCK}-{len(MODEL)-1}" if family == "drama3" else f"model.bin bytes={BLOCK}-"
+                            self.assertEqual(after, [expected])
+                        elif gate == "check":
+                            self.assertEqual(after, [])
+                    finally:
+                        (root / "continue").touch()
+                        installer.close()
 
 
 class GpuBuildTests(unittest.TestCase):

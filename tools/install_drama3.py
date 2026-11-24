@@ -251,6 +251,7 @@ def install_runtime(root, *, say=say_now):
     archive = folder(root) / RUNTIME_ARCHIVE
     if not base.fetch(RUNTIME_URL, archive, RUNTIME_SIZE, RUNTIME_SHA256, say=say):
         say("      already in place")
+    base.phase("unpacking")
     runtime = folder(root) / "runtime"
     with zipfile.ZipFile(archive) as bundle:
         for member in bundle.infolist():
@@ -285,6 +286,7 @@ def download_model(root, *, say=say_now, pause=time.sleep):
     """Fetch the model in pieces of BLOCK bytes, WORKERS at a time, into a .partial file of the full size. The pieces done are
     kept in .ranges.json, so an interrupted download continues from them. Only a file whose SHA-256 matches replaces the
     model."""
+    base.phase("downloading")
     block, workers, size, sha256 = BLOCK, WORKERS, MODEL_SIZE, MODEL_SHA256
     models = folder(root) / "models"
     models.mkdir(parents=True, exist_ok=True)
@@ -381,7 +383,9 @@ def write_receipt(root, executable, check=None):
     if check:
         receipt["speech_check"] = {key: check.get(key) for key in ("load_seconds", "total_seconds", "audio_seconds")}
     path = folder(root) / "installation.json"
-    path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    base.replace_file(temporary, path)
     return path
 
 
@@ -429,7 +433,12 @@ def run(args, *, say=say_now, ask=input, interactive=None, ram_gb=None):
     runtime_needed = executable is None or not (folder(root) / RUNTIME_ARCHIVE).is_file()
     model_needed = not args.runtime_only and not model_done(root)
     assets = [] if args.runtime_only else pending_assets(root)
-    need = (RUNTIME_SIZE * 4 if runtime_needed else 0) + (MODEL_SIZE if model_needed else 0) + SPACE_MARGIN_MB * 10**6
+    archive = folder(root) / RUNTIME_ARCHIVE
+    runtime_need = RUNTIME_SIZE * 3 + base.remaining_bytes(archive, RUNTIME_SIZE) if runtime_needed else 0
+    partial = model_path(root).with_name(MODEL + ".partial")
+    # The range downloader reserves space for the whole model when it creates its partial file.
+    model_need = MODEL_SIZE if model_needed and not (partial.is_file() and partial.stat().st_size == MODEL_SIZE) else 0
+    need = runtime_need + model_need + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if not args.runtime_only:
         problems += ram_problems(total_ram_gb() if ram_gb is None else ram_gb)
@@ -473,7 +482,9 @@ def run(args, *, say=say_now, ask=input, interactive=None, ram_gb=None):
         say(f"The Drama 3 model is already in place ({MODEL_SIZE / 1e9:.1f} GB).")
     receipt = write_receipt(root, executable)  # the Lab, and the speech check, find the model and the runtime through it
     say("Checking that Drama 3 speaks, on the CPU (it can take a few minutes):")
+    base.phase("checking")
     check = run_speech_check(root)
+    base.phase("finishing")
     write_receipt(root, executable, check)
     say("")
     say(

@@ -445,7 +445,7 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     download, disk = switch_mb(card=card) if switch_only else packages_mb(nvidia=nvidia, card=card)
     packages_need = (download + disk) * 10**6 if todo else 0
-    need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
+    need = packages_need + base.checkpoint_space(root, manifest, pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if nvidia:
         problems += nvidia_problems()
@@ -493,7 +493,9 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
         say("Fetching the Chatterbox 500M and Voice Conversion model files:")
         base.download_checkpoint(root, manifest, manifest["files"], say=say)
         say("Checking that Chatterbox 500M speaks and Voice Conversion converts" + where)
+        base.phase("checking")
         check = run_original_check(root, device=device, amd_card=bool(card), number=number)
+        base.phase("finishing")
         receipt = write_receipt(root, manifest, packages, check, original=True, card=card, number=number)
         say("")
         say(f"Chatterbox 500M and Voice Conversion are installed. Chatterbox 500M loaded in {check['load_seconds']:.0f} s and "
@@ -507,8 +509,10 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     say("Fetching the Chatterbox Turbo model files:")
     base.download_checkpoint(root, manifest, manifest["files"], say=say)
     say("Checking that Chatterbox Turbo speaks and clones a voice" + where)
+    base.phase("checking")
     check = run_speech_check(root, device=device, amd_card=bool(card), number=number)
     match = voice_match(check)
+    base.phase("finishing")
     receipt = write_receipt(root, manifest, packages, check, match, card=card, number=number)
     say("")
     say(f"Chatterbox Turbo is installed. It loaded in {check['load_seconds']:.0f} s, spoke {check['reference_seconds']:.1f} s in its "

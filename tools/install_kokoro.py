@@ -54,6 +54,8 @@ except ImportError:  # run as a script, which puts tools\ first on the path and 
     sys.path.append(str(ROOT))
     from hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
 
+from install_control import package_step, phase
+
 LOCK = "requirements/kokoro-cpu.txt"
 NVIDIA_LOCK = "requirements/kokoro-nvidia.txt"
 MANIFEST = "catalog/kokoro_snapshot.json"
@@ -222,6 +224,21 @@ def pending_files(root, manifest, files):
             if not (folder / item["path"]).is_file() or (folder / item["path"]).stat().st_size != item["size"]]
 
 
+def remaining_bytes(destination, size):
+    """Additional disk space for a download that can reuse a partial file."""
+    partial = destination.with_name(destination.name + ".partial")
+    try:
+        have = partial.stat().st_size
+    except FileNotFoundError:
+        have = 0
+    return size - min(size, have)
+
+
+def checkpoint_space(root, manifest, pending):
+    folder = snapshot_dir(root, manifest)
+    return sum(remaining_bytes(folder / item["path"], item["size"]) for item in pending)
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as source:
@@ -267,7 +284,8 @@ def make_env(root, environment, *, runner=subprocess.run):
     python = getattr(sys, "_base_executable", sys.executable)
     # .venv's launcher leaves these behind, and the base Python would then take itself for .venv's.
     env = {key: value for key, value in os.environ.items() if key.upper() not in {"__PYVENV_LAUNCHER__", "VIRTUAL_ENV"}}
-    code = runner([python, "-m", "venv", str(target)], cwd=root, env={**env, "PYTHONUTF8": "1"}).returncode
+    code = package_step([python, "-m", "venv", str(target)], runner=runner, phase_name="environment",
+                        cwd=root, env={**env, "PYTHONUTF8": "1"}).returncode
     if code or not env_python(root, environment).is_file():
         raise InstallError(f"Python could not make {environment} (exit code {code}). Read its message above, delete the "
                            f"{environment} folder if it is there, and run the installer again.")
@@ -277,7 +295,7 @@ def pip_install(root, environment, requirements, *, runner=subprocess.run):
     """pip install a pinned list into an engine's environment, every file checked against its SHA-256."""
     command = [str(env_python(root, environment)), "-m", "pip", "install", "--no-input", "--disable-pip-version-check",
                "--only-binary=:all:", "--no-deps", "--require-hashes", "-r", str(requirements)]
-    code = runner(command, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
+    code = package_step(command, runner=runner, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
     if code:
         raise InstallError(f"pip stopped with exit code {code}. Read its message above, fix the cause, and run the installer "
                            "again: it continues where it stopped.")
@@ -729,6 +747,7 @@ def fetch(url, destination, size, sha256, *, say=say_now, attempts=4, pause=time
     """Download one file: resumed after an interruption, and kept only when its size and SHA-256 match.
 
     Returns False when the file was already in place."""
+    phase("downloading")
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_name(destination.name + ".partial")
@@ -1033,7 +1052,7 @@ def run(args, *, say=say_now, ask=input, interactive=None):
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     download, disk = switch_mb(card=card) if switch_only else packages_mb(nvidia=nvidia, card=card)
     packages_need = (download + disk) * 10**6 if todo else 0
-    need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
+    need = packages_need + checkpoint_space(root, manifest, pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if nvidia:
         problems += nvidia_problems()
@@ -1077,7 +1096,9 @@ def run(args, *, say=say_now, ask=input, interactive=None):
     say("Fetching the Kokoro model files:")
     download_checkpoint(root, manifest, files, say=say)
     say("Checking that Kokoro speaks (the first load is slow):")
+    phase("checking")
     check = run_speech_check(root, device="cuda" if build else "cpu", amd_card=bool(card), number=number)
+    phase("finishing")
     receipt = write_receipt(root, manifest, packages, files, check, card=card, number=number)
     say("")
     where = f" on the {card['name']}" if card else " on the graphics card" if build else ""

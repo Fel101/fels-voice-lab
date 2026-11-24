@@ -115,6 +115,10 @@ appearance before the page paints. `ui_preferences.py` saves the page language, 
   `tests/test_engine_adapters.py` adds a pretend engine this way. A guided installer follows
   [tools/install_phonon.py](../tools/install_phonon.py), the smallest one; the shared pieces are in `tools/install_kokoro.py`.
   Its launcher and script (the adapter's `guided_installer` and `installer`) give the engine's card its **Install** button.
+  [install_control.py](../install_control.py) lets the installer publish its phase and check for Stop before it starts each
+  package command. The service writes the stop flag before reading the phase. It waits if a package command is active
+  and can end the process tree during downloads and speech checks. A stopped install keeps its build choice under
+  `out/install/`, so the card can offer **Install** again even when the files are present.
   The page's scripts still name engines, as their Node tests run page functions without the catalog.
 - **A setting for one computer:** a key in `runtime.local.json`, read with `common.runtime_setting`, and a line in
   [Setup](SETUP.md#hardware-and-state-settings).

@@ -450,7 +450,8 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     source_pending = pending_source(root, source)
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     packages_need = sum(packages_mb(card)) * 10**6 if todo else 0
-    need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
+    source_need = sum(base.remaining_bytes(root / SOURCE / item["path"], item["size"]) for item in source_pending)
+    need = packages_need + source_need + base.checkpoint_space(root, manifest, pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root)
@@ -515,7 +516,9 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     say("Fetching the VoxCPM2 model files:")
     base.download_checkpoint(root, manifest, manifest["files"], say=say)
     say("Checking that VoxCPM2 speaks on the graphics card (a minute or two):")
+    base.phase("checking")
     check = run_speech_check(root, number=number)
+    base.phase("finishing")
     receipt = write_receipt(root, manifest, source, packages, check, card=card, number=number)
     memory = f", using {check['peak_gpu_gb']:.1f} GB of graphics memory at most" if check.get("peak_gpu_gb") else ""
     say("")

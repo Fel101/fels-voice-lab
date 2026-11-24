@@ -120,10 +120,12 @@ def register(router, lab):
 
     @router.get("/api/engines/status")
     def engine_status(self, parsed, req):
+        # A finished install has released the worker by the time snapshot returns.
+        install = installer.snapshot()
         status = engines.engine_status()
         if hasattr(installer, "with_sizes"):
             status = installer.with_sizes(status)
-        self._json(200, {**status, "install": installer.snapshot()})
+        self._json(200, {**status, "install": install})
 
     @router.post("/api/engines/{engine_id}/check")
     def engine_check(self, parsed, req, engine_id):
@@ -139,6 +141,13 @@ def register(router, lab):
         if dry_run:
             return self._json(200, {"plan": installer.plan(engine_id, nvidia=nvidia)})
         self._json(200, {"install": installer.start(engine_id, nvidia=nvidia)})
+
+    @router.post("/api/engines/{engine_id}/install/stop")
+    def engine_install_stop(self, parsed, req, engine_id):
+        job_id = req.get("job_id")
+        if not isinstance(job_id, str) or not job_id:
+            raise ValueError("Send the job_id from the install's progress.")
+        self._json(200, {"install": installer.stop(engine_id, job_id)})
 
     @router.post("/api/engines/{engine_id}/uninstall")
     def engine_uninstall(self, parsed, req, engine_id):

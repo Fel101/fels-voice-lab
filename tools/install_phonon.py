@@ -217,7 +217,7 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     pending = pending_files(root, manifest)
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     need = ((PACKAGES_DOWNLOAD_MB + PACKAGES_DISK_MB) * 10**6 if todo else 0) \
-        + sum(item["size"] for _repo, item in pending) + SPACE_MARGIN_MB * 10**6
+        + sum(base.checkpoint_space(root, repo, [item]) for repo, item in pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root, installed)
@@ -249,7 +249,9 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     for repo in manifest["repos"]:
         base.download_checkpoint(root, repo, repo["files"], say=say)
     say("Checking that Phonon speaks:")
+    base.phase("checking")
     check = run_speech_check(root)
+    base.phase("finishing")
     receipt = write_receipt(root, manifest, packages, check)
     say("")
     say(f"Phonon is installed and spoke a test sentence ({check['audio_seconds']:.1f} s of audio in {check['total_seconds']:.1f} s "

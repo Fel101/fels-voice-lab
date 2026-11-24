@@ -9,7 +9,8 @@ for the plan, which is the script's own --dry-run, so it shows what the script w
 now then starts the script with --yes as a child process under the lab's own Python, as its launcher does (each installer makes
 its model's own environment), and keeps the end of its output for the page to show. One install runs at a time. While it runs
 it holds the pool's job lock, so tests, loads and clips are refused instead of competing with it for memory and disk. Closing
-the service stops the install and its children; the script continues where it stopped when it is run again.
+the service or pressing Stop ends the install and its children after any active package command is safe to leave.
+The script continues where it stopped when it is run again.
 
 A card whose GPU/CPU switch says GPU installs the engine's GPU build for this computer's graphics card (the script's --gpu):
 NVIDIA's CUDA build, or AMD's ROCm build on a computer whose card is an AMD Radeon. An engine installed with the CPU build of
@@ -27,11 +28,15 @@ Models page never shows FFmpeg's progress as a model's.
 
 import codecs
 import importlib
+import json
 import os
 import re
+import signal
 import subprocess
+import tempfile
 import threading
 import time
+import uuid
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +44,7 @@ from pathlib import Path
 import hardware
 import engine_adapters
 import engine_uninstall
+from install_control import CONTROL_ENV, STOPPED, InstallControl
 import worker_pool
 
 # Engine id -> the script its launcher runs (setup-kokoro.bat runs tools\install_kokoro.py), or the script and the arguments
@@ -74,6 +80,8 @@ TOOLS = {
 }
 _STEP = re.compile(r"(?:\d+\.|-)\s")
 _TERMINATORS = re.compile(r"(\r\n|\n|\r)")
+ACTIVE = {"running", "stopping"}
+PROTECTED_PHASES = {"environment", "packages", "finishing", "waiting"}
 
 
 def paragraphs(text):
@@ -126,13 +134,38 @@ class EngineInstaller:
         self._amd = None
         self._jobs = {}    # the latest install of each kind: "engine" or "tool"
         self._tools_seen = {}
-        self._process = None
+        self._resume = {}
+        self._closed = False
 
     def _running(self):
-        return any(job["state"] == "running" for job in self._jobs.values())
+        return next((job for job in self._jobs.values() if job["state"] in ACTIVE), None)
 
-    def _running_name(self):
-        return next(job["name"] for job in self._jobs.values() if job["state"] == "running")
+    def _resume_path(self, key):
+        return self.root / LOG_FOLDER / f"{key}.resume.json"
+
+    def _resume_record(self, key):
+        if key not in self._resume:
+            try:
+                saved = json.loads(self._resume_path(key).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+            if not isinstance(saved, dict) or not isinstance(saved.get("nvidia"), bool):
+                return None
+            self._resume[key] = saved
+        return self._resume[key]
+
+    def _record_resume(self, key, resume):
+        self._resume[key] = resume
+        path = self._resume_path(key)
+        try:
+            if resume is None:
+                path.unlink(missing_ok=True)
+            else:
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(resume), encoding="utf-8")
+                temporary.replace(path)
+        except OSError:
+            pass  # The current service can still offer a retry if the disk is full.
 
     def _resolve(self, key, tool=False):
         if tool:
@@ -174,7 +207,7 @@ class EngineInstaller:
     def with_sizes(self, status):
         """The engine status (worker_pool.engine_status) with an `install_size` on each model that is not installed and that
         Install can put in: {download_bytes, disk_bytes} for the build its Install starts (install_sizes), or None when its
-        numbers cannot be read. The page's first-run note and the cards show it before anyone presses Install."""
+        numbers cannot be read. Also adds `install_resume` to a model whose install was stopped."""
         import install_sizes
 
         gpu = []    # (nvidia, AMD card) for a GPU build, worked out once and only when a row needs it
@@ -190,6 +223,11 @@ class EngineInstaller:
             return gpu[0]
 
         for row in status.get("engines", []):
+            if row["id"] in self.scripts:
+                with self._lock:
+                    resume = self._resume_record(row["id"])
+                if resume:
+                    row["install_resume"] = resume
             if row.get("state") != "not_installed" or not (row.get("installation") or {}).get("installer"):
                 continue
             nvidia, card = gpu_target() if (row.get("gpu") or {}).get("install") else (False, None)
@@ -227,8 +265,8 @@ class EngineInstaller:
         if nvidia and (tool or key not in self.gpu_builds):
             raise ValueError(f"{_entry.get('name', key)} has no GPU build the app can install.")
         with self._lock:
-            if self._running():
-                raise worker_pool.WorkerBusy(f"{self._running_name()} is being installed now.")
+            if running := self._running():
+                raise worker_pool.WorkerBusy(f"{running['name']} is being installed now.")
         try:
             done = subprocess.run([*command, *([GPU_OPTION] if nvidia else []), "--dry-run"], cwd=self.root,
                                   env=_environment(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
@@ -254,39 +292,57 @@ class EngineInstaller:
         name = entry.get("name", key)
         if nvidia and (tool or key not in self.gpu_builds):
             raise ValueError(f"{name} has no GPU build the app can install.")
-        if not tool and self.pool.install_probe(entry)["installed"]:
-            if not nvidia:
-                raise ValueError(f"{name} is already installed.")
-            if self.pool.build_probe(entry)[0] != "cpu":
-                raise ValueError(f"{name} is already installed, and its PyTorch is not the CPU build.")
         with self._lock:
-            if self._running():
-                raise worker_pool.WorkerBusy(f"{self._running_name()} is already being installed.")
+            if self._closed:
+                raise worker_pool.WorkerBusy("Voice Lab is closing. Reopen it to install a model.")
+            if running := self._running():
+                raise worker_pool.WorkerBusy(f"{running['name']} is already being installed.")
             if not tool:
+                resume = self._resume_record(key)
+                if self.pool.install_probe(entry)["installed"] and not (resume and resume["nvidia"] == nvidia):
+                    if not nvidia:
+                        raise ValueError(f"{name} is already installed.")
+                    if self.pool.build_probe(entry)[0] != "cpu":
+                        raise ValueError(f"{name} is already installed, and its PyTorch is not the CPU build.")
                 self.pool.hold(f"{name} is being installed", doing=f"installing {name}")
+            control_dir = None
+            log = None
             try:
+                env = _environment()
+                env.pop(CONTROL_ENV, None)
+                if not tool:
+                    folder = self.root / LOG_FOLDER
+                    folder.mkdir(parents=True, exist_ok=True)
+                    control_dir = tempfile.TemporaryDirectory(prefix="run-", dir=folder,
+                                                              ignore_cleanup_errors=True)
+                    env[CONTROL_ENV] = control_dir.name
                 log_path = self._new_log(key)
                 log = log_path.open("wb")
-                try:
-                    process = subprocess.Popen([*command, *([GPU_OPTION] if nvidia else []), "--yes"], cwd=self.root,
-                                               env=_environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                               stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
-                except Exception:
-                    log.close()
-                    raise
+                process = subprocess.Popen([*command, *([GPU_OPTION] if nvidia else []), "--yes"], cwd=self.root,
+                                           env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
+                                           start_new_session=os.name != "nt")
             except Exception:
-                if not tool:
-                    self.pool.release_hold()
+                try:
+                    if control_dir is not None:
+                        control_dir.cleanup()
+                    if log is not None:
+                        log.close()
+                finally:
+                    if not tool:
+                        self.pool.release_hold()
                 raise
             job = {"engine": key, "kind": "tool" if tool else "engine", "name": name, "nvidia": nvidia, "state": "running",
-                   "started": time.time(), "ended": None,
+                   "id": uuid.uuid4().hex, "started": time.time(), "ended": None, "process": process,
+                   "done": threading.Event(), "stop_phase": None,
+                   "control": InstallControl(control_dir.name) if control_dir else None,
                    "exit_code": None, "lines": deque(maxlen=KEPT_LINES), "current": "", "overwrite": False,
                    "log": f"{LOG_FOLDER}/{log_path.name}"}
-            self._jobs[job["kind"]], self._process = job, process
+            self._jobs[job["kind"]] = job
             if tool:
                 self._tools_seen[key] = job
-        threading.Thread(target=self._pump, args=(job, process, log), name=f"install-{key}", daemon=True).start()
-        return self.snapshot(job["kind"])
+            threading.Thread(target=self._pump, args=(job, log, control_dir), name=f"install-{key}", daemon=True).start()
+            return self._snapshot(job)
 
     def _new_log(self, key):
         folder = self.root / LOG_FOLDER
@@ -302,6 +358,16 @@ class EngineInstaller:
             count += 1
             path = folder / f"{stem}-{count}.log"
         return path
+
+    def stop(self, key, job_id):
+        """Ask the matching model install to stop, without interrupting a package command."""
+        with self._lock:
+            job = self._jobs.get("engine")
+            if not job or job["engine"] != key or job["id"] != job_id:
+                raise worker_pool.WorkerBusy("That install has ended. Open Show progress for the current install.")
+            if job["state"] == "running":
+                self._halt(job, user_requested=True)
+            return self._snapshot(job)
 
     def _feed(self, job, text):
         """Add output to the job as a terminal would show it: a newline ends a line, and a carriage return lets the next text
@@ -325,7 +391,8 @@ class EngineInstaller:
                 job["lines"].append(job["current"])
             job["current"], job["overwrite"] = "", False
 
-    def _pump(self, job, process, log):
+    def _pump(self, job, log, control_dir):
+        process = job["process"]
         decoder = codecs.getincrementaldecoder("utf-8")("replace")
         code = None
         try:
@@ -340,7 +407,11 @@ class EngineInstaller:
             code = process.wait()
         except Exception as exc:
             self._feed(job, f"\nThe service stopped reading the installer's output: {type(exc).__name__}: {exc}\n")
-            self._stop(process)
+            with self._lock:
+                protected = self._halt(job)
+            if protected:
+                while process.stdout.read1(4096):
+                    pass    # keep draining pip's output until it can exit
             code = process.wait()
         finally:
             try:
@@ -350,29 +421,46 @@ class EngineInstaller:
                     except OSError:    # a full disk can fail the last flush of the log, and the install must still end
                         pass
                 self._commit(job)
-                with self._lock:
-                    job["exit_code"] = code if code is not None else -1
-                    job["state"] = "finished" if code == 0 else "failed"
-                    job["ended"] = time.time()
             finally:
-                if job["kind"] == "engine":
-                    self.pool.release_hold()    # after the state is final, so a page that sees the service free sees the result
+                with self._lock:
+                    if control_dir:
+                        control_dir.cleanup()
+                    job["exit_code"] = code if code is not None else -1
+                    phase = job["stop_phase"]
+                    stopped = job["control"] is not None and (code == STOPPED or (phase and phase not in PROTECTED_PHASES))
+                    job["state"] = "finished" if code == 0 else "stopped" if stopped else "failed"
+                    job["ended"] = time.time()
+                    if job["kind"] == "engine":
+                        key = job["engine"]
+                        if code == 0:
+                            self._record_resume(key, None)
+                        elif phase:
+                            self._record_resume(key, {"nvidia": job["nvidia"], "phase": phase})
+                        self.pool.release_hold()
+                    job["done"].set()
 
     def snapshot(self, kind="engine", *, tool_key=None):
         """The latest install of that kind ("engine", or "tool" for FFmpeg), or None when none has run since the service
         started: engine (the engine's or tool's id), name, nvidia (the GPU build),
-        state (running, finished or failed), started_at, ended_at, seconds so far, exit_code, the end of its output as lines,
-        and its log file."""
+        state, started_at, ended_at, seconds so far, exit_code, the end of its output as lines, and its log file.
+        Model jobs report an id and phase for Stop."""
         with self._lock:
             job = self._jobs.get(kind) if tool_key is None else self._tools_seen.get(tool_key)
-            if job is None:
-                return None
-            lines = list(job["lines"]) + ([job["current"]] if job["current"] else [])
-            ended = job["ended"]
-            return {"engine": job["engine"], "name": job["name"], "nvidia": job["nvidia"], "state": job["state"],
-                    "started_at": _stamp(job["started"]),
-                    "ended_at": _stamp(ended) if ended else None, "seconds": round((ended or time.time()) - job["started"], 1),
-                    "exit_code": job["exit_code"], "lines": lines[-TAIL_LINES:], "log": job["log"]}
+            return self._snapshot(job) if job else None
+
+    def _snapshot(self, job):
+        lines = list(job["lines"]) + ([job["current"]] if job["current"] else [])
+        ended = job["ended"]
+        answer = {"engine": job["engine"], "name": job["name"], "nvidia": job["nvidia"], "state": job["state"],
+                  "started_at": _stamp(job["started"]),
+                  "ended_at": _stamp(ended) if ended else None, "seconds": round((ended or time.time()) - job["started"], 1),
+                  "exit_code": job["exit_code"], "lines": lines[-TAIL_LINES:], "log": job["log"]}
+        if job["control"] is not None:
+            phase = job["stop_phase"]
+            if job["state"] == "running":
+                phase = job["control"].current_phase()
+            answer.update(id=job["id"], phase=phase)
+        return answer
 
     def uninstall_plan(self, key):
         """What uninstalling a model deletes and what stays (engine_uninstall.plan), for the confirmation."""
@@ -383,12 +471,16 @@ class EngineInstaller:
         deleted, so no request can start one of them halfway. Raises WorkerBusy while an install or a request runs."""
         name = self.pool.entries.get(key, {}).get("name", key)
         with self._lock:
-            if self._running():
-                raise worker_pool.WorkerBusy(f"{self._running_name()} is being installed. Uninstall {name} when it has finished.")
+            if running := self._running():
+                raise worker_pool.WorkerBusy(f"{running['name']} is being installed. Uninstall {name} when it has finished.")
         self.pool.hold(f"{name} is being uninstalled", doing=f"uninstalling {name}")
         try:
             self.pool.unload_held()
-            return engine_uninstall.run(self.pool.entries, key, self.root, self.pool.install_probe)
+            result = engine_uninstall.run(self.pool.entries, key, self.root, self.pool.install_probe)
+            if not result["failed"]:
+                with self._lock:
+                    self._record_resume(key, None)
+            return result
         finally:
             self.pool.release_hold()
 
@@ -398,19 +490,42 @@ class EngineInstaller:
         python.exe is only a launcher for the interpreter that runs the script."""
         if os.name == "nt":
             try:
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, creationflags=NO_WINDOW)
-            except OSError:
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True,
+                               creationflags=NO_WINDOW, timeout=CLOSE_WAIT)
+            except (OSError, subprocess.TimeoutExpired):
                 pass
-        process.kill()
+            process.kill()
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    def _halt(self, job, *, user_requested=False):
+        """Signal a stop, then terminate the process tree if the current phase can be interrupted."""
+        if job["process"].poll() is not None:
+            return False
+        control = job["control"]
+        try:
+            phase = control.request_stop() if control else None
+        except OSError:
+            if user_requested:
+                raise
+            return True    # Without the stop flag, a safe phase could change to pip before a kill.
+        protected = phase in PROTECTED_PHASES
+        if user_requested or protected:
+            job["stop_phase"] = phase
+            job["state"] = "stopping"
+        if not protected:
+            self._stop(job["process"])
+        return protected
 
     def close(self):
         """Stop a running install and the processes it started."""
         with self._lock:
-            process = self._process if self._running() else None
-        if process is None:
-            return
-        self._stop(process)
-        try:
-            process.wait(timeout=CLOSE_WAIT)
-        except subprocess.TimeoutExpired:
-            pass
+            self._closed = True
+            job = self._running()
+            if job is None:
+                return
+            protected = self._halt(job) if job["state"] == "running" else job["stop_phase"] in PROTECTED_PHASES
+        job["done"].wait(timeout=None if protected else CLOSE_WAIT)

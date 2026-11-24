@@ -429,7 +429,7 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     pending = base.pending_files(root, manifest, manifest["files"])
     todo = 0 if args.checkpoint_only else len(missing) + len(different)
     packages_need = sum(packages_mb(card)) * 10**6 if todo else 0
-    need = packages_need + sum(item["size"] for item in pending) + SPACE_MARGIN_MB * 10**6
+    need = packages_need + base.checkpoint_space(root, manifest, pending) + SPACE_MARGIN_MB * 10**6
     problems = interpreter_problems(root)
     if args.checkpoint_only:
         problems += checkpoint_only_problems(root, installed)
@@ -492,7 +492,9 @@ def run(args, *, say=base.say_now, ask=input, interactive=None):
     say(f"Fetching the {spec['name']} model files:")
     base.download_checkpoint(root, manifest, manifest["files"], say=say)
     say(f"Checking that {spec['name']} speaks on the graphics card (a minute or two):")
+    base.phase("checking")
     check = run_speech_check(root, engine, number=number)
+    base.phase("finishing")
     receipt = write_receipt(root, engine, manifest, packages, check, card=card, number=number)
     memory = f", using {check['peak_gpu_gb']:.1f} GB of graphics memory at most" if check.get("peak_gpu_gb") else ""
     say("")

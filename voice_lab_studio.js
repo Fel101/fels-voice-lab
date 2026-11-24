@@ -264,9 +264,21 @@ function fillCatalog() {
 var modelCards={};
 var engineStateNames={not_integrated:LabText.t('studio.not_integrated'),not_installed:LabText.t('studio.not_installed_yet'),conversion_task:LabText.t('studio.conversion_task')};
 function deviceLabel(device){return device==='cpu'?'CPU':device==='cuda'?'GPU':String(device||'');}
+function activeInstall(job){return !!job&&(job.state==='running'||job.state==='stopping');}
+function stoppingInstall(phase){
+  if(phase==='packages'){return LabText.t('studio.stopping_after_this_package');}
+  if(phase==='environment'){return LabText.t('studio.stopping_after_python_setup');}
+  return LabText.t('studio.stopping_install');
+}
+function stoppedInstall(phase){
+  if(phase==='checking'||phase==='finishing'){return LabText.t('studio.install_stopped_check');}
+  if(phase==='preparing'||phase==='environment'||phase==='packages'){return LabText.t('studio.install_stopped_packages');}
+  return LabText.t('studio.install_stopped_download');
+}
 function engineStateText(row,device,job){
   // While an install runs the card's text stays put, so the cards around it do not move: its progress is in the install window.
-  if(job&&job.state==='running'){return job.nvidia?LabText.t('studio.installing_the_gpu_build'):LabText.t('studio.installing');}
+  if(activeInstall(job)){return job.state==='stopping'?stoppingInstall(job.phase):job.nvidia?LabText.t('studio.installing_the_gpu_build'):LabText.t('studio.installing');}
+  if(row.install_resume){return LabText.t('studio.install_paused');}
   // A model that could not use the graphics card when it loaded ran on the CPU: say so rather than the service's device.
   var ran=row.check&&row.check.ran_on==='cpu'?'cpu':device;
   if(row.state==='usable'){return LabText.t('studio.speaks_now_on', {device: deviceLabel(ran)});}
@@ -280,6 +292,9 @@ function elapsedText(seconds){var total=Math.round(seconds||0),minutes=Math.floo
 function engineDetailText(row,device,job){
   // A running install leaves this text as it was (the state line and the button say it runs), so the card keeps its height.
   var check=row.check,install=row.installation||{};
+  if(row.install_resume&&!activeInstall(job)){
+    return job&&job.state==='failed'?LabText.t('studio.install_retry_failed'):stoppedInstall(row.install_resume.phase);
+  }
   // A model that is not installed says what Install will fetch; the files it lacks and any log are under the card's Details.
   if(row.state==='not_installed'){
     var size=row.install_size;
@@ -396,9 +411,9 @@ function studioReady(job){
 }
 function renderFirstRun(status){
   var rows=status.engines||[],job=status.install||null,box=$('firstRun'),button=$('firstRunButton');
-  var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only;});
-  var running=!!job&&job.state==='running';
-  var offer=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;})[0];
+  var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only&&!row.install_resume;});
+  var running=activeInstall(job);
+  var offer=rows.find(function(row){return row.install_resume;})||rows.find(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;});
   if(installed&&firstRun.engine&&job&&job.engine===firstRun.engine&&job.state==='finished'){studioReady(job);}
   firstRun.action=null;$('firstRunSample').hidden=true;
   if(firstRun.ready&&installed){
@@ -415,16 +430,16 @@ function renderFirstRun(status){
   if(running){
     firstRun.action={kind:'progress',engine:job.engine};
     $('firstRunTitle').textContent=LabText.t('studio.installing_2', {name: job.name});
-    $('firstRunText').textContent=LabText.t('studio.running_for_nothing_can_speak', {elapsed: elapsedText(job.seconds)});
+    $('firstRunText').textContent=job.state==='stopping'?stoppingInstall(job.phase):LabText.t('studio.running_for_nothing_can_speak', {elapsed: elapsedText(job.seconds)});
     button.textContent=LabText.t('studio.show_progress');button.disabled=false;
     return;
   }
   firstRun.action={kind:'install',engine:offer.id};
   var failed=job&&job.state==='failed'&&job.engine===offer.id;
-  $('firstRunTitle').textContent=failed?LabText.t('studio.did_not_install', {name: offer.name}):LabText.t('studio.no_voice_model_is_installed');
+  $('firstRunTitle').textContent=failed?LabText.t('studio.did_not_install', {name: offer.name}):offer.install_resume?LabText.t('studio.install_paused'):LabText.t('studio.no_voice_model_is_installed');
   $('firstRunText').textContent=failed
     ?LabText.t('studio.the_install_stopped_exit_code', {exit_code: job.exit_code, elapsed: elapsedText(job.seconds), log: job.log})
-    :LabText.t('studio.install_to_hear_the_lab', {name: offer.name, download_details: installSizeText(offer)});
+    :offer.install_resume?stoppedInstall(offer.install_resume.phase):LabText.t('studio.install_to_hear_the_lab', {name: offer.name, download_details: installSizeText(offer)});
   button.textContent=LabText.t('studio.install', {name: offer.name});button.disabled=!!status.busy;
 }
 function placeCards(status){
@@ -580,14 +595,14 @@ function renderDeviceSwitch(view,row,status,job){
 }
 function renderEngineStatus(status){
   var job=status.install||null;
-  installRunning=!!job&&job.state==='running';
+  installRunning=activeInstall(job);
   (status.engines||[]).forEach(function(row){
     var view=modelCards[row.id];if(!view){return;}
-    var mine=job&&job.engine===row.id?job:null,running=!!mine&&mine.state==='running',missing=row.state==='not_installed',install=row.installation||{},need=ramText(row,status.ram);
+    var mine=job&&job.engine===row.id?job:null,running=activeInstall(mine),missing=row.state==='not_installed',install=row.installation||{},resume=row.install_resume,need=ramText(row,status.ram);
     // The device the card names: the CPU when its switch says so, which is also true of Phonon and Drama 3, whose workers keep
     // the service's device and choose the CPU themselves.
     var device=row.switch==='cpu'?'cpu':(row.device||status.device);
-    view.action=running?'progress':missing?(install.installer?'install':'none'):(row.state==='not_integrated'||row.state==='conversion_task'?'none':'test');
+    view.action=running?'progress':resume?'install':missing?(install.installer?'install':'none'):(row.state==='not_integrated'||row.state==='conversion_task'?'none':'test');
     view.state.textContent=engineStateText(row,device,mine);
     view.details.textContent=engineDetailText(row,device,mine);
     var more=engineMoreText(row,mine);
@@ -597,8 +612,9 @@ function renderEngineStatus(status){
     view.button.hidden=view.action==='none';
     view.button.disabled=view.action!=='progress'&&(!!status.busy||view.action==='none');
     renderDeviceSwitch(view,row,status,mine);
-    var gpuBuild=!running&&!missing&&!!row.gpu&&row.switch==='gpu'&&row.gpu.build==='cpu'&&row.gpu.install;
-    view.extra=gpuBuild?'gpu':(mine&&mine.state==='failed'&&missing?'output':null);
+    if(resume){view.installGpu=resume.nvidia;}
+    var gpuBuild=!running&&!missing&&!resume&&!!row.gpu&&row.switch==='gpu'&&row.gpu.build==='cpu'&&row.gpu.install;
+    view.extra=gpuBuild?'gpu':(mine&&mine.state==='failed'&&(missing||resume)?'output':null);
     view.extraButton.textContent=view.extra==='gpu'?LabText.t('studio.install_gpu_build'):LabText.t('studio.show_output');
     view.extraButton.hidden=!view.extra;
     view.extraButton.disabled=view.extra==='gpu'&&!!status.busy;
@@ -628,15 +644,16 @@ function checkEngine(engineId){
 }
 function addNote(parent,text,className){var note=document.createElement('p');note.className=className;note.textContent=text;parent.appendChild(note);}
 // The install window: the plan before an install, then its progress. It sits over the page, so the cards never move for it.
-var installDialog={engine:null,nvidia:false,mode:null},installDialogWired=false;
-function dialogParts(){return {box:$('installDialog'),title:$('installTitle'),state:$('installState'),plan:$('installPlan'),log:$('installLog'),go:$('installGo'),close:$('installClose')};}
+var installDialog={engine:null,nvidia:false,mode:null,job:null,stopPending:false,stopError:''},installDialogWired=false;
+function dialogParts(){return {box:$('installDialog'),title:$('installTitle'),state:$('installState'),plan:$('installPlan'),log:$('installLog'),go:$('installGo'),stop:$('installStop'),close:$('installClose')};}
 function wireInstallDialog(){
   if(installDialogWired){return;}
   installDialogWired=true;
   var parts=dialogParts();
   parts.go.addEventListener('click',function(){startInstall();});
+  parts.stop.addEventListener('click',function(){stopInstall();});
   parts.close.addEventListener('click',function(){closeInstallDialog();});
-  parts.box.addEventListener('close',function(){installDialog={engine:null,nvidia:false,mode:null};});
+  parts.box.addEventListener('close',function(){if(!parts.box.open){installDialog.mode=null;}});
   var gone=uninstallParts();
   gone.go.addEventListener('click',function(){return startUninstall();});
   gone.close.addEventListener('click',function(){closeUninstall();});
@@ -644,15 +661,16 @@ function wireInstallDialog(){
 }
 function openInstallDialog(engineId,nvidia,mode,title){
   var parts=dialogParts();
-  installDialog={engine:engineId,nvidia:!!nvidia,mode:mode};
+  installDialog={engine:engineId,nvidia:!!nvidia,mode:mode,job:null,stopPending:false,stopError:''};
   parts.title.textContent=title;parts.state.textContent='';parts.plan.textContent='';parts.log.textContent='';
   parts.plan.hidden=mode!=='plan';parts.log.hidden=mode!=='progress';parts.go.hidden=true;parts.go.disabled=false;
+  parts.stop.hidden=true;parts.stop.disabled=false;
   parts.close.textContent=mode==='plan'?LabText.t('studio.cancel'):LabText.t('studio.hide');
   if(!parts.box.open&&parts.box.showModal){parts.box.showModal();}
   return parts;
 }
 function closeInstallDialog(){
-  var box=$('installDialog');installDialog={engine:null,nvidia:false,mode:null};
+  var box=$('installDialog');installDialog.mode=null;
   if(box.open&&box.close){box.close();}
 }
 function planInstall(engineId,nvidia){
@@ -672,10 +690,24 @@ function startInstall(){
   var engineId=installDialog.engine,nvidia=installDialog.nvidia,parts=dialogParts();
   if(!engineId||installDialog.mode!=='plan'){return;}
   parts.go.disabled=true;
-  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{nvidia:nvidia}).then(function(){
+  return fetchJson('/api/engines/'+encodeURIComponent(engineId)+'/install',{nvidia:nvidia}).then(function(result){
     var view=modelCards[engineId];
     openInstallDialog(engineId,nvidia,'progress',nvidia ? LabText.t('studio.installing_gpu_model', {model: view ? view.name : engineId}) : LabText.t('studio.installing_4', {name: view ? view.name : engineId})).state.textContent=LabText.t('studio.starting');
+    renderInstallDialog(result.install);
   }).catch(function(e){parts.state.textContent=LabText.t('studio.the_install_did_not_start', {message: e.message});parts.go.hidden=true;parts.close.textContent=LabText.t('studio.close');}).then(function(){parts.go.disabled=false;return refreshEngineStatus();});
+}
+function stopInstall(){
+  var dialog=installDialog,job=dialog.job;
+  if(!job||job.state!=='running'||dialog.stopPending){return;}
+  dialog.stopPending=true;dialog.stopError='';
+  renderInstallDialog(job);
+  return fetchJson('/api/engines/'+encodeURIComponent(job.engine)+'/install/stop',{job_id:job.id}).then(function(result){
+    dialog.stopPending=false;
+    if(installDialog===dialog){renderInstallDialog(result.install);}
+  }).catch(function(e){
+    dialog.stopPending=false;dialog.stopError=LabText.t('studio.install_stop_error',{message:e.message});
+    if(installDialog===dialog){renderInstallDialog(dialog.job);}
+  }).then(refreshEngineStatus);
 }
 function showProgress(engineId){
   var view=modelCards[engineId];if(!view){return;}
@@ -728,11 +760,22 @@ function closeUninstall(){
 }
 function renderInstallDialog(job){
   if(installDialog.mode!=='progress'||!job||job.engine!==installDialog.engine){return;}
-  var parts=dialogParts(),name=job.name+(job.nvidia?LabText.t('studio.gpu_build'):'');
-  if(job.state==='running'){
+  var previous=installDialog.job;
+  if(previous&&previous.id===job.id&&((previous.state==='stopping'&&job.state==='running')||(!activeInstall(previous)&&activeInstall(job)))){return;}
+  installDialog.job=job;
+  var parts=dialogParts(),name=job.name+(job.nvidia?LabText.t('studio.gpu_build'):''),running=activeInstall(job);
+  parts.stop.hidden=!running||!job.id;
+  if((!running||job.state==='stopping'||installDialog.stopPending)&&document.activeElement===parts.stop){parts.close.focus();}
+  parts.stop.disabled=job.state==='stopping'||installDialog.stopPending;
+  if(running){
     parts.title.textContent=LabText.t('studio.installing_4', {name: name});
-    parts.state.textContent=LabText.t('studio.running_for_downloads_and_packages', {elapsed: elapsedText(job.seconds)});
+    parts.state.textContent=job.state==='stopping'||installDialog.stopPending?stoppingInstall(job.phase):
+      installDialog.stopError||LabText.t('studio.running_for_downloads_and_packages', {elapsed: elapsedText(job.seconds)});
     parts.close.textContent=LabText.t('studio.hide');
+  }else if(job.state==='stopped'){
+    parts.title.textContent=LabText.t('studio.install_paused');
+    parts.state.textContent=stoppedInstall(job.phase);
+    parts.close.textContent=LabText.t('studio.close');
   }else if(job.state==='finished'){
     parts.title.textContent=LabText.t('studio.is_installed_2', {name: name});
     parts.state.textContent=LabText.t('studio.it_finished_in_press_test', {elapsed: elapsedText(job.seconds)});

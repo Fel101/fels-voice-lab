@@ -245,6 +245,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
 | POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer. |
+| POST | [`/api/engines/{engine_id}/install/stop`](#post-api-engines-engine_id-install-stop) | Stop a guided model install. An active package command finishes first. Resumable model downloads are kept. |
 | POST | [`/api/engines/{engine_id}/uninstall`](#post-api-engines-engine_id-uninstall) | Uninstall a model: read what it would delete, or delete its files from the Lab's folder. |
 | POST | [`/api/engines/{engine_id}/device`](#post-api-engines-engine_id-device) | Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does. |
 | POST | [`/api/load`](#post-api-load) | Load an engine into memory ahead of its first use. |
@@ -300,7 +301,7 @@ List every engine the Lab knows, with its support level, pinned checkpoint, capa
 
 Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.
 
-**Answer:** `200`, JSON. `device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), `state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder).
+**Answer:** `200`, JSON. `device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), `state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, `downloading`, `unpacking`, `checking`, `finishing`, `waiting` or `null`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder). A card that can retry an interrupted install has `install_resume` with its `nvidia` choice and the `phase` where it was interrupted.
 
 <a id="post-api-engines-engine_id-check"></a>
 
@@ -346,6 +347,27 @@ Install an engine with its guided installer (every engine in the catalog has one
 |---|---|
 | `400` | The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or `dry_run` or `nvidia` is not true or false. |
 | `409` | An install is already running, or the model worker is busy. |
+
+<a id="post-api-engines-engine_id-install-stop"></a>
+
+#### `POST /api/engines/{engine_id}/install/stop`
+
+Stop a guided model install. An active package command finishes first. Resumable model downloads are kept.
+
+| Path parameter | Meaning |
+|---|---|
+| `engine_id` | An engine id from `GET /api/catalog`. |
+
+| Request field | Type | Meaning |
+|---|---|---|
+| `job_id` (required) | string | The install's `id` from its progress. |
+
+**Answer:** `200`, JSON. `install`: the matching job, as in `GET /api/engines/status`. Poll until its state is final.
+
+| Also answers | When |
+|---|---|
+| `400` | The job id is missing or invalid. |
+| `409` | The current install does not match this job. |
 
 <a id="post-api-engines-engine_id-uninstall"></a>
 

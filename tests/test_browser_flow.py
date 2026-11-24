@@ -48,7 +48,7 @@ BROWSER_PATHS = [
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
 ]
 STATUS_IDS = ["err", "performError", "performStatus", "referenceStatus", "sceneError", "sceneStatus",
-              "exportError", "exportStatus"]
+              "exportError", "exportStatus", "installState"]
 
 
 def find_browser():
@@ -875,6 +875,107 @@ class GenerateAfterInstallTests(unittest.TestCase):
 
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class InstallWindowTests(unittest.TestCase):
+    def test_stop_with_the_keyboard_and_retry_from_the_model_card(self):
+        from engine_install import EngineInstaller
+        from tests.fixtures.interruptible_model_install import write_launcher
+
+        with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
+            root = Path(temp)
+            write_launcher(root / "installer.py", "kokoro")
+            (root / "hold").write_text("pip", "ascii")
+            installer = None
+
+            def setup(pool):
+                nonlocal installer
+                pool.busy = False
+
+                def hold(*_, **_kwargs):
+                    pool.busy = True
+
+                def release():
+                    pool.busy = False
+
+                def probe(_):
+                    return {"installed": (root / "check.pid").is_file(), "installer": "setup-kokoro.bat"}
+
+                def status():
+                    installation = probe(None)
+                    return {"device": "cpu", "busy": pool.busy, "speed": [], "engines": [{
+                        "id": "kokoro", "name": "Kokoro 82M", "installation": installation,
+                        "state": "not_checked" if installation["installed"] else "not_installed",
+                    }]}
+
+                pool.hold, pool.release_hold, pool.install_probe, pool.engine_status = hold, release, probe, status
+                installer = EngineInstaller(pool, root=root, python=sys.executable, scripts={"kokoro": "installer.py"})
+                return installer
+
+            with mock.patch.object(serve, "EngineInstaller", side_effect=setup):
+                server = FlowServer(root)
+            page = None
+            card_button = "modelCards.kokoro.button"
+            try:
+                page = DevToolsPage(BROWSER)
+                page.open(server.base + "/#models")
+                page.wait_until(f"{card_button}.textContent === 'Install' && !{card_button}.disabled")
+                page.evaluate("modelCards.kokoro.card.id = 'kokoro-test-card'")
+                card = "#kokoro-test-card .model-actions button:first-child"
+                page.click(card)
+                page.wait_until("!$('installGo').hidden")
+                self.assertTrue(page.evaluate("$('installStop').hidden"))
+                page.click("#installGo")
+                page.wait_until("installDialog.job?.phase === 'packages' && !$('installStop').hidden")
+                page.evaluate("$('installClose').focus()")
+                page.press("Tab", "Tab", 9, modifiers=SHIFT)
+                self.assertEqual(page.evaluate("document.activeElement.id"), "installStop")
+                page.press(" ", "Space", 32)
+                page.wait_until("installDialog.job?.state === 'stopping' && $('installState').textContent.startsWith('Stopping after this package')")
+                self.assertEqual(page.evaluate("document.activeElement.id"), "installClose")
+                page.screenshot("install-stopping-after-package", "#installDialog")
+                page.click("#installClose")
+                page.wait_until(f"{card_button}.textContent === 'Show progress'")
+                page.click(card)
+                page.wait_until("installDialog.job?.state === 'stopping'")
+                (root / "continue").touch()
+                page.wait_until("installDialog.job?.state === 'stopped' && $('installState').textContent.includes('Choose Install')")
+                page.click("#installClose")
+                page.wait_until(f"{card_button}.textContent === 'Install' && !{card_button}.disabled")
+
+                (root / "continue").unlink()
+                (root / "hold").write_text("check", "ascii")
+                self.assertTrue(page.evaluate("fetch('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},"
+                                              "body:JSON.stringify({language:'es'})}).then(r=>r.ok)"))
+                page.call("Page.reload", {"ignoreCache": True})
+                page.wait_until(f"document.documentElement.lang === 'es' && {card_button}.textContent === 'Instalar'")
+                page.evaluate("modelCards.kokoro.card.id = 'kokoro-test-card'")
+                page.click(card)
+                page.wait_until("!$('installGo').hidden")
+                page.click("#installGo")
+                page.wait_until("installDialog.job?.phase === 'checking' && !$('installStop').hidden")
+                self.assertEqual(page.evaluate("$('installStop').textContent"), "Detener")
+                page.wait_until("fetch('/api/engines/status').then(r=>r.json()).then(s=>s.engines[0].installation.installed)")
+                page.click("#installStop")
+                page.wait_until("installDialog.job?.state === 'stopped' && $('installState').textContent.includes('comprobación del modelo')")
+                page.click("#installClose")
+                page.wait_until(f"{card_button}.textContent === 'Instalar' && !{card_button}.disabled")
+                page.screenshot("install-stopped-model-check", "#kokoro-test-card")
+
+                (root / "continue").touch()
+                page.click(card)
+                page.wait_until("!$('installGo').hidden")
+                page.click("#installGo")
+                page.wait_until("installDialog.job?.state === 'finished'")
+                page.click("#installClose")
+                page.wait_until(f"{card_button}.textContent === 'Prueba'")
+                self.assertTrue((root / "receipt").is_file())
+                self.assertEqual(page.problems, [])
+            finally:
+                (root / "continue").touch()
+                if page is not None:
+                    page.close()
+                server.close()
+                if installer is not None:
+                    installer.close()
+
     def test_the_install_window_shows_while_model_studio_is_open(self):
         """The first-run note in Model studio opens the same install window as a model's card, while Models & features is
         hidden. A modal dialog inside a hidden section opens with no size, and the page behind it stops answering."""

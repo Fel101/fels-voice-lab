@@ -163,7 +163,7 @@ def build_from_source(root, environment, requirements, *, runner=subprocess.run)
         "-r",
         str(requirements),
     ]
-    code = runner(command, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
+    code = base.package_step(command, runner=runner, cwd=root, env={**os.environ, "PYTHONUTF8": "1"}).returncode
     if code:
         raise InstallError(
             f"pip stopped with exit code {code} while it built {SOURCE_PACKAGE}, the part of AMD's ROCm runtime that AMD "

@@ -226,9 +226,11 @@ ROUTES = [
             "also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, "
             "from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. "
             "`install` is the latest install started from the Models "
-            "page, or `null` when none has run since the service started: `engine`, `name`, `nvidia` (the GPU build), "
-            "`state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end "
-            "of its output) and `log` (all of it, a path under the lab folder)."),
+            "page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), "
+            "`state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, "
+            "`downloading`, `unpacking`, `checking`, `finishing`, `waiting` or `null`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` "
+            "(the end of its output) and `log` (all of it, a path under the lab folder). A card that can retry an interrupted "
+            "install has `install_resume` with its `nvidia` choice and the `phase` where it was interrupted."),
     R("POST", "/api/engines/{engine_id}/check", "Service",
       "Check that one engine can speak now: confirm its files, load it and speak one short clip.",
       body_kind="none",
@@ -253,6 +255,11 @@ ROUTES = [
       errors=((400, "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or "
                     "`dry_run` or `nvidia` is not true or false."),
               (409, "An install is already running, or the model worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/install/stop", "Service",
+      "Stop a guided model install. An active package command finishes first. Resumable model downloads are kept.",
+      body=(F("job_id", "string", "The install's `id` from its progress.", required=True),),
+      reply="`install`: the matching job, as in `GET /api/engines/status`. Poll until its state is final.",
+      errors=((400, "The job id is missing or invalid."), (409, "The current install does not match this job."))),
     R("POST", "/api/engines/{engine_id}/uninstall", "Service",
       "Uninstall a model: read what it would delete, or delete its files from the Lab's folder.",
       body=(F("dry_run", "boolean", "Only read the plan: what would be deleted and what stays. Nothing is changed. Default "

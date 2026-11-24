@@ -29,6 +29,9 @@ and the four [Qwen3-TTS](#qwen3-tts-on-a-graphics-card) models, [VoxCPM2](#voxcp
 [Breeze TTS 2](#breeze-tts-2-on-a-graphics-card) only on a graphics card, an NVIDIA card or an [AMD Radeon](#amd-radeon-cards).
 A core installation without a model opens the studio and its stores, but cannot speak until one is installed.
 
+To pause a model install, open **Show progress** on its card and press **Stop**. The Lab lets the current package command
+finish and keeps completed files and resumable downloads. Press **Install** on the same card to continue.
+
 Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and so on), apart from
 the service's `.venv`, so no installer can change the packages another model or the service depends on.
 [Troubleshooting](TROUBLESHOOTING.md) has a table of what runs on an 8, 16 or 32 GB computer.
