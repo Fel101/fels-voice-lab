@@ -2,6 +2,10 @@
 
     .venv\\Scripts\\python.exe tools\\real_model_smoke.py kokoro
     .venv\\Scripts\\python.exe tools\\real_model_smoke.py --all-installed
+    .venv\\Scripts\\python.exe tools\\real_model_smoke.py --supported --device cuda
+
+For a release, run --supported on the GPU and again with --device cpu. The CPU pass selects the Supported models that
+run on the CPU. A required model that is missing or runs on the wrong device fails the pass.
 
 Nearly every other test runs without loading a model. This one loads them. For each model it:
 
@@ -90,6 +94,15 @@ def choose(status, names, *, all_installed):
     if converts:
         raise Usage(f"{', '.join(converts)} converts recordings and does not speak text, so there is nothing to try.")
     return list(names)
+
+
+def choose_supported(catalog, *, device):
+    """Read the release list from the catalog so an absent installation cannot shrink the test run."""
+    return [
+        entry["id"]
+        for entry in catalog["engines"]
+        if entry["support"] == "supported" and (device != "cpu" or entry["facts"]["runs"]["cpu"])
+    ]
 
 
 def judge(path, *, engine, sample_rate, text=SENTENCE):
@@ -250,14 +263,25 @@ def run(args, *, out=ROOT / "out" / "smoke", service_factory=Service, say=print,
     try:
         say(f"Starting the Lab's service (its log: {folder / 'service.log'}) ...")
         health = service.start()
-        status = lab_cli.get_json(service.base, "/api/engines/status", 60)
-        engines = choose(status, args.models, all_installed=args.all_installed)
-        if not engines:
-            raise Usage("No model is installed. Install one from the Models page, or name one to see why it fails.")
+        if args.supported:
+            catalog = lab_cli.get_json(service.base, "/api/catalog", 60)
+            engines = choose_supported(catalog, device=args.device)
+            if not engines:
+                raise Usage("No Supported model is listed for this pass. Check the model catalog.")
+        else:
+            status = lab_cli.get_json(service.base, "/api/engines/status", 60)
+            engines = choose(status, args.models, all_installed=args.all_installed)
+            if not engines:
+                raise Usage("No model is installed. Install one from the Models page, or name one to see why it fails.")
         rows = []
         for engine in engines:
             say(f"{synthetic_label.engine_name(engine)}: Test, then the sentence ...")
-            rows.append(try_model(service.base, engine, folder))
+            row = try_model(service.base, engine, folder)
+            if args.supported and args.device in {"cpu", "cuda"} and row["test"] == "passed" and row["ran_on"] != args.device:
+                expected = "GPU" if args.device == "cuda" else "CPU"
+                observed = {"cuda": "GPU", "cpu": "CPU"}.get(row["ran_on"], row["ran_on"] or "an unknown device")
+                row["problems"].append(f"its Test ran on {observed}. This pass requires {expected}")
+            rows.append(row)
             try:
                 lab_cli.call(service.base, "POST", "/api/unload", timeout=120)
             except lab_cli.Failed:
@@ -278,6 +302,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Load real models, have each say one sentence, and check the clips.")
     parser.add_argument("models", nargs="*", metavar="MODEL", help="model ids, such as kokoro (GET /api/catalog lists them)")
     parser.add_argument("--all-installed", action="store_true", help="every installed model that speaks")
+    parser.add_argument("--supported", action="store_true", help="every Supported model (with --device cpu, only CPU models)")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), help="the service's --device (default: its own, auto)")
     return parser
 
@@ -285,8 +310,8 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    if bool(args.models) == args.all_installed:
-        parser.error("name the models to try, or give --all-installed")
+    if sum((bool(args.models), args.all_installed, args.supported)) != 1:
+        parser.error("name the models to try, or give --all-installed or --supported")
     try:
         return run(args)
     except Usage as exc:

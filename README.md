@@ -181,9 +181,28 @@ environment and pinned files are on disk) and *usable* (a test on your device lo
 spoke one sentence), shows how much free RAM each family needs, and can install every one of them for you (the Qwen3-TTS
 models, VoxCPM2 and Breeze TTS 2 only on a computer with a graphics card, an NVIDIA card or an AMD Radeon). Each card says
 in plain words whether the model needs a graphics card, whether it clones a voice, its languages and what its audio may be
-used for, and **Which model fits?** hides the rest.
+used for. In **Which model fits?**, you can show only the models tested for every release.
 Which languages and devices were actually tried is written down in
 [capabilities and limits](MODEL_CAPABILITIES.md) and the [language screen](docs/LANGUAGE_MATRIX.md).
+
+- **Supported** models are tested for every release on the Lab's test GPU and on the CPU where they run.
+- **Works** models are tested when they change.
+- **Experimental** models may break or have limits. Their cards explain what to watch for.
+
+| Model | Support level |
+|---|---|
+| Kokoro 82M | Supported |
+| Phonon 31M English | Experimental |
+| Chatterbox Turbo 350M | Supported |
+| Chatterbox 500M | Works |
+| Chatterbox Voice Conversion | Works |
+| Breeze TTS 2 BF16 | Works |
+| Qwen3-TTS 1.7B VoiceDesign | Supported |
+| Qwen3-TTS 1.7B Base | Supported |
+| Qwen3-TTS 0.6B Base | Works |
+| Qwen3-TTS 1.7B CustomVoice | Supported |
+| VoxCPM2 2B | Works |
+| Fish Audio Drama 3 (35B MoE / Q4_K) | Experimental |
 
 Drama studio and all Drama cloning use CPU after a local Vulkan device-loss incident. Experimental
 short GPU design is an opt-in local configuration; do not enable GPU cloning. Previous-take editing,

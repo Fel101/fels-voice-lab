@@ -241,7 +241,7 @@ Is it running, what is loaded, which engines exist. None of these makes audio, e
 |---|---|---|
 | GET | [`/api/health`](#get-api-health) | Say whether the service is ready, and which version it is. |
 | GET | [`/api/info`](#get-api-info) | Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory. |
-| GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its pinned checkpoint, capabilities and license. |
+| GET | [`/api/catalog`](#get-api-catalog) | List every engine the Lab knows, with its support level, pinned checkpoint, capabilities and license. |
 | GET | [`/api/engines/status`](#get-api-engines-status) | Say which engines are installed and usable here, and what each check measured. Reads files and stored results only. |
 | POST | [`/api/engines/{engine_id}/check`](#post-api-engines-engine_id-check) | Check that one engine can speak now: confirm its files, load it and speak one short clip. |
 | POST | [`/api/engines/{engine_id}/install`](#post-api-engines-engine_id-install) | Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the installer. |
@@ -290,9 +290,9 @@ Name the device, the loaded engines, the Kokoro and Phonon voices found and the 
 
 #### `GET /api/catalog`
 
-List every engine the Lab knows, with its pinned checkpoint, capabilities and license.
+List every engine the Lab knows, with its support level, pinned checkpoint, capabilities and license.
 
-**Answer:** `200`, JSON. The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.
+**Answer:** `200`, JSON. The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have limits, described in `support_note`). Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.
 
 <a id="get-api-engines-status"></a>
 

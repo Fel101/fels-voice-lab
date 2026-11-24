@@ -20,6 +20,7 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import model_facts  # noqa: E402
 import synthetic_label  # noqa: E402
 from tools import real_model_smoke as smoke  # noqa: E402
 
@@ -45,6 +46,13 @@ STATUS = {
         {"id": "drama-3", "state": "not_integrated"},
     ]
 }
+RELEASE_CATALOG = {
+    "engines": [
+        {"id": "kokoro", "support": "supported", "facts": {"runs": {"cpu": True}}},
+        {"id": "turbo", "support": "works", "facts": {"runs": {"cpu": True}}},
+        {"id": "qwen3-tts-1.7b-base", "support": "supported", "facts": {"runs": {"cpu": False}}},
+    ]
+}
 
 
 class ChoosingTests(unittest.TestCase):
@@ -60,8 +68,15 @@ class ChoosingTests(unittest.TestCase):
         with self.assertRaisesRegex(smoke.Usage, "chatterbox-vc converts recordings and does not speak text"):
             smoke.choose(STATUS, ["chatterbox-vc"], all_installed=False)
 
-    def test_the_command_line_needs_models_or_all_installed_but_not_both(self):
-        for argv in ([], ["kokoro", "--all-installed"]):
+    def test_release_passes_select_from_the_catalog_even_when_models_are_missing(self):
+        catalog = model_facts.catalog_with_facts(json.loads((ROOT / "catalog/engines.json").read_text(encoding="utf-8")))
+        self.assertEqual(smoke.choose_supported(catalog, device="cuda"), [
+            "kokoro", "turbo", "qwen3-tts-1.7b-voice-design", "qwen3-tts-1.7b-base", "qwen3-tts-1.7b-custom-voice",
+        ])  # fmt: skip
+        self.assertEqual(smoke.choose_supported(catalog, device="cpu"), ["kokoro", "turbo"])
+
+    def test_the_command_line_needs_exactly_one_selection(self):
+        for argv in ([], ["kokoro", "--all-installed"], ["kokoro", "--supported"], ["--supported", "--all-installed"]):
             with self.subTest(argv=argv), self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
                 smoke.main(argv)
             self.assertEqual(raised.exception.code, 2)
@@ -164,6 +179,8 @@ class StandIn(BaseHTTPRequestHandler):
             return self.answer(200, {"status": "ready", "version": "9.9.9", "device": "cpu"})
         if self.path == "/api/engines/status":
             return self.answer(200, STATUS)
+        if self.path == "/api/catalog":
+            return self.answer(200, RELEASE_CATALOG)
         return self.answer(404, {"error": "not found"})
 
     def do_POST(self):
@@ -174,6 +191,8 @@ class StandIn(BaseHTTPRequestHandler):
             return self.answer(200, {"check": {"status": "passed", "ran_on": "cpu", "load_seconds": 2.25}})
         if self.path == "/api/engines/turbo/check":
             return self.answer(200, {"check": {"status": "failed", "ran_on": "cpu", "reason": "generated silence"}})
+        if self.path == "/api/engines/qwen3-tts-1.7b-base/check":
+            return self.answer(200, {"check": {"status": "not_installed", "missing": ["checkpoint"]}})
         if self.path == "/api/load":
             return self.answer(200, {"engine": body["engine"], "sample_rate": RATE, "load_seconds": 2.25})
         if self.path == "/api/speak" and body["engine"] == "kokoro":
@@ -211,9 +230,9 @@ class RunTests(unittest.TestCase):
 
         self.service = FakeService
 
-    def run_smoke(self, models=(), all_installed=False):
+    def run_smoke(self, models=(), all_installed=False, supported=False, device="cpu"):
         said = []
-        code = smoke.run(Namespace(models=list(models), all_installed=all_installed, device="cpu"), out=self.out,
+        code = smoke.run(Namespace(models=list(models), all_installed=all_installed, supported=supported, device=device), out=self.out,
                          service_factory=self.service, say=said.append, now=lambda: datetime(2026, 11, 12, 9, 30))  # fmt: skip
         return code, "\n".join(said), self.out / "2026-11-12-093000"
 
@@ -262,6 +281,19 @@ class RunTests(unittest.TestCase):
         code, said, _folder = self.run_smoke(["phonon-31m-en"])
         self.assertEqual(code, 1)
         self.assertIn("it is not installed: .venv-phonon not found.", said)
+
+    def test_the_gpu_release_pass_fails_for_cpu_fallback_and_a_missing_checkpoint(self):
+        code, said, _folder = self.run_smoke(supported=True, device="cuda")
+        self.assertEqual(code, 1)
+        self.assertIn("Kokoro 82M: its Test ran on CPU. This pass requires GPU.", said)
+        self.assertIn("Qwen3-TTS 1.7B Base: it is not installed: checkpoint not found.", said)
+        self.assertEqual([path for _, path, _ in StandIn.calls if path.endswith("/check")],
+                         ["/api/engines/kokoro/check", "/api/engines/qwen3-tts-1.7b-base/check"])  # fmt: skip
+
+    def test_the_cpu_release_pass_tries_supported_models_with_a_cpu_build(self):
+        code, said, _folder = self.run_smoke(supported=True)
+        self.assertEqual(code, 0, said)
+        self.assertEqual([path for _, path, _ in StandIn.calls if path.endswith("/check")], ["/api/engines/kokoro/check"])
 
     def test_no_model_installed_is_said_plainly(self):
         empty = {"engines": [{"id": "kokoro", "state": "not_installed"}]}

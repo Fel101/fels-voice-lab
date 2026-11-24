@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- **Model support levels.** Every model card says Supported, Works or Experimental and what the level means. **Which
+  model fits?** can show only release-tested models. `GET /api/catalog` includes `support` and the `support_note` for
+  experimental models. The real-model smoke run can check all Supported models with `--supported`.
+
 ### For the other apps of Fel's Studio
 
 - **One folder for the four apps.** The Lab writes its address where Voice Slate, NPC Forge and Altera look for it,

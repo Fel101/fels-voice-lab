@@ -1115,6 +1115,15 @@ class ModelHelpPageTests(unittest.TestCase):
                 page.wait_until("document.getElementById('modelFilterMatch').hidden")
                 self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card').length"), len(server.engines.catalog["engines"]))
                 self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-card[hidden]').length"), 0)
+                self.assertEqual(page.evaluate("document.querySelectorAll('#models .model-support').length"),
+                                 len(server.engines.catalog["engines"]))
+                page.evaluate("document.getElementById('modelFilterClone').focus()")
+                page.press("Tab", "Tab", 9)
+                self.assertEqual(page.evaluate("document.activeElement.labels[0].textContent.trim()"),
+                                 "Show only models tested for every release")
+                page.press(" ", "Space", 32)
+                names = [entry["name"] for entry in server.engines.catalog["engines"] if entry["support"] == "supported"]
+                self.assertCountEqual(page.evaluate(shown), names)
                 self.assertEqual(page.problems, [])
             finally:
                 if page is not None:

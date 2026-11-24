@@ -448,6 +448,14 @@ function integrationText(integration){
   if(!integration.service_api){return LabText.t('studio.not_integrated_this_build_has');}
   return integration.task_only?LabText.t('studio.integrated_as_a_conversion_task'):LabText.t('studio.integrated_this_build_has_its');
 }
+function modelSupport(entry){
+  if(!entry.support){return null;}
+  var key='models.support.'+entry.support;
+  var summary=cardNode('p','meta model-support'),meaning=LabText.t(key+'_meaning');
+  summary.appendChild(cardNode('strong','',LabText.t(key)));
+  summary.appendChild(cardNode('span','',' · '+meaning+(entry.support_note?' '+entry.support_note:'')));
+  return summary;
+}
 function renderModelOverview(result){
   var container=$('modelOverview');container.textContent='';modelCards={};
   (result.engines||[]).forEach(function(entry){
@@ -476,18 +484,19 @@ function renderModelOverview(result){
     button.addEventListener('click',function(){var view=modelCards[entry.id];return view.action==='install'?planInstall(entry.id,view.installGpu):view.action==='progress'?showProgress(entry.id):checkEngine(entry.id);});
     extra.addEventListener('click',function(){return modelCards[entry.id].extra==='gpu'?planInstall(entry.id,true):showProgress(entry.id);});
     actions.appendChild(button);actions.appendChild(extra);actions.appendChild(uninstall);
-    [title,first,state,details,more,features,ram,devices,note,actions].forEach(function(node){if(node){card.appendChild(node);}});
+    [title,first,modelSupport(entry),state,details,more,features,ram,devices,note,actions].forEach(function(node){if(node){card.appendChild(node);}});
     container.appendChild(card);
-    modelCards[entry.id]={name:entry.name,facts:facts,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,uninstallButton:uninstall,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
+    modelCards[entry.id]={name:entry.name,support:entry.support,facts:facts,card:card,state:state,details:details,more:more,moreText:moreText,ram:ram,devices:devices,radios:radios,note:note,button:button,extraButton:extra,uninstallButton:uninstall,action:'test',extra:null,installGpu:false,pendingDevice:false,deviceError:''};
   });
   renderModelFilter(result);
   applyModelFilter();
 }
-// The three questions above the cards (roadmap issue 3): no graphics card, cloning a voice, and a language. A card fits by its
-// facts alone, so the page holds no fact about any model.
-var modelFilter={cpu:false,clone:false,language:''},modelFilterWired=false;
-function modelFits(facts,filter){
+// The picker uses the catalog's support levels and model facts for each match.
+var modelFilter={cpu:false,clone:false,language:'',supported:false},modelFilterWired=false;
+function modelFits(view,filter){
+  if(filter.supported&&view.support!=='supported'){return false;}
   if(!filter.cpu&&!filter.clone&&!filter.language){return true;}
+  var facts=view.facts;
   if(!facts){return false;}
   if(filter.cpu&&!facts.runs.cpu){return false;}
   if(filter.clone&&!facts.voices.clones){return false;}
@@ -516,16 +525,20 @@ function renderModelFilter(result){
   });
   // With no facts to answer from (a catalog without them), no question is asked, so no card is hidden.
   $('modelFilter').hidden=!languages.length;
-  if(!languages.length){modelFilter={cpu:false,clone:false,language:''};$('modelFilterCpu').checked=false;$('modelFilterClone').checked=false;}
+  if(!languages.length){
+    modelFilter={cpu:false,clone:false,language:'',supported:false};
+    $('modelFilterCpu').checked=false;$('modelFilterClone').checked=false;$('modelFilterSupported').checked=false;
+  }
   if(modelFilterWired){return;}
   modelFilterWired=true;
   $('modelFilterCpu').addEventListener('change',function(){modelFilter.cpu=!!$('modelFilterCpu').checked;applyModelFilter();});
   $('modelFilterClone').addEventListener('change',function(){modelFilter.clone=!!$('modelFilterClone').checked;applyModelFilter();});
+  $('modelFilterSupported').addEventListener('change',function(){modelFilter.supported=!!$('modelFilterSupported').checked;applyModelFilter();});
 }
 function applyModelFilter(){
-  var more=$('modelMore'),asked=modelFilter.cpu||modelFilter.clone||!!modelFilter.language,fits=[],apart=0;
+  var more=$('modelMore'),asked=modelFilter.cpu||modelFilter.clone||!!modelFilter.language||modelFilter.supported,fits=[],apart=0;
   Object.keys(modelCards).forEach(function(id){
-    var view=modelCards[id],fit=modelFits(view.facts,modelFilter);
+    var view=modelCards[id],fit=modelFits(view,modelFilter);
     view.card.hidden=!fit;
     if(fit){fits.push(view.name);if(view.card.parentNode===more){apart+=1;}}
   });

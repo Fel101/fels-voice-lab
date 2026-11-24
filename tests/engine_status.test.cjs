@@ -715,10 +715,11 @@ function facts({cpu = true, clones = false, languages = ['English'], first = fal
 }
 const service = {service_api: true};
 const PICKING = {engines: [
-  {id: 'kokoro', name: 'Kokoro 82M', integration: service, capabilities: {}, facts: facts({first: true, languages: ['English', 'Spanish']})},
-  {id: 'turbo', name: 'Chatterbox Turbo', integration: service, capabilities: {}, facts: facts({clones: true})},
-  {id: 'qwen', name: 'Qwen Base', integration: service, capabilities: {}, facts: facts({cpu: false, clones: true, languages: ['Chinese', 'Spanish'], partly: ['Japanese']})},
-  {id: 'drama-3', name: 'Drama 3', integration: service, capabilities: {}, facts: facts({clones: true, languages: ['English', 'Spanish']})}]};
+  {id: 'kokoro', name: 'Kokoro 82M', support: 'supported', integration: service, capabilities: {}, facts: facts({first: true, languages: ['English', 'Spanish']})},
+  {id: 'turbo', name: 'Chatterbox Turbo', support: 'supported', integration: service, capabilities: {}, facts: facts({clones: true})},
+  {id: 'qwen', name: 'Qwen Base', support: 'works', integration: service, capabilities: {}, facts: facts({cpu: false, clones: true, languages: ['Chinese', 'Spanish'], partly: ['Japanese']})},
+  {id: 'drama-3', name: 'Drama 3', support: 'experimental', support_note: 'Voice cloning runs on the CPU.',
+    integration: service, capabilities: {}, facts: facts({clones: true, languages: ['English', 'Spanish']})}]};
 const visible = c => Object.keys(c.modelCards).filter(id => !c.modelCards[id].card.hidden);
 function answer(fields, id) { fields[id].checked = !fields[id].checked; return fields[id].handlers.change(); }
 function pickLanguage(fields, name) {
@@ -744,6 +745,26 @@ test('a card states its facts in plain words, marks a good first model, and keep
   assert.deepEqual(fields.modelFilterLanguages.children.map(label => [label.children[0].value, label.children[1].textContent, label.className]),
     [['', 'Any', 'on'], ['Chinese', 'Chinese', ''], ['English', 'English', ''], ['Japanese', 'Japanese', ''], ['Spanish', 'Spanish', '']]);
   assert.equal(fields.modelFilterMatch.hidden, true);
+});
+
+test('cards explain their support levels and the release filter combines with the existing filters', () => {
+  const {context: c, fields} = harness();
+  c.renderModelOverview(PICKING);
+  assert.deepEqual(fields.modelOverview.children.map(card => card.children.find(child => child.className.includes('model-support')).textContent), [
+    'Supported · Tested for every release on the Lab’s test GPU and on the CPU where it runs.',
+    'Supported · Tested for every release on the Lab’s test GPU and on the CPU where it runs.',
+    'Works · Tested when it changes.',
+    'Experimental · May break or have limits. Voice cloning runs on the CPU.'
+  ]);
+  answer(fields, 'modelFilterSupported');
+  assert.deepEqual(visible(c), ['kokoro', 'turbo']);
+  answer(fields, 'modelFilterClone');
+  assert.deepEqual(visible(c), ['turbo']);
+  assert.equal(fields.modelFilterMatch.textContent, '1 model fits: Chatterbox Turbo.');
+  pickLanguage(fields, 'Spanish');
+  assert.deepEqual(visible(c), []);
+  answer(fields, 'modelFilterSupported');
+  assert.deepEqual(visible(c), ['qwen', 'drama-3']);
 });
 
 test('three answers find the model that clones a voice with no graphics card in Spanish', () => {

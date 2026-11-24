@@ -23,6 +23,7 @@
     {
       "id": "kokoro",
       "name": "Kokoro 82M",
+      "support": "supported",
       "family": "kokoro",
       "checkpoint": "hexgrad/Kokoro-82M",
       "local_revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
@@ -44,6 +45,8 @@
     {
       "id": "phonon-31m-en",
       "name": "Phonon 31M English",
+      "support": "experimental",
+      "support_note": "The licence for its 37 preset voices is unclear. Ask Gradium before publishing clips that use them.",
       "family": "phonon",
       "checkpoint": "gradium/phonon-31m-en",
       "local_revision": "8c64b55ec301728e2d1695bfea87a08a267d0c2d",
@@ -77,6 +80,7 @@
     {
       "id": "turbo",
       "name": "Chatterbox Turbo 350M",
+      "support": "supported",
       "family": "chatterbox",
       "checkpoint": "ResembleAI/chatterbox-turbo",
       "local_revision": "749d1c1a46eb10492095d68fbcf55691ccf137cd",
@@ -106,6 +110,7 @@
     {
       "id": "orig",
       "name": "Chatterbox 500M",
+      "support": "works",
       "family": "chatterbox",
       "checkpoint": "ResembleAI/chatterbox",
       "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
@@ -131,6 +136,7 @@
     {
       "id": "chatterbox-vc",
       "name": "Chatterbox Voice Conversion",
+      "support": "works",
       "family": "chatterbox",
       "checkpoint": "ResembleAI/chatterbox",
       "local_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
@@ -151,6 +157,7 @@
     {
       "id": "breeze-tts-2",
       "name": "Breeze TTS 2 BF16",
+      "support": "works",
       "family": "breeze-tts-2",
       "checkpoint": "drbaph/Breeze-TTS-2-comfyui",
       "local_revision": "a6bfd9d0d4e8b3b61c3a5ed3ecf55468c8ab88e4",
@@ -180,6 +187,7 @@
     {
       "id": "qwen3-tts-1.7b-voice-design",
       "name": "Qwen3-TTS 1.7B VoiceDesign",
+      "support": "supported",
       "family": "qwen3-tts",
       "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
       "local_revision": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
@@ -203,6 +211,7 @@
     {
       "id": "qwen3-tts-1.7b-base",
       "name": "Qwen3-TTS 1.7B Base",
+      "support": "supported",
       "family": "qwen3-tts",
       "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
       "local_revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
@@ -227,6 +236,7 @@
     {
       "id": "qwen3-tts-0.6b-base",
       "name": "Qwen3-TTS 0.6B Base",
+      "support": "works",
       "family": "qwen3-tts",
       "checkpoint": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
       "local_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
@@ -251,6 +261,7 @@
     {
       "id": "qwen3-tts-1.7b-custom-voice",
       "name": "Qwen3-TTS 1.7B CustomVoice",
+      "support": "supported",
       "family": "qwen3-tts",
       "checkpoint": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
       "local_revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
@@ -277,6 +288,7 @@
     {
       "id": "voxcpm2",
       "name": "VoxCPM2 2B",
+      "support": "works",
       "family": "voxcpm2",
       "checkpoint": "openbmb/VoxCPM2",
       "local_revision": "32279effe8c19989596f05d353d1447f51d9e915",
@@ -304,6 +316,8 @@
     {
       "id": "drama-3",
       "name": "Fish Audio Drama 3 (35B MoE / Q4_K)",
+      "support": "experimental",
+      "support_note": "Voice cloning runs on the CPU and can be slow. Fish Audio’s licence sets conditions on using the audio.",
       "family": "fish-audio",
       "checkpoint": "fishaudio/drama-3",
       "local_revision": "e0a9218aa48888270f06ef1ed9ea67622c0e17d2",

@@ -145,6 +145,7 @@ pre { white-space:pre-wrap; }
 .model-card .model-more { margin:0; padding:0; border:0; } .model-more summary { font-size:.85rem; font-weight:normal; color:var(--muted); }
 .engine-state { font-weight:600; }
 .model-card .first-model { margin:-4px 0 4px; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+.model-support strong { color:var(--fg); }
 .model-facts { margin:8px 0; padding-left:18px; font-size:.88rem; } .model-facts li { margin:4px 0; }
 .model-filter { border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:18px 0 0; display:flex; flex-direction:column; gap:8px; }
 .model-filter legend { font-weight:600; padding:0 6px; }
@@ -971,6 +972,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <fieldset class="model-filter" id="modelFilter" hidden><legend>{{ui:models.which_model_fits}}</legend>
   <label><input type="checkbox" id="modelFilterCpu"> {{ui:models.i_have_no_graphics_card}}</label>
   <label><input type="checkbox" id="modelFilterClone"> {{ui:models.i_want_to_clone_a}}</label>
+  <label><input type="checkbox" id="modelFilterSupported"> {{ui:models.release_tested_only}}</label>
   <div class="language-choices" role="radiogroup" aria-labelledby="modelFilterLanguageLabel"><span class="meta" id="modelFilterLanguageLabel">{{ui:models.language}}</span><span id="modelFilterLanguages"></span></div>
   <p class="meta" id="modelFilterMatch" aria-live="polite" hidden></p>
 </fieldset>

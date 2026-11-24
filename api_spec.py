@@ -199,9 +199,11 @@ ROUTES = [
       reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
             "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "
             "`description`) and `free_ram_gb`."),
-    R("GET", "/api/catalog", "Service", "List every engine the Lab knows, with its pinned checkpoint, capabilities and license.",
+    R("GET", "/api/catalog", "Service", "List every engine the Lab knows, with its support level, pinned checkpoint, capabilities and license.",
       reply="The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose "
-            "`integration.service_api` is true answer them. Each engine also has `facts`, what its card on the Models page "
+            "`integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's "
+            "test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have "
+            "limits, described in `support_note`). Each engine also has `facts`, what its card on the Models page "
             "says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good "
             "first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, "
             "`converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its "

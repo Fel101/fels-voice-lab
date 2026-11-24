@@ -37,7 +37,7 @@ acceptance should report exact runtimes, checkpoints, words, identity, acting,
 resource usage and shutdown behavior separately.
 
 None of those tests loads a model. `tools/real_model_smoke.py` does. Close the Lab, then run
-`.venv\Scripts\python.exe tools/real_model_smoke.py kokoro` (or name other models, or give `--all-installed`). It starts the
+`.venv\Scripts\python.exe tools/real_model_smoke.py kokoro` (or name other models, or give `--all-installed` or `--supported`). It starts the
 service on a free port and, for each model, runs its **Test** from the Models page, has it say one fixed sentence through
 `/api/speak` and checks the WAV: the model's sample rate, a length that fits the sentence, audible and not clipped by the
 Lab's own waveform checks, and the AI-generated speech label naming that model. It prints a table with each model's load time
@@ -142,9 +142,11 @@ version number, a tag and a GitHub release that agree:
    that section short, as it is the release's notes: a line or two for each change under New, Changed, Fixed, After
    updating, and For scripts and contributors. Every change in detail goes in `docs/releases/<version>.md`, which the
    section links to.
-2. Run every check. On the development PC, also run `.venv\Scripts\python.exe tools/real_model_smoke.py --all-installed`
-   and listen to its clips. Commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push the commit and the
-   tag.
+2. Run every check. On the development PC, run `.venv\Scripts\python.exe tools/real_model_smoke.py --supported --device cuda`
+   and again with `--device cpu`. Install every Supported model first. The CPU pass selects models that can run on the CPU.
+   Both passes report missing models and a Test that ran on the wrong device as failures. Listen to the clips from both
+   passes. Test Works models when they change. Commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push
+   the commit and the tag.
 3. Pushing the tag publishes the release once the checks pass. [The release workflow](.github/workflows/release.yml) runs the
    same checks as every push on the tagged commit. Then it refuses a tag that is not `v` and `VERSION`, writes the notes from
    the changelog's section with `tools/release_notes.py` (which makes the repository's links absolute at the tag), builds

@@ -537,8 +537,12 @@ whether it takes acting directions, its languages, and what its audio may be use
 first model: a small download, no graphics card and no recording needed. A card's **Details** hold what the
 [language screen](LANGUAGE_MATRIX.md) heard in each language.
 
-Above the cards, **Which model fits?** asks three questions: **I have no graphics card**, **I want to clone a voice from a
-recording**, and a **Language**. Each answer hides the cards that do not fit, and the line below says which models are left.
+Each card also shows its support level. **Supported** models are tested for every release on the Lab's test GPU and on the
+CPU where they run. **Works** models are tested when they change. **Experimental** models may break or have limits, which
+the card describes.
+
+In **Which model fits?**, choose the hardware, cloning and language filters you need. Turn on **Show only models tested for
+every release** to keep only Supported models. The line below names the matches.
 For a computer with no graphics card, cloning a voice in Spanish, three clicks leave Drama 3. A language counts when the
 screen understood it, even partly, or when the model offers it and it was never screened; Drama 3 counts only languages the
 screen heard, because the language a line names is only a note for it.
@@ -546,7 +550,7 @@ screen heard, because the language a line names is only a note for it.
 Every fact comes from the Lab's records (the catalog, each model's adapter, its installer and the language screen), and
 [MODEL_CAPABILITIES.md](../MODEL_CAPABILITIES.md) says the same; a test checks the two against each other. Where the records
 say nothing, the card says **not stated**: the audio of most models, for example, and of Phonon's preset voices, whose
-repository states no licence. GET `/api/catalog` gives each model's facts as `facts`.
+repository states no licence. GET `/api/catalog` gives each model's `facts` and `support` level.
 
 ## Check which models can speak
 

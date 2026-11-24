@@ -56,6 +56,15 @@ def fits(facts, cpu=False, clone=False, language=""):
 
 
 class CardFactsTests(unittest.TestCase):
+    def test_every_catalog_engine_has_a_support_level_and_the_readme_agrees(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+        for entry in CATALOG["engines"]:
+            with self.subTest(engine=entry["id"]):
+                self.assertIn(entry["support"], {"supported", "works", "experimental"})
+                self.assertIn(f"| {entry['name']} | {entry['support'].title()} |", readme)
+                if entry["support"] == "experimental":
+                    self.assertTrue(entry["support_note"].strip())
+
     def test_every_engine_has_every_fact_in_plain_words(self):
         facts = all_facts()
         self.assertEqual(set(facts), {entry["id"] for entry in CATALOG["engines"]})
