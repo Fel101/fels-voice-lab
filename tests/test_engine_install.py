@@ -464,11 +464,35 @@ class InstallTests(InstallerCase):
                                "the stand-in to start its child")
         script, child = map(int, pids)
         self.assertTrue(worker_pool.process_is_running(script) and worker_pool.process_is_running(child))
-        self.installer.close()
+        said = []
+        self.installer.close(waiting=said.append)
+        self.assertEqual(said, [])  # nothing to finish first, so the window is not asked to wait
         done = self.wait_until(self.finished, "the install to stop")
         self.assertEqual(done["state"], "failed")
         self.wait_until(lambda: not worker_pool.process_is_running(script) and not worker_pool.process_is_running(child),
                         "both processes to be gone")
+        self.assertFalse(self.pool.busy)
+
+    def test_closing_during_a_package_command_waits_for_it_and_says_so(self):
+        self.stub("""
+            control = Path(os.environ["VOICE_LAB_INSTALL_CONTROL"])
+            (control / "phase").write_text("packages", "ascii")
+            print("installing packages", flush=True)
+            wait_for("go")
+            sys.exit(125 if (control / "stop").exists() else 0)
+        """)
+        started = self.installer.start("kokoro")
+        self.wait_until(lambda: self.installer.snapshot()["phase"] == "packages", "the package command")
+        said = []
+        closing = threading.Thread(target=self.installer.close, kwargs={"waiting": said.append})
+        closing.start()
+        self.wait_until(lambda: said, "close to say that it waits")
+        self.assertEqual(said, [started["name"]])
+        self.assertTrue(closing.is_alive())  # the package command is not cut short
+        self.release()
+        closing.join(20)
+        self.assertFalse(closing.is_alive())
+        self.assertEqual(self.installer.snapshot()["state"], "stopped")
         self.assertFalse(self.pool.busy)
 
     def test_closing_with_nothing_running_does_nothing(self):
@@ -882,6 +906,25 @@ class InstallRoutesTests(InstallerCase):
         self.server.RequestHandlerClass.close_installer()
         self.assertEqual(self.wait_until(self.finished, "the install to stop")["state"], "failed")
         self.assertFalse(self.pool.busy)
+
+    def test_the_service_tells_its_window_to_wait_for_a_package_command(self):
+        self.stub("""
+            control = Path(os.environ["VOICE_LAB_INSTALL_CONTROL"])
+            (control / "phase").write_text("packages", "ascii")
+            print("installing packages", flush=True)
+            wait_for("go")
+            sys.exit(125 if (control / "stop").exists() else 0)
+        """)
+        self.call("POST", "/api/engines/kokoro/install", {})
+        self.wait_until(lambda: (self.installer.snapshot() or {}).get("phase") == "packages", "the package command")
+        said = []
+        closing = threading.Thread(target=self.server.RequestHandlerClass.close_installer, args=(said.append,))
+        closing.start()
+        self.wait_until(lambda: said, "the service to tell the window")
+        self.release()
+        closing.join(20)
+        self.assertFalse(closing.is_alive())
+        self.assertEqual(self.installer.snapshot()["state"], "stopped")
 
 
 if __name__ == "__main__":

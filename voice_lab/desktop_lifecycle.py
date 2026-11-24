@@ -29,3 +29,23 @@ def publish_session(directory, server):
             time.sleep(.2)
 
     threading.Thread(target=watch, name="desktop-stop", daemon=True).start()
+
+
+FINISHING = "finishing"
+
+
+def note_finishing(directory, what):
+    """Tell the window that the service, asked to stop, is letting a model install finish its package command first
+    (engine_install), so the window waits for the service instead of ending its processes, pip among them."""
+    try:
+        (Path(directory) / FINISHING).write_text(str(what), "utf-8")
+    except OSError:
+        pass
+
+
+def finishing(directory):
+    """The install the service said it is finishing before it stops, or None."""
+    try:
+        return (Path(directory) / FINISHING).read_text("utf-8")
+    except OSError:
+        return None

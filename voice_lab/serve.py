@@ -488,8 +488,12 @@ class Handler(BaseHTTPRequestHandler):
         cls.lab.close_drama()
 
     @classmethod
-    def close_installer(cls):
-        cls.lab.installer.close()
+    def close_installer(cls, waiting=None):
+        """Stop a running model install. `waiting(name)` is called when it must first finish a package command."""
+        if waiting is None:
+            cls.lab.installer.close()
+        else:
+            cls.lab.installer.close(waiting=waiting)
 
     def log_message(self, fmt, *args):
         pass
@@ -1024,7 +1028,11 @@ def main():
         if lab._automation is not None:
             lab._automation.close()
         batch_runner.close(timeout=0)
-        server.RequestHandlerClass.close_installer()
+        if args.desktop_session:
+            from voice_lab.desktop_lifecycle import note_finishing
+            server.RequestHandlerClass.close_installer(lambda name: note_finishing(args.desktop_session, name))
+        else:
+            server.RequestHandlerClass.close_installer()
         engines.close()
         server.RequestHandlerClass.close_drama()
         batch_runner.close(timeout=10)

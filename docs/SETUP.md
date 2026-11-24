@@ -30,7 +30,8 @@ and the four [Qwen3-TTS](#qwen3-tts-on-a-graphics-card) models, [VoxCPM2](#voxcp
 A core installation without a model opens the studio and its stores, but cannot speak until one is installed.
 
 To pause a model install, open **Show progress** on its card and press **Stop**. The Lab lets the current package command
-finish and keeps completed files and resumable downloads. Press **Install** on the same card to continue.
+finish and keeps completed files and resumable downloads. Press **Install** on the same card to continue. Closing the Lab
+during a package command also lets that command finish before the Lab stops.
 
 Every model runs in a Python environment of its own (`.venv-kokoro`, `.venv-phonon`, `.venv-chatterbox` and so on), apart from
 the service's `.venv`, so no installer can change the packages another model or the service depends on.
@@ -147,8 +148,8 @@ The studio can run the same installer for you. Until it has run, the Kokoro card
 *Not installed yet*, says how much **Install** downloads and how much disk it uses, and keeps the files that are missing under
 **Details**. **Install** shows the installer's own plan, the text `--dry-run` prints, with the reasons it would refuse if this
 computer cannot take it. **Install now** then runs the installer, and its window shows the end of its output. While it runs nothing else loads a model or speaks, and a page that is
-reloaded shows the progress again. There is no Stop button: closing the studio stops the install, and running it again
-continues where it stopped. The whole output of each run is kept in `out\install`. When it ends the card reads *Installed,
+reloaded shows the progress again. **Stop** in its progress pauses it after the current package command, and running it
+again continues where it stopped. The whole output of each run is kept in `out\install`. When it ends the card reads *Installed,
 not tested*; press **Test**. A studio with no model installed says so at the top of **Model studio** and links to that page, and
 its model picker marks the models that are not installed. Speaking before the install has run fails with an error that begins by
 saying Kokoro is not installed and where to install it; once it has run, **Generate** reads the new voices by itself, so a studio

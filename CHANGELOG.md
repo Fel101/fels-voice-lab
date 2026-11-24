@@ -8,8 +8,8 @@
   are in `tools\`, alongside the installers. The desktop shortcut, `serve.bat` and the Claude Code MCP command still work.
 
 - **Stop model installs.** Use **Stop** in a model's install progress. The installer finishes any active package command
-  and keeps resumable downloads. The card shows how to continue. `POST /api/engines/{engine_id}/install/stop` takes the job
-  ID from `GET /api/engines/status`.
+  and keeps resumable downloads, and so does closing the Lab. The card shows how to continue.
+  `POST /api/engines/{engine_id}/install/stop` takes the job ID from `GET /api/engines/status`.
 
 - **Connected apps.** Open **System & backups** to find NPC Forge and Altera, see how many Voice Slate clips are waiting
   in Cast, and check who is using the graphics card. The Lab's address and copy buttons are under **Connect other programs**.

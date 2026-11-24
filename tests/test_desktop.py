@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 
 from voice_lab.desktop import DesktopBackend
+from voice_lab import desktop_lifecycle
 from voice_lab import fels_suite
 from voice_lab.worker_pool import process_is_running
 
@@ -111,6 +112,44 @@ time.sleep(120)
                 process.wait(timeout=5)
             process.stdout.close()
             process.stderr.close()
+
+
+class CloseWaitTests(unittest.TestCase):
+    """How long the window waits for its service to stop, with a stand-in for the service's process."""
+
+    class Service:
+        def __init__(self):
+            self.waits = []
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            self.waits.append(timeout)
+            if len(self.waits) == 1:
+                raise subprocess.TimeoutExpired("serve.py", timeout)
+            return 0
+
+    def close(self, installing=None):
+        with tempfile.TemporaryDirectory() as temp:
+            backend = DesktopBackend(root=ROOT, sessions=temp)
+            backend.session, backend.process = Path(temp), self.Service()
+            if installing:
+                desktop_lifecycle.note_finishing(temp, installing)
+            with self.assertLogs(level="INFO") as logs:
+                backend.close()
+            self.assertEqual((Path(temp) / "stop").read_text("utf-8"), backend.nonce)
+            return backend.process.waits, "\n".join(logs.output)
+
+    def test_the_window_waits_while_its_service_finishes_a_package_command(self):
+        waits, log = self.close("Kokoro 82M")
+        self.assertEqual(waits, [DesktopBackend.STOP_WAIT, None, 10])
+        self.assertIn("package command of the Kokoro 82M install", log)
+
+    def test_otherwise_the_window_ends_its_service_after_the_stop_wait(self):
+        waits, log = self.close()
+        self.assertEqual(waits, [DesktopBackend.STOP_WAIT, 10])
+        self.assertIn("stopping its owned process tree", log)
 
 
 if __name__ == "__main__":

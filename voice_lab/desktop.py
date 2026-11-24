@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 
+from voice_lab import desktop_lifecycle
 from voice_lab import lab_address
 from voice_lab.local_ownership import LocalOwnership
 from voice_lab import self_update
@@ -27,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class DesktopBackend:
     """The service one desktop window owns. Its session folder goes in `sessions` (out/desktop by default), and
     `service_args` are added to the service's command line; the tests use both to keep a run out of the real out/ folder."""
+
+    STOP_WAIT = 30  # seconds the service has to stop when the window closes, unless it is finishing a package command
 
     def __init__(self, *, root=ROOT, state_root=None, python=None, device="auto", sessions=None, service_args=(), port=0):
         self.root = Path(root).resolve()
@@ -146,9 +149,15 @@ class DesktopBackend:
                 if self.session:
                     (self.session / "stop").write_text(self.nonce, "utf-8")
                 try:
-                    self.process.wait(timeout=30)
+                    self.process.wait(timeout=self.STOP_WAIT)
                 except subprocess.TimeoutExpired:
-                    logging.warning("Backend did not finish shutdown; stopping its owned process tree")
+                    installing = desktop_lifecycle.finishing(self.session) if self.session else None
+                    if installing is not None:
+                        # Ending the service now would end pip halfway and could leave the model's environment broken.
+                        logging.info("Waiting for the service to finish the package command of the %s install", installing)
+                        self.process.wait()
+                    else:
+                        logging.warning("Backend did not finish shutdown; stopping its owned process tree")
         finally:
             if self.job:
                 self.job.close()

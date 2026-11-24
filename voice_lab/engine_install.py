@@ -9,8 +9,8 @@ for the plan, which is the script's own --dry-run, so it shows what the script w
 now then starts the script with --yes as a child process under the lab's own Python, as its launcher does (each installer makes
 its model's own environment), and keeps the end of its output for the page to show. One install runs at a time. While it runs
 it holds the pool's job lock, so tests, loads and clips are refused instead of competing with it for memory and disk. Closing
-the service or pressing Stop ends the install and its children after any active package command is safe to leave.
-The script continues where it stopped when it is run again.
+the service or pressing Stop ends the install and its children after any active package command is safe to leave; the
+desktop window waits for that command too. The script continues where it stopped when it is run again.
 
 A card whose GPU/CPU switch says GPU installs the engine's GPU build for this computer's graphics card (the script's --gpu):
 NVIDIA's CUDA build, or AMD's ROCm build on a computer whose card is an AMD Radeon. An engine installed with the CPU build of
@@ -520,12 +520,16 @@ class EngineInstaller:
             self._stop(job["process"])
         return protected
 
-    def close(self):
-        """Stop a running install and the processes it started."""
+    def close(self, waiting=None):
+        """Stop a running install and the processes it started. While a package command finishes, wait for it, and first call
+        `waiting(name)`: the service uses it to tell the desktop window to wait as well (desktop_lifecycle.note_finishing),
+        which would otherwise end the service and pip with it after 30 seconds."""
         with self._lock:
             self._closed = True
             job = self._running()
             if job is None:
                 return
             protected = self._halt(job) if job["state"] == "running" else job["stop_phase"] in PROTECTED_PHASES
+        if protected and waiting is not None:
+            waiting(job["name"])
         job["done"].wait(timeout=None if protected else CLOSE_WAIT)
