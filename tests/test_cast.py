@@ -88,6 +88,31 @@ class CastStoreTests(unittest.TestCase):
         self.assertEqual([row["version"] for row in reopened.get_character(self.character["id"])
                           ["identities"][0]["references"]], [2, 1])
 
+    def test_licence_migration_and_a_rating_for_each_recording(self):
+        identity_id = self.identity["id"]
+        original = self.add_reference(allowed_use="Commercial use permitted")
+        db = sqlite3.connect(self.store.db_path)
+        try:
+            db.execute("DROP TABLE recording_licences")
+        finally:
+            db.close()
+        self.assertEqual(self.store.get_identity(identity_id)["licence"]["rating"], "unclear")
+        self.store.update_identity(identity_id, {
+            "status": "approved", "reference_version_id": original["id"], "licence_rating": "yes",
+        })
+        edited = self.store.add_reference_version(original["id"], {"allowed_use": "Personal projects only."})
+        result = self.store.update_identity(identity_id, {"licence_reference_id": edited["id"], "licence_rating": "no"})
+        self.assertEqual(result["approved_reference_id"], original["id"])
+        self.assertEqual(result["licence"]["rating"], "yes")
+        self.assertEqual(self.store.get_reference(edited["id"])["licence_rating"], "no")
+        changed = self.store.update_identity(identity_id, {"status": "approved", "reference_version_id": edited["id"]})
+        self.assertEqual(changed["licence"]["rating"], "no")
+        result = self.store.update_identity(identity_id, {"licence_rating": None})
+        self.assertEqual(result["licence"]["rating"], "unclear")
+        self.assertIsNone(result["licence_rating"])
+        self.assertEqual(self.store.get_reference(original["id"])["allowed_use"], "Commercial use permitted")
+        self.assertEqual(self.store._row("PRAGMA user_version")[0], 9)  # 0.4.0 can still open this library
+
     def test_missing_transcript_silence_and_overlong_are_rejected_before_generation(self):
         with self.assertRaisesRegex(ValueError, "exact transcript"):
             self.add_reference(transcript="")
@@ -175,6 +200,20 @@ class TakeWaveformCheckTests(unittest.TestCase):
         self.assertEqual(take["waveform_checks"], {"status": "unavailable", "checker": "take-waveform-v1",
                                                     "flags": [], "error": "analysis unavailable"})
         self.assertEqual(self.store.get_take(take["id"])["waveform_checks"]["status"], "unavailable")
+
+    def test_old_and_edited_takes_follow_the_exact_recording_used(self):
+        take = self.save(self.speech(1.0))
+        identity = take["identity_id"]
+        recording = take["reference_version_id"]
+        self.assertEqual(take["licence"]["rating"], "unclear")
+        self.store.update_identity(identity, {"licence_reference_id": recording, "licence_rating": "conditions"})
+        self.assertEqual(self.store.get_take(take["id"])["licence"]["rating"], "conditions")
+        edit, _ = self.store.create_edited_take(take["id"], {"start_seconds": 0.1, "end_seconds": 0.8})
+        self.assertEqual(edit["licence"], self.store.take_summaries_for([take["id"]])[take["id"]]["licence"])
+        changed = self.store.add_reference_version(recording, {"allowed_use": "for tests only"})
+        self.store.update_identity(identity, {"status": "approved", "reference_version_id": changed["id"], "licence_rating": "no"})
+        self.assertEqual(self.store.get_identity(identity)["licence"]["rating"], "no")
+        self.assertEqual(self.store.get_take(edit["id"])["licence"]["rating"], "conditions")
 
     def test_batch_rows_read_stored_checks_for_many_takes(self):
         clean = self.save(self.speech(1.0))

@@ -203,7 +203,8 @@ ROUTES = [
       reply="The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose "
             "`integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's "
             "test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have "
-            "limits, described in `support_note`). Each engine also has `facts`, what its card on the Models page "
+            "limits, described in `support_note`). Each engine has a `licence` rating and reason, and can have a "
+            "separate `preset_licence` for its voice catalog. Each engine also has `facts`, what its card on the Models page "
             "says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good "
             "first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, "
             "`converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its "
@@ -338,7 +339,8 @@ ROUTES = [
       reply="`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the "
             "one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and "
             "`model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and "
-            "`why_not`, a sentence saying what to do when it is not ready. A "
+            "`why_not`, a sentence saying what to do when it is not ready. `licence` has a `rating` "
+            "(`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. A "
             "Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name "
             "for it.",
       notes="A Cast voice is named after its character when it is the character's only voice, or its only approved one; any "
@@ -351,7 +353,8 @@ ROUTES = [
               ("voices[].model", "string"), ("voices[].model_name", "string"), ("voices[].label", "string"),
               ("voices[].languages", "string[]"), ("voices[].takes_direction", "boolean"), ("voices[].ready", "boolean"),
               ("voices[].why_not", "string|null"), ("voices[].character", "string"), ("voices[].identity_id", "string"),
-              ("voices[].status", "string"), ("voices[].voice_id", "string"))),
+              ("voices[].status", "string"), ("voices[].voice_id", "string"),
+              ("voices[].licence.rating", "string"), ("voices[].licence.reason", "string"))),
     R("POST", "/api/speak", "Speaking", "Speak text with one engine and answer with the finished WAV file.",
       body=(F("text", "string", "What to say, 1 to 10,000 characters. " + LONG_TEXT, True),
             F("engine", "string", "An engine id from `GET /api/catalog` whose `integration.service_api` is true. "
@@ -562,7 +565,8 @@ ROUTES = [
             "identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, "
             "`fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the "
             "recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, "
-            "`duration_seconds` and `audio_url`). A voice can also report `voice_languages` and whether its "
+            "`duration_seconds`, `audio_url` and `licence_rating`, null until one is chosen). Each voice has a `licence` "
+            "with its effective rating and reason. A voice can also report `voice_languages` and whether its "
             "`approved_recording_available` file is present. Retired items say so."),
     R("POST", "/api/characters", "Cast", "Create a character.", status=201,
       body=(F("name", "string", "1 to 80 characters.", True), F("description", "string", "Up to 2000 characters."),
@@ -602,7 +606,8 @@ ROUTES = [
       suite=True,
       answer=(("voice.name", "string"), ("voice.aliases", "string[]"), ("voice.kind", "string"), ("voice.model", "string"),
               ("voice.character", "string"), ("voice.identity_id", "string"), ("voice.status", "string"),
-              ("voice.ready", "boolean"), ("voice.why_not", "string|null"), ("character_id", "string"),
+              ("voice.ready", "boolean"), ("voice.why_not", "string|null"), ("voice.licence.rating", "string"),
+              ("voice.licence.reason", "string"), ("character_id", "string"),
               ("reference_id", "string"), ("engine", "string"), ("clone_engine", "string"))),
     R("POST", "/api/characters/{character_id}", "Cast", "Rename a character or change its description.",
       body=(F("name", "string", "1 to 80 characters. Leave out to keep it."),
@@ -625,17 +630,20 @@ ROUTES = [
       answer=(("identity.id", "string"), ("identity.engine_id", "string"), ("identity.label", "string"),
               ("identity.status", "string"), ("identity.kind", "string"), ("identity.references", "array"))),
     R("POST", "/api/identities/{identity_id}/update", "Cast",
-      "Rename a voice, change its notes or Kokoro voice, or approve or reject it.",
+      "Update a voice, approve or reject it, or rate its recording's licence.",
       body=(F("label", "string", "1 to 80 characters."), F("notes", "string", "Up to 2000 characters."),
             F("status", "string", "`candidate`, `approved` or `rejected`."),
             F("reference_version_id", "string", "The recording to approve; needed to approve a cloning voice."),
+            F("licence_rating", "string|null", "Recording use: `yes`, `conditions`, `unclear` or `no`. Use null to clear it."),
+            F("licence_reference_id", "string", "The saved recording to rate. Defaults to the approved recording."),
             F("engine_options", "object", "Kokoro: `{\"voice\": \"af_heart\"}`. Preset voices cannot change.")),
       reply="`identity`.",
       notes="Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another "
             "approved voice of the same character and engine back to `candidate`.",
       suite=True,
       answer=(("identity.id", "string"), ("identity.status", "string"), ("identity.approved_reference_id", "string|null"),
-              ("identity.references[].id", "string"))),
+              ("identity.references[].id", "string"), ("identity.references[].licence_rating", "string|null"),
+              ("identity.licence.rating", "string"), ("identity.licence.reason", "string"))),
     R("POST", "/api/identities/{identity_id}/references", "Cast", "Upload a recording for a cloning voice and save it as a "
                                                                   "voice recording.",
       status=201, body_kind="audio",
@@ -725,7 +733,8 @@ ROUTES = [
       reply="`takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, "
             "`reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, "
             "`provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, "
-            "`waveform_checks`, `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the "
+            "`waveform_checks`, `licence` (the rating and reason for the specific recording and model used), "
+            "`has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the "
             "take is an edit of another take), `audio_url` and its retirement state."),
     R("GET", "/api/takes/{take_id}", "Takes", "Read one take.", reply="`take`, as in `GET /api/takes`."),
     R("GET", "/api/takes/{take_id}/audio", "Takes", "Download a take's WAV.", reply_kind="wav", reply="The WAV.",
@@ -1551,7 +1560,7 @@ def _schema(kind):
         return {"type": "string", "format": "binary"}
     if kind.endswith("[]"):
         return {"type": "array", "items": _schema(kind[:-2])}
-    return {"type": kind}
+    return answer_type(kind)
 
 
 def _fields_schema(fields):

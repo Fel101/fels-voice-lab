@@ -168,7 +168,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have limits, described in `support_note`). Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.",
+            "description": "The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have limits, described in `support_note`). Each engine has a `licence` rating and reason, and can have a separate `preset_licence` for its voice catalog. Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.",
             "content": {
               "application/json": {
                 "schema": {
@@ -942,7 +942,7 @@
         "description": "A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.",
         "responses": {
           "200": {
-            "description": "`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.",
+            "description": "`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. `licence` has a `rating` (`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1003,6 +1003,17 @@
                           },
                           "voice_id": {
                             "type": "string"
+                          },
+                          "licence": {
+                            "type": "object",
+                            "properties": {
+                              "rating": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            }
                           }
                         }
                       }
@@ -2369,7 +2380,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds` and `audio_url`). A voice can also report `voice_languages` and whether its `approved_recording_available` file is present. Retired items say so.",
+            "description": "`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds`, `audio_url` and `licence_rating`, null until one is chosen). Each voice has a `licence` with its effective rating and reason. A voice can also report `voice_languages` and whether its `approved_recording_available` file is present. Retired items say so.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2568,6 +2579,17 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "licence": {
+                          "type": "object",
+                          "properties": {
+                            "rating": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          }
                         }
                       }
                     },
@@ -2802,7 +2824,7 @@
     "/api/identities/{identity_id}/update": {
       "post": {
         "operationId": "post_api_identities_identity_id_update",
-        "summary": "Rename a voice, change its notes or Kokoro voice, or approve or reject it.",
+        "summary": "Update a voice, approve or reject it, or rate its recording's licence.",
         "tags": [
           "Cast"
         ],
@@ -2830,6 +2852,17 @@
                   "reference_version_id": {
                     "type": "string",
                     "description": "The recording to approve; needed to approve a cloning voice."
+                  },
+                  "licence_rating": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Recording use: `yes`, `conditions`, `unclear` or `no`. Use null to clear it."
+                  },
+                  "licence_reference_id": {
+                    "type": "string",
+                    "description": "The saved recording to rate. Defaults to the approved recording."
                   },
                   "engine_options": {
                     "type": "object",
@@ -2883,7 +2916,24 @@
                             "properties": {
                               "id": {
                                 "type": "string"
+                              },
+                              "licence_rating": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               }
+                            }
+                          }
+                        },
+                        "licence": {
+                          "type": "object",
+                          "properties": {
+                            "rating": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
                             }
                           }
                         }
@@ -3766,7 +3816,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, `reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, `provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, `waveform_checks`, `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the take is an edit of another take), `audio_url` and its retirement state.",
+            "description": "`takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, `reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, `provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, `waveform_checks`, `licence` (the rating and reason for the specific recording and model used), `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the take is an edit of another take), `audio_url` and its retirement state.",
             "content": {
               "application/json": {
                 "schema": {

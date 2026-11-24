@@ -54,6 +54,28 @@ $('approveIdentity').addEventListener('click',function(){var ref=$('approveRefer
   saveIdentityUpdate({status:'approved',reference_version_id:ref}).then(function(){return refreshCast($('characterSelect').value,$('identitySelect').value);})
     .then(function(){$('referenceStatus').textContent=LabText.t('cast.the_voice_now_uses_the');}).catch(apiFailure);});
 $('referenceVersion').addEventListener('change',updateReferenceRetirement);
+$('referenceVersion').addEventListener('change',updateReferenceLicence);
+$('saveReferenceLicence').addEventListener('click',async function () {
+  var identity = activeIdentity(), ref = selectedReferenceVersion(), button = this;
+  if (!identity || !ref || ref.retired) return;
+  button.disabled = true;
+  try {
+    var result = await fetchJson('/api/identities/' + identity.id + '/update', {
+      licence_rating: $('referenceLicenceRating').value || null,
+      licence_reference_id: ref.id,
+    });
+    Object.assign(identity, result.identity);
+    if (selectedReferenceVersion()?.id === ref.id) {
+      $('referenceLicenceStatus').textContent = LabText.t('cast.licence_rating_saved');
+    }
+    VoiceLabLibrary.refresh();
+    loadCurrentTakes();
+  } catch (error) {
+    $('referenceLicenceStatus').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 $('retireReference').addEventListener('click',function(){var identity=activeIdentity(),ref=selectedReferenceVersion();if(!identity||!ref)return;retireAction('reference',ref.id,LabText.t('cast.this_recording_version')).then(function(message){if(message)$('referenceStatus').textContent=message;return refreshCast(identity.character_id,identity.id);}).catch(apiFailure);});
 $('restoreReference').addEventListener('click',function(){var identity=activeIdentity(),ref=selectedReferenceVersion();if(!identity||!ref)return;restoreAction('reference',ref.id,'this recording version').then(function(message){$('referenceStatus').textContent=message;return refreshCast(identity.character_id,identity.id);}).catch(apiFailure);});
 $('purgeReference').addEventListener('click',function(){var identity=activeIdentity(),ref=selectedReferenceVersion();if(!identity||!ref)return;purgeAction('reference',ref.id,LabText.t('cast.this_recording_version_and_everything')).then(function(message){if(message)$('referenceStatus').textContent=message;return refreshCast(identity.character_id,identity.id);}).catch(apiFailure);});

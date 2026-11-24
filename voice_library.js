@@ -113,6 +113,7 @@
       var maker=voice.generation_engine_id||(preset?voice.engine_id:null),makerName=voice.generation_engine_id?voice.generation_engine_name:(preset?voice.engine_name:null);
       card.appendChild(node('span',LabText.statusName(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?LabText.t('cast.speaker_blend'):LabText.t('cast.preset_voice_2')):''),'voice-kind'));
       card.appendChild(node('h3',parts[0]));card.appendChild(node('p',parts.slice(1).join(' · ')||voice.identity_label,'voice-role'));
+      if(voice.licence)appendLicenceBadge(card,voice.licence);
       card.appendChild(node('p',LabText.t('cast.created_with', {model: engineName(maker,makerName)})));
       if(maker!==voice.engine_id)card.appendChild(node('p',LabText.t('cast.generate_dialogue_with', {model: engineName(voice.engine_id,voice.engine_name)}),'meta'));
       var audition=voice.audition;
@@ -152,6 +153,7 @@
       details.appendChild(node('p',voice.character_description||LabText.t('cast.no_description_saved'),'meta'));
       details.appendChild(node('p',LabText.t('cast.origin_record', {origin: voice.origin || LabText.t('cast.origin_undocumented')}),'meta'));
       details.appendChild(node('p',LabText.t('cast.allowed_use_2', {allowed_use: voice.allowed_use||LabText.t('cast.use_terms_undocumented')}),'meta'));
+      if(voice.licence)details.appendChild(node('p',voice.licence.reason,'meta'));
       card.appendChild(details);gallery.appendChild(card);
     });
   }

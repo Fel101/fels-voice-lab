@@ -208,6 +208,25 @@ edit makes another version. The file you imported is kept apart from the edited 
 **Send to Voice Lab** wait at the top of **Cast library**: **Preview** one, then **Import as candidate**, or **Dismiss**
 it. Voice Slate clip imports are documented in [the bridge guide](RECORDER_BRIDGE.md).
 
+### Read or set a licence rating
+
+Cast cards and take rows show the stricter of the model's licence and the recording's allowed use.
+For a cloned voice, open **Edit voice**, select the saved recording version, read **Who may use it,
+and how**, then choose a **Recording licence rating** and press **Save licence rating**. Until you
+choose a rating, the recording is **Not cleared**. Review each new version separately. Existing takes
+follow the rating of the version they used, including when you change that rating.
+
+| Badge | What it says |
+|---|---|
+| **Commercial use allowed** | The model terms and any recording permission allow commercial use. Keep applicable licence notices. |
+| **Allowed, with conditions** | Read the model or recording conditions before using it commercially. |
+| **Not cleared** | The Lab lacks a clear licence or a rating for the recording. Phonon's 37 catalog voices are in this group. |
+| **Non-commercial only** | The model or recording permission restricts commercial use. |
+
+The badge gives the reason. Export manifests carry the rating and reason alongside the original
+provenance. Voice files carry the source Lab's rating for reference. When you import a cloned voice,
+review and rate the recording in your own Cast library.
+
 ### Perform lines
 
 **Perform lines** reuses a Cast voice, the exact script and the acting settings its model

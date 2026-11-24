@@ -25,6 +25,7 @@ import loudness
 from db_snapshots import snapshot_before_migration
 from evaluation_diagnostics import TAKE_CHECKER, take_checks
 import engine_adapters
+from output_license import LICENCE_RATINGS, take_licence, voice_licence
 import reference_quality
 import speaker_similarity
 import synthetic_label
@@ -154,8 +155,11 @@ def decode_audio(source_bytes, filename, *, what="Reference", max_seconds=None, 
 AUDIO_SUFFIXES = SUPPORTED_AUDIO
 MAX_EXTERNAL_REPORT = 200
 RETIREMENT_KINDS = ("character", "identity", "reference", "take")
-_TAKE_SELECT = ("SELECT t.*,c.name AS character_name,i.label AS identity_label,i.engine_id FROM takes t "
-                "JOIN characters c ON c.id=t.character_id JOIN identities i ON i.id=t.identity_id")
+_TAKE_SELECT = ("SELECT t.*,c.name AS character_name,i.label AS identity_label,i.engine_id,rc.rating AS recording_rating "
+                "FROM takes t JOIN characters c ON c.id=t.character_id JOIN identities i ON i.id=t.identity_id "
+                "LEFT JOIN recording_licences rc ON rc.reference_id=t.reference_version_id")
+_REFERENCE_SELECT = ("SELECT r.*,rc.rating AS licence_rating FROM reference_versions r "
+                     "LEFT JOIN recording_licences rc ON rc.reference_id=r.id")
 _SOURCE_LABELS = {"character": "its character", "identity": "its voice",
                   "reference": "its reference recording", "take": "its source take"}
 _CHILD_QUERIES = {
@@ -313,6 +317,11 @@ def _loudness_readings(path):
         return loudness.measure_file(path)
     except Exception as exc:
         return loudness.unavailable(exc)
+
+
+def has_recording_licences(db):
+    """Also used by the read-only exporter, which can open a library before the Lab migrates it."""
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recording_licences'").fetchone() is not None
 
 
 class CastStore:
@@ -553,6 +562,12 @@ class CastStore:
                 "ALTER TABLE takes ADD COLUMN parent_take_id TEXT",
                 "ALTER TABLE takes ADD COLUMN edit_json TEXT NOT NULL DEFAULT ''",
                 "CREATE INDEX takes_parent ON takes(parent_take_id) WHERE parent_take_id IS NOT NULL"])
+        # This additive migration leaves schema 9 readable by 0.4.0 after an update rollback.
+        if not has_recording_licences(db):
+            db.execute("""CREATE TABLE IF NOT EXISTS recording_licences (
+                reference_id TEXT PRIMARY KEY REFERENCES reference_versions(id) ON DELETE CASCADE,
+                rating TEXT NOT NULL CHECK(rating IN ('yes','conditions','unclear','no'))
+            )""")
 
     def _row(self, query, args=()):
         with self._connect() as db:
@@ -640,49 +655,68 @@ class CastStore:
 
     def update_identity(self, identity_id, changes, *, fixed_voices=None):
         identity_id = _validate_id(identity_id, "identity id")
-        row = self._row("SELECT * FROM identities WHERE id=?", (identity_id,))
-        if row is None:
-            raise KeyError("Voice identity not found.")
-        label = str(changes.get("label", row["label"]) or "").strip()
-        notes = str(changes.get("notes", row["notes"]) or "")
-        if not label or len(label) > 80 or len(notes) > 2000:
-            raise ValueError("Identity label must contain 1–80 characters and notes at most 2000 characters.")
-        options = json.loads(row["engine_options_json"])
-        if "engine_options" in changes:
-            if not isinstance(changes["engine_options"], dict):
-                raise ValueError("engine_options must be an object.")
-            if row["kind"] == "preset_voice":
-                raise ValueError("Preset checkpoint, speaker, and language are immutable; create a new voice identity to change them.")
-            options = changes["engine_options"]
-        if row["kind"] == "fixed_voice":
-            voice = str(options.get("voice", ""))
-            voices = [item.strip() for item in voice.split(",")]
-            if (not voices or len(voices) > 8 or len(set(voices)) != len(voices) or
-                    any(not item for item in voices) or
-                    fixed_voices is not None and any(item not in fixed_voices for item in voices)):
-                raise ValueError("Choose one or more fixed voices reported by the local service; blend IDs with commas.")
-            options["voice"] = ",".join(sorted(voices))
-        status = changes.get("status", row["status"])
-        if status not in ("candidate", "approved", "rejected"):
-            raise ValueError("Identity status must be candidate, approved, or rejected.")
-        selected_reference = changes.get("reference_version_id", row["approved_reference_id"])
-        if status == "approved" and row["kind"] == "reference":
-            selected_reference = _validate_id(selected_reference, "voice recording id")
-            ref = self._row("SELECT * FROM reference_versions WHERE id=? AND identity_id=?",
-                            (selected_reference, identity_id))
-            if ref is None:
-                raise ValueError("Approve this voice with one of its own voice recordings.")
-            if self.retirement_state("reference", selected_reference) or self.retirement_state("identity", identity_id):
-                raise ValueError("This voice or its voice recording is retired; restore it before approving.")
-            if REFERENCE_POLICIES.get(row["engine_id"], {}).get("requires_transcript_for_cast", True) and not ref["transcript"].strip():
-                raise ValueError("Add the exact words of the voice recording before approving this voice.")
-            self._validate_reference(ref, row["engine_id"])
-        elif row["kind"] in {"fixed_voice", "preset_voice"}:
-            selected_reference = None
-        elif status != "approved":
-            selected_reference = None
-        stamp = now_utc()
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM identities WHERE id=?", (identity_id,)).fetchone()
+            if row is None:
+                raise KeyError("Voice identity not found.")
+            label = str(changes.get("label", row["label"]) or "").strip()
+            notes = str(changes.get("notes", row["notes"]) or "")
+            if not label or len(label) > 80 or len(notes) > 2000:
+                raise ValueError("Identity label must contain 1–80 characters and notes at most 2000 characters.")
+            options = json.loads(row["engine_options_json"])
+            if "engine_options" in changes:
+                if not isinstance(changes["engine_options"], dict):
+                    raise ValueError("engine_options must be an object.")
+                if row["kind"] == "preset_voice":
+                    raise ValueError("Preset checkpoint, speaker, and language are immutable; create a new voice identity to change them.")
+                options = changes["engine_options"]
+            if row["kind"] == "fixed_voice":
+                voice = str(options.get("voice", ""))
+                voices = [item.strip() for item in voice.split(",")]
+                if (not voices or len(voices) > 8 or len(set(voices)) != len(voices) or
+                        any(not item for item in voices) or
+                        fixed_voices is not None and any(item not in fixed_voices for item in voices)):
+                    raise ValueError("Choose one or more fixed voices reported by the local service; blend IDs with commas.")
+                options["voice"] = ",".join(sorted(voices))
+            status = changes.get("status", row["status"])
+            if status not in ("candidate", "approved", "rejected"):
+                raise ValueError("Identity status must be candidate, approved, or rejected.")
+            selected_reference = changes.get("reference_version_id", row["approved_reference_id"])
+            if status == "approved" and row["kind"] == "reference":
+                selected_reference = _validate_id(selected_reference, "voice recording id")
+                ref = db.execute("SELECT * FROM reference_versions WHERE id=? AND identity_id=?",
+                                   (selected_reference, identity_id)).fetchone()
+                if ref is None:
+                    raise ValueError("Approve this voice with one of its own voice recordings.")
+                if RetirementReader(db).state("reference", selected_reference):
+                    raise ValueError("This voice or its voice recording is retired; restore it before approving.")
+                if REFERENCE_POLICIES.get(row["engine_id"], {}).get("requires_transcript_for_cast", True) and not ref["transcript"].strip():
+                    raise ValueError("Add the exact words of the voice recording before approving this voice.")
+                self._validate_reference(ref, row["engine_id"])
+            elif row["kind"] in {"fixed_voice", "preset_voice"}:
+                selected_reference = None
+            elif status != "approved":
+                selected_reference = None
+            stamp = now_utc()
+            if "licence_rating" in changes:
+                rating = changes["licence_rating"]
+                if rating is not None and rating not in LICENCE_RATINGS:
+                    raise ValueError("Choose a licence rating for the voice recording.")
+                if row["kind"] != "reference":
+                    raise ValueError("This voice gets its licence rating from its model.")
+                target = changes.get("licence_reference_id", selected_reference or row["approved_reference_id"])
+                if target is None:
+                    raise ValueError("Choose a saved recording for this voice in Cast before rating it.")
+                target = _validate_id(target, "voice recording id")
+                ref = db.execute("SELECT 1 FROM reference_versions WHERE id=? AND identity_id=?", (target, identity_id)).fetchone()
+                if ref is None or RetirementReader(db).state("reference", target):
+                    raise ValueError("Choose one of this voice's saved, active recordings to rate.")
+                if rating is None:
+                    db.execute("DELETE FROM recording_licences WHERE reference_id=?", (target,))
+                else:
+                    db.execute("INSERT INTO recording_licences(reference_id,rating) VALUES(?,?) "
+                               "ON CONFLICT(reference_id) DO UPDATE SET rating=excluded.rating", (target, rating))
             if status == "approved":
                 db.execute("UPDATE identities SET status='candidate', approved_reference_id=NULL, updated_at=? "
                            "WHERE character_id=? AND engine_id=? AND status='approved' AND id<>?",
@@ -980,6 +1014,7 @@ class CastStore:
         elif reference_version_id is not None:
             raise ValueError("This voice is one of a model's preset voices, so it does not use a voice recording.")
         identity["reference"] = reference
+        identity["licence"] = voice_licence(row["engine_id"], row["kind"], (reference or {}).get("licence_rating"))
         return identity
 
     def add_reference_from_take(self, identity_id, take_id, *, transcript=None, edits=None, origin=None, allowed_use=None):
@@ -1020,7 +1055,7 @@ class CastStore:
     def get_reference(self, reference_id):
         reference_id = _validate_id(reference_id, "voice recording id")
         with self._connect() as db:
-            row = db.execute("SELECT * FROM reference_versions WHERE id=?", (reference_id,)).fetchone()
+            row = db.execute(f"{_REFERENCE_SELECT} WHERE r.id=?", (reference_id,)).fetchone()
             if row is None:
                 raise KeyError("Voice recording not found.")
             result = self._reference_dict(row)
@@ -1267,6 +1302,7 @@ class CastStore:
     @staticmethod
     def _take_dict(row, reader):
         result = dict(row)
+        result["licence"] = take_licence(result, result.pop("recording_rating"))
         for field, key in (("settings_json", "settings"), ("model_json", "model"), ("provenance_json", "provenance")):
             result[key] = json.loads(result.pop(field))
         result["waveform_checks"] = _stored_waveform_checks(result.pop("waveform_checks_json"))
@@ -1580,10 +1616,15 @@ class CastStore:
         with self._connect() as db:
             reader = RetirementReader(db)
             for chunk, marks in _in_chunks(ids):
-                for row in db.execute(f"SELECT id,waveform_checks_json,loudness_json FROM takes WHERE id IN ({marks})",
-                                      chunk).fetchall():
-                    found[row[0]] = {"waveform_checks": _stored_waveform_checks(row[1]), "loudness": loudness.stored(row[2]),
-                                     "retirement": reader.state("take", row[0]), "purged": False}
+                for row in db.execute(
+                    f"SELECT t.id,t.waveform_checks_json,t.loudness_json,t.reference_version_id,i.engine_id,rc.rating "
+                    f"FROM takes t JOIN identities i ON i.id=t.identity_id "
+                    f"LEFT JOIN recording_licences rc ON rc.reference_id=t.reference_version_id WHERE t.id IN ({marks})", chunk
+                ):
+                    found[row["id"]] = {"waveform_checks": _stored_waveform_checks(row["waveform_checks_json"]),
+                                        "loudness": loudness.stored(row["loudness_json"]),
+                                        "licence": take_licence(row, row["rating"]),
+                                        "retirement": reader.state("take", row["id"]), "purged": False}
                 for (purged_id,) in db.execute(
                         f"SELECT target_id FROM purged_items WHERE target_kind='take' AND target_id IN ({marks})", chunk).fetchall():
                     found.setdefault(purged_id, {"waveform_checks": None, "loudness": None, "retirement": None, "purged": True})
@@ -1622,11 +1663,16 @@ class CastStore:
                     ident["engine_options"] = json.loads(ident.pop("engine_options_json"))
                     ident.update(_retirement_fields(reader, "identity", ident["id"]))
                     ident["references"] = []
-                    for ref in db.execute("SELECT * FROM reference_versions WHERE identity_id=? ORDER BY version DESC",
+                    for ref in db.execute(f"{_REFERENCE_SELECT} WHERE r.identity_id=? ORDER BY r.version DESC",
                                           (identity["id"],)).fetchall():
                         reference = self._reference_dict(ref)
                         reference.update(_retirement_fields(reader, "reference", reference["id"]))
                         ident["references"].append(reference)
+                    approved = ident["approved_reference_id"]
+                    active = [ref for ref in ident["references"] if not ref["retired"]]
+                    recording = next((ref for ref in active if ref["id"] == approved), active[0] if active else {})
+                    ident["licence_rating"] = recording.get("licence_rating")
+                    ident["licence"] = voice_licence(ident["engine_id"], ident["kind"], ident["licence_rating"])
                     item["identities"].append(ident)
                 result.append(item)
         return result

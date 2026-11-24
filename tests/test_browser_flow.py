@@ -591,7 +591,7 @@ class BrowserFlowTests(unittest.TestCase):
                 page.wait_until("document.getElementById('referenceStatus').textContent.startsWith('Preview ready')")
                 page.set_value("#referenceTranscript", "A clear reference line.")
                 page.set_value("#referenceOrigin", "Browser flow fixture")
-                page.set_value("#referenceAllowedUse", "Tests only")
+                page.set_value("#referenceAllowedUse", "Commercial use permitted with credit.")
                 page.wait_until("!document.getElementById('saveReference').disabled")
                 page.click("#saveReference")
                 # The save message is replaced when the cast refreshes, so wait for the version in the approval list.
@@ -649,6 +649,19 @@ class BrowserFlowTests(unittest.TestCase):
                 page.click("#refreshVoices")
                 page.wait_until("document.querySelector('#voiceGallery article audio') !== null")
                 self.assertIn("Created with Qwen Base 1.7B", page.evaluate("document.getElementById('voiceGallery').textContent"))
+                self.assertIn("Not cleared", page.evaluate("document.querySelector('#voiceGallery .licence-badge').textContent"))
+                page.evaluate("[...document.querySelectorAll('#voiceGallery button')].find((b) => b.textContent === 'Edit voice').click()")
+                page.wait_until("document.getElementById('castEditor').open && !document.getElementById('referenceLicence').hidden")
+                page.set_value("#referenceLicenceRating", "conditions")
+                page.evaluate("document.getElementById('referenceLicenceRating').focus()")
+                page.press("Tab", "Tab", 9)
+                self.assertEqual(page.evaluate("document.activeElement.id"), "saveReferenceLicence")
+                page.press(" ", "Space", 32)
+                page.wait_until("document.querySelector('#voiceGallery .licence-badge.conditions') !== null")
+                self.assertIn("Allowed, with conditions", page.evaluate("document.querySelector('#voiceGallery .licence-badge').textContent"))
+                page.show("perform")
+                page.wait_until("document.querySelectorAll('#takeList .licence-badge.conditions').length === 3")
+                page.show("cast")
                 page.screenshot("cast-library", "#cast", to="#voiceGallery")
 
                 # Scene: start from the performer, save, edit, render from the table, choose the takes, re-render a ticked

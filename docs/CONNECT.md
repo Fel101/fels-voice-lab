@@ -231,7 +231,8 @@ Before the first call, find the Lab (its address file, then port 8765) and check
 which can take minutes: send `wait_seconds` (up to 3600) so the call waits its turn instead of answering `409` at once.
 
 **1. Speak with a voice by name.** `GET /api/voices` lists the voices. Use one whose `ready` is true; when it is false,
-`why_not` says what the person must do first.
+`why_not` says what the person must do first. Each voice includes `licence` with a `rating` (`yes`, `conditions`, `unclear`
+or `no`) and a `reason`. For a cloned voice, the rating includes the recording's allowed use as reviewed in Cast.
 
 ```
 POST /v1/audio/speech

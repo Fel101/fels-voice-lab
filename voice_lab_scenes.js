@@ -1048,6 +1048,7 @@ function renderSceneTakes(container, line, state) {
       audio.controls = true;
       audio.preload = 'none';
       audio.src = take.audio_url;
+      if (take.licence) appendLicenceBadge(item, take.licence);
       item.appendChild(audio);
       about.className = 'meta';
       about.textContent =
@@ -1818,6 +1819,7 @@ function refreshSceneJob() {
         article.appendChild(gone);
       }
       if (row.take_id && !row.purged) {
+        if (row.licence) appendLicenceBadge(article, row.licence);
         var audio = document.createElement('audio');
         audio.controls = true;
         audio.src = '/api/takes/' + row.take_id + '/audio';

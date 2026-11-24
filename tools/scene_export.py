@@ -36,9 +36,9 @@ import timed_scene  # noqa: E402  the same mixer used for timed previews
 import word_timing  # noqa: E402  pure helpers only: phrase grouping and offsets; the exporter never writes Cast data
 from fit import fit_status  # noqa: E402  slot status only; the stretch itself is not applied by the exporter
 from lipsync import check_track, prime_for_takes, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
-from output_license import license_profile  # noqa: E402
+from output_license import license_profile, take_licence, worst_licence  # noqa: E402
 from scene_selection import validate_selected_take  # noqa: E402
-from cast_store import RetirementReader
+from cast_store import RetirementReader, has_recording_licences
 
 
 FORMATS = {"wav", "flac", "ogg", "mp3", "m4a"}
@@ -63,6 +63,7 @@ CSV_FIELDS = [
     "source_audio_sha256", "output_path", "output_sha256", "codec", "sample_rate",
     "channels", "duration_seconds", "reference_version_id", "reference_provenance_json",
     "model_json", "runtime_json", "take_settings_json", "license_json", "processing_steps_json", "text",
+    "licence_rating", "licence_reason",
 ]
 
 
@@ -197,6 +198,7 @@ def load_takes(root, scene):
         # One reader for the whole scene. A Cast database from before schema 4 has no retirements table, so nothing in
         # it can be retired, and it must still export.
         retirements = RetirementReader(db) if db.execute("PRAGMA user_version").fetchone()[0] >= 4 else None
+        recording_ratings = has_recording_licences(db)
         for line in scene["lines"]:
             segments = line.get("segments") or []
             if not segments:
@@ -219,6 +221,11 @@ def load_takes(root, scene):
                 if row is None:
                     raise ExportError(f"Selected take does not exist in Cast: {take_id}")
                 take = dict(row)
+                rating = (
+                    db.execute("SELECT rating FROM recording_licences WHERE reference_id=?", (take["reference_version_id"],)).fetchone()
+                    if recording_ratings and take["reference_version_id"] else None
+                )
+                take["licence"] = take_licence(take, rating["rating"] if rating else None)
                 for source, target in (
                     ("settings_json", "settings"), ("model_json", "model"),
                     ("provenance_json", "provenance"),
@@ -706,11 +713,10 @@ def run_preflight(args):
 
 
 def _asset_record(*, root, asset_type, scene, line=None, take=None, output_path, output_hash,
-                  media, processing_steps, source_hash=None, license_data=None):
+                  media, processing_steps, source_hash=None, licence=None):
     model = (take or {}).get("model", {})
     engine_id = (take or {}).get("engine_id") or ""
     reference = reference_provenance(root, take) if take else {}
-    license_data = license_data or license_profile(engine_id, model, reference)
     return {
         "asset_type": asset_type,
         "scene_id": scene["scene_id"],
@@ -732,7 +738,8 @@ def _asset_record(*, root, asset_type, scene, line=None, take=None, output_path,
         "runtime": model.get("runtime") or model.get("backend") or {},
         "take_settings": (take or {}).get("settings"),
         "reference_provenance": reference,
-        "license": license_data,
+        "license": license_profile(engine_id, model, reference),
+        "licence": licence or take["licence"],
         "source_audio_sha256": source_hash,
         "output_path": str(output_path),
         "output_sha256": output_hash,
@@ -764,6 +771,8 @@ def write_manifest_csv(path, records):
                 "take_settings_json": json.dumps(row.get("take_settings"), ensure_ascii=False, sort_keys=True),
                 "selected_take_ids_json": json.dumps(row.get("selected_take_ids", []), ensure_ascii=False),
                 "license_json": json.dumps(row.get("license"), ensure_ascii=False, sort_keys=True),
+                "licence_rating": row["licence"]["rating"],
+                "licence_reason": row["licence"]["reason"],
                 "processing_steps_json": json.dumps(row.get("processing_steps"), ensure_ascii=False),
                 "text": (row.get("text") or "").replace("\r", " ").replace("\n", " "),
             })
@@ -808,6 +817,7 @@ def export_package(args):
         for item in selected:
             line = item["line"]
             take = item["takes"][0]
+            line_licence = worst_licence(*(part["licence"] for part in item["takes"]))
             char_id = line["character_id"]
             char_name = take["character_name"]
             char_folder = char_folders.setdefault(
@@ -858,6 +868,7 @@ def export_package(args):
                     output_path=line_source.relative_to(destination).as_posix(),
                     output_hash=sha256_file(line_source), media=source_probe,
                     processing_steps=line_source_steps,
+                    licence=line_licence,
                     source_hash=None,
                 ))
             line_audio_sources.append((item, line_source, source_probe, char_folder, stub))
@@ -871,6 +882,7 @@ def export_package(args):
                     take_original_paths[t["id"]].relative_to(destination).as_posix()
                     for t in item["takes"]
                 ],
+                "licence": line_licence,
                 "deliverables": {},
             }
             track, track_reason = track_for_takes(
@@ -884,6 +896,7 @@ def export_package(args):
                     output_path=track_output, output_hash=sha256_file(track_path),
                     media={"duration_seconds": track["duration_seconds"]},
                     processing_steps=[f"phoneme times: {track['timing']['source']}; moved to match the export trims"],
+                    licence=line_licence,
                 ))
                 line_outputs[line["line_id"]]["lip_sync"] = {
                     "status": "written", "timing_source": track["timing"]["source"], "path": track_output}
@@ -904,6 +917,7 @@ def export_package(args):
                     output_path=out_path.relative_to(destination).as_posix(),
                     output_hash=sha256_file(out_path), media=media,
                     processing_steps=line_source_steps + proc_steps,
+                    licence=line_licence,
                     source_hash=start_take["audio_sha256"] if len(item["takes"]) == 1 else None,
                 ))
                 line_outputs[line["line_id"]]["deliverables"][fmt] = out_path.relative_to(destination).as_posix()
@@ -927,6 +941,7 @@ def export_package(args):
         scene_mix_path = scene_dir / "scene-mix-raw.wav"
         scene_timing = make_scene_mix(root, selected, scene_mix_path, scene.get("timeline"))
         scene_probe = probe_media(scene_mix_path, args.ffprobe)
+        scene_licence = worst_licence(*(take["licence"] for item in selected for take in item["takes"]))
         scene_license_profiles = {}
         for item in selected:
             first = item["takes"][0]
@@ -939,6 +954,7 @@ def export_package(args):
             output_path=scene_mix_path.relative_to(destination).as_posix(),
             output_hash=sha256_file(scene_mix_path), media=scene_probe,
             processing_steps=scene_timing["processing_steps"],
+            licence=scene_licence,
         )
         scene_record["selected_take_ids"] = [
             take["id"] for item in selected for take in item["takes"]
@@ -958,6 +974,7 @@ def export_package(args):
                 output_path=out_path.relative_to(destination).as_posix(),
                 output_hash=sha256_file(out_path), media=media,
                 processing_steps=["source: raw scene mix"] + proc_steps,
+                licence=scene_licence,
             )
             record["selected_take_ids"] = scene_record["selected_take_ids"]
             record["line_selections"] = selected_map
@@ -1028,6 +1045,8 @@ def export_package(args):
                 "character_name": char_meta["character_name"],
                 "identity_ids": sorted({line["identity_id"] for line in selected_lines}),
                 "line_count": len(selected_lines),
+                "licence": worst_licence(*(take["licence"] for item in selected if item["line"]["character_id"] == char_id
+                                           for take in item["takes"])),
                 "lines": selected_lines,
                 "license_profiles": {
                     item["takes"][0]["engine_id"]: license_profile(
@@ -1057,6 +1076,7 @@ def export_package(args):
                 "scene_checksum": scene["checksum"], "name": scene["name"],
             },
             "selection": selected_map,
+            "licence": scene_licence,
             "formats": formats,
             "caption_sets": caption_sets,
             **({"source_captions": list(SOURCE_CAPTION_PATHS)} if source_captions else {}),

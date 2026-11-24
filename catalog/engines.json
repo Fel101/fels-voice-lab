@@ -22,6 +22,7 @@
   "engines": [
     {
       "id": "kokoro",
+      "licence": {"rating": "yes", "reason": "Kokoro and its voice packs use Apache-2.0."},
       "name": "Kokoro 82M",
       "support": "supported",
       "family": "kokoro",
@@ -44,6 +45,8 @@
     },
     {
       "id": "phonon-31m-en",
+      "licence": {"rating": "yes", "reason": "Phonon's weights, tokenizer and default voice use Apache-2.0."},
+      "preset_licence": {"rating": "unclear", "reason": "Gradium does not state a licence for the 37 Phonon catalog voices."},
       "name": "Phonon 31M English",
       "support": "experimental",
       "support_note": "The licence for its 37 preset voices is unclear. Ask Gradium before publishing clips that use them.",
@@ -79,6 +82,7 @@
     },
     {
       "id": "turbo",
+      "licence": {"rating": "yes", "reason": "Chatterbox Turbo uses the MIT licence."},
       "name": "Chatterbox Turbo 350M",
       "support": "supported",
       "family": "chatterbox",
@@ -109,6 +113,7 @@
     },
     {
       "id": "orig",
+      "licence": {"rating": "yes", "reason": "Chatterbox 500M uses the MIT licence."},
       "name": "Chatterbox 500M",
       "support": "works",
       "family": "chatterbox",
@@ -135,6 +140,7 @@
     },
     {
       "id": "chatterbox-vc",
+      "licence": {"rating": "yes", "reason": "Chatterbox Voice Conversion uses the MIT licence."},
       "name": "Chatterbox Voice Conversion",
       "support": "works",
       "family": "chatterbox",
@@ -156,6 +162,7 @@
     },
     {
       "id": "breeze-tts-2",
+      "licence": {"rating": "no", "reason": "BreezeBlue's Research and Non-Commercial License covers the weights and self-hosted outputs."},
       "name": "Breeze TTS 2 BF16",
       "support": "works",
       "family": "breeze-tts-2",
@@ -186,6 +193,7 @@
     },
     {
       "id": "qwen3-tts-1.7b-voice-design",
+      "licence": {"rating": "yes", "reason": "Qwen3-TTS uses Apache-2.0."},
       "name": "Qwen3-TTS 1.7B VoiceDesign",
       "support": "supported",
       "family": "qwen3-tts",
@@ -210,6 +218,7 @@
     },
     {
       "id": "qwen3-tts-1.7b-base",
+      "licence": {"rating": "yes", "reason": "Qwen3-TTS uses Apache-2.0."},
       "name": "Qwen3-TTS 1.7B Base",
       "support": "supported",
       "family": "qwen3-tts",
@@ -235,6 +244,7 @@
     },
     {
       "id": "qwen3-tts-0.6b-base",
+      "licence": {"rating": "yes", "reason": "Qwen3-TTS uses Apache-2.0."},
       "name": "Qwen3-TTS 0.6B Base",
       "support": "works",
       "family": "qwen3-tts",
@@ -260,6 +270,7 @@
     },
     {
       "id": "qwen3-tts-1.7b-custom-voice",
+      "licence": {"rating": "yes", "reason": "Qwen3-TTS uses Apache-2.0."},
       "name": "Qwen3-TTS 1.7B CustomVoice",
       "support": "supported",
       "family": "qwen3-tts",
@@ -287,6 +298,7 @@
     },
     {
       "id": "voxcpm2",
+      "licence": {"rating": "yes", "reason": "VoxCPM2 uses Apache-2.0."},
       "name": "VoxCPM2 2B",
       "support": "works",
       "family": "voxcpm2",
@@ -315,6 +327,7 @@
     },
     {
       "id": "drama-3",
+      "licence": {"rating": "conditions", "reason": "The Fish Audio Community License 1.0 sets conditions on commercial use and requires attribution."},
       "name": "Fish Audio Drama 3 (35B MoE / Q4_K)",
       "support": "experimental",
       "support_note": "Voice cloning runs on the CPU and can be slow. Fish Audio’s licence sets conditions on using the audio.",

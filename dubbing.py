@@ -604,9 +604,13 @@ def export(scenes, scene_id, request):
     if source:
         _attachment_checks(folder / "source", source)
     args = _format_options(scenes, scene, folder, source, request)
+    take_ids = [
+        take_id for line in scene["lines"] if not line.get("dub", {}).get("mute") for take_id in line["selected_takes"].values()
+    ]
+    licences = {take["id"]: take["licence"] for take in scenes.cast.get_takes(take_ids)}
     fingerprint = digest_json(
         [
-            2,
+            3,
             scene["checksum"],
             source and source["sha256"],
             args.bed_sha,
@@ -616,6 +620,7 @@ def export(scenes, scene_id, request):
             args.duck,
             args.burn,
             [receipt["checksum"] for _, receipt in args.alternates],
+            licences,
         ]
     )
     deliveries = folder / "deliveries"
@@ -629,7 +634,7 @@ def export(scenes, scene_id, request):
                 except (OSError, ValueError, KeyError):
                     continue
                 return existing
-        return _publish(scenes, scene, folder, source, args, fingerprint)
+        return _publish(scenes, scene, folder, source, args, fingerprint, licences)
 
 
 def _dialogue(scenes, scene, source, options, stage):
@@ -646,7 +651,7 @@ def _dialogue(scenes, scene, source, options, stage):
     return max(preview["duration_seconds"], (source or {}).get("duration_ms", 0) / 1000), preview
 
 
-def _publish(scenes, scene, folder, source, options, fingerprint):
+def _publish(scenes, scene, folder, source, options, fingerprint, licences):
     from dub_caption_styles import generated_words, write as write_ass
 
     scene_id = scene["scene_id"]
@@ -655,6 +660,8 @@ def _publish(scenes, scene, folder, source, options, fingerprint):
         stage = Path(temporary) / "delivery"
         stage.mkdir()
         seconds, preview = _dialogue(scenes, scene, source, options, stage)
+        if {line["take_id"]: line["licence"] for line in preview["lines"]} != licences:
+            raise ValueError("The take licence ratings changed during export. Try the export again.")
         _mix_output(stage, seconds, options.bed_path, options.gain, options.duck, preview["audio_sha256"])
         duration, wav_streams = _probe(stage / "dub.wav", "wav")
         if abs(duration - seconds) > 0.01 or len(wav_streams) != 1 or wav_streams[0]["codec_name"] != "pcm_s16le":

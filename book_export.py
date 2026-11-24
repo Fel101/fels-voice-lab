@@ -206,6 +206,7 @@ def _chosen(books, scene):
                     "samples": audio.frames,
                     "rate": audio.samplerate,
                     "model": take.get("model") or {},
+                    "licence": take["licence"],
                     "reference_id": take["reference_version_id"],
                 }
             stamp = verified[take["id"]]

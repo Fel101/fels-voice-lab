@@ -78,7 +78,9 @@
           "voices[].character": "string",
           "voices[].identity_id": "string",
           "voices[].status": "string",
-          "voices[].voice_id": "string"
+          "voices[].voice_id": "string",
+          "voices[].licence.rating": "string",
+          "voices[].licence.reason": "string"
         },
         "headers": []
       }
@@ -402,6 +404,8 @@
           "voice.status": "string",
           "voice.ready": "boolean",
           "voice.why_not": "string|null",
+          "voice.licence.rating": "string",
+          "voice.licence.reason": "string",
           "character_id": "string",
           "reference_id": "string",
           "engine": "string",
@@ -488,6 +492,14 @@
             "type": "string",
             "required": false
           },
+          "licence_rating": {
+            "type": "string|null",
+            "required": false
+          },
+          "licence_reference_id": {
+            "type": "string",
+            "required": false
+          },
           "engine_options": {
             "type": "object",
             "required": false
@@ -501,7 +513,10 @@
           "identity.id": "string",
           "identity.status": "string",
           "identity.approved_reference_id": "string|null",
-          "identity.references[].id": "string"
+          "identity.references[].id": "string",
+          "identity.references[].licence_rating": "string|null",
+          "identity.licence.rating": "string",
+          "identity.licence.reason": "string"
         },
         "headers": []
       }

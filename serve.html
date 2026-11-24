@@ -32,6 +32,12 @@ canvas.wave { width:100%; height:100px; border:1px solid var(--line); border-rad
 .saved-voice .voice-role { margin:0 0 12px; color:var(--muted); }
 .saved-voice audio { margin:12px 0; } .saved-voice .cast-actions button { flex:1 1 130px; }
 .voice-kind { color:var(--accent); font-size:.8rem; } .voice-count { font-weight:600; }
+.licence-badge { display:inline-block; width:fit-content; margin:4px 0; padding:2px 8px; border:1px solid currentColor; border-radius:999px; font-size:.8rem; font-weight:700; }
+.licence-badge.yes { color:light-dark(#12804c,#3ccf8e); }
+.licence-badge.conditions { color:light-dark(#93600f,#d4a24c); }
+.licence-badge.unclear { color:light-dark(#b45309,#f0883e); }
+.licence-badge.no { color:light-dark(#c4321f,#ff6b5e); }
+strong + .licence-badge { margin-inline-start:8px; }
 .reference-filters { display:flex; gap:16px; flex-wrap:wrap; margin:6px 0; font-size:.85rem; color:var(--muted); }
 .reference-tools details { overflow-wrap:anywhere; } .reference-details { white-space:pre-wrap; }
 #voiceLibraryStatus { white-space:pre-line; } #castEditor { border-top:1px solid var(--line); padding-top:16px; }
@@ -360,6 +366,20 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <div class="cast-actions"><button type="button" id="suggestTranscript">{{ui:cast.suggest_the_words_from_the}}</button><span class="meta">{{ui:cast.a_local_draft_to_check}}</span> <a href="#system">{{ui:cast.speech_recognition_setup}}</a></div>
     <div class="cast-grid"><label class="field">{{ui:cast.where_it_comes_from}}<input id="referenceOrigin" type="text" maxlength="1000" placeholder="{{ui:cast.where_this_recording_design_came}}"></label>
       <label class="field">{{ui:cast.who_may_use_it_and}}<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="{{ui:cast.permission_and_use_limits_restrictions}}"></label></div>
+    <div id="referenceLicence" hidden>
+      <div class="cast-actions">
+        <label class="field compact">{{ui:cast.recording_licence}}<select id="referenceLicenceRating" aria-describedby="referenceLicenceHelp">
+          <option value="">{{ui:cast.licence_not_rated}}</option>
+          <option value="yes">{{ui:cast.licence_yes}}</option>
+          <option value="conditions">{{ui:cast.licence_conditions}}</option>
+          <option value="unclear">{{ui:cast.licence_unclear}}</option>
+          <option value="no">{{ui:cast.licence_no}}</option>
+        </select></label>
+        <button type="button" id="saveReferenceLicence">{{ui:cast.save_licence_rating}}</button>
+      </div>
+      <p id="referenceLicenceHelp" class="meta">{{ui:cast.recording_licence_help}}</p>
+      <p id="referenceLicenceStatus" class="meta" role="status"></p>
+    </div>
     <div class="cast-actions"><button type="button" id="saveReference">{{ui:cast.save_the_recording}}</button><button type="button" id="saveReferenceVersion" hidden>{{ui:cast.save_edited_version}}</button>
       <label class="field compact">{{ui:cast.approve_this_version}}<select id="approveReference"></select></label><button type="button" id="approveIdentity">{{ui:cast.approve_voice}}</button></div>
     <p class="meta" id="referenceStatus"></p>

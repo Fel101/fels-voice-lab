@@ -61,7 +61,7 @@ class CardFactsTests(unittest.TestCase):
         for entry in CATALOG["engines"]:
             with self.subTest(engine=entry["id"]):
                 self.assertIn(entry["support"], {"supported", "works", "experimental"})
-                self.assertIn(f"| {entry['name']} | {entry['support'].title()} |", readme)
+                self.assertTrue(any(line.startswith(f"| {entry['name']} | {entry['support'].title()} |") for line in readme))
                 if entry["support"] == "experimental":
                     self.assertTrue(entry["support_note"].strip())
 

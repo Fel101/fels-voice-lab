@@ -257,6 +257,7 @@ class ExportPackageTests(ExportPanelBase):
         self.assertTrue(preview["dry_run"])
         self.assertIn("PRE-EXPORT PROVENANCE REVIEW", preview["log"])
         self.assertFalse((self.root / "out" / "exports").exists())
+        self.cast.update_identity(self.identity["id"], {"licence_rating": "conditions"})
 
         req = {"scene_id": scene_id, "formats": ["wav", "flac"], "name": "panel-test",
                "filename_template": "{line_id}", "trim_end_seconds": 0.0, "fade_out_ms": 20}
@@ -270,6 +271,11 @@ class ExportPackageTests(ExportPanelBase):
         package = self.root / "out" / "exports" / folder
         manifest = json.loads((package / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["formats"], ["wav", "flac"])
+        self.assertEqual(manifest["licence"]["rating"], "conditions")
+        self.assertTrue(all(row["licence"] == manifest["licence"] for row in manifest["assets"]))
+        csv_text = (package / "manifest.csv").read_text(encoding="utf-8-sig")
+        self.assertIn("licence_rating,licence_reason", csv_text.splitlines()[0])
+        self.assertIn(",conditions,", csv_text)
         self.assertEqual(manifest["transforms"]["fade_out_ms"], 20)
         self.assertTrue((package / "deliverables" / "flac").is_dir())
 

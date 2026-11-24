@@ -28,6 +28,7 @@ import scene_store  # noqa: E402
 import synthetic_label  # noqa: E402
 import voice_names  # noqa: E402
 from tools import lab_cli  # noqa: E402
+from test_cast import tone_wav  # noqa: E402
 from worker_pool import EnginePool, WorkerBusy, read_catalog  # noqa: E402
 from worker_process import WorkerCancelled  # noqa: E402
 
@@ -237,6 +238,8 @@ class VoiceListTests(ServiceCase):
             ["Ann (One)", "Ann (Two)", "Mira", "Mira (Low)", "Nell", "af_heart", "ef_dora"],
         )
         self.assertEqual(voices["Mira"]["aliases"], ["Mira (Bright)"])
+        self.assertEqual(voices["Mira"]["licence"]["rating"], "yes")
+        self.assertTrue(voices["af_heart"]["licence"]["reason"])
         nell = voices["Nell"]
         self.assertEqual(
             {key: nell[key] for key in ("kind", "character", "label", "model", "languages", "ready", "why_not", "status")},
@@ -269,9 +272,34 @@ class VoiceListTests(ServiceCase):
         with mock.patch.object(phonon_support, "discover_phonon_voices", lambda: [{"name": "Harper", "description": "Calm."}]):
             self.installed.add("phonon-31m-en")
             self.service.add_voice("Harper", "Mine")
-            names = list(self.voices())
+            voices = self.voices()
+            names = list(voices)
+            self.assertEqual(voices["phonon-31m-en:Harper"]["licence"]["rating"], "unclear")
         self.assertIn("phonon-31m-en:Harper", names)
         self.assertEqual(names.count("Harper"), 1)
+
+    def test_cloned_voice_reports_licence_after_the_recording_is_rated(self):
+        cast = self.service.cast
+        character = cast.create_character("Mira")
+        identity = cast.create_identity(character["id"], "qwen3-tts-1.7b-base", "Recorded")
+        ref = cast.add_reference(
+            identity["id"],
+            "mira.wav",
+            tone_wav(),
+            transcript="A test line.",
+            origin="Synthetic test fixture",
+            allowed_use="Permitted for test use",
+        )
+        path = f"/api/identities/{identity['id']}/update"
+        before = self.voices()["Mira"]["licence"]
+        self.assertEqual(before["rating"], "unclear")
+        self.assertIn("has no rating", before["reason"])
+        status, _ = self.error(path, {"licence_reference_id": ref["id"], "licence_rating": "invalid"})
+        self.assertEqual(status, 400)
+        status, reply = self.error(path, {"licence_reference_id": ref["id"], "licence_rating": "no"})
+        self.assertEqual(status, 200)
+        self.assertEqual(reply["identity"]["licence"], self.voices()["Mira"]["licence"])
+        self.assertEqual(reply["identity"]["licence"]["rating"], "no")
 
     def test_names_are_found_without_regard_to_case_and_unknown_ones_say_where_to_look(self):
         self.service.add_voice("Nell", "Warm")

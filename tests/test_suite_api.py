@@ -158,7 +158,7 @@ class SnapshotTests(unittest.TestCase):
 
     def test_an_addition_keeps_the_number(self):
         voices = row("GET /api/voices")
-        routes = changed("GET /api/voices", answer=voices.answer + (("voices[].licence", "object"),))
+        routes = changed("GET /api/voices", answer=voices.answer + (("voices[].summary", "object"),))
         routes = [
             replace(route, body=route.body + (api_spec.F("pace", "number", "New."),))
             if api_spec.key(route) == "POST /api/speak"
@@ -175,7 +175,7 @@ class SnapshotTests(unittest.TestCase):
             sorted(added),
             sorted(
                 [
-                    "GET /api/voices answers a new field, voices[].licence.",
+                    "GET /api/voices answers a new field, voices[].summary.",
                     "POST /api/speak takes a new field, pace.",
                     "POST /api/load is new in the suite API.",
                 ]
@@ -197,7 +197,7 @@ class SnapshotTests(unittest.TestCase):
                 for name, kind in row("GET /api/voices").answer
             ),
         )
-        added = changed("GET /api/voices", answer=row("GET /api/voices").answer + (("voices[].licence", "object"),))
+        added = changed("GET /api/voices", answer=row("GET /api/voices").answer + (("voices[].summary", "object"),))
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             folder = Path(temp)
             kept = folder / SNAPSHOT.name
@@ -220,7 +220,7 @@ class SnapshotTests(unittest.TestCase):
                 self.assertTrue((folder / "openapi.json").is_file(), "the other files are written")
                 with mock.patch.object(api_spec, "ROUTES", added), contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(build_api_docs.main([]), 0)
-                self.assertIn('"voices[].licence": "object"', kept.read_text(encoding="utf-8"))
+                self.assertIn('"voices[].summary": "object"', kept.read_text(encoding="utf-8"))
                 # A new number writes a new file beside the old one.
                 with (
                     mock.patch.object(api_spec, "ROUTES", renamed),
@@ -230,7 +230,7 @@ class SnapshotTests(unittest.TestCase):
                     self.assertEqual(build_api_docs.main([]), 0)
                     following = json.loads((folder / f"suite_api_{api_spec.SUITE_API}.json").read_text(encoding="utf-8"))
                 self.assertIn("voices[].reason", following["routes"]["GET /api/voices"]["answer"]["fields"])
-                self.assertIn('"voices[].licence": "object"', kept.read_text(encoding="utf-8"), "the old file stays")
+                self.assertIn('"voices[].summary": "object"', kept.read_text(encoding="utf-8"), "the old file stays")
 
     def test_openapi_json_says_which_routes_are_the_suite_api(self):
         spec = api_spec.build_openapi()

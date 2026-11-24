@@ -223,7 +223,7 @@ class TableTests(unittest.TestCase):
         for row in api_spec.ROUTES:
             for field in row.query + row.body + row.headers:
                 with self.subTest(f"{api_spec.key(row)} {field.name}"):
-                    self.assertRegex(field.type, r"^(string|integer|number|boolean|object|binary)(\[\])?$")
+                    self.assertRegex(field.type, r"^(string|integer|number|boolean|object|binary)(\[\])?(\|null)?$")
                     self.assertTrue(field.doc.endswith((".", "`")), "a field's meaning is a sentence")
             names = [field.name for field in row.body]
             self.assertEqual(len(names), len(set(names)), api_spec.key(row))
@@ -314,7 +314,9 @@ class OpenApiTests(unittest.TestCase):
                  "audio": "audio/*", "html": "text/html", "javascript": "text/javascript", "file": "application/octet-stream"}
 
         def schema_of(kind):
-            return {"type": "array", "items": {"type": kind[:-2]}} if kind.endswith("[]") else {"type": kind}
+            if kind.endswith("[]"):
+                return {"type": "array", "items": {"type": kind[:-2]}}
+            return {"type": kind.split("|") if kind.endswith("|null") else kind}
 
         for row in api_spec.documented():
             operation = self.spec["paths"][row.path][row.method.lower()]

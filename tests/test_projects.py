@@ -61,6 +61,7 @@ class ProjectFilesTests(ExportPanelBase):
 
     def test_voice_file_checks_permissions_and_keeps_audition_and_cast_details(self):
         self.render_selected_scene()
+        self.cast.update_identity(self.identity["id"], {"licence_rating": "no"})
         self.cast.save_pronunciation(source="harbor", replacement="har bor", character_id=self.character["id"])
         request = {"kind": "persona", "identity_id": self.identity["id"], "author": "Test fixture"}
         self.assertIn("permission", self.checked_json("/api/portable/export", 400, request)["error"])
@@ -72,6 +73,8 @@ class ProjectFilesTests(ExportPanelBase):
         self.assertEqual(self.cast.list_cast(), before)
         self.assertEqual(preview["author"], "Test fixture")
         item = preview["voices"][0]
+        self.assertEqual(item["licence"]["rating"], "no")
+        self.assertEqual(item["audition"]["licence"], item["licence"])
         self.assertEqual(item["sample"]["origin"], "local test fixture")
         self.assertEqual(item["sample"]["allowed_use"], "tests only")
         status, audition = self.request("/api/portable/voice-preview?asset=" + item["audition"]["asset"], raw)
@@ -85,6 +88,7 @@ class ProjectFilesTests(ExportPanelBase):
             result = portable_projects.import_archive(target, raw, {**options, "permission": True})
             identity = result["identity"]
             self.assertEqual(identity["status"], "candidate")
+            self.assertEqual(identity["licence"]["rating"], "unclear")
             self.assertIsNone(identity["approved_reference_id"])
             self.assertNotEqual(identity["id"], self.identity["id"])
             character = target.cast.get_character(identity["character_id"])

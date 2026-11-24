@@ -212,6 +212,7 @@ function renderActiveIdentity() {
     $('saveReference').hidden=false;$('saveReferenceVersion').hidden=!identity.references.length;
   }
   updateReferenceRetirement();
+  updateReferenceLicence();
   renderPerformanceCharacter();
 }
 function loadSavedReference(reference) {
@@ -439,15 +440,38 @@ function updateReferenceRetirement(){
   $('purgeReference').hidden=!ref||!ref.retired;
   $('referenceRetirement').textContent=ref&&ref.retired?retirementLabel(ref):'';
 }
+function updateReferenceLicence() {
+  var ref = selectedReferenceVersion();
+  $('referenceLicence').hidden = !ref || ref.retired;
+  $('referenceLicenceRating').value = ref ? ref.licence_rating || '' : '';
+  $('referenceLicenceStatus').textContent = '';
+}
+function appendLicenceBadge(parent, licence) {
+  var labels = {
+    yes: ['✓', LabText.t('cast.licence_yes')],
+    conditions: ['!', LabText.t('cast.licence_conditions')],
+    unclear: ['?', LabText.t('cast.licence_unclear')],
+    no: ['✕', LabText.t('cast.licence_no')],
+  };
+  var label = labels[licence.rating];
+  if (!label) return;
+  var badge = document.createElement('span');
+  badge.className = 'licence-badge ' + licence.rating;
+  badge.textContent = label.join(' ');
+  badge.title = licence.reason;
+  badge.setAttribute('aria-description', licence.reason);
+  parent.appendChild(badge);
+}
 function renderTakes(takes){
   var container=$('takeList');container.textContent='';if(!takes.length){container.textContent=LabText.t('cast.no_saved_takes_for_this');return;}
   takes.slice().reverse().forEach(function(take){var article=document.createElement('article'),title=document.createElement('strong');title.textContent=LabText.t('cast.s', {character_name: take.character_name, identity_label: take.identity_label, line_id: take.line_id, status: LabText.statusName(take.status), seconds: take.duration_seconds.toFixed(2)});article.appendChild(title);
+    if(take.licence)appendLicenceBadge(article,take.licence);
     var player=document.createElement('audio');player.controls=true;player.src=take.audio_url;article.appendChild(player);
     var detail=document.createElement('p');detail.className='meta';detail.textContent=(LabText.t('cast.text_sent_revision', {spoken_text: take.spoken_text, backend: take.model.backend, checkpoint: take.model.checkpoint, checkpoint_revision: take.model.checkpoint_revision, mode: take.model.mode||''}) + (take.edit?'\n'+takeEditNote(take):''));article.appendChild(detail);appendTakeChecks(article,take.waveform_checks);appendTakeLoudness(article,take.loudness);
     var provenance=document.createElement('details'),provenanceTitle=document.createElement('summary'),provenanceBody=document.createElement('pre');
     provenanceTitle.textContent=LabText.t('cast.effective_settings_and_provenance');provenanceBody.className='meta';
     provenanceBody.textContent=JSON.stringify({effective_settings:take.model.effective_settings||{},voice_identity:take.model.voice_identity||null,
-      reference_version_id:take.reference_version_id||null,provenance:take.provenance||{}},null,2);
+      reference_version_id:take.reference_version_id||null,licence:take.licence,provenance:take.provenance||{}},null,2);
     provenance.appendChild(provenanceTitle);provenance.appendChild(provenanceBody);article.appendChild(provenance);
     var actions=document.createElement('div');actions.className='cast-actions';[['selected',LabText.t('cast.select')],['candidate',LabText.t('cast.keep_as_candidate')],['rejected',LabText.t('cast.reject')]].forEach(function(pair){var button=document.createElement('button');button.type='button';button.textContent=pair[1];button.addEventListener('click',function(){fetchJson('/api/takes/'+take.id+'/update',{status:pair[0],rating:pair[0]==='selected'?5:null}).then(loadCurrentTakes).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(button);});
     var newReference=document.createElement('button');newReference.type='button';newReference.textContent=LabText.t('cast.make_a_voice_recording_from');newReference.addEventListener('click',function(){var identity=performanceIdentity();if(!identity||identity.id!==take.identity_id||identity.kind!=='reference'){ $('performError').textContent=LabText.t('cast.choose_this_take_s_voice');return;}fetchJson('/api/identities/'+identity.id+'/references/from-take',{take_id:take.id}).then(function(result){$('performError').textContent=LabText.t('cast.created_recording_v_with_inherited', {version: result.reference.version});return refreshCast(identity.character_id,identity.id);}).catch(function(error){$('performError').textContent=error.message;});});actions.appendChild(newReference);var voiceMatch=document.createElement('button');voiceMatch.type='button';voiceMatch.textContent=LabText.t('cast.check_voice_match');var matchNote=document.createElement('p');matchNote.className='meta';voiceMatch.addEventListener('click',function(){matchNote.textContent=LabText.t('cast.measuring_the_voice_match');fetchJson('/api/takes/'+take.id+'/voice-match').then(function(result){var m=result.voice_match;matchNote.textContent=m.available?(LabText.t('cast.voice_match_proxy_calibrated_on', {score: m.score.toFixed(2), assessment: {likely_same:LabText.t('cast.similar_to_recording'),uncertain:LabText.t('cast.match_uncertain'),likely_different:LabText.t('cast.different_from_recording')}[m.band]})):m.reason;}).catch(function(error){matchNote.textContent=error.message;});});actions.appendChild(voiceMatch);article.appendChild(actions);article.appendChild(matchNote);appendTakeEditor(article,take,actions,loadCurrentTakes,function(message){$('performStatus').textContent=message;});if(take.retired)Array.from(actions.querySelectorAll('button')).forEach(function(b){if(b.textContent!==LabText.t('cast.check_voice_match'))b.disabled=true;});appendTakeRetirement(article,take,loadCurrentTakes,function(message){$('performStatus').textContent=message;});container.appendChild(article);});

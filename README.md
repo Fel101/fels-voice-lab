@@ -83,16 +83,17 @@ The pictures that follow are made by [`tools/readme_shots.py`](tools/readme_shot
 
 ### Cast library
 
-![The Cast library with two approved Kokoro voice cards, Mira and Tobin, each with its audition player and buttons](docs/images/cast-library.png)
+![The Cast library with two approved Kokoro voice cards, Mira and Tobin, each with its licence rating, audition player and buttons](docs/images/cast-library.png)
 
-Every saved voice is a card that shows how it was made, which model will speak for it, a saved audition
+Every saved voice is a card that shows how it was made, which model will speak for it, its licence rating, a saved audition
 to play, and either the preset voices it uses or how many saved versions its voice recording has. A
 version of a recording never changes once saved, and keeps its transcript, origin and allowed use.
-Approving a voice records your decision to use it; it cannot prove that you have the right to.
+For a cloned voice, review and rate the recording’s allowed use in **Edit voice**. The voice and its
+takes show the stricter rating from the recording and model. [Licence ratings](docs/USER_GUIDE.md#read-or-set-a-licence-rating).
 
 ### Perform lines
 
-![Perform lines: Mira's Kokoro voice, a line of dialogue and its take, with its loudness and waveform check](docs/images/perform.png)
+![Perform lines: Mira's Kokoro voice and a take with its licence rating, loudness and waveform check](docs/images/perform.png)
 
 Pick a character and voice, write or paste a line, optionally add an acting instruction, and make a
 set of takes on consecutive seeds. Every take is saved with the text, model, reference and settings
@@ -189,20 +190,20 @@ Which languages and devices were actually tried is written down in
 - **Works** models are tested when they change.
 - **Experimental** models may break or have limits. Their cards explain what to watch for.
 
-| Model | Support level |
-|---|---|
-| Kokoro 82M | Supported |
-| Phonon 31M English | Experimental |
-| Chatterbox Turbo 350M | Supported |
-| Chatterbox 500M | Works |
-| Chatterbox Voice Conversion | Works |
-| Breeze TTS 2 BF16 | Works |
-| Qwen3-TTS 1.7B VoiceDesign | Supported |
-| Qwen3-TTS 1.7B Base | Supported |
-| Qwen3-TTS 0.6B Base | Works |
-| Qwen3-TTS 1.7B CustomVoice | Supported |
-| VoxCPM2 2B | Works |
-| Fish Audio Drama 3 (35B MoE / Q4_K) | Experimental |
+| Model | Support level | Model licence |
+|---|---|---|
+| Kokoro 82M | Supported | ✓ Commercial use allowed |
+| Phonon 31M English | Experimental | ? Not cleared for catalog voices |
+| Chatterbox Turbo 350M | Supported | ✓ Commercial use allowed |
+| Chatterbox 500M | Works | ✓ Commercial use allowed |
+| Chatterbox Voice Conversion | Works | ✓ Commercial use allowed |
+| Breeze TTS 2 BF16 | Works | ✕ Non-commercial only |
+| Qwen3-TTS 1.7B VoiceDesign | Supported | ✓ Commercial use allowed |
+| Qwen3-TTS 1.7B Base | Supported | ✓ Commercial use allowed |
+| Qwen3-TTS 0.6B Base | Works | ✓ Commercial use allowed |
+| Qwen3-TTS 1.7B CustomVoice | Supported | ✓ Commercial use allowed |
+| VoxCPM2 2B | Works | ✓ Commercial use allowed |
+| Fish Audio Drama 3 (35B MoE / Q4_K) | Experimental | ! Allowed, with conditions |
 
 Drama studio and all Drama cloning use CPU after a local Vulkan device-loss incident. Experimental
 short GPU design is an opt-in local configuration; do not enable GPU cloning. Previous-take editing,

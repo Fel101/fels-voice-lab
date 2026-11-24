@@ -1,10 +1,34 @@
 """Export receipts keep each model's own terms apart from the application's MIT licence."""
 import unittest
 
-from output_license import license_profile
+from output_license import LICENCE_RATINGS, license_profile, model_licence, voice_licence, worst_licence
+from worker_pool import read_catalog
 
 
 class OutputLicenseTests(unittest.TestCase):
+    def test_every_model_has_a_rating_and_reason(self):
+        for entry in read_catalog()["engines"]:
+            with self.subTest(engine=entry["id"]):
+                self.assertIn(entry["licence"]["rating"], LICENCE_RATINGS)
+                self.assertTrue(entry["licence"]["reason"])
+
+    def test_worst_recording_or_model_rating_wins(self):
+        for engine, ratings in {
+            "turbo": ["unclear", "yes", "conditions", "unclear", "no"],
+            "drama-3": ["unclear", "conditions", "conditions", "unclear", "no"],
+            "breeze-tts-2": ["no", "no", "no", "no", "no"],
+        }.items():
+            for recording, expected in zip((None, *LICENCE_RATINGS), ratings, strict=True):
+                with self.subTest(engine=engine, recording=recording):
+                    self.assertEqual(voice_licence(engine, "reference", recording)["rating"], expected)
+        self.assertEqual(model_licence("phonon-31m-en")["rating"], "yes")
+        self.assertEqual(voice_licence("phonon-31m-en", "preset_voice")["rating"], "unclear")
+        self.assertEqual(voice_licence("missing-model", "fixed_voice")["rating"], "unclear")
+        self.assertEqual(voice_licence("kokoro", "fixed_voice")["rating"], "yes")
+        clearer = model_licence("kokoro")
+        restrictive = model_licence("breeze-tts-2")
+        self.assertEqual(worst_licence(clearer, restrictive, restrictive), restrictive)
+
     def test_export_receipts_keep_model_terms_separate_from_application_mit(self):
         drama = license_profile("drama-3", {}, {"allowed_use": "self-recorded permitted use"})
         self.assertEqual(drama["status"], "restricted")

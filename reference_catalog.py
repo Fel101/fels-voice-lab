@@ -419,6 +419,7 @@ def list_voice_library(lab, cast, *, max_items=MAX_ITEMS, include_retired=False)
                 audition = {
                     "take_id": take["id"], "audio_url": take["audio_url"],
                     "duration_seconds": round(float(details.duration), 3), "sample_rate_hz": details.samplerate,
+                    "licence": take["licence"],
                     "text": take.get("spoken_text") or take.get("text", ""), "status": take.get("status"),
                     "language": take.get("language"), "settings": take.get("settings") or {},
                     "created_at": take.get("created_at"), "audio_sha256": take.get("audio_sha256"),
@@ -434,6 +435,7 @@ def list_voice_library(lab, cast, *, max_items=MAX_ITEMS, include_retired=False)
                 **character_fields, "id": identity["id"], "identity_id": identity["id"],
                 "identity_label": str(identity.get("label", "")), "identity_kind": identity.get("kind"),
                 "identity_status": identity.get("status"), "engine_id": identity["engine_id"],
+                "licence": identity["licence"],
                 "engine_name": names.get(identity["engine_id"], identity["engine_id"]),
                 "generation_engine_id": generation_engine,
                 "generation_engine_name": names.get(generation_engine, generation_engine),

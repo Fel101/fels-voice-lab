@@ -292,7 +292,7 @@ Name the device, the loaded engines, the Kokoro and Phonon voices found and the 
 
 List every engine the Lab knows, with its support level, pinned checkpoint, capabilities and license.
 
-**Answer:** `200`, JSON. The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have limits, described in `support_note`). Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.
+**Answer:** `200`, JSON. The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose `integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have limits, described in `support_note`). Each engine has a `licence` rating and reason, and can have a separate `preset_licence` for its voice catalog. Each engine also has `facts`, what its card on the Models page says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, `converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its `screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with its `text` in plain words.
 
 <a id="get-api-engines-status"></a>
 
@@ -534,7 +534,7 @@ Turn text into audio. `speak` and `performance` answer with the finished WAV fil
 
 List every voice a program can speak with by name.
 
-**Answer:** `200`, JSON. `voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.
+**Answer:** `200`, JSON. `voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and `model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and `why_not`, a sentence saying what to do when it is not ready. `licence` has a `rating` (`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. A Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name for it.
 
 **Suite API 1:** the other apps of Fel's Studio rely on this route. Its fields keep their names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 
@@ -554,6 +554,8 @@ List every voice a program can speak with by name.
 | `voices[].identity_id` | string |
 | `voices[].status` | string |
 | `voices[].voice_id` | string |
+| `voices[].licence.rating` | string |
+| `voices[].licence.reason` | string |
 
 A Cast voice is named after its character when it is the character's only voice, or its only approved one; any Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, since only the loaded checkpoint reports them. Nothing is loaded to answer.
 
@@ -843,7 +845,7 @@ Characters, the voices (identities) they speak with, the recordings that clone t
 | POST | [`/api/characters/from-design`](#post-api-characters-from-design) | Design a voice from words and keep it as a new character's voice, ready to speak by the character's name. |
 | POST | [`/api/characters/{character_id}`](#post-api-characters-character_id) | Rename a character or change its description. |
 | POST | [`/api/characters/{character_id}/identities`](#post-api-characters-character_id-identities) | Add a voice to a character. |
-| POST | [`/api/identities/{identity_id}/update`](#post-api-identities-identity_id-update) | Rename a voice, change its notes or Kokoro voice, or approve or reject it. |
+| POST | [`/api/identities/{identity_id}/update`](#post-api-identities-identity_id-update) | Update a voice, approve or reject it, or rate its recording's licence. |
 | POST | [`/api/identities/{identity_id}/references`](#post-api-identities-identity_id-references) | Upload a recording for a cloning voice and save it as a voice recording. |
 | POST | [`/api/identities/{identity_id}/references/preview`](#post-api-identities-identity_id-references-preview) | Process a recording the way an upload would, and return the result without saving anything. |
 | POST | [`/api/identities/{identity_id}/references/from-take`](#post-api-identities-identity_id-references-from-take) | Save a take as a new reference recording for a cloning voice. |
@@ -960,7 +962,7 @@ Any listed file can be dismissed, refused ones too. It is deleted outside Window
 
 List every character with its voices and their recordings.
 
-**Answer:** `200`, JSON. `schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds` and `audio_url`). A voice can also report `voice_languages` and whether its `approved_recording_available` file is present. Retired items say so.
+**Answer:** `200`, JSON. `schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, `fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, `duration_seconds`, `audio_url` and `licence_rating`, null until one is chosen). Each voice has a `licence` with its effective rating and reason. A voice can also report `voice_languages` and whether its `approved_recording_available` file is present. Retired items say so.
 
 <a id="post-api-characters"></a>
 
@@ -1019,6 +1021,8 @@ Design a voice from words and keep it as a new character's voice, ready to speak
 | `voice.status` | string |
 | `voice.ready` | boolean |
 | `voice.why_not` | string\|null |
+| `voice.licence.rating` | string |
+| `voice.licence.reason` | string |
 | `character_id` | string |
 | `reference_id` | string |
 | `engine` | string |
@@ -1089,7 +1093,7 @@ A cloning voice has no recording yet: upload one with [`POST /api/identities/{id
 
 #### `POST /api/identities/{identity_id}/update`
 
-Rename a voice, change its notes or Kokoro voice, or approve or reject it.
+Update a voice, approve or reject it, or rate its recording's licence.
 
 | Path parameter | Meaning |
 |---|---|
@@ -1101,6 +1105,8 @@ Rename a voice, change its notes or Kokoro voice, or approve or reject it.
 | `notes` | string | Up to 2000 characters. |
 | `status` | string | `candidate`, `approved` or `rejected`. |
 | `reference_version_id` | string | The recording to approve; needed to approve a cloning voice. |
+| `licence_rating` | string\|null | Recording use: `yes`, `conditions`, `unclear` or `no`. Use null to clear it. |
+| `licence_reference_id` | string | The saved recording to rate. Defaults to the approved recording. |
 | `engine_options` | object | Kokoro: `{"voice": "af_heart"}`. Preset voices cannot change. |
 
 **Answer:** `200`, JSON. `identity`.
@@ -1113,6 +1119,9 @@ Rename a voice, change its notes or Kokoro voice, or approve or reject it.
 | `identity.status` | string |
 | `identity.approved_reference_id` | string\|null |
 | `identity.references[].id` | string |
+| `identity.references[].licence_rating` | string\|null |
+| `identity.licence.rating` | string |
+| `identity.licence.reason` | string |
 
 Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another approved voice of the same character and engine back to `candidate`.
 
@@ -1388,7 +1397,7 @@ List takes, oldest first.
 | `identity_id` | string | Only this voice's takes. |
 | `line_id` | string | Only takes for this line. |
 
-**Answer:** `200`, JSON. `takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, `reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, `provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, `waveform_checks`, `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the take is an edit of another take), `audio_url` and its retirement state.
+**Answer:** `200`, JSON. `takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, `reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, `provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, `waveform_checks`, `licence` (the rating and reason for the specific recording and model used), `has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the take is an edit of another take), `audio_url` and its retirement state.
 
 <a id="get-api-takes-take_id"></a>
 

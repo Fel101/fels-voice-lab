@@ -1026,6 +1026,7 @@ class SceneStore:
             summary = summaries.get(item["take_id"]) or {}
             item["waveform_checks"] = summary.get("waveform_checks")
             item["loudness"] = summary.get("loudness")
+            item["licence"] = summary.get("licence")
             item["retirement"] = summary.get("retirement")
             item["purged"] = bool(summary.get("purged"))
         engine_of = {}
@@ -1091,7 +1092,7 @@ class SceneStore:
             "progress": {key: job[key] for key in ("total", "completed", "failed", "cancelled", "queued", "running")},
             "rows": [{key: row.get(key) for key in ("id", "ordinal", "scene_order", "line_id", "segment_id", "segment_index",
                 "take_index", "cast_line_id", "identity_id", "reference_version_id", "text", "language", "direction",
-                "settings", "use_pronunciations", "status", "request_key", "take_id", "attempts", "error")}
+                "settings", "use_pronunciations", "status", "request_key", "take_id", "attempts", "error", "licence")}
                      for row in job["rows"]],
         }
 
@@ -1357,7 +1358,8 @@ class SceneStore:
                 newest_problem = problem
             listed.append({"id": take["id"], "created_at": take["created_at"],
                            "duration_seconds": take["duration_seconds"], "audio_url": take["audio_url"],
-                           "waveform_checks": take["waveform_checks"], "chosen": take["id"] == chosen_id, "fits": fits,
+                           "waveform_checks": take["waveform_checks"], "licence": take["licence"],
+                           "chosen": take["id"] == chosen_id, "fits": fits,
                            "reason": ("This take is retired." if take["retired"] else
                                       STALE_REASONS.get(problem[0], problem[1]) if problem else "")})
         chosen = next((take for take in takes if take["id"] == chosen_id), None) or others.get(chosen_id)
@@ -1497,7 +1499,8 @@ class SceneStore:
                         audio = resample_poly(audio, output_rate // divisor, rate // divisor).astype(np.float32)
                     parts.append(audio)
                     manifest_lines.append({"line_id": line["line_id"], "segment_id": segment["id"], "take_id": take_id,
-                                           "audio_sha256": take["audio_sha256"], "duration_seconds": take["duration_seconds"]})
+                                           "audio_sha256": take["audio_sha256"], "duration_seconds": take["duration_seconds"],
+                                           "licence": take["licence"]})
                 yield line, parts
 
         if timeline:

@@ -196,6 +196,7 @@ def _voice(cast, ident, files, audio):
         "voice_options": item.get("engine_options", {}),
         "notes": item.get("notes", ""),
         "origin_status": item["status"],
+        "licence": item["licence"],
     }
     entry["model"] = _model_pin(item["engine_id"], entry["voice_options"])
     if audio and item["kind"] == "reference":
@@ -248,6 +249,7 @@ def _include_audition(cast, identity, files):
         "language": take["language"],
         "direction": take["direction"],
         "settings": take["settings"],
+        "licence": take["licence"],
     }
 
 
