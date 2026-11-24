@@ -7,9 +7,9 @@ then a speech check on the card.
     .venv\\Scripts\\python.exe tools\\install_breeze.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-breeze.bat does that for you. Breeze TTS 2's weights are under the
+the lab's own Python, which setup.bat creates; tools\\setup-breeze.bat does that for you. Breeze TTS 2's weights are under the
 BreezeBlue Research and Non-Commercial License, which also covers what you make with them; the plan says so first, and
-installing them means accepting it. Breeze's code is already in this folder (breeze/), so .venv-breeze, made from the same
+installing them means accepting it. Breeze's code is shipped in voice_lab/breeze/, so .venv-breeze, made from the same
 Python 3.12 as .venv, gets only the packages it imports, from requirements/breeze-nvidia.txt with every file's SHA-256 checked;
 the script refuses to replace a package that is already installed at another version. The Lab runs Breeze only on a graphics
 card, with its BF16 weights, which peaked at 7.5 GB of graphics memory, so there is no CPU build, and the installer stops on a
@@ -97,9 +97,9 @@ root, wav_path = Path(sys.argv[1]), sys.argv[2]
 sys.path.insert(0, str(root))
 import soundfile
 import torch
-import engine_checks
-from breeze_worker import BreezeWorker
-from common import to_numpy
+from voice_lab import engine_checks
+from voice_lab.breeze_worker import BreezeWorker
+from voice_lab.common import to_numpy
 
 worker = BreezeWorker("cuda")
 started = time.perf_counter()

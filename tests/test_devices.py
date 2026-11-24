@@ -12,9 +12,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import common  # noqa: E402
-import hardware  # noqa: E402
-import worker_runtime  # noqa: E402
+from voice_lab import common  # noqa: E402
+from voice_lab import hardware  # noqa: E402
+from voice_lab import worker_runtime  # noqa: E402
 
 
 def fake_torch(*, gpu):
@@ -87,8 +87,8 @@ class ServiceDeviceTests(unittest.TestCase):
 
     def test_the_service_and_the_desktop_launcher_accept_the_same_devices(self):
         self.assertEqual(common.DEVICES, ("auto", "cpu", "cuda"))
-        self.assertIn('choices=("auto", "cpu", "cuda")', (ROOT / "desktop.py").read_text(encoding="utf-8"))
-        self.assertIn("choices=DEVICES", (ROOT / "serve.py").read_text(encoding="utf-8"))
+        self.assertIn('choices=("auto", "cpu", "cuda")', (ROOT / "voice_lab/desktop.py").read_text(encoding="utf-8"))
+        self.assertIn("choices=DEVICES", (ROOT / "voice_lab/serve.py").read_text(encoding="utf-8"))
 
 
 class WorkerDeviceTests(unittest.TestCase):

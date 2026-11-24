@@ -18,11 +18,11 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
-from cast_store import CAST_SCHEMA_VERSION, CastStore
-from performance_settings import performance_controls
-from scene_store import SceneBatchRunner, SceneStore
-from worker_pool import read_catalog
+from voice_lab import serve
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab.performance_settings import performance_controls
+from voice_lab.scene_store import SceneBatchRunner, SceneStore
+from voice_lab.worker_pool import read_catalog
 
 
 CUSTOM = "qwen3-tts-1.7b-custom-voice"

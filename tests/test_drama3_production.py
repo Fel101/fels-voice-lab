@@ -10,15 +10,15 @@ import zipfile
 
 import numpy as np
 import soundfile as sf
-from drama3_production import Studio, script, protected_transform, LANGUAGES
-from worker_pool import EnginePool
-from worker_process import WorkerUnavailable
+from voice_lab.drama3_production import Studio, script, protected_transform, LANGUAGES
+from voice_lab.worker_pool import EnginePool
+from voice_lab.worker_process import WorkerUnavailable
 
 
 class ProductionTests(unittest.TestCase):
     def test_saved_cast_source_pins_reference_version_after_active_reference_changes(self):
-        from cast_store import CastStore
-        from drama3_lab_studio import create
+        from voice_lab.cast_store import CastStore
+        from voice_lab.drama3_lab_studio import create
         with tempfile.TemporaryDirectory() as temp:
             cast=CastStore(temp);character=cast.create_character('Keeper');identity=cast.create_identity(character['id'],'drama-3','Voice')
             def reference(text,value):
@@ -57,10 +57,10 @@ class ProductionTests(unittest.TestCase):
 
     def test_http_job_poll_and_exports_use_the_actual_handler(self):
         import urllib.request
-        import serve
-        from cast_store import CastStore
-        from evaluation_store import EvaluationStore
-        from worker_pool import read_catalog
+        from voice_lab import serve
+        from voice_lab.cast_store import CastStore
+        from voice_lab.evaluation_store import EvaluationStore
+        from voice_lab.worker_pool import read_catalog
         with tempfile.TemporaryDirectory() as temp:
             class Pool:
                 entries={r['id']:r for r in read_catalog()['engines']}

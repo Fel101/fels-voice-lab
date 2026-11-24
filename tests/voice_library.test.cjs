@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const {pageSource}=require('./page_source.cjs');
-const source=fs.readFileSync(path.join(__dirname,'..','voice_library.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'..','web', 'voice_library.js'),'utf8');
 const page=pageSource();
 function harness(){
   const fields={},calls=[],ready=[];

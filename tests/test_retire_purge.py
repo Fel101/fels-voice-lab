@@ -19,11 +19,11 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
-from cast_store import CAST_SCHEMA_VERSION, CastStore
-from reference_catalog import list_references, list_voice_library
+from voice_lab import serve
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab.reference_catalog import list_references, list_voice_library
 from tools.scene_export import ExportError, load_takes
-from worker_pool import EnginePool, read_catalog
+from voice_lab.worker_pool import EnginePool, read_catalog
 
 
 def speech(seconds=1.0, sample_rate=24_000):

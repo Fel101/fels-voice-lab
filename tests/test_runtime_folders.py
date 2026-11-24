@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import runtime_folders
-from runtime_folders import FolderMoveError, migrate_program_folders, move_folder
+from voice_lab import runtime_folders
+from voice_lab.runtime_folders import FolderMoveError, migrate_program_folders, move_folder
 
 
 class FolderTestCase(unittest.TestCase):
@@ -109,10 +109,10 @@ class NamesMatchTheProgramTests(unittest.TestCase):
     """The new names are written in several places; this fails if one of them is changed without the others."""
 
     def test_the_folders_the_program_reads_and_writes_are_the_ones_the_move_leaves_them_in(self):
-        import chatterbox_vc_worker
-        import engine_checks
-        import serve
-        import voxcpm_worker
+        from voice_lab import chatterbox_vc_worker
+        from voice_lab import engine_checks
+        from voice_lab import serve
+        from voice_lab import voxcpm_worker
         from tools import dataset_workbench
         targets = {new for _old, new in runtime_folders.PROGRAM_MOVES}
         lab = voxcpm_worker.LAB

@@ -7,8 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from qwen_worker import QwenWorker, _boolean, _integer, _number
-from worker_pool import EnginePool, read_catalog
+from voice_lab.qwen_worker import QwenWorker, _boolean, _integer, _number
+from voice_lab.worker_pool import EnginePool, read_catalog
 from tests.audio_fixtures import owned_reference
 from tests.page_source import page_source
 

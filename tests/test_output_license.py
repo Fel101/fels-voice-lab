@@ -1,8 +1,8 @@
 """Export receipts keep each model's own terms apart from the application's MIT licence."""
 import unittest
 
-from output_license import LICENCE_RATINGS, license_profile, model_licence, voice_licence, worst_licence
-from worker_pool import read_catalog
+from voice_lab.output_license import LICENCE_RATINGS, license_profile, model_licence, voice_licence, worst_licence
+from voice_lab.worker_pool import read_catalog
 
 
 class OutputLicenseTests(unittest.TestCase):

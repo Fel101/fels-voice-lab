@@ -11,12 +11,12 @@ from contextlib import closing
 import numpy as np
 import soundfile as sf
 
-import audio_tools
-import dubbing
-import library_backup
-from automation import Store
-from cast_store import CastStore
-from scene_store import SceneStore
+from voice_lab import audio_tools
+from voice_lab import dubbing
+from voice_lab import library_backup
+from voice_lab.automation import Store
+from voice_lab.cast_store import CastStore
+from voice_lab.scene_store import SceneStore
 from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
 
 SRT = """1
@@ -55,7 +55,7 @@ class DubbingTests(ExportPanelBase):
     def render(self, scene_id, line_ids=None):
         job = self.scenes.create_job(scene_id, line_ids)
         if not self.runner:
-            from scene_store import SceneBatchRunner
+            from voice_lab.scene_store import SceneBatchRunner
 
             self.runner = SceneBatchRunner(self.scenes, self.base)
             self.runner.start()

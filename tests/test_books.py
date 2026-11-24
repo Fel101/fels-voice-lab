@@ -10,9 +10,9 @@ import zlib
 
 import soundfile as sf
 
-from book_store import Books
-import manuscript_import
-from scene_store import SceneBatchRunner, SceneStore
+from voice_lab.book_store import Books
+from voice_lab import manuscript_import
+from voice_lab.scene_store import SceneBatchRunner, SceneStore
 from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
 
 TEXT = """# A Light at the Harbor

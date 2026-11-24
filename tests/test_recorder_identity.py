@@ -13,13 +13,13 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import recorder_identity as ri
-import speaker_similarity as ss
-from recorder_clip import load_clip
+from voice_lab import recorder_identity as ri
+from voice_lab import speaker_similarity as ss
+from voice_lab.recorder_clip import load_clip
 from tests import recorder_fixtures as fx
 
 try:
-    import denoise_ref
+    from voice_lab import denoise_ref
     FFMPEG = denoise_ref.find_ffmpeg()
 except Exception:                     # ffmpeg is optional: only the tests that make cleaned clips need it
     FFMPEG = None
@@ -267,8 +267,8 @@ class VerdictTests(IdentityCase):
 
 class StoredResultTests(IdentityCase):
     def test_results_are_kept_in_the_reference_folder_and_never_overwritten(self):
-        import recorder_import
-        from cast_store import CastStore
+        from voice_lab import recorder_import
+        from voice_lab.cast_store import CastStore
         store = CastStore(Path(self.temp.name) / "lab")
         clip = self.clip()
         report = recorder_import.import_clip(clip, character="Narrator", create_character=True, store=store,

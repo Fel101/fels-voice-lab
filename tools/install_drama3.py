@@ -7,7 +7,7 @@ speech check.
     .venv\\Scripts\\python.exe tools\\install_drama3.py --runtime-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-drama3.bat does that for you. Drama 3 is under the Fish Audio Community
+the lab's own Python, which setup.bat creates; tools\\setup-drama3.bat does that for you. Drama 3 is under the Fish Audio Community
 License: the plan says so first, and installing it means accepting it. Nothing is installed with pip: the Lab runs Drama 3
 through speech.cpp, a native program, from the lab's own .venv. The installer fetches speech.cpp 0.8.10 for Windows x64 (MIT)
 from its GitHub release and unpacks it into out\\drama3\\runtime, then the 20.8 GB Q4_K conversion of fishaudio/drama-3 with its
@@ -79,10 +79,10 @@ from pathlib import Path
 root, wav_path = Path(sys.argv[1]), sys.argv[2]
 sys.path.insert(0, str(root))
 import soundfile
-import engine_checks
-from common import require_ram
-from drama3_worker import Drama3Worker
-from ram_needs import MIN_FREE_RAM_GB
+from voice_lab import engine_checks
+from voice_lab.common import require_ram
+from voice_lab.drama3_worker import Drama3Worker
+from voice_lab.ram_needs import MIN_FREE_RAM_GB
 
 require_ram(MIN_FREE_RAM_GB["drama-3"], "Drama 3")
 worker = Drama3Worker("cpu")

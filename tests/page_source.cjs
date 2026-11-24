@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.join(__dirname, '..');
+const root = path.join(__dirname, '..', 'web');
 
 function pageSource() {
   const html = fs.readFileSync(path.join(root, 'serve.html'), 'utf8');
@@ -14,7 +14,7 @@ function pageSource() {
 // The test DOM gets the same English text methods as a real page.
 function englishPageText() {
   const vm = require('node:vm');
-  const {messages: english} = require('../locales/en.json');
+  const {messages: english} = require('../web/locales/en.json');
   const config = {language: 'en', english, messages: {}};
   const document = {
     getElementById() {return {textContent: JSON.stringify(config)};},

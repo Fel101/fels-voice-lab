@@ -21,11 +21,11 @@ from http.server import ThreadingHTTPServer
 
 import soundfile as sf
 
-from cast_store import CastStore
-import reference_catalog as catalog
-import synthetic_label
-import serve
-from worker_pool import read_catalog
+from voice_lab.cast_store import CastStore
+from voice_lab import reference_catalog as catalog
+from voice_lab import synthetic_label
+from voice_lab import serve
+from voice_lab.worker_pool import read_catalog
 
 
 def synthetic_wav(seconds=1):

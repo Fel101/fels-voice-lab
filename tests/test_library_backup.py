@@ -21,13 +21,13 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import library_backup  # noqa: E402
-from cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
-from evaluation_cast import import_cast_takes  # noqa: E402
-from evaluation_store import SCHEMA_VERSION as EVALUATION_SCHEMA, EvaluationStore  # noqa: E402
-from library_backup import BackupBusy, BackupError  # noqa: E402
+from voice_lab import library_backup  # noqa: E402
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
+from voice_lab.evaluation_cast import import_cast_takes  # noqa: E402
+from voice_lab.evaluation_store import SCHEMA_VERSION as EVALUATION_SCHEMA, EvaluationStore  # noqa: E402
+from voice_lab.library_backup import BackupBusy, BackupError  # noqa: E402
 from library_fixture import use_old_comparison_folder  # noqa: E402
-from scene_store import SceneStore  # noqa: E402
+from voice_lab.scene_store import SceneStore  # noqa: E402
 
 RATE = 24_000
 TERMS = {"transcript": "A clear reference line.", "origin": "backup fixture", "allowed_use": "tests only",

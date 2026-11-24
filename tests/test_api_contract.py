@@ -18,8 +18,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service
-import api_spec
-import serve
+from voice_lab import api_spec
+from voice_lab import serve
 
 
 def documented(key):

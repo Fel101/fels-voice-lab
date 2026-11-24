@@ -22,7 +22,7 @@ To install, or to resume an interrupted download, press **Install** on its card 
 Fel's Voice Lab folder ([SETUP.md](SETUP.md#drama-3-on-the-cpu) says what it does):
 
 ```powershell
-setup-drama3.bat
+tools\setup-drama3.bat
 ```
 
 The installer states the licence and its plan and asks first. It verifies the runtime archive and complete model hashes before

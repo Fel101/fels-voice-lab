@@ -20,9 +20,9 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
-from cast_store import CAST_SCHEMA_VERSION, CastStore
-from worker_pool import read_catalog
+from voice_lab import serve
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab.worker_pool import read_catalog
 
 
 def tone_wav(seconds=1.0, sample_rate=24_000, amplitude=0.1):
@@ -195,7 +195,7 @@ class TakeWaveformCheckTests(unittest.TestCase):
         self.assertAlmostEqual(pause["waveform_checks"]["longest_pause_seconds"], 1.5, places=3)
 
     def test_a_failed_check_is_recorded_and_the_take_is_still_saved(self):
-        with mock.patch("cast_store.take_checks", side_effect=RuntimeError("analysis unavailable")):
+        with mock.patch("voice_lab.cast_store.take_checks", side_effect=RuntimeError("analysis unavailable")):
             take = self.save(self.speech(1.0))
         self.assertEqual(take["waveform_checks"], {"status": "unavailable", "checker": "take-waveform-v1",
                                                     "flags": [], "error": "analysis unavailable"})

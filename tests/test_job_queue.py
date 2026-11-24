@@ -9,9 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import job_queue  # noqa: E402
-from job_queue import JobQueue, Ticket, WorkerBusy, parse_wait  # noqa: E402
-from worker_process import WorkerCancelled  # noqa: E402
+from voice_lab import job_queue  # noqa: E402
+from voice_lab.job_queue import JobQueue, Ticket, WorkerBusy, parse_wait  # noqa: E402
+from voice_lab.worker_process import WorkerCancelled  # noqa: E402
 
 
 class Waiter:

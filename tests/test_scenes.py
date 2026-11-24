@@ -18,10 +18,10 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
-from cast_store import CastStore
-from scene_store import SceneBatchRunner, SceneStore, segment_text
-from worker_pool import read_catalog
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
+from voice_lab.scene_store import SceneBatchRunner, SceneStore, segment_text
+from voice_lab.worker_pool import read_catalog
 
 
 def tone_wav(seconds=1.0, sample_rate=24_000, amplitude=0.1):

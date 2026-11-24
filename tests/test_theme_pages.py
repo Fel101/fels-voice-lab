@@ -3,7 +3,7 @@ import re
 import unittest
 from pathlib import Path
 
-from ui_preferences import UiPreferences
+from voice_lab.ui_preferences import UiPreferences
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKENS = {"serve.html": {"--bg", "--fg", "--muted", "--card", "--line", "--accent", "--soft", "--err"},
@@ -12,7 +12,7 @@ DARK_THEMES = ("dark", "forest")
 
 
 def page(name):
-    return (ROOT / name).read_text("utf-8")
+    return (ROOT / "web" / name).read_text("utf-8")
 
 
 def block(text, selector):

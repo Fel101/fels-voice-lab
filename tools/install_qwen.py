@@ -9,7 +9,7 @@ packages, the model's pinned checkpoint into hf-cache, then a speech check on th
 --model chooses the model: 0.6b-base and 1.7b-base clone a voice from a recording, 1.7b-voice-design makes a voice from a
 written description, and 1.7b-custom-voice speaks in nine preset voices that take direction (the Models page's catalog ids,
 such as qwen3-tts-0.6b-base, work too). It prints what it will do and asks before it changes anything (--yes accepts the plan,
---dry-run only shows it). Run it with the lab's own Python, which setup.bat creates; setup-qwen.bat does that for you. The four
+--dry-run only shows it). Run it with the lab's own Python, which setup.bat creates; tools\\setup-qwen.bat does that for you. The four
 models share .venv-fqwen, an environment of their own made from the same Python 3.12 as .venv, and pip installs
 requirements/qwen-nvidia.txt there with every file's SHA-256 checked; the script refuses to replace a package that is already
 installed at another version. The Lab runs Qwen3-TTS only on a graphics card, because its fast decoder (faster-qwen3-tts)
@@ -124,8 +124,8 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import soundfile
 import torch
-import engine_checks
-from qwen_worker import QwenWorker
+from voice_lab import engine_checks
+from voice_lab.qwen_worker import QwenWorker
 
 root, engine, wav_path = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 worker = QwenWorker(engine, "cuda")
@@ -189,7 +189,7 @@ def reference_problems(root, engine):
         return [
             f"{MODELS[engine]['name']} clones a voice, and its speech check clones reference\\af_heart.wav, the short clip "
             "Kokoro's installer makes, which is not here. Install Kokoro first (Install on its card in Models & features, "
-            "or setup-kokoro.bat), then install this model."
+            "or tools\\setup-kokoro.bat), then install this model."
         ]
     return []
 

@@ -1,6 +1,6 @@
 # Language screen
 
-Recorded 2026-10-22 on the service device `cuda` (AMD Radeon AI PRO R9700). Generated from [evidence/language-matrix.json](evidence/language-matrix.json) by `python language_matrix.py report`.
+Recorded 2026-10-22 on the service device `cuda` (AMD Radeon AI PRO R9700). Generated from [evidence/language-matrix.json](evidence/language-matrix.json) by `python -m voice_lab.language_matrix report`.
 
 Each cell is the median word error rate (character error rate for Chinese and Japanese) over the generations. The screen asks one question: after the engine speaks the sentence, does a speech recognizer write back the same words? It does not judge accent, voice quality, likeness or acting, and it is not a listening test.
 

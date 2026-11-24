@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.resolve(__dirname, '../voice_lab_i18n.js'), 'utf8');
+const source = fs.readFileSync(path.resolve(__dirname, '../web/voice_lab_i18n.js'), 'utf8');
 function helper(language, messages, languages) {
   const english = {
     greeting: 'Welcome, {name}',

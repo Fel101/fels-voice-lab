@@ -14,11 +14,11 @@ import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from cast_store import CastStore
-from reference_paths import (REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV,
+from voice_lab.cast_store import CastStore
+from voice_lab.reference_paths import (REFERENCE_ROOTS_ENV, CONVERSION_SOURCE_ROOTS_ENV,
                              configured_worker_roots, resolve_reference_path)
-from worker_pool import EnginePool
-import serve
+from voice_lab.worker_pool import EnginePool
+from voice_lab import serve
 
 
 class IsolatedWorkerRootsTests(unittest.TestCase):
@@ -60,12 +60,12 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
         # The actual launch environment and adapter validators run in each pinned runtime;
         # no model or GPU is loaded by this containment regression.
         guards = {
-            "breeze-tts-2": "from breeze_worker import BreezeWorker; guard=BreezeWorker._reference_path",
-            "qwen3-tts-1.7b-base": "from qwen_worker import QwenWorker; guard=QwenWorker._reference_path",
-            "qwen3-tts-0.6b-base": "from qwen_worker import QwenWorker; guard=QwenWorker._reference_path",
-            "voxcpm2": "from voxcpm_worker import VoxCPMWorker; guard=VoxCPMWorker._reference",
-            "orig": "from reference_paths import resolve_reference_path; guard=lambda p:resolve_reference_path('orig',p)",
-            "turbo": "from reference_paths import resolve_reference_path; guard=lambda p:resolve_reference_path('turbo',p)",
+            "breeze-tts-2": "from voice_lab.breeze_worker import BreezeWorker; guard=BreezeWorker._reference_path",
+            "qwen3-tts-1.7b-base": "from voice_lab.qwen_worker import QwenWorker; guard=QwenWorker._reference_path",
+            "qwen3-tts-0.6b-base": "from voice_lab.qwen_worker import QwenWorker; guard=QwenWorker._reference_path",
+            "voxcpm2": "from voice_lab.voxcpm_worker import VoxCPMWorker; guard=VoxCPMWorker._reference",
+            "orig": "from voice_lab.reference_paths import resolve_reference_path; guard=lambda p:resolve_reference_path('orig',p)",
+            "turbo": "from voice_lab.reference_paths import resolve_reference_path; guard=lambda p:resolve_reference_path('turbo',p)",
         }
         for engine, imports in guards.items():
             with self.subTest(engine=engine):
@@ -81,7 +81,7 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
                 worker = self.pool._new_worker(engine, entry)
                 bootstrap = ""
                 if engine == "voxcpm2":
-                    entrypoint = ast.parse((ROOT / 'engine_worker.py').read_text(encoding='utf-8'))
+                    entrypoint = ast.parse((ROOT / 'voice_lab/engine_worker.py').read_text(encoding='utf-8'))
                     main = next(node for node in entrypoint.body if isinstance(node, ast.FunctionDef) and node.name == 'main')
                     setup = next(node for node in main.body if isinstance(node, ast.If)
                                  and ast.unparse(node.test) == "args.engine == 'voxcpm2'")
@@ -136,7 +136,7 @@ class IsolatedWorkerRootsTests(unittest.TestCase):
         self.assertIn(str(self.reference), {row['path'] for row in serve._conversion_asset_rows(cast, target=True)})
         self.assertIn(str(self.source), {row['path'] for row in serve._conversion_asset_rows(cast)})
         worker = self.pool._new_worker("chatterbox-vc", self.entry("chatterbox-vc"))
-        script = """from chatterbox_vc_worker import _resolve_audio
+        script = """from voice_lab.chatterbox_vc_worker import _resolve_audio
 import sys
 assert str(_resolve_audio(sys.argv[1], 'Target voice reference')) == sys.argv[1]
 assert str(_resolve_audio(sys.argv[2], 'Source performance')) == sys.argv[2]

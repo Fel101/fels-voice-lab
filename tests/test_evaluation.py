@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from evaluation_diagnostics import CLIPPING_PEAK, analyze_audio, compare_transcript, take_checks, with_headroom
-from evaluation_store import EvaluationStore, RATING_FIELDS, digest_json
-from evaluation_suites import SUITES, get_suite
+from voice_lab.evaluation_diagnostics import CLIPPING_PEAK, analyze_audio, compare_transcript, take_checks, with_headroom
+from voice_lab.evaluation_store import EvaluationStore, RATING_FIELDS, digest_json
+from voice_lab.evaluation_suites import SUITES, get_suite
 from library_fixture import use_old_comparison_folder
 
 

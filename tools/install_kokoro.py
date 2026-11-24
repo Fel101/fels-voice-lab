@@ -7,7 +7,7 @@
     .venv\\Scripts\\python.exe tools\\install_kokoro.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-kokoro.bat does that for you. Kokoro gets an environment of its own,
+the lab's own Python, which setup.bat creates; tools\\setup-kokoro.bat does that for you. Kokoro gets an environment of its own,
 .venv-kokoro, made from the same Python 3.12 as .venv, so nothing another model installs can clash with its packages. pip
 installs requirements/kokoro-cpu.txt there with every file's SHA-256 checked, and the script refuses to replace a package that
 is already installed at another version, so an environment that has its own PyTorch keeps it. --gpu takes the GPU build of
@@ -49,12 +49,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 try:
-    from hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
+    from voice_lab.hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
 except ImportError:  # run as a script, which puts tools\ first on the path and not the lab folder
     sys.path.append(str(ROOT))
-    from hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
+    from voice_lab.hardware import capability_text, driver_text, nvidia_cards, nvidia_driver_present
 
-from install_control import package_step, phase
+from voice_lab.install_control import package_step, phase
 
 LOCK = "requirements/kokoro-cpu.txt"
 NVIDIA_LOCK = "requirements/kokoro-nvidia.txt"
@@ -99,9 +99,9 @@ import json, sys, time
 sys.path.insert(0, sys.argv[1])
 import soundfile
 import torch
-import engine_checks
-import engines
-from kokoro_support import discover_kokoro_voices
+from voice_lab import engine_checks
+from voice_lab import engines
+from voice_lab.kokoro_support import discover_kokoro_voices
 
 started = time.perf_counter()
 engine = engines.Kokoro(sys.argv[3])
@@ -382,7 +382,7 @@ MEMORY_UNREAD = "could not read how much memory"
 
 def unavailable_text(card, *, environ=None):
     """Why no NVIDIA build can run now on a card the driver is installed for: the driver itself says CUDA cannot start
-    (card["unavailable"] holds its words, from hardware.nvidia_cards), with what to do about it."""
+    (card["unavailable"] holds its words, from voice_lab.hardware.nvidia_cards), with what to do about it."""
     said = card["unavailable"]
     text = f"{CARD_UNAVAILABLE}{card['name']}: the driver says \"{said}\"."
     if "NO_DEVICE" not in said:

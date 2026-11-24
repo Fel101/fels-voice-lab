@@ -238,7 +238,7 @@ class FirstSetupTests(unittest.TestCase):
         self.assertIn(
             "needs NVIDIA driver 580 or later, and this computer has 572.83. So setup installs Kokoro's CPU build", out
         )
-        self.assertIn("delete the .venv-kokoro folder and run setup-kokoro.bat --nvidia", out)
+        self.assertIn("delete the .venv-kokoro folder and run tools\\setup-kokoro.bat --nvidia", out)
         self.assertIn("So setup installs Chatterbox Turbo's CPU build", out)
         self.assertEqual(self.installers.runs("--nvidia"), [])
 
@@ -351,8 +351,8 @@ class FirstSetupTests(unittest.TestCase):
         self.assertIn("There is no model called 'qwen'", out.getvalue())
 
     def test_every_model_it_offers_is_a_guided_installer_of_the_catalog(self):
-        import engine_checks
-        import engine_install
+        from voice_lab import engine_checks
+        from voice_lab import engine_install
 
         for name, model in fs.MODELS.items():
             with self.subTest(model=name):

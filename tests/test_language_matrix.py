@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-import asr_worker
-import language_matrix as lm
-from evaluation_suites import get_suite
+from voice_lab import asr_worker
+from voice_lab import language_matrix as lm
+from voice_lab.evaluation_suites import get_suite
 from phonon_fixtures import Lab
 
 KOKORO_VOICES = ["af_heart", "af_bella", "bf_alice", "bf_emma", "ef_dora", "em_alex", "ff_siwis"]
@@ -383,7 +383,7 @@ class UnscreenedMarkTests(unittest.TestCase):
     @unittest.skipUnless(lm.EVIDENCE.is_file(), "no published language screen yet")
     def test_the_picker_payload_carries_the_marks_for_every_engine(self):
         # VoiceDesign has no performance controls, so its marks must not depend on the per-engine schema.
-        import serve
+        from voice_lab import serve
         self.assertEqual(serve.unscreened_by_engine(lm.ENGINE_ORDER), {
             "qwen3-tts-1.7b-voice-design": ["Italian", "Portuguese"],
             "qwen3-tts-1.7b-base": ["Japanese", "Portuguese"],

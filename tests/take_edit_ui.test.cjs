@@ -8,7 +8,7 @@ const vm=require('node:vm');
 const {pageSource}=require('./page_source.cjs');
 const html=pageSource();
 function between(start,end){const at=html.indexOf(start);return html.slice(at,html.indexOf(end,at));}
-const script=fs.readFileSync(path.join(__dirname,'..','voice_lab_take_edit.js'),'utf8');
+const script=fs.readFileSync(path.join(__dirname,'..','web', 'voice_lab_take_edit.js'),'utf8');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};}

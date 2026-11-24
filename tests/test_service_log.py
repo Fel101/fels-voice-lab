@@ -15,13 +15,13 @@ from pathlib import Path
 
 import numpy as np
 
-import serve
+from voice_lab import serve
 from app_version import VERSION
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from request_log import NullRequestLog, RequestLog, new_request_id
-from scene_store import SceneStore
-from worker_pool import read_catalog
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.request_log import NullRequestLog, RequestLog, new_request_id
+from voice_lab.scene_store import SceneStore
+from voice_lab.worker_pool import read_catalog
 
 
 class RequestLogTests(unittest.TestCase):

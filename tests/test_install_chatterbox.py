@@ -17,8 +17,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import chatterbox_support  # noqa: E402
-import engine_checks  # noqa: E402
+from voice_lab import chatterbox_support  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
 import soundfile as sf  # noqa: E402
 from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
@@ -149,14 +149,14 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertEqual(guided, {".venv-kokoro", ".venv-phonon", ".venv-chatterbox"})
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
-        data = (ROOT / "setup-chatterbox.bat").read_bytes()
+        data = (ROOT / "tools/setup-chatterbox.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
         text = data.decode("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_chatterbox.py %*', text)
         self.assertIn("Run setup.bat first.", text)
 
     def test_the_setup_window_waits_for_a_key_so_a_double_click_can_be_read(self):
-        lines = [line.strip() for line in (ROOT / "setup-chatterbox.bat").read_text("utf-8").splitlines() if line.strip()]
+        lines = [line.strip() for line in (ROOT / "tools/setup-chatterbox.bat").read_text("utf-8").splitlines() if line.strip()]
         last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
         self.assertIn("pause", lines[last_run + 1:])
 
@@ -164,11 +164,11 @@ class ShippedFilesTests(unittest.TestCase):
         from tools import first_setup
         self.assertEqual(first_setup.MODELS["chatterbox"],
                          {"engine": "turbo", "script": "tools/install_chatterbox.py", "gpu": True})
-        self.assertIn("setup-chatterbox.bat", first_setup.menu_text(16, first_setup.model_sizes()))
+        self.assertIn("tools\\setup-chatterbox.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = " ".join((ROOT / "docs" / "SETUP.md").read_text("utf-8").split())
-        for needed in ("setup-chatterbox.bat", "tools\\install_chatterbox.py", "--dry-run", "--yes", "--checkpoint-only",
+        for needed in ("tools\\setup-chatterbox.bat", "tools\\install_chatterbox.py", "--dry-run", "--yes", "--checkpoint-only",
                        "requirements/chatterbox-cpu.txt", "catalog/chatterbox_turbo_snapshot.json", ".venv-chatterbox",
                        "Visual C++ Redistributable", "Perth"):
             self.assertIn(needed, setup)
@@ -179,11 +179,11 @@ class ShippedFilesTests(unittest.TestCase):
             self.assertIn(number, setup)
         for name in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "MODEL_CAPABILITIES.md"):
             text = " ".join((ROOT / name).read_text("utf-8").split())
-            self.assertTrue("setup-chatterbox.bat" in text or "tools/install_chatterbox.py" in text, name)
+            self.assertTrue("tools\\setup-chatterbox.bat" in text or "tools/install_chatterbox.py" in text, name)
 
     def test_the_guides_and_the_tables_agree_on_the_free_ram_turbo_needs(self):
-        import serve
-        import worker_runtime
+        from voice_lab import serve
+        from voice_lab import worker_runtime
 
         self.assertEqual(serve.MIN_FREE_RAM_GB["turbo"], worker_runtime.MIN_FREE_RAM_GB["turbo"])
         setup = " ".join((ROOT / "docs" / "SETUP.md").read_text("utf-8").split())
@@ -556,7 +556,7 @@ class SpeechCheckTests(unittest.TestCase):
         result, calls, folder = self.check(stdout="loaded PerthNet\n" + self.GOOD + "\n", stderr="a warning\n")
         command, kwargs = calls[0]
         self.assertEqual(command[:2], [str(folder / ".venv-chatterbox" / "Scripts" / "python.exe"), "-c"])
-        self.assertIn("from engines import ChatterboxTurbo", command[2])
+        self.assertIn("from voice_lab.engines import ChatterboxTurbo", command[2])
         self.assertIn('engine_checks.smoke_request("turbo")', command[2])
         self.assertEqual(command[3:], [str(folder), str(folder / "out" / "chatterbox" / "install-reference.wav"),
                                        str(folder / "out" / "chatterbox" / "install-check.wav"), "cpu"])
@@ -586,9 +586,11 @@ class SpeechCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             lab = Path(folder) / "lab"
             lab.mkdir()
+            (lab / "voice_lab").mkdir()
+            (lab / "voice_lab/__init__.py").touch()
             (lab / "torch.py").write_text("__version__ = '2.6.0+cpu'\n", "utf-8")
-            (lab / "common.py").write_text("REFERENCE_TEXT = 'a paragraph long enough to clone'\n", "utf-8")
-            (lab / "engines.py").write_text(
+            (lab / "voice_lab/common.py").write_text("REFERENCE_TEXT = 'a paragraph long enough to clone'\n", "utf-8")
+            (lab / "voice_lab/engines.py").write_text(
                 "import numpy as np\n"
                 "class ChatterboxTurbo:\n"
                 "    def __init__(self, device):\n"
@@ -601,7 +603,7 @@ class SpeechCheckTests(unittest.TestCase):
                 "        seconds = 6 if ref_wav is None else 2\n"
                 "        t = np.arange(24000 * seconds) / 24000\n"
                 "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 0.5}\n", "utf-8")
-            (lab / "engine_checks.py").write_text(
+            (lab / "voice_lab/engine_checks.py").write_text(
                 "def smoke_request(engine):\n    assert engine == 'turbo'\n    return {'engine': engine, 'text': 'check'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
             reference, wav = Path(folder) / "reference.wav", Path(folder) / "clip.wav"
@@ -617,8 +619,8 @@ class SpeechCheckTests(unittest.TestCase):
             self.assertEqual(sf.info(str(wav)).frames, 2 * 24000)
 
     def test_the_names_the_check_script_uses_exist_in_the_lab(self):
-        import common
-        import engines
+        from voice_lab import common
+        from voice_lab import engines
 
         self.assertTrue(callable(engine_checks.smoke_request) and callable(engine_checks.audible))
         self.assertTrue(hasattr(engines, "ChatterboxTurbo") and hasattr(engines.ChatterboxTurbo, "prepare_reference"))
@@ -628,7 +630,7 @@ class SpeechCheckTests(unittest.TestCase):
 
 class VoiceMatchTests(unittest.TestCase):
     def test_the_clone_is_compared_with_its_reference_by_the_studios_voice_match(self):
-        import speaker_similarity
+        from voice_lab import speaker_similarity
 
         check = {"reference": "a.wav", "wav": "b.wav"}
         with mock.patch.object(speaker_similarity, "similarity", return_value=0.912345) as similarity:
@@ -636,7 +638,7 @@ class VoiceMatchTests(unittest.TestCase):
         similarity.assert_called_once_with("a.wav", "b.wav")
 
     def test_a_voice_match_that_fails_is_reported_and_not_raised(self):
-        import speaker_similarity
+        from voice_lab import speaker_similarity
 
         with mock.patch.object(speaker_similarity, "similarity", side_effect=FileNotFoundError("ve.safetensors")):
             self.assertEqual(ic.voice_match({"reference": "a", "wav": "b"}), {"error": "FileNotFoundError: ve.safetensors"})
@@ -853,7 +855,7 @@ class RunTests(unittest.TestCase):
         (self.lab.snapshot() / "conds.pt").unlink()
         report = engine_checks.installation(ENTRY, self.base)
         self.assertEqual(report["missing"], [f"{report['checkpoint']}/conds.pt"])
-        self.assertEqual(report["installer"], "setup-chatterbox.bat")
+        self.assertEqual(report["installer"], "tools\\setup-chatterbox.bat")
 
     def test_an_environment_that_has_every_package_is_left_alone(self):
         self.own_environment({"pip": "25.0.1", "chatterbox-tts": "0.1.7", "torch": "2.6.0"})
@@ -1017,10 +1019,12 @@ class OriginalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             lab = Path(folder) / "lab"
             (lab / "chatterbox").mkdir(parents=True)
+            (lab / "voice_lab").mkdir()
+            (lab / "voice_lab/__init__.py").touch()
             (lab / "torch.py").write_text("__version__ = '2.6.0+cpu'\n", "utf-8")
-            (lab / "common.py").write_text("import numpy as np\ndef to_numpy(audio):\n    return np.asarray(audio, 'float32').reshape(-1)\n",
+            (lab / "voice_lab/common.py").write_text("import numpy as np\ndef to_numpy(audio):\n    return np.asarray(audio, 'float32').reshape(-1)\n",
                                            "utf-8")
-            (lab / "chatterbox_support.py").write_text("def original_snapshot_dir(root):\n    return root / 'snapshot'\n", "utf-8")
+            (lab / "voice_lab/chatterbox_support.py").write_text("def original_snapshot_dir(root):\n    return root / 'snapshot'\n", "utf-8")
             (lab / "chatterbox" / "__init__.py").write_text("", "utf-8")
             (lab / "chatterbox" / "vc.py").write_text(
                 "import numpy as np\nimport soundfile\n"
@@ -1034,7 +1038,7 @@ class OriginalTests(unittest.TestCase):
                 "        assert audio == target_voice_path\n"
                 "        data, rate = soundfile.read(audio, dtype='float32')\n"
                 "        return data[None, :]\n", "utf-8")
-            (lab / "engines.py").write_text(
+            (lab / "voice_lab/engines.py").write_text(
                 "import numpy as np\n"
                 "class ChatterboxOriginal:\n"
                 "    def __init__(self, device):\n"
@@ -1042,7 +1046,7 @@ class OriginalTests(unittest.TestCase):
                 "    def speak(self, text):\n"
                 "        t = np.arange(24000 * 3) / 24000\n"
                 "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 1.5}\n", "utf-8")
-            (lab / "engine_checks.py").write_text(
+            (lab / "voice_lab/engine_checks.py").write_text(
                 "def smoke_request(engine):\n    assert engine == 'orig'\n    return {'engine': engine, 'text': 'check'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
             wav, converted = Path(folder) / "original.wav", Path(folder) / "vc.wav"
@@ -1054,8 +1058,8 @@ class OriginalTests(unittest.TestCase):
             self.assertAlmostEqual(result["audio_seconds"], 3.0)
             self.assertAlmostEqual(result["vc_audio_seconds"], 3.0)
             self.assertEqual(sf.info(str(converted)).frames, 3 * 24000)
-        import engines
-        from chatterbox_support import original_snapshot_dir    # the names the script imports exist in the lab
+        from voice_lab import engines
+        from voice_lab.chatterbox_support import original_snapshot_dir    # the names the script imports exist in the lab
         self.assertTrue(hasattr(engines, "ChatterboxOriginal") and callable(original_snapshot_dir))
         compile(ic.ORIGINAL_CHECK, "<original check>", "exec")
 
@@ -1142,10 +1146,10 @@ class ManifestTests(unittest.TestCase):
 
     def test_the_revision_is_written_once_for_the_service(self):
         # speaker_similarity, the adapter and the installation check all take Turbo's snapshot from the catalog.
-        import speaker_similarity
+        from voice_lab import speaker_similarity
 
         self.assertEqual(speaker_similarity.ENCODER_WEIGHTS, chatterbox_support.turbo_snapshot_dir(ROOT) / "ve.safetensors")
-        self.assertNotIn(ENTRY["local_revision"], (ROOT / "speaker_similarity.py").read_text("utf-8"))
+        self.assertNotIn(ENTRY["local_revision"], (ROOT / "voice_lab/speaker_similarity.py").read_text("utf-8"))
         self.assertTrue(re.fullmatch(r"[0-9a-f]{40}", ENTRY["local_revision"]))
 
 

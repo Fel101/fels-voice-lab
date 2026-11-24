@@ -9,7 +9,7 @@ speech check that clones a voice.
     .venv\\Scripts\\python.exe tools\\install_chatterbox.py --original
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-chatterbox.bat does that for you. Chatterbox gets an environment of its own,
+the lab's own Python, which setup.bat creates; tools\\setup-chatterbox.bat does that for you. Chatterbox gets an environment of its own,
 .venv-chatterbox, made from the same Python 3.12 as .venv, as every model does: its PyTorch 2.6 and the PyTorch 2.12 of Kokoro's
 .venv-kokoro could not share one. pip installs requirements/chatterbox-cpu.txt there with every file's SHA-256 checked, and the
 script refuses to replace a package that is already installed at another version, so an environment with its own PyTorch keeps
@@ -92,9 +92,9 @@ import json, sys, time
 sys.path.insert(0, sys.argv[1])
 import soundfile
 import torch
-import engine_checks
-from common import REFERENCE_TEXT
-from engines import ChatterboxTurbo
+from voice_lab import engine_checks
+from voice_lab.common import REFERENCE_TEXT
+from voice_lab.engines import ChatterboxTurbo
 
 started = time.perf_counter()
 engine = ChatterboxTurbo(sys.argv[4])
@@ -121,11 +121,11 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import soundfile
 import torch
-import engine_checks
+from voice_lab import engine_checks
 from chatterbox.vc import ChatterboxVC
-from chatterbox_support import original_snapshot_dir
-from common import to_numpy
-from engines import ChatterboxOriginal
+from voice_lab.chatterbox_support import original_snapshot_dir
+from voice_lab.common import to_numpy
+from voice_lab.engines import ChatterboxOriginal
 
 started = time.perf_counter()
 engine = ChatterboxOriginal(sys.argv[4])
@@ -395,7 +395,7 @@ def voice_match(check):
     which is where the service runs it. A failure here is reported, not fatal: the model itself is installed."""
     try:
         sys.path.insert(0, str(ROOT))
-        import speaker_similarity
+        from voice_lab import speaker_similarity
 
         score = speaker_similarity.similarity(check["reference"], check["wav"])
         return {"score": round(score, 4), "band": speaker_similarity.band(score)}

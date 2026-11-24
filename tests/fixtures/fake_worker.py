@@ -11,7 +11,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from worker_protocol import PROTOCOL_VERSION, decode_message, encode_message, response
+from voice_lab.worker_protocol import PROTOCOL_VERSION, decode_message, encode_message, response
 
 
 def main():

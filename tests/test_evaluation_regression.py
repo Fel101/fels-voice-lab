@@ -14,9 +14,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import evaluation_regression as er  # noqa: E402
-from evaluation_suites import get_suite  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import evaluation_regression as er  # noqa: E402
+from voice_lab.evaluation_suites import get_suite  # noqa: E402
 
 VOICES = ("af_heart", "bf_emma")
 SUITE = {"suite_id": "unit-suite", "version": 1, "repeat_count": 1, "cases": [
@@ -180,7 +180,7 @@ class CommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="voice-lab-regression-") as temp, \
                 mock.patch.object(er, "BASELINES", Path(temp) / "baselines"), \
                 mock.patch.object(engine_checks, "installation", return_value={"installed": True, "missing": []}), \
-                mock.patch("kokoro_support.discover_kokoro_voices", return_value=list(VOICES)), \
+                mock.patch("voice_lab.kokoro_support.discover_kokoro_voices", return_value=list(VOICES)), \
                 mock.patch.object(er.lm, "_run_asr", fake_asr_for(texts)), \
                 mock.patch.object(er, "get_suite", return_value=SUITE), contextlib.redirect_stdout(io.StringIO()):
             out = Path(temp) / "run"

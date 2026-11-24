@@ -12,7 +12,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import transcript_suggest
+from voice_lab import transcript_suggest
 import re
 
 from tests.test_export_panel import ExportPanelBase, tone_wav

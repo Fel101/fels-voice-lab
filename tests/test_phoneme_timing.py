@@ -15,9 +15,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve  # noqa: E402
-from cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
-from worker_pool import read_catalog  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
+from voice_lab.worker_pool import read_catalog  # noqa: E402
 
 TIMING = {"source": "kokoro-durations", "frame_seconds": 0.025, "unplaced_words": 0,
           "words": [{"word": "Hi", "start": 0.025, "end": 0.1}],

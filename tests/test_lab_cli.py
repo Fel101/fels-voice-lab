@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service
-import lab_address
+from voice_lab import lab_address
 from tools import lab_cli
 
 CLI = ROOT / "tools" / "lab_cli.py"
@@ -604,9 +604,10 @@ class CommandLineTests(CliCase):
     # The Lab's own modules the tool imports, which follow the same two rules: where the address file is (lab_address.py),
     # the app's name (app_version.py) and the suite's address file (fels_suite.py).
     LAB_MODULES = {
-        "lab_address": ROOT / "lab_address.py",
+        "voice_lab": ROOT / "voice_lab/__init__.py",
+        "voice_lab.lab_address": ROOT / "voice_lab/lab_address.py",
         "app_version": ROOT / "app_version.py",
-        "fels_suite": ROOT / "fels_suite.py",
+        "voice_lab.fels_suite": ROOT / "voice_lab/fels_suite.py",
     }
 
     def test_it_imports_nothing_but_the_standard_library(self):
@@ -616,9 +617,14 @@ class CommandLineTests(CliCase):
             names = set()
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
-                    names |= {item.name.split(".")[0] for item in node.names}
+                    names |= {
+                        item.name if item.name.startswith("voice_lab.") else item.name.split(".")[0] for item in node.names
+                    }
                 elif isinstance(node, ast.ImportFrom) and node.level == 0:
-                    names.add(node.module.split(".")[0])
+                    if node.module == "voice_lab":
+                        names |= {f"voice_lab.{item.name}" for item in node.names}
+                    else:
+                        names.add(node.module if node.module.startswith("voice_lab.") else node.module.split(".")[0])
             self.assertEqual(sorted(names - allowed), [], path.name)
 
     def test_it_uses_only_syntax_that_python_3_8_reads(self):

@@ -7,9 +7,9 @@ from http.server import BaseHTTPRequestHandler
 
 import numpy as np
 
-import serve
+from voice_lab import serve
 from library_fixture import temp_cast
-from worker_pool import WorkerBusy, read_catalog
+from voice_lab.worker_pool import WorkerBusy, read_catalog
 
 RATE = 24_000
 

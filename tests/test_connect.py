@@ -17,10 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service  # noqa: E402
 from app_version import VERSION  # noqa: E402
-import desktop  # noqa: E402
-import fels_suite  # noqa: E402
-import lab_address  # noqa: E402
-import serve  # noqa: E402
+from voice_lab import desktop  # noqa: E402
+from voice_lab import fels_suite  # noqa: E402
+from voice_lab import lab_address  # noqa: E402
+from voice_lab import serve  # noqa: E402
 
 
 def stand_in_app(case, health):
@@ -197,7 +197,7 @@ class JoiningTests(unittest.TestCase):
         self.assertEqual(command[command.index("--port") + 1], "9123")
 
     def test_the_window_reads_its_port_from_the_settings(self):
-        source = (ROOT / "desktop.py").read_text(encoding="utf-8")
+        source = (ROOT / "voice_lab/desktop.py").read_text(encoding="utf-8")
         self.assertIn("port=lab_address.window_port(ROOT)", source)
 
 

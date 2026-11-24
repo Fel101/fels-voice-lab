@@ -16,9 +16,9 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service  # noqa: E402
-import kokoro_support  # noqa: E402
-import sample_project  # noqa: E402
-import scene_store  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
+from voice_lab import sample_project  # noqa: E402
+from voice_lab import scene_store  # noqa: E402
 
 VOICES = ["af_heart", "am_michael", "bf_emma"]
 

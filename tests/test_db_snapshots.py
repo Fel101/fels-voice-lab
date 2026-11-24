@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cast_store import CAST_SCHEMA_VERSION, CastStore
-from db_snapshots import FOLDER, KEEP, SnapshotError, snapshot_before_migration
-from evaluation_store import SCHEMA_VERSION as EVALUATION_SCHEMA_VERSION, EvaluationStore
-from scene_store import SceneStore
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab.db_snapshots import FOLDER, KEEP, SnapshotError, snapshot_before_migration
+from voice_lab.evaluation_store import SCHEMA_VERSION as EVALUATION_SCHEMA_VERSION, EvaluationStore
+from voice_lab.scene_store import SceneStore
 
 
 def user_version(path):

@@ -14,11 +14,11 @@ import urllib.request
 import numpy as np
 import soundfile as sf
 
-from cast_store import CastStore
-import reference_catalog
-import synthetic_label
-import serve
-from worker_pool import read_catalog
+from voice_lab.cast_store import CastStore
+from voice_lab import reference_catalog
+from voice_lab import synthetic_label
+from voice_lab import serve
+from voice_lab.worker_pool import read_catalog
 
 
 TEXT = "Synthetic contract fixture only."

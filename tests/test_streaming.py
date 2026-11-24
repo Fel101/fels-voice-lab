@@ -20,12 +20,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
-from cast_store import CastStore
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
 from library_fixture import temp_cast
-from qwen_worker import QwenWorker
-from worker_pool import EnginePool, read_catalog
-from worker_process import WorkerCancelled, WorkerProcess
+from voice_lab.qwen_worker import QwenWorker
+from voice_lab.worker_pool import EnginePool, read_catalog
+from voice_lab.worker_process import WorkerCancelled, WorkerProcess
 
 FAKE_STREAM_WORKER = ROOT / "tests" / "fixtures" / "stream_worker.py"
 

@@ -13,16 +13,16 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_install  # noqa: E402
-import install_sizes  # noqa: E402
-import serve  # noqa: E402
-from chatterbox_support import TURBO_ENGINE_ID  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
+from voice_lab import install_sizes  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.chatterbox_support import TURBO_ENGINE_ID  # noqa: E402
 from library_fixture import temp_cast  # noqa: E402
 from tests.test_amd_build import R9700  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
 from tools import first_setup  # noqa: E402
 from tools import install_kokoro as ik  # noqa: E402
-from worker_pool import EnginePool  # noqa: E402
+from voice_lab.worker_pool import EnginePool  # noqa: E402
 
 RTX_5070 = {"name": "NVIDIA GeForce RTX 5070 Laptop GPU", "capability": (12, 0), "driver": (617, 14), "memory_mib": 8151}
 

@@ -4,8 +4,8 @@ import json
 import time
 import unittest
 
-import dubbing
-from dub_queue import DubQueue
+from voice_lab import dubbing
+from voice_lab.dub_queue import DubQueue
 from tests import test_dubbing as fixture
 
 

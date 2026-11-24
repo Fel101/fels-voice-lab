@@ -3,7 +3,7 @@
     .venv\\Scripts\\python.exe tools\\build_installer.py                  the commit checked out now
     .venv\\Scripts\\python.exe tools\\build_installer.py --ref v0.3.0     a release's tag (the release workflow does this)
 
-It stages four things in out\\installer\\staging and hands them to Inno Setup (installer\\FelsVoiceLab.iss):
+It stages the following in out\\installer\\staging and hands them to Inno Setup (installer\\FelsVoiceLab.iss):
 
 - app: the commit's files from `git archive`, which is how GitHub packs the release's source ZIP. The installed folder holds
   exactly the release's files, so update.bat treats it like an unpacked ZIP.
@@ -12,8 +12,8 @@ It stages four things in out\\installer\\staging and hands them to Inno Setup (i
 - wheels: the packages of requirements\\core.txt and requirements\\desktop.txt and the pip setup_core moves to, built for
   this Python (64-bit CPython 3.12 on Windows) by `pip wheel`. Setup installs them with no internet, and deletes them.
 - releases.json: the SHA-256 of every file of the commit and of each release before it (the tags v<major>.<minor>.<patch>
-  up to its version), as `git archive` gives them. Setup run over an installed Lab hands it to update.py --after-setup,
-  which removes the files the new version no longer has, without the internet. The tags must be in this clone.
+  up to its version), as `git archive` gives them. Setup hands this list to update.py --after-setup. The tags must be in this clone.
+- retired.iss: [InstallDelete] rules for the dropped files. Setup checks the installed version and each file's hash first.
 
 It needs git, Windows PowerShell, Inno Setup 6.7 or later (ISCC.exe: --iscc, the ISCC environment variable, the PATH, or
 where Inno Setup installs) and this Python to be 64-bit 3.12. The internet is needed for Python and the wheels.
@@ -129,6 +129,21 @@ def stage_release_files(ref, version, target):
         "releases": {tag[1:]: file_hashes(f"refs/tags/{tag}") for tag in tags},
     }
     target.write_text(json.dumps(lists, sort_keys=True), encoding="utf-8")
+    entries = []
+    for old_version, hashes in lists["releases"].items():
+        if old_version == version:
+            continue
+        for path in sorted(set(hashes) - set(lists["this"])):
+            if update.protected(path):
+                continue
+            # Only explicit portable file names can be used in Inno's deletion rules.
+            if not re.fullmatch(r"[\w .+/-]+", path, flags=re.ASCII):
+                continue  # --after-setup handles names that cannot go in the script
+            name = update.shown_path(path)
+            entries.append(
+                f"Type: files; Name: \"{{app}}\\{name}\"; Check: StageRetiredFile('{name}', '{old_version}', '{hashes[path]}')"
+            )
+    target.with_name("retired.iss").write_text("\n".join(entries) + "\n", encoding="ascii")
     return tags
 
 

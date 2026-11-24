@@ -33,7 +33,7 @@ try:
 except ImportError:  # run as a script, which puts tools\ first on the path and not the lab folder
     import install_kokoro as base
 
-import hardware
+from voice_lab import hardware
 
 InstallError = base.InstallError
 ROOT = Path(__file__).resolve().parents[1]

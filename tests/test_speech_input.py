@@ -8,12 +8,12 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 
-import engine_adapters
-import live_speech
-import speech_input
+from voice_lab import engine_adapters
+from voice_lab import live_speech
+from voice_lab import speech_input
 from tests import test_openai_route as fixture
 from tests.test_export_panel import tone_wav
-from worker_pool import ModelNotInstalled
+from voice_lab.worker_pool import ModelNotInstalled
 
 
 class SpeechProfiles(unittest.TestCase):

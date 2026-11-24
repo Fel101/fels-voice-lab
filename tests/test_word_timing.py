@@ -8,10 +8,10 @@ from unittest import mock
 
 import numpy as np
 
-import align_worker as aw
-import fit
-import word_timing as wt
-from cast_store import CAST_SCHEMA_VERSION, CastStore
+from voice_lab import align_worker as aw
+from voice_lab import fit
+from voice_lab import word_timing as wt
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore
 from tools import scene_export
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -251,7 +251,7 @@ class FitTests(unittest.TestCase):
     def test_the_status_check_and_the_exporter_import_without_librosa(self):
         # A fresh interpreter, because an earlier import in this process would hide a module-level import.
         code = ("import sys; sys.modules['librosa'] = None; sys.path.insert(0, sys.argv[1]); "
-                "import fit; from tools import scene_export; print(fit.fit_status(1.0, 1.1)['status'])")
+                "from voice_lab import fit; from tools import scene_export; print(fit.fit_status(1.0, 1.1)['status'])")
         result = subprocess.run([sys.executable, "-c", code, str(ROOT)], capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr[-600:])
         self.assertEqual(result.stdout.strip(), fit.STATUS_STRETCHED)

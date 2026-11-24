@@ -21,8 +21,8 @@ This is an early Windows release that runs from source, not a bundled
 installer with every model. It runs on Python 3.12 (64-bit), and `setup.bat` brings its own when the computer has none.
 `setup.bat` sets up the core, the desktop window and the speech models you choose, in one go: [Kokoro](#kokoro-on-the-cpu),
 [Phonon](#phonon-on-the-cpu) and [Chatterbox Turbo](#chatterbox-turbo-on-the-cpu), which all speak on an ordinary CPU;
-Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher of its own too (`setup-kokoro.bat`,
-`setup-phonon.bat`, `setup-chatterbox.bat`) for adding it later. Every other model has a guided installer and a launcher as
+Chatterbox Turbo is the one that clones a voice from a recording. Each has a launcher of its own too (`tools\setup-kokoro.bat`,
+`tools\setup-phonon.bat`, `tools\setup-chatterbox.bat`) for adding it later. Every other model has a guided installer and a launcher as
 well, and **Install** on its card in **Models & features** runs it:
 [Chatterbox 500M and Voice Conversion](#chatterbox-500m-and-voice-conversion) and [Drama 3](#drama-3-on-the-cpu) on the CPU,
 and the four [Qwen3-TTS](#qwen3-tts-on-a-graphics-card) models, [VoxCPM2](#voxcpm2-on-a-graphics-card) and
@@ -135,7 +135,7 @@ Kokoro is the quickest way to hear the studio speak: a small model that runs on 
 it later, run
 
 ```powershell
-setup-kokoro.bat
+tools\setup-kokoro.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_kokoro.py`. It prints its plan and asks before it changes anything.
@@ -195,7 +195,7 @@ To remove Kokoro, press **Uninstall…** on its card in **Models & features**; o
 `hf-cache\hub\models--hexgrad--Kokoro-82M` and `out\kokoro`.
 
 If an earlier version of the Lab installed Kokoro into `.venv`, the Lab now looks for it in `.venv-kokoro`, and Models & features
-says it is not installed until you run `setup-kokoro.bat` again: it keeps the model files already in `hf-cache` and fetches only
+says it is not installed until you run `tools\setup-kokoro.bat` again: it keeps the model files already in `hf-cache` and fetches only
 the packages. Kokoro's packages left in `.venv` (about 1 GB) do nothing there any more; to clear them, delete `.venv` and run
 `setup.bat`, which makes it again with the core packages only.
 
@@ -222,7 +222,7 @@ a snow queen) and takes a seed, a temperature and a pace shift. It cannot clone 
 `setup.bat` offers it; to add it later, run
 
 ```powershell
-setup-phonon.bat
+tools\setup-phonon.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_phonon.py`. It prints its plan and asks before it changes anything. `--dry-run` shows the
@@ -266,7 +266,7 @@ A seed gives nearly the same clip, not the same file: two clips from one seed di
 with one thread instead of all of them moved the end of a clip by one 80 ms frame. Do not expect an identical clip on another computer.
 
 To remove Phonon, delete `.venv-phonon`, `hf-cache\hub\models--gradium--phonon-31m-en`, `hf-cache\hub\models--gradium--phonon-voices`
-and `out\phonon`. If an earlier version installed `ptts` into `.venv`, run `setup-phonon.bat` again, which makes `.venv-phonon`
+and `out\phonon`. If an earlier version installed `ptts` into `.venv`, run `tools\setup-phonon.bat` again, which makes `.venv-phonon`
 and keeps the model files; `ptts` left in `.venv` does nothing there.
 
 The recipe was checked on one Windows 11 computer with Python 3.12.10, using only the CPU, from a copy of the Lab that had only the
@@ -284,7 +284,7 @@ ordinary computer without a graphics card, though more slowly than it speaks (se
 run
 
 ```powershell
-setup-chatterbox.bat
+tools\setup-chatterbox.bat
 ```
 
 or `.venv\Scripts\python.exe tools\install_chatterbox.py`. It prints its plan and asks before it changes anything. `--dry-run` shows
@@ -345,7 +345,7 @@ RAM before it loads it ([`min_free_ram_gb`](#hardware-and-state-settings) change
 sentences: given 1,200 characters, it stopped after 30 to 36 seconds of audio, and the
 take's checks flag audio much shorter than its text.
 
-On an AMD Radeon AI PRO R9700, `setup-chatterbox.bat --gpu` switched a `.venv-chatterbox` that held the CPU build to
+On an AMD Radeon AI PRO R9700, `tools\setup-chatterbox.bat --gpu` switched a `.venv-chatterbox` that held the CPU build to
 [AMD's build](#amd-radeon-cards) in 174 seconds with the model files in place: pip replaced PyTorch 2.6 and torchaudio 2.6 with
 AMD's PyTorch 2.12 and torchaudio 2.11 and added the ROCm runtime and the R9700's code, 4.9 GB installed in all. Its speech check
 cloned the built-in voice and spoke 2.5 seconds of audio in 2.0 seconds, and the voice match scored the clone 0.86 against its
@@ -360,7 +360,7 @@ installer, which keeps the checkpoint files already in `hf-cache` and fetches on
 yourself with the packages you had (a GPU build of PyTorch, say) and run it with `--checkpoint-only`.
 
 The recipe was checked on one Windows 11 computer with Python 3.12.10, using only the CPU, from fresh clones of the repository
-after `setup.bat`. `setup-chatterbox.bat` made `.venv-chatterbox` and installed the 73 packages (pip's cache was warm), and was
+after `setup.bat`. `tools\setup-chatterbox.bat` made `.venv-chatterbox` and installed the 73 packages (pip's cache was warm), and was
 stopped part way through the download. Run again, it kept the packages, resumed the half-fetched file where it stopped, and
 finished in 252 seconds; its speech check spoke in the built-in voice and cloned it. In the studio started from that folder,
 **Test** passed (2.4 s of audio in 6.6 s), and the calls the Voice cloning page makes saved a voice from an 11.5-second recording
@@ -377,7 +377,7 @@ Conversion (which says a recording again in the voice of another) run in the sam
 `ResembleAI/chatterbox` at revision 5bb1f6e. **Install** on either card, or
 
 ```powershell
-setup-chatterbox.bat --original
+tools\setup-chatterbox.bat --original
 ```
 
 installs both: the environment and its 73 packages when Turbo is not installed yet (with `--gpu`, the GPU build), and then the
@@ -413,8 +413,8 @@ Laptop GPU (8 GB) and NVIDIA driver 617.14: each model installed, passed its spe
 below). On another NVIDIA card, a [hardware report](TROUBLESHOOTING.md#reporting-a-problem) tells the next person how it went.
 
 ```powershell
-setup-kokoro.bat --gpu
-setup-chatterbox.bat --gpu
+tools\setup-kokoro.bat --gpu
+tools\setup-chatterbox.bat --gpu
 ```
 
 `--gpu` takes the GPU build for this computer's card, which is NVIDIA's when there is an NVIDIA driver; `--nvidia` asks for
@@ -500,8 +500,8 @@ of PyTorch 2.12 and torchaudio 2.11, from AMD's own index, in place of the CUDA 
 it is. Kokoro and the three Chatterbox models take the same builds in place of their CPU ones when asked for their GPU build:
 
 ```powershell
-setup-kokoro.bat --gpu
-setup-chatterbox.bat --gpu
+tools\setup-kokoro.bat --gpu
+tools\setup-chatterbox.bat --gpu
 ```
 
 or **Install** (or **Install GPU build**) on their cards with the switch on GPU, or the question `setup.bat` asks. Nothing needs
@@ -536,7 +536,7 @@ your computer at your request and are not part of this repository.
 What it did on the development computer, an AMD mini PC with a Radeon AI PRO R9700 (32 GB) beside the Radeon 780M in its Ryzen 7
 PRO 8845HS: each installer chose the R9700 (the first wrote `"hip_visible_devices": "1"`, and the others found it there) and
 passed its speech check on it (each model's section has the numbers). Qwen3-TTS 1.7B CustomVoice and Kokoro were installed from
-their cards on the Models page, a `.venv-chatterbox` that held the CPU build was switched with `setup-chatterbox.bat --gpu`, and
+their cards on the Models page, a `.venv-chatterbox` that held the CPU build was switched with `tools\setup-chatterbox.bat --gpu`, and
 **Test** passed on the R9700 for Qwen3-TTS 1.7B CustomVoice, Kokoro, Chatterbox Turbo and Chatterbox 500M. **No other AMD chip
 has been tried yet**: if it works, or does not, a
 [hardware report](TROUBLESHOOTING.md#reporting-a-problem) helps the next person.
@@ -549,10 +549,10 @@ computer has an NVIDIA card and driver the build runs on, or an AMD card that [A
 the launcher with the model's name:
 
 ```powershell
-setup-qwen.bat --model 0.6b-base
-setup-qwen.bat --model 1.7b-base
-setup-qwen.bat --model 1.7b-voice-design
-setup-qwen.bat --model 1.7b-custom-voice
+tools\setup-qwen.bat --model 0.6b-base
+tools\setup-qwen.bat --model 1.7b-base
+tools\setup-qwen.bat --model 1.7b-voice-design
+tools\setup-qwen.bat --model 1.7b-custom-voice
 ```
 
 | Model | What it does | Model files |
@@ -613,7 +613,7 @@ runs it only on a graphics card with at least 7 GB of memory. **Install** on its
 NVIDIA card and driver the build runs on, or an AMD card that [AMD's build](#amd-radeon-cards) has code for), or:
 
 ```powershell
-setup-voxcpm.bat
+tools\setup-voxcpm.bat
 ```
 
 It prints its plan and asks first, and installs into this folder, in `.venv-voxcpm`, `hf-cache` and `out\voxcpm2`:
@@ -682,7 +682,7 @@ has an NVIDIA card big enough and a driver the build runs on, or an AMD card big
 has code for, or:
 
 ```powershell
-setup-breeze.bat
+tools\setup-breeze.bat
 ```
 
 It prints its plan and asks first, and installs into this folder, in `.venv-breeze`, `breeze\models` and `out\breeze`:
@@ -723,13 +723,13 @@ tracks of aligned takes; it comes with Kokoro, in `.venv-kokoro`, and the export
 
 | Family | Runtime path | Setup status |
 |---|---|---|
-| Kokoro | `.venv-kokoro/Scripts/python.exe` | `setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
-| Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
-| Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
-| Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `setup-qwen.bat --model <model>` installs the pinned runtime for this computer's NVIDIA or AMD card and one model's checkpoint ([above](#qwen3-tts-on-a-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
-| VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `setup-voxcpm.bat` installs the pinned runtime for this computer's NVIDIA or AMD card, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-a-graphics-card)); needs a card with 7 GB of memory. |
-| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 8 GB of memory, and 10 GB is better. Its weights are for research and non-commercial use only. |
-| Drama 3 | Core environment plus speech.cpp | `setup-drama3.bat` installs the pinned native runtime and the Q4_K model ([below](#drama-3-on-the-cpu)); runs on the CPU with 26 GB of free RAM. |
+| Kokoro | `.venv-kokoro/Scripts/python.exe` | `tools\setup-kokoro.bat` installs the pinned runtime and checkpoint ([above](#kokoro-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
+| Phonon 31M English | `.venv-phonon/Scripts/python.exe` | `tools\setup-phonon.bat` installs the pinned CPU runtime and model files ([above](#phonon-on-the-cpu)). |
+| Chatterbox Turbo, 500M and VC | `.venv-chatterbox/Scripts/python.exe` | `tools\setup-chatterbox.bat` installs the pinned runtime and Turbo's checkpoint, and `tools\setup-chatterbox.bat --original` the checkpoint of Chatterbox 500M and Voice Conversion ([above](#chatterbox-turbo-on-the-cpu)), for the CPU or, with `--gpu`, this computer's NVIDIA or AMD card. |
+| Qwen3-TTS (four models) | `.venv-fqwen/Scripts/python.exe` | `tools\setup-qwen.bat --model <model>` installs the pinned runtime for this computer's NVIDIA or AMD card and one model's checkpoint ([above](#qwen3-tts-on-a-graphics-card)). Stock qwen-tts is a different comparison runtime, not offered by the service. |
+| VoxCPM2 | `.venv-voxcpm/Scripts/python.exe` | `tools\setup-voxcpm.bat` installs the pinned runtime for this computer's NVIDIA or AMD card, VoxCPM's source files and the checkpoint ([above](#voxcpm2-on-a-graphics-card)); needs a card with 7 GB of memory. |
+| Breeze TTS 2 | `.venv-breeze/Scripts/python.exe` | `tools\setup-breeze.bat` installs the pinned runtime for this computer's NVIDIA or AMD card and the BF16 checkpoint ([above](#breeze-tts-2-on-a-graphics-card)); needs a card with 8 GB of memory, and 10 GB is better. Its weights are for research and non-commercial use only. |
+| Drama 3 | Core environment plus speech.cpp | `tools\setup-drama3.bat` installs the pinned native runtime and the Q4_K model ([below](#drama-3-on-the-cpu)); runs on the CPU with 26 GB of free RAM. |
 
 Do not install a model's dependencies into the core environment. Runtime dependency conflicts are why every model has an
 environment of its own and the workers are separate processes. This release does not claim Linux or macOS support, tested NVIDIA
@@ -746,7 +746,7 @@ hosted service needs a separate licence from Fish Audio, and anything you publis
 Audio". Read it before you install; the plan says this first, and installing it means accepting it. **Install** on its card, or:
 
 ```powershell
-setup-drama3.bat
+tools\setup-drama3.bat
 ```
 
 It prints its plan and asks first, and installs into `out\drama3`, with nothing installed by pip: the Lab runs Drama 3 through
@@ -816,7 +816,7 @@ To see the installer plan from a terminal, run `.venv\Scripts\python.exe tools\i
 The UI reports unavailable if they are absent. Speaker matching (the voice match on
 takes, the second-voice warning in the reference screen, and the identity checks on
 cleaned and imported clips) needs only Chatterbox Turbo's speaker encoder, `ve.safetensors`
-in the pinned Turbo snapshot in `hf-cache`, which `setup-chatterbox.bat` fetches. The Lab runs
+in the pinned Turbo snapshot in `hf-cache`, which `tools\setup-chatterbox.bat` fetches. The Lab runs
 that encoder itself with NumPy, so neither PyTorch nor Chatterbox has to be in `.venv`; its
 tests hold it to embeddings that Chatterbox made. The two bands that label a score
 ship in [catalog/speaker_similarity.json](../catalog/speaker_similarity.json), so

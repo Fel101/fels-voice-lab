@@ -19,12 +19,12 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import fels_suite  # noqa: E402
-import serve  # noqa: E402
+from voice_lab import fels_suite  # noqa: E402
+from voice_lab import serve  # noqa: E402
 from library_fixture import temp_cast  # noqa: E402
-from local_ownership import LocalOwnership  # noqa: E402
-from worker_pool import EnginePool, GpuBusy, WorkerBusy  # noqa: E402
-from worker_process import WorkerProcess  # noqa: E402
+from voice_lab.local_ownership import LocalOwnership  # noqa: E402
+from voice_lab.worker_pool import EnginePool, GpuBusy, WorkerBusy  # noqa: E402
+from voice_lab.worker_process import WorkerProcess  # noqa: E402
 
 FAKE_WORKER = ROOT / "tests" / "fixtures" / "fake_worker.py"
 
@@ -33,7 +33,7 @@ STAND_IN = """
 import os
 import sys
 sys.path.insert(0, sys.argv[1])
-import fels_suite
+from voice_lab import fels_suite
 lock = fels_suite.GpuLock(sys.argv[3], {"FELS_SUITE_DIR": sys.argv[2]})
 print("ready", os.getpid(), flush=True)
 for line in sys.stdin:
@@ -249,7 +249,7 @@ class UnloadForTheSuiteTests(unittest.TestCase):
 
     def start(self, cast, scenes=None):
         """A service on the pool: its address, its handler class, and its scene batch runner when there are scenes."""
-        from scene_store import SceneBatchRunner
+        from voice_lab.scene_store import SceneBatchRunner
 
         server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
         port = server.server_address[1]
@@ -306,7 +306,7 @@ class UnloadForTheSuiteTests(unittest.TestCase):
         self.assertEqual(self.call("/api/gpu")[1]["holders"], [])
 
     def test_a_scene_batch_waits_for_the_card_while_forge_has_it_and_then_finishes(self):
-        from scene_store import SceneStore
+        from voice_lab.scene_store import SceneStore
 
         cast = temp_cast(self)
         character = cast.create_character("Nell", "")
@@ -405,7 +405,7 @@ class UnloadForTheSuiteTests(unittest.TestCase):
 
 class SceneProgressTests(unittest.TestCase):
     def test_the_batch_rendering_counts_its_lines(self):
-        from scene_store import SceneStore
+        from voice_lab.scene_store import SceneStore
 
         store = SceneStore(temp_cast(self))
         self.assertIsNone(store.rendering_progress())

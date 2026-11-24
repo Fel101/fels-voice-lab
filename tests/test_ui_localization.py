@@ -8,13 +8,13 @@ import tempfile
 import unittest
 from unittest import mock
 
-import library_backup
-import performance_settings
-import serve
+from voice_lab import library_backup
+from voice_lab import performance_settings
+from voice_lab import serve
 from tests.test_browser_flow import BROWSER, DevToolsPage, FlowServer
 
-from ui_localization import PAGE_TEXT, TOKEN, VALUE, PageText
-from ui_preferences import UiPreferences
+from voice_lab.ui_localization import PAGE_TEXT, TOKEN, VALUE, PageText
+from voice_lab.ui_preferences import UiPreferences
 
 ROOT = Path(__file__).resolve().parents[1]
 CALL = re.compile(r"""\bLabText\.(t|plural)\(\s*['"]([a-z][a-zA-Z0-9_.-]+)['"]""")
@@ -96,8 +96,8 @@ class PageTextTests(unittest.TestCase):
         )
 
     def test_catalog_keys_are_known_and_match_the_kind_of_call(self):
-        PageText(ROOT / "locales")  # Shipped files must all pass, even though the service can recover.
-        for source in (*ROOT.glob("*.html"), *ROOT.glob("*.js")):
+        PageText(ROOT / "web/locales")  # Shipped files must all pass, even though the service can recover.
+        for source in (*(ROOT / "web").glob("*.html"), *(ROOT / "web").glob("*.js")):
             body = source.read_text(encoding="utf-8")
             for key in TOKEN.findall(body):
                 with self.subTest(source=source.name, key=key):
@@ -258,7 +258,7 @@ class PageTextTests(unittest.TestCase):
             server.close()
 
     def test_the_spanish_draft_covers_the_english_catalog_and_value_places(self):
-        text = PageText(ROOT / "locales")
+        text = PageText(ROOT / "web/locales")
         spanish = text.catalogs["es"]
         self.assertEqual(spanish["name"], "Español")
         self.assertTrue(spanish["draft"])
@@ -276,7 +276,7 @@ class PageTextTests(unittest.TestCase):
                     self.assertTrue(after.strip())
 
     def test_translations_preserve_model_tags_and_translate_page_copy(self):
-        text = PageText(ROOT / "locales")
+        text = PageText(ROOT / "web/locales")
         for locale, catalog in text.catalogs.items():
             if locale == "en":
                 continue
@@ -300,7 +300,7 @@ class PageTextTests(unittest.TestCase):
                     self.assertFalse([name for name in VALUE.findall(line) if CODE_VALUE.fullmatch(name)])
 
     def test_page_scripts_pass_data_instead_of_prose_to_messages(self):
-        for source in (*ROOT.glob("*.js"), ROOT / "compare.html"):
+        for source in (*(ROOT / "web").glob("*.js"), ROOT / "web/compare.html"):
             body = source.read_text(encoding="utf-8")
             for match in LITERAL_PLURAL.finditer(body):
                 singular, plural = match[2], match[4]
@@ -385,4 +385,4 @@ class PageTextTests(unittest.TestCase):
             with self.subTest(file=file):
                 parser = PageMarkup()
                 parser.check = lambda word: self.assertIsNotNone(TOKEN.fullmatch(word), word)
-                parser.feed((ROOT / file).read_text(encoding="utf-8"))
+                parser.feed((ROOT / "web" / file).read_text(encoding="utf-8"))

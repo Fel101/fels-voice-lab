@@ -16,13 +16,13 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import phonon_support  # noqa: E402
-import serve  # noqa: E402
-import worker_runtime  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab import worker_runtime  # noqa: E402
 from library_fixture import temp_cast  # noqa: E402
 from phonon_fixtures import Lab  # noqa: E402
-from scene_store import SceneStore  # noqa: E402
-from worker_pool import EnginePool, read_catalog  # noqa: E402
+from voice_lab.scene_store import SceneStore  # noqa: E402
+from voice_lab.worker_pool import EnginePool, read_catalog  # noqa: E402
 
 PHONON = phonon_support.PHONON_ENGINE_ID
 
@@ -306,7 +306,7 @@ class WorkerBranchTests(unittest.TestCase):
             patch = mock.patch.object(owner, name, value)
             patch.start()
             self.addCleanup(patch.stop)
-        patch = mock.patch("engines.build_engine", lambda key, device: self.engine)
+        patch = mock.patch("voice_lab.engines.build_engine", lambda key, device: self.engine)
         patch.start()
         self.addCleanup(patch.stop)
 

@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const script=fs.readFileSync(path.join(__dirname,'..','voice_lab_queue.js'),'utf8');
+const script=fs.readFileSync(path.join(__dirname,'..','web', 'voice_lab_queue.js'),'utf8');
 
 class El{
   constructor(tag){this.tagName=tag;this.children=[];this.dataset={};this.hidden=false;this.disabled=false;this.className='';

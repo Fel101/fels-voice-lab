@@ -19,22 +19,22 @@ a model worker           engine_worker.py in that model's own environment: .venv
 - **Each model runs in its own environment**, named by `runtime.python` in [catalog/engines.json](../catalog/engines.json).
   Its pinned list (for example [requirements/kokoro-cpu.txt](../requirements/kokoro-cpu.txt)) repeats the core packages at the
   same versions, because the worker imports the Lab's own modules too. Two models never share a PyTorch.
-- **`worker_pool.EnginePool`** keeps at most one model loaded, checks free RAM first ([ram_needs.py](../ram_needs.py)), and
-  talks to the worker in JSON lines over stdin and stdout ([worker_protocol.py](../worker_protocol.py)). Audio comes back as a
+- **`worker_pool.EnginePool`** keeps at most one model loaded, checks free RAM first ([ram_needs.py](../voice_lab/ram_needs.py)), and
+  talks to the worker in JSON lines over stdin and stdout ([worker_protocol.py](../voice_lab/worker_protocol.py)). Audio comes back as a
   temporary `.npy` file under `out/workers/<engine>-<pid>`. `worker_runtime.py` is the worker's side: load, generate, unload.
-- **[engine_adapters/](../engine_adapters/) says what each model is.** One module per family holds an adapter for each of
+- **[engine_adapters/](../voice_lab/engine_adapters/) says what each model is.** One module per family holds an adapter for each of
   its engines: its installers, RAM need, Test request, settings, how a take asks for it, and, in the worker's half, how it
   loads and speaks. The shared code asks the adapter instead of testing the engine's name, and the adapters import in the
   service's `.venv` with no model package (`tests/test_engine_adapters.py` checks both).
-- **[job_queue.py](../job_queue.py) is the line for the worker.** One request uses it at a time. The others wait in order,
+- **[job_queue.py](../voice_lab/job_queue.py) is the line for the worker.** One request uses it at a time. The others wait in order,
   a person's ahead of a scene batch's lines, when they sent `wait_seconds`, and are refused with 409 otherwise; any can be
   cancelled, and a running one is stopped by ending its worker's process. `serve.Handler._place_in_line` puts every request that
   needs the worker in line under its `X-Request-Id`, and the page's `voice_lab_queue.js` makes all of the page's ask to wait.
-- **The other apps of Fel's Studio** find the Lab through [fels_suite.py](../fels_suite.py), one file that Voice Slate, NPC
+- **The other apps of Fel's Studio** find the Lab through [fels_suite.py](../voice_lab/fels_suite.py), one file that Voice Slate, NPC
   Forge and Altera carry too, unchanged: the suite folder, the address file `serve.py` writes there, `/api/health`'s `fels`
   block and the inbox. `tests/suite_vectors.json` holds the cases every app runs. Change it only together with the other
   apps ([Contributing](../CONTRIBUTING.md#fels-studio-the-shared-file-and-the-ports)).
-- **The inbox.** [slate_inbox.py](../slate_inbox.py) lists what waits in `inbox\voice-lab\` and checks each
+- **The inbox.** [slate_inbox.py](../voice_lab/slate_inbox.py) lists what waits in `inbox\voice-lab\` and checks each
   `.voiceslate` file once, with `slate_bundle.read_bundle` as the Cast page's file box does, until the file changes. The
   routes in `route_groups/cast.py` import through the same function as the file box, then hand the file to
   `fels_suite.inbox_done`, which sends it to the Recycle Bin.
@@ -52,12 +52,12 @@ a model worker           engine_worker.py in that model's own environment: .venv
 ## A request
 
 1. `serve.py` refuses anything that is not local (`_local_only`: the Host, Origin and Sec-Fetch-Site headers).
-2. [routes.py](../routes.py) matches the path against the rows of [api_spec.py](../api_spec.py), the one table of every route,
+2. [routes.py](../voice_lab/routes.py) matches the path against the rows of [api_spec.py](../voice_lab/api_spec.py), the one table of every route,
    and finds the function registered for that row with `@router.get(...)` or `@router.post(...)` by one of the route groups
-   in [route_groups/](../route_groups/): the pages, engines and speech, conversion, the Cast, takes, scenes and export,
+   in [route_groups/](../voice_lab/route_groups/): the pages, engines and speech, conversion, the Cast, takes, scenes and export,
    comparisons, the system and backups, and the Drama studio, each a module with a `register(router, lab)`.
 3. The function works with what the routes share, the `serve.Lab` that `make_handler` builds: `cast` (characters, voices,
-   references and takes; [cast_store.py](../cast_store.py)), `scenes` ([scene_store.py](../scene_store.py)), `evaluations`,
+   references and takes; [cast_store.py](../voice_lab/cast_store.py)), `scenes` ([scene_store.py](../voice_lab/scene_store.py)), `evaluations`,
    `engines` (the pool), `installer` (the Models page's Install button) and the rest. It answers through the request handler,
    `serve.Handler` (`_send`, `_json`, the body readers), and reads `serve.py`'s own names, such as `LAB` and `OUT`, as
    `serve.LAB`, so that a test which points them elsewhere moves the routes too.
@@ -68,6 +68,8 @@ a model worker           engine_worker.py in that model's own environment: .venv
 
 | Folder | What is there |
 |---|---|
+| `voice_lab/` | The service, desktop application, workers and engine adapters. |
+| `web/` | The studio and comparison pages, their scripts and translations. |
 | `data/` (the library) | Cast, Scenes and Comparisons: SQLite databases and the media they point at. A different library is a `--state-root`. |
 | `out/` | What a run makes and can lose: service and worker logs, worker scratch folders, export packages, conversions, installer receipts. |
 | `hf-cache/` | Model checkpoints at pinned revisions. |
@@ -81,41 +83,41 @@ a model worker           engine_worker.py in that model's own environment: .venv
 scope, plus the Drama studio as a module. The first line of each script says what it owns. The Node tests run a script in a
 `vm` context with a stand-in page, and `tests/page_source.cjs` gives them the whole page as one text. `theme.js` sets the
 appearance before the page paints. `ui_preferences.py` saves the page language, and
-`ui_localization.py` renders static page words from `locales/` before the first paint.
+`ui_localization.py` renders static page words from `web/locales/` before the first paint.
 `voice_lab_i18n.js` formats words and plurals written by the scripts.
 
 ## Deciding things
 
 | Question | Answered in |
 |---|---|
-| Is a model installed, usable, out of date? | [engine_checks.py](../engine_checks.py) |
-| How much free RAM does it need? | [ram_needs.py](../ram_needs.py) (and `min_free_ram_gb` in `runtime.local.json`) |
-| What may its output be used for? | [output_license.py](../output_license.py) |
-| What does a performance's setting accept? | [performance_settings.py](../performance_settings.py) |
-| What label does a clip carry inside its file? | [synthetic_label.py](../synthetic_label.py) |
-| What does the copied report say? | [system_report.py](../system_report.py) and [hardware.py](../hardware.py) |
-| Which NVIDIA build runs on this card? | `card_problems` in each installer, from [hardware.py](../hardware.py)'s `nvidia_cards`; `worker_runtime.usable_device` at run time |
-| Which AMD card, and which chip's code? | [tools/amd_build.py](../tools/amd_build.py) (`card_problems`, `chosen_card`, `settle_number`), from [hardware.py](../hardware.py)'s `amd_cards` and [requirements/amd-rocm.txt](../requirements/amd-rocm.txt); each installer's `amd_card_problems` |
+| Is a model installed, usable, out of date? | [engine_checks.py](../voice_lab/engine_checks.py) |
+| How much free RAM does it need? | [ram_needs.py](../voice_lab/ram_needs.py) (and `min_free_ram_gb` in `runtime.local.json`) |
+| What may its output be used for? | [output_license.py](../voice_lab/output_license.py) |
+| What does a performance's setting accept? | [performance_settings.py](../voice_lab/performance_settings.py) |
+| What label does a clip carry inside its file? | [synthetic_label.py](../voice_lab/synthetic_label.py) |
+| What does the copied report say? | [system_report.py](../voice_lab/system_report.py) and [hardware.py](../voice_lab/hardware.py) |
+| Which NVIDIA build runs on this card? | `card_problems` in each installer, from [hardware.py](../voice_lab/hardware.py)'s `nvidia_cards`; `worker_runtime.usable_device` at run time |
+| Which AMD card, and which chip's code? | [tools/amd_build.py](../tools/amd_build.py) (`card_problems`, `chosen_card`, `settle_number`), from [hardware.py](../voice_lab/hardware.py)'s `amd_cards` and [requirements/amd-rocm.txt](../requirements/amd-rocm.txt); each installer's `amd_card_problems` |
 | Which GPU build does `--gpu` put in? | `requested_build` in [tools/install_kokoro.py](../tools/install_kokoro.py) (Kokoro and Chatterbox), `graphics` in the installers of the models that run only on a graphics card |
-| Is there a newer release, and how does a folder get it? | [updates.py](../updates.py) (the check) and [tools/update.py](../tools/update.py) (`update.bat`) |
+| Is there a newer release, and how does a folder get it? | [updates.py](../voice_lab/updates.py) (the check) and [tools/update.py](../tools/update.py) (`update.bat`) |
 
 ## Adding
 
 - **A route:** a row in `api_spec.ROUTES` (documented, or `internal=True` for the Lab's own pages), a function in its
-  group's `register(router, lab)` in [route_groups/](../route_groups/) with `@router.get(path)` or `@router.post(path)` and the
+  group's `register(router, lab)` in [route_groups/](../voice_lab/route_groups/) with `@router.get(path)` or `@router.post(path)` and the
   same path (a new group is a new module, listed in `GROUPS`), then
   `.venv\Scripts\python.exe tools\build_api_docs.py` to write `docs/API.md` and `openapi.json`. The service will not start
   with a row and no function, or a function and no row. A row with `suite=True` is part of the suite API, which NPC Forge
   and Altera rely on: its fields are in `tests/suite_api_<N>.json`, and the tool adds to that file but will not break it
   without a new `SUITE_API` in [app_version.py](../app_version.py) ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).
 - **An engine:** an entry in `catalog/engines.json` with its own environment, an adapter in its family's module in
-  [engine_adapters/](../engine_adapters/) (a new family is a new module, listed in `FAMILIES`), and an installer.
-  [engine_adapters/base.py](../engine_adapters/base.py) lists every answer an adapter can give, with the one most engines
-  take; [engine_adapters/phonon.py](../engine_adapters/phonon.py) is the smallest family, and
+  [engine_adapters/](../voice_lab/engine_adapters/) (a new family is a new module, listed in `FAMILIES`), and an installer.
+  [engine_adapters/base.py](../voice_lab/engine_adapters/base.py) lists every answer an adapter can give, with the one most engines
+  take; [engine_adapters/phonon.py](../voice_lab/engine_adapters/phonon.py) is the smallest family, and
   `tests/test_engine_adapters.py` adds a pretend engine this way. A guided installer follows
   [tools/install_phonon.py](../tools/install_phonon.py), the smallest one; the shared pieces are in `tools/install_kokoro.py`.
   Its launcher and script (the adapter's `guided_installer` and `installer`) give the engine's card its **Install** button.
-  [install_control.py](../install_control.py) lets the installer publish its phase and check for Stop before it starts each
+  [install_control.py](../voice_lab/install_control.py) lets the installer publish its phase and check for Stop before it starts each
   package command. The service writes the stop flag before reading the phase. It waits if a package command is active
   and can end the process tree during downloads and speech checks. A stopped install keeps its build choice under
   `out/install/`, so the card can offer **Install** again even when the files are present.

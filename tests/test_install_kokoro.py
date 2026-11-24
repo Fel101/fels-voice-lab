@@ -19,8 +19,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import kokoro_support  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
 import soundfile as sf  # noqa: E402
 from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
@@ -233,14 +233,14 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertNotIn("torchaudio", {item["key"] for item in packages}, "Kokoro needs no torchaudio")
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
-        data = (ROOT / "setup-kokoro.bat").read_bytes()
+        data = (ROOT / "tools/setup-kokoro.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
         text = data.decode("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_kokoro.py %*', text)
         self.assertIn("Run setup.bat first.", text)
 
     def test_every_setup_window_waits_for_a_key_so_a_double_click_can_be_read(self):
-        for name in ("setup.bat", "setup-desktop.bat", "setup-kokoro.bat"):
+        for name in ("setup.bat", "setup-desktop.bat", "tools\\setup-kokoro.bat"):
             lines = [line.strip() for line in (ROOT / name).read_text("utf-8").splitlines() if line.strip()]
             last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
             self.assertIn("pause", lines[last_run + 1:], name)
@@ -248,11 +248,11 @@ class ShippedFilesTests(unittest.TestCase):
     def test_the_first_setup_offers_the_installer(self):
         from tools import first_setup
         self.assertEqual(first_setup.MODELS["kokoro"], {"engine": "kokoro", "script": "tools/install_kokoro.py", "gpu": True})
-        self.assertIn("setup-kokoro.bat", first_setup.menu_text(16, first_setup.model_sizes()))
+        self.assertIn("tools\\setup-kokoro.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = (ROOT / "docs" / "SETUP.md").read_text("utf-8")
-        for needed in ("setup-kokoro.bat", "tools\\install_kokoro.py", "--dry-run", "--yes", "--checkpoint-only", "--voices",
+        for needed in ("tools\\setup-kokoro.bat", "tools\\install_kokoro.py", "--dry-run", "--yes", "--checkpoint-only", "--voices",
                        "requirements/kokoro-cpu.txt", "catalog/kokoro_snapshot.json", "Visual C++ Redistributable"):
             self.assertIn(needed, setup)
         packages = len(ik.read_lock(ROOT / ik.LOCK))
@@ -264,10 +264,10 @@ class ShippedFilesTests(unittest.TestCase):
             self.assertIn(number, flat)
         for name in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"):
             text = " ".join((ROOT / name).read_text("utf-8").split())
-            self.assertTrue("setup-kokoro.bat" in text or "tools/install_kokoro.py" in text, name)
+            self.assertTrue("tools\\setup-kokoro.bat" in text or "tools/install_kokoro.py" in text, name)
             if name != "README.md":
                 self.assertIn(f"{packages} ", text)
-        self.assertIn("setup-kokoro.bat", (ROOT / "README.md").read_text("utf-8"))
+        self.assertIn("tools\\setup-kokoro.bat", (ROOT / "README.md").read_text("utf-8"))
 
     def test_the_installer_prints_only_plain_ascii(self):
         self.assertTrue((ROOT / "tools" / "install_kokoro.py").read_bytes().isascii())
@@ -988,7 +988,9 @@ class SpeechCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             lab, wav = Path(folder) / "lab", Path(folder) / "clip.wav"
             lab.mkdir()
-            (lab / "engines.py").write_text(
+            (lab / "voice_lab").mkdir()
+            (lab / "voice_lab/__init__.py").touch()
+            (lab / "voice_lab/engines.py").write_text(
                 "import numpy as np\n"
                 "class Kokoro:\n"
                 "    def __init__(self, device):\n"
@@ -999,10 +1001,10 @@ class SpeechCheckTests(unittest.TestCase):
                 "def ensure_reference(kokoro):\n"
                 "    assert isinstance(kokoro, Kokoro), 'the model already loaded speaks the reference'\n"
                 "    open(__file__ + '.reference', 'w').close()\n", "utf-8")
-            (lab / "engine_checks.py").write_text(
+            (lab / "voice_lab/engine_checks.py").write_text(
                 "def smoke_request(engine):\n    return {'engine': engine, 'text': 'check', 'voice': 'af_heart'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
-            (lab / "kokoro_support.py").write_text("def discover_kokoro_voices():\n    return ['af_heart']\n", "utf-8")
+            (lab / "voice_lab/kokoro_support.py").write_text("def discover_kokoro_voices():\n    return ['af_heart']\n", "utf-8")
             (lab / "torch.py").write_text("__version__ = '2.12.0+cpu'\n", "utf-8")
             done = subprocess.run([sys.executable, "-c", ik.SPEECH_CHECK, str(lab), str(wav), "cpu"], capture_output=True,
                                   text=True, timeout=120)
@@ -1013,10 +1015,10 @@ class SpeechCheckTests(unittest.TestCase):
             self.assertAlmostEqual(result["audio_seconds"], 1.0)
             samples, rate = sf.read(str(wav))
             self.assertEqual((rate, len(samples)), (24000, 24000))
-            self.assertTrue((lab / "engines.py.reference").is_file())
+            self.assertTrue((lab / "voice_lab/engines.py.reference").is_file())
 
     def test_the_names_the_check_script_uses_exist_in_the_lab(self):
-        import engines
+        from voice_lab import engines
         self.assertTrue(callable(engine_checks.smoke_request) and callable(engine_checks.audible))
         self.assertTrue(hasattr(engines, "Kokoro") and callable(engines.ensure_reference))
         self.assertTrue(callable(kokoro_support.discover_kokoro_voices))

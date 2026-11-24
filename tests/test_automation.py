@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-import automation
-import connector_profiles
+from voice_lab import automation
+from voice_lab import connector_profiles
 from tests import test_openai_route
 from tests.test_browser_flow import BROWSER, DevToolsPage
 

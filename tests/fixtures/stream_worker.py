@@ -9,7 +9,7 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
-from worker_protocol import PROTOCOL_VERSION, decode_message, encode_message, response
+from voice_lab.worker_protocol import PROTOCOL_VERSION, decode_message, encode_message, response
 
 
 def main():

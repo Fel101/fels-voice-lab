@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from library_backup import SECTIONS  # noqa: E402
+from voice_lab.library_backup import SECTIONS  # noqa: E402
 from tools import uninstall_lab  # noqa: E402
 
 PROGRAM = ["serve.py", "app_version.py", "tools/update.py", "docs/SETUP.md", ".venv/Scripts/python.exe",

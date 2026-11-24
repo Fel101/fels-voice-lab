@@ -13,9 +13,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import loudness  # noqa: E402
-import serve  # noqa: E402
-from cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
+from voice_lab import loudness  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore  # noqa: E402
 
 RATE = 24_000
 

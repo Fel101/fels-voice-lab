@@ -17,10 +17,10 @@ import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from drama3_runtime import controls, SpeechRuntime
-from worker_pool import EnginePool, read_catalog, process_is_running
-from cast_store import CastStore
-from scene_store import SceneStore
+from voice_lab.drama3_runtime import controls, SpeechRuntime
+from voice_lab.worker_pool import EnginePool, read_catalog, process_is_running
+from voice_lab.cast_store import CastStore
+from voice_lab.scene_store import SceneStore
 
 
 class Drama3Tests(unittest.TestCase):
@@ -60,11 +60,11 @@ class Drama3Tests(unittest.TestCase):
         pcm=b'\x01\x00\x02\x00'
         runtime.events.put({'type':'chunk','id':'fixture','seq':0,'pcm':base64.b64encode(pcm).decode()})
         runtime.events.put({'type':'end','id':'fixture','samples':2,'stop':'complete'})
-        with patch('drama3_runtime.uuid.uuid4',return_value=types.SimpleNamespace(hex='fixture')):
+        with patch('voice_lab.drama3_runtime.uuid.uuid4',return_value=types.SimpleNamespace(hex='fixture')):
             result, terminal=runtime._request({'type':'synthesize','text':'A line.'})
         self.assertEqual(result,pcm)
         runtime.events.put({'type':'end','id':'fixture','samples':0,'stop':'max_seconds'})
-        with patch('drama3_runtime.uuid.uuid4',return_value=types.SimpleNamespace(hex='fixture')):
+        with patch('voice_lab.drama3_runtime.uuid.uuid4',return_value=types.SimpleNamespace(hex='fixture')):
             with self.assertRaisesRegex(RuntimeError,'duration limit'):
                 runtime._request({'type':'synthesize','text':'A line.'})
 
@@ -91,7 +91,7 @@ class Drama3Tests(unittest.TestCase):
         python=getattr(sys,'_base_executable',sys.executable)
         script="""import subprocess,sys,time
 sys.path.insert(0,sys.argv[1])
-from drama3_runtime import ChildJob
+from voice_lab.drama3_runtime import ChildJob
 job=ChildJob()
 child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(120)'])
 job.add(child)

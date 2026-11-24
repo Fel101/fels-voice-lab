@@ -20,21 +20,21 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import api_spec
-import engine_checks
-import phonon_support
-import reference_paths
-import serve
-import worker_pool
-from cast_store import CastStore
-from engine_checks import (EngineCheckStore, audible, check_record, engine_fingerprint, installation,
+from voice_lab import api_spec
+from voice_lab import engine_checks
+from voice_lab import phonon_support
+from voice_lab import reference_paths
+from voice_lab import serve
+from voice_lab import worker_pool
+from voice_lab.cast_store import CastStore
+from voice_lab.engine_checks import (EngineCheckStore, audible, check_record, engine_fingerprint, installation,
                            smoke_request, status_payload)
 from phonon_fixtures import Lab, record as voice_record
-from worker_pool import EnginePool, WorkerBusy, read_catalog
-from worker_process import ModelNotInstalled, WorkerRequestError, WorkerTimeout, WorkerUnavailable
+from voice_lab.worker_pool import EnginePool, WorkerBusy, read_catalog
+from voice_lab.worker_process import ModelNotInstalled, WorkerRequestError, WorkerTimeout, WorkerUnavailable
 
 CATALOG = {entry["id"]: entry for entry in read_catalog()["engines"]}
-POINTER = ("Kokoro 82M is not installed. Open Models & features and press Install on its card, or run setup-kokoro.bat in the "
+POINTER = ("Kokoro 82M is not installed. Open Models & features and press Install on its card, or run tools\\setup-kokoro.bat in the "
            "lab folder, then try again.")
 
 
@@ -176,12 +176,12 @@ class InstallationTests(TempTree):
         self.assertIn(f"{self.hf_snapshot('kokoro')} (no weight file)", result["missing"])
 
     def test_a_missing_kokoro_names_the_launcher_that_installs_it(self):
-        self.assertEqual(installation(CATALOG["kokoro"], self.root)["installer"], "setup-kokoro.bat")
+        self.assertEqual(installation(CATALOG["kokoro"], self.root)["installer"], "tools\\setup-kokoro.bat")
         self.environment("kokoro")
         self.write(f"{self.hf_snapshot('kokoro')}/config.json")
         result = installation(CATALOG["kokoro"], self.root)
         self.assertFalse(result["installed"])
-        self.assertEqual(result["installer"], "setup-kokoro.bat")
+        self.assertEqual(result["installer"], "tools\\setup-kokoro.bat")
 
     def test_an_installed_engine_names_no_launcher(self):
         self.environment("kokoro", "kokoro-0.9.4")
@@ -210,7 +210,7 @@ class InstallationTests(TempTree):
         result = installation(CATALOG["voxcpm2"], self.root)
         self.assertEqual(result["missing"], ["torch (Python package)", "transformers (Python package)",
                                              "librosa (Python package)", "out/voxcpm2/source/src"])
-        self.assertEqual(result["installer"], "setup-voxcpm.bat")
+        self.assertEqual(result["installer"], "tools\\setup-voxcpm.bat")
         (self.root / "out/voxcpm2/source/src").mkdir(parents=True)
         self.environment("voxcpm2", "torch-2.12.0+cu130", "transformers-5.15.1", "librosa-1.0.0")
         self.assertTrue(installation(CATALOG["voxcpm2"], self.root)["installed"])
@@ -246,7 +246,7 @@ class InstallationTests(TempTree):
         folder = "breeze/models/breezetts2/drbaph_Breeze-TTS-2-comfyui"
         result = installation(CATALOG["breeze-tts-2"], self.root)
         self.assertIn(f"{folder}/Breeze-TTS-2-bf16.safetensors", result["missing"])
-        self.assertEqual(result["installer"], "setup-breeze.bat")
+        self.assertEqual(result["installer"], "tools\\setup-breeze.bat")
         self.write("breeze/models/breezetts2/example/Breeze-TTS-2-bf16.safetensors")    # not where the loader looks
         self.assertFalse(installation(CATALOG["breeze-tts-2"], self.root)["installed"])
         for name in ("Breeze-TTS-2-bf16.safetensors", "config.json", "tokenizer.json", "audio_tokenizer/model.safetensors"):
@@ -275,7 +275,7 @@ class InstallationTests(TempTree):
         self.write(".venv-phonon/Lib/site-packages/pttsx-1.0.dist-info/METADATA")  # another package that starts the same way
         result = installation(CATALOG["phonon-31m-en"], self.root)
         self.assertEqual((result["installed"], result["missing"], result["installer"]),
-                         (False, ["ptts (Python package)"], "setup-phonon.bat"))
+                         (False, ["ptts (Python package)"], "tools\\setup-phonon.bat"))
 
     def test_phonon_without_its_model_weights_names_the_snapshot(self):
         snapshot = self.hf_snapshot("phonon-31m-en")
@@ -301,7 +301,7 @@ class InstallPointerTests(unittest.TestCase):
     def test_a_missing_phonon_is_told_its_own_launcher(self):
         self.assertEqual(engine_checks.install_pointer(CATALOG["phonon-31m-en"], missing_probe),
                          "Phonon 31M English is not installed. Open Models & features and press Install on its card, or run "
-                         "setup-phonon.bat in the lab folder, then try again.")
+                         "tools\\setup-phonon.bat in the lab folder, then try again.")
         self.assertIsNone(engine_checks.install_pointer(CATALOG["phonon-31m-en"], installed_probe))
 
     def test_an_engine_without_a_launcher_is_pointed_at_the_setup_guide(self):
@@ -409,7 +409,7 @@ class SmokeRequestTests(unittest.TestCase):
                 self.assertEqual(smoke_request("phonon-31m-en", root=lab.root),
                                  {"engine": "phonon-31m-en", "text": engine_checks.CHECK_TEXT, "voice": voice})
         with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaisesRegex(ValueError, "setup-phonon.bat"):
+            with self.assertRaisesRegex(ValueError, r"tools\\setup-phonon\.bat"):
                 smoke_request("phonon-31m-en", root=Lab(Path(folder), records=None, files=False).root)
 
     def test_custom_voice_uses_the_first_speaker_the_checkpoint_reports(self):
@@ -514,12 +514,12 @@ class StatusPayloadTests(unittest.TestCase):
         empty_lab = Path(self.temp.name) / "empty-lab"
         rows, _ = self.rows("cpu", probe=lambda entry: installation(entry, empty_lab))
         self.assertEqual(rows["kokoro"]["state"], "not_installed")
-        self.assertEqual(rows["kokoro"]["installation"]["installer"], "setup-kokoro.bat")
-        self.assertEqual(rows["turbo"]["installation"]["installer"], "setup-chatterbox.bat")
+        self.assertEqual(rows["kokoro"]["installation"]["installer"], "tools\\setup-kokoro.bat")
+        self.assertEqual(rows["turbo"]["installation"]["installer"], "tools\\setup-chatterbox.bat")
         self.assertEqual(rows["orig"]["state"], "not_installed")
-        self.assertEqual(rows["orig"]["installation"]["installer"], "setup-chatterbox.bat --original")
-        self.assertEqual(rows["chatterbox-vc"]["installation"]["installer"], "setup-chatterbox.bat --original")
-        with mock.patch.dict(engine_checks.GUIDED_INSTALLERS, {"kokoro": "setup-kokoro.bat"}, clear=True):
+        self.assertEqual(rows["orig"]["installation"]["installer"], "tools\\setup-chatterbox.bat --original")
+        self.assertEqual(rows["chatterbox-vc"]["installation"]["installer"], "tools\\setup-chatterbox.bat --original")
+        with mock.patch.dict(engine_checks.GUIDED_INSTALLERS, {"kokoro": "tools\\setup-kokoro.bat"}, clear=True):
             rows, _ = self.rows("cpu", probe=lambda entry: installation(entry, empty_lab))
         self.assertNotIn("installer", rows["orig"]["installation"])    # an engine without a launcher names none
 

@@ -21,9 +21,9 @@ from http.server import ThreadingHTTPServer
 import numpy as np
 import soundfile as sf
 
-from cast_store import CastStore
-import serve
-from worker_pool import read_catalog
+from voice_lab.cast_store import CastStore
+from voice_lab import serve
+from voice_lab.worker_pool import read_catalog
 
 
 def synthetic_wav(frequency=220, seconds=1, sample_rate=24_000):

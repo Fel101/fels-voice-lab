@@ -25,9 +25,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import fels_suite  # noqa: E402
-import slate_inbox  # noqa: E402
-from slate_inbox import NotWaiting, SlateInbox  # noqa: E402
+from voice_lab import fels_suite  # noqa: E402
+from voice_lab import slate_inbox  # noqa: E402
+from voice_lab.slate_inbox import NotWaiting, SlateInbox  # noqa: E402
 from tests.test_export_panel import ExportPanelBase  # noqa: E402
 
 ENGINE = "qwen3-tts-1.7b-base"

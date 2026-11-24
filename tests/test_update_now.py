@@ -20,9 +20,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_adapters  # noqa: E402
-import self_update  # noqa: E402
-import updates  # noqa: E402
+from voice_lab import engine_adapters  # noqa: E402
+from voice_lab import self_update  # noqa: E402
+from voice_lab import updates  # noqa: E402
 from tests.test_update import CURRENT, NEW, OLD, ModelLab, answers, make_zip, release  # noqa: E402
 from tests.test_update import Lab as ZipLab  # noqa: E402
 from tools import update  # noqa: E402
@@ -317,8 +317,8 @@ class StandIn:
 
 class RouteTests(unittest.TestCase):
     def setUp(self):
-        import serve
-        from cast_store import CastStore
+        from voice_lab import serve
+        from voice_lab.cast_store import CastStore
 
         temp = Path(self.enterContext(tempfile.TemporaryDirectory(ignore_cleanup_errors=True)))
         self.updater = StandIn()
@@ -383,8 +383,8 @@ class RouteTests(unittest.TestCase):
 
 class SceneRenderingTests(unittest.TestCase):
     def test_only_batches_that_render_or_wait_to_count(self):
-        from cast_store import CastStore
-        from scene_store import SceneStore
+        from voice_lab.cast_store import CastStore
+        from voice_lab.scene_store import SceneStore
 
         temp = Path(self.enterContext(tempfile.TemporaryDirectory(ignore_cleanup_errors=True)))
         store = SceneStore(CastStore(temp), {}, root=temp)
@@ -431,7 +431,7 @@ class ServeBatTests(unittest.TestCase):
 
 class DesktopHandOverTests(unittest.TestCase):
     def setUp(self):
-        import desktop
+        from voice_lab import desktop
 
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.backend = desktop.DesktopBackend(root=self.root)

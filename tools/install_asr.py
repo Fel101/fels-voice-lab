@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import asr_installation as installation  # noqa: E402
+from voice_lab import asr_installation as installation  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 
 IMPORTS = (

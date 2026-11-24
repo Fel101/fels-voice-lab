@@ -13,8 +13,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engines  # noqa: E402
-import phonon_support  # noqa: E402
+from voice_lab import engines  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
 
 CATALOG = json.loads((ROOT / "catalog" / "engines.json").read_text("utf-8"))
 ENTRY = next(entry for entry in CATALOG["engines"] if entry["id"] == phonon_support.PHONON_ENGINE_ID)
@@ -83,7 +83,7 @@ class PhononEngineTests(unittest.TestCase):
     def test_missing_files_are_named_with_the_launcher_that_puts_them_back(self):
         (self.model / "model.q8.gguf").unlink()
         with self.assertRaisesRegex(RuntimeError, r"incomplete: models--gradium--phonon-31m-en/snapshots/\w+/model\.q8\.gguf is "
-                                                  r"missing from hf-cache/hub\. Run setup-phonon\.bat"):
+                                                  r"missing from hf-cache/hub\. Run tools\\setup-phonon\.bat"):
             engines.Phonon("cpu")
         self.assertEqual(FakeTTS.instances, [], "nothing is constructed from an incomplete snapshot")
 

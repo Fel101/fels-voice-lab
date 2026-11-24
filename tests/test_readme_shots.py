@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import script_import  # noqa: E402
+from voice_lab import script_import  # noqa: E402
 from tools import readme_shots  # noqa: E402
 
 

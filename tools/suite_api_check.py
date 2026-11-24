@@ -38,8 +38,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import api_spec  # noqa: E402 - beside this folder, standard library only
-import lab_address  # noqa: E402
+from voice_lab import api_spec  # noqa: E402 - beside this folder, standard library only
+from voice_lab import lab_address  # noqa: E402
 from app_version import SUITE_API  # noqa: E402
 
 # How long a model call waits in line for the model worker: the first one loads its model.

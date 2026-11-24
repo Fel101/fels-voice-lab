@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'theme.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'theme.js'), 'utf8');
 
 function fixture(fetch) {
   const root = {dataset:{theme:'dark'}};

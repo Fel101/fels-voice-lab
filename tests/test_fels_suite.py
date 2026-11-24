@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import fels_suite  # noqa: E402
+from voice_lab import fels_suite  # noqa: E402
 
 VECTORS = Path(__file__).resolve().parent / "suite_vectors.json"
 
@@ -27,7 +27,7 @@ class SharedCaseTests(unittest.TestCase):
         self.assertEqual((vectors["suite_version"], vectors["contract"]), (fels_suite.FELS_SUITE_VERSION, fels_suite.CONTRACT))
 
     def test_the_file_reads_on_python_3_8_and_imports_only_the_standard_library(self):
-        source = (ROOT / "fels_suite.py").read_text("utf-8")
+        source = (ROOT / "voice_lab/fels_suite.py").read_text("utf-8")
         tree = ast.parse(source, feature_version=(3, 8))
         names = set()
         for node in ast.walk(tree):
@@ -175,7 +175,7 @@ HOLD = """
 import os
 import sys
 sys.path.insert(0, sys.argv[1])
-import fels_suite
+from voice_lab import fels_suite
 lock = fels_suite.GpuLock("npc-forge", {"FELS_SUITE_DIR": sys.argv[2]})
 print(lock.acquire("pictures", alone=sys.argv[3] == "alone", timeout=10), os.getpid(), flush=True)
 sys.stdin.readline()

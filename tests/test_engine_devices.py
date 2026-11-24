@@ -14,11 +14,11 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks
-import engine_devices
-import worker_pool
-from engine_devices import EngineDeviceStore, device_facts, torch_build
-from worker_pool import EnginePool, WorkerBusy
+from voice_lab import engine_checks
+from voice_lab import engine_devices
+from voice_lab import worker_pool
+from voice_lab.engine_devices import EngineDeviceStore, device_facts, torch_build
+from voice_lab.worker_pool import EnginePool, WorkerBusy
 
 GPU_OK = (True, None)
 NO_BUILD = (False, "The app has no GPU build of it to install; it runs on the CPU.")
@@ -299,7 +299,13 @@ class PoolDeviceTests(unittest.TestCase):
 
     def test_a_gpu_only_model_names_its_launcher_only_where_the_app_can_install_it(self):
         pool = self.pool()
-        missing = {"installed": False, "missing": ["x"], "environment": "e", "checkpoint": "c", "installer": "setup-qwen.bat"}
+        missing = {
+            "installed": False,
+            "missing": ["x"],
+            "environment": "e",
+            "checkpoint": "c",
+            "installer": "tools\\setup-qwen.bat",
+        }
         pool.install_probe = lambda entry: dict(missing)
         refused = (False, "The app installs GPU builds for NVIDIA graphics cards only, and this computer has no NVIDIA driver.")
         for answer, named in ((GPU_OK, True), (refused, False)):

@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 
-import serve
+from voice_lab import serve
 from app_version import APP_NAME, VERSION
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -15,9 +15,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import fels_suite  # noqa: E402
-import lab_address  # noqa: E402
-import serve  # noqa: E402
+from voice_lab import fels_suite  # noqa: E402
+from voice_lab import lab_address  # noqa: E402
+from voice_lab import serve  # noqa: E402
 
 
 class AddressFileTests(unittest.TestCase):

@@ -16,10 +16,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import engine_install  # noqa: E402
-import qwen_support  # noqa: E402
-import qwen_worker  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
+from voice_lab import qwen_support  # noqa: E402
+from voice_lab import qwen_worker  # noqa: E402
 import soundfile as sf  # noqa: E402
 from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
@@ -163,17 +163,17 @@ class ShippedFilesTests(unittest.TestCase):
                 )
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python_and_waits_for_a_key(self):
-        text = (ROOT / "setup-qwen.bat").read_text("utf-8")
+        text = (ROOT / "tools/setup-qwen.bat").read_text("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_qwen.py %*', text)
         self.assertIn("Run setup.bat first.", text)
         self.assertEqual(text.strip().splitlines()[-1], "pause")
-        self.assertIn(b"\r\n", (ROOT / "setup-qwen.bat").read_bytes())
+        self.assertIn(b"\r\n", (ROOT / "tools/setup-qwen.bat").read_bytes())
 
     def test_the_models_page_runs_the_launchers_command_for_each_model(self):
         for engine, model in qwen_support.QWEN_MODELS.items():
             with self.subTest(engine=engine):
                 self.assertEqual(engine_install.INSTALLERS[engine], ("tools/install_qwen.py", "--model", model))
-                self.assertEqual(engine_checks.GUIDED_INSTALLERS[engine], f"setup-qwen.bat --model {model}")
+                self.assertEqual(engine_checks.GUIDED_INSTALLERS[engine], f"tools\\setup-qwen.bat --model {model}")
                 self.assertEqual(engine_install.GPU_BUILDS[engine], "tools.install_qwen")
                 self.assertEqual(iq.engine_id(model), engine)
                 self.assertEqual(iq.engine_id(engine), engine)
@@ -363,7 +363,7 @@ class SpeechCheckTests(unittest.TestCase):
         result, calls, folder = self.check(stdout="Warning: flash-attn is not installed.\n" + self.GOOD + "\n")
         command, kwargs = calls[0]
         self.assertEqual(command[:2], [str(folder / ".venv-fqwen" / "Scripts" / "python.exe"), "-c"])
-        self.assertIn("from qwen_worker import QwenWorker", command[2])
+        self.assertIn("from voice_lab.qwen_worker import QwenWorker", command[2])
         self.assertIn('QwenWorker(engine, "cuda")', command[2])
         self.assertEqual(command[3:], [str(folder), DESIGN, str(folder / "out" / "qwen" / "install-1.7b-voice-design.wav")])
         self.assertEqual((kwargs["env"]["HF_HUB_OFFLINE"], kwargs["env"]["TRANSFORMERS_OFFLINE"]), ("1", "1"))
@@ -419,6 +419,8 @@ class SpeechCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             lab = Path(folder) / "lab"
             lab.mkdir()
+            (lab / "voice_lab").mkdir()
+            (lab / "voice_lab/__init__.py").touch()
             (lab / "torch.py").write_text(
                 "__version__ = '2.12.0+cu130'\n"
                 "class cuda:\n"
@@ -428,7 +430,7 @@ class SpeechCheckTests(unittest.TestCase):
                 "    def max_memory_reserved():\n        return 5 * 2**30\n",
                 "utf-8",
             )
-            (lab / "qwen_worker.py").write_text(
+            (lab / "voice_lab/qwen_worker.py").write_text(
                 "import numpy as np\n"
                 "class QwenWorker:\n"
                 "    def __init__(self, engine, device):\n"
@@ -444,7 +446,7 @@ class SpeechCheckTests(unittest.TestCase):
                 "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 0.8}\n",
                 "utf-8",
             )
-            (lab / "engine_checks.py").write_text(
+            (lab / "voice_lab/engine_checks.py").write_text(
                 "def smoke_request(engine, loaded, root=None):\n"
                 "    assert root is not None\n"
                 "    return {'engine': engine, 'text': 'check', 'speaker': loaded['supported_speakers'][0]}\n"
@@ -639,7 +641,7 @@ class RunTests(unittest.TestCase):
         (self.lab.snapshot() / "speech_tokenizer" / "model.safetensors").unlink()
         report = engine_checks.installation(CATALOG[DESIGN], self.base)
         self.assertEqual(report["missing"], [f"{report['checkpoint']}/speech_tokenizer/model.safetensors"])
-        self.assertEqual(report["installer"], "setup-qwen.bat --model 1.7b-voice-design")
+        self.assertEqual(report["installer"], "tools\\setup-qwen.bat --model 1.7b-voice-design")
 
     def test_a_computer_without_a_usable_nvidia_card_is_told_why_before_any_change(self):
         self.nvidia = [iq.NO_NVIDIA_DRIVER]

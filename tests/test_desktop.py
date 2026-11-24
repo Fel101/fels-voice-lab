@@ -11,9 +11,9 @@ from unittest import mock
 import urllib.error
 import urllib.request
 
-from desktop import DesktopBackend
-import fels_suite
-from worker_pool import process_is_running
+from voice_lab.desktop import DesktopBackend
+from voice_lab import fels_suite
+from voice_lab.worker_pool import process_is_running
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -84,7 +84,7 @@ class DesktopTests(unittest.TestCase):
     def test_crashed_launcher_releases_owned_descendants(self):
         script = """import subprocess,sys,time
 sys.path.insert(0,sys.argv[1])
-from desktop_process import OwnedJob
+from voice_lab.desktop_process import OwnedJob
 job=OwnedJob()
 child=subprocess.Popen([sys.executable,'-u','-c',"import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)']); print(p.pid,flush=True);time.sleep(120)"],stdout=subprocess.PIPE,text=True)
 job.add(child)

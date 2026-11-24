@@ -7,7 +7,7 @@ commit, the pinned checkpoint, then a speech check on the card.
     .venv\\Scripts\\python.exe tools\\install_voxcpm.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-voxcpm.bat does that for you. VoxCPM2 gets an environment of its own,
+the lab's own Python, which setup.bat creates; tools\\setup-voxcpm.bat does that for you. VoxCPM2 gets an environment of its own,
 .venv-voxcpm, made from the same Python 3.12 as .venv, and pip installs requirements/voxcpm-nvidia.txt there with every file's
 SHA-256 checked; the script refuses to replace a package that is already installed at another version. VoxCPM itself is not
 installed as a package: the source files its inference imports come from GitHub at the commit the Lab was checked with
@@ -95,8 +95,8 @@ sys.path.insert(0, str(root))
 if importlib.util.find_spec("torch") is None:
     sys.path.append(str(root / ".venv-fqwen" / "Lib" / "site-packages"))
 import soundfile
-import engine_checks
-from voxcpm_worker import VoxCPMWorker
+from voice_lab import engine_checks
+from voice_lab.voxcpm_worker import VoxCPMWorker
 
 worker = VoxCPMWorker("cuda")
 started = time.perf_counter()

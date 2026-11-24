@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import asr_installation
+from voice_lab import asr_installation
 from tools import install_asr
 
 

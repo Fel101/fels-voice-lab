@@ -4,6 +4,9 @@
 
 ### Changed
 
+- **Program folders.** The Lab's Python code is in `voice_lab/` and the pages are in `web/`. Individual model launchers
+  are in `tools\`, alongside the installers. The desktop shortcut, `serve.bat` and the Claude Code MCP command still work.
+
 - **Stop model installs.** Use **Stop** in a model's install progress. The installer finishes any active package command
   and keeps resumable downloads. The card shows how to continue. `POST /api/engines/{engine_id}/install/stop` takes the job
   ID from `GET /api/engines/status`.

@@ -7,8 +7,8 @@
 ;
 ; Over an installed Lab it is an update, as update.bat's: it says "update from X to Y", refuses an older version over a newer
 ; one and waits for the Lab to close (the installed Lab's own update.py checks, with the Lab's own Python), and after copying
-; it runs the new update.py --after-setup, which removes the files the new version no longer has (by the releases' file lists
-; it carries, releases.json), records the update and finishes it as update.bat does. Its last page says what that found.
+; it runs the new update.py --after-setup, which records the update and finishes it as update.bat does. Before copying,
+; [InstallDelete] backs up and removes pristine files the new version dropped. Its last page says what the update found.
 ; Uninstalling asks before it touches the library and keeps it unless told otherwise (tools\uninstall_lab.py).
 
 #ifndef AppVersion
@@ -65,6 +65,9 @@ Source: "{#Staging}\python\*"; DestDir: "{app}\python"; Flags: ignoreversion rec
 ; Only for setting up the core and the window, and for an update; {tmp} is deleted when Setup ends.
 Source: "{#Staging}\wheels\*"; DestDir: "{tmp}\wheels"; Flags: ignoreversion
 Source: "{#Staging}\releases.json"; DestDir: "{tmp}"; Flags: ignoreversion
+
+[InstallDelete]
+#include Staging + "\retired.iss"
 
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{#WindowPython}"; Parameters: """{app}\desktop.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\voice-lab.ico"; Comment: "Local voice design, casting and dialogue studio"
@@ -292,6 +295,25 @@ begin
     end;
 end;
 
+{ Only retire a file if it still matches the installed release. Keep a copy with releases.json for --after-setup. }
+function StageRetiredFile(Path, Version, Hash: String): Boolean;
+var
+  Source, Target: String;
+begin
+  Result := False;
+  if InstalledVersion <> Version then
+    Exit;
+  Source := ExpandConstant('{app}\') + Path;
+  if not FileExists(Source) then
+    Exit;
+  if Lowercase(GetSHA256OfFile(Source)) <> Hash then
+    Exit;
+  Target := ExpandConstant('{tmp}\retired\') + Path;
+  Result := ForceDirectories(ExtractFileDir(Target)) and FileCopy(Source, Target, False);
+  if Result then
+    Log('Retiring unchanged file: ' + Path);
+end;
+
 { Run one setup step with its output added to the log, showing what it does. True when it ended with exit code 0. }
 function SetUpStep(Status, Exe, Arguments: String): Boolean;
 var
@@ -315,8 +337,7 @@ begin
   ForceDirectories(ExpandConstant('{app}\out\install'));
   WizardForm.ProgressGauge.Style := npbstMarquee;
   Failed := '';
-  { An update from an older version first removes what the new version no longer has and brings the packages up to date, so
-    the core's check below loads the new version. Installing the same version again skips it. }
+  { Record the files removed and bring the packages up to date so the core's check below loads the new version. }
   if (InstalledVersion <> '') and (CompareVersions(InstalledVersion, '{#AppVersion}') < 0) then
     if not SetUpStep('Finishing the update from ' + InstalledVersion + ' to {#AppVersion} ...',
         ExpandConstant('{app}\python\python.exe'),

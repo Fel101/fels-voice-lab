@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const {webcrypto}=require('node:crypto');
-const script=fs.readFileSync(path.join(__dirname,'..','voice_workflows.js'),'utf8');
+const script=fs.readFileSync(path.join(__dirname,'..','web', 'voice_workflows.js'),'utf8');
 function harness(){
   const nodes={},calls=[],requests=[];let ready,info={voices:[]};
   function node(id){
@@ -233,7 +233,7 @@ test('a studio clip from a model that cannot clone goes to an installed cloning 
 test('with no cloning model installed the picker starts on one the Lab can install, and says to press Install',()=>{
   const h=harness(),picker=h.node('cloneEngine');
   h.ctx.engineRows={'drama-3':{state:'not_installed',installation:{installed:false}},
-    turbo:{state:'not_installed',installation:{installed:false,installer:'setup-chatterbox.bat'}}};
+    turbo:{state:'not_installed',installation:{installed:false,installer:'tools\\setup-chatterbox.bat'}}};
   h.ctx.VoiceLabWorkflows.refreshCloneEngine();
   assert.equal(picker.value,'turbo');
   assert.match(h.node('cloneModelHelp').textContent,/^Not installed on this computer yet; press Install on its card in Models & features\. Chatterbox Turbo:/);

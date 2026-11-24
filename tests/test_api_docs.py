@@ -21,12 +21,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import api_spec  # noqa: E402
-import routes  # noqa: E402
+from voice_lab import api_spec  # noqa: E402
+from voice_lab import routes  # noqa: E402
 from tools import build_api_docs  # noqa: E402
 
 # The service: serve.py and its route groups.
-SERVICE = (ROOT / "serve.py", *sorted((ROOT / "route_groups").glob("*.py")))
+SERVICE = (ROOT / "voice_lab/serve.py", *sorted((ROOT / "voice_lab/route_groups").glob("*.py")))
 GUIDE = ROOT / "docs" / "API.md"
 
 
@@ -37,9 +37,9 @@ def strings_in(path):
 
 def built_handler():
     """serve.py's request handler, built the way main() builds it but on stand-in stores in a temporary library."""
-    import serve
-    from cast_store import CastStore
-    from worker_pool import read_catalog
+    from voice_lab import serve
+    from voice_lab.cast_store import CastStore
+    from voice_lab.worker_pool import read_catalog
 
     folder = tempfile.TemporaryDirectory(prefix="voice-lab-api-docs-")
     entries = {entry["id"]: entry for entry in read_catalog()["engines"]}
@@ -114,7 +114,7 @@ class RouteTableTests(unittest.TestCase):
 
     def test_request_fields_are_names_the_lab_reads(self):
         names = set()
-        for path in (*ROOT.glob("*.py"), *ROOT.glob("route_groups/*.py")):
+        for path in (*ROOT.glob("voice_lab/*.py"), *ROOT.glob("voice_lab/route_groups/*.py")):
             if path.name != "api_spec.py":
                 names |= strings_in(path)
         for row in api_spec.documented():
@@ -264,7 +264,7 @@ class OpenApiTests(unittest.TestCase):
         error = self.spec["components"]["schemas"]["Error"]
         self.assertEqual((error["type"], error["required"]), ("object", ["error", "code"]))
         self.assertEqual(error["properties"]["error"], {"type": "string", "description": "What went wrong."})
-        import serve  # the codes the service answers with
+        from voice_lab import serve  # the codes the service answers with
 
         for code in serve.ERROR_CODES.values():
             self.assertIn(f"`{code}`", error["properties"]["code"]["description"])

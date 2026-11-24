@@ -12,7 +12,7 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import ffmpeg_tools  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
 
 FFMPEG = ffmpeg_tools.find_ffmpeg()
 HAS_AAC = bool(FFMPEG and ffmpeg_tools.capabilities(FFMPEG, ffmpeg_tools.find_ffprobe())["encoders"].get("aac"))

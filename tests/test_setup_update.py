@@ -98,6 +98,16 @@ class AfterSetupTests(unittest.TestCase):
         self.assertIn(f"Updated from version {OLD} to {VERSION}.", said)
         self.assertNotIn("--undo", said, "Setup's update cannot be undone")
 
+    def test_the_installer_can_remove_a_pristine_file_before_finish(self):
+        old = self.root / "docs/OLD.md"
+        staged = self.root / "retired/docs/OLD.md"
+        staged.parent.mkdir(parents=True)
+        old.replace(staged)
+        self.assertEqual(self.run_after_setup()[0], 0)
+        self.assertEqual(update.read_record(self.root)["removed"], ["docs/OLD.md"])
+        backup = self.root / f"out/update/{OLD}-to-{VERSION}/files/docs/OLD.md"
+        self.assertEqual(backup.read_bytes(), self.old["docs/OLD.md"])
+
     def test_the_core_packages_come_from_setups_wheels(self):
         _, calls, _ = self.run_after_setup()
         self.assertEqual(
@@ -194,6 +204,22 @@ class ReleaseFileTests(unittest.TestCase):
         staged = {path.relative_to(target).as_posix(): sha(path.read_bytes()) for path in target.rglob("*") if path.is_file()}
         self.assertEqual(build_installer.file_hashes("HEAD"), staged)
 
+    def test_inno_only_gets_exact_unprotected_files_that_the_new_release_dropped(self):
+        target = Path(self.enterContext(tempfile.TemporaryDirectory())) / "releases.json"
+        old = {"serve.html": sha(b"old"), "update.bat": sha(b"old"), "data/voices/keep.ini": sha(b"private")}
+        new = {"update.bat": sha(b"new"), "web/serve.html": sha(b"new")}
+        with (
+            mock.patch.object(build_installer, "release_tags", return_value=["v0.4.0"]),
+            mock.patch.object(build_installer, "file_hashes", side_effect=[new, old]),
+        ):
+            build_installer.stage_release_files("HEAD", "1.0.0", target)
+        self.assertEqual(
+            target.with_name("retired.iss").read_text(encoding="ascii").splitlines(),
+            [
+                f"""Type: files; Name: "{{app}}\\serve.html"; Check: StageRetiredFile('serve.html', '0.4.0', '{old["serve.html"]}')"""
+            ],
+        )
+
 
 class InstallerScriptTests(unittest.TestCase):
     def test_setup_carries_the_lists_and_finishes_an_update_from_an_older_version(self):
@@ -213,7 +239,7 @@ class InstallerScriptTests(unittest.TestCase):
     @unittest.skipUnless(sys.platform == "win32", "the Lab's programs are found the Windows way")
     def test_the_installers_check_says_whether_a_program_runs_from_the_labs_environments(self):
         lab = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        for name in ("tools/update.py", "updates.py", "app_version.py"):
+        for name in ("tools/update.py", "voice_lab/__init__.py", "voice_lab/updates.py", "app_version.py"):
             (lab / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, lab / name)
         python = getattr(sys, "_base_executable", sys.executable)

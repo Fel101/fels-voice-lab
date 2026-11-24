@@ -14,8 +14,8 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import ffmpeg_tools  # noqa: E402
-import synthetic_label  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
+from voice_lab import synthetic_label  # noqa: E402
 from app_version import APP_NAME, VERSION  # noqa: E402
 from tools import scene_export  # noqa: E402
 

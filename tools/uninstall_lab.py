@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from housekeeping import is_link  # noqa: E402
-from library_backup import SECTIONS  # noqa: E402
+from voice_lab.housekeeping import is_link  # noqa: E402
+from voice_lab.library_backup import SECTIONS  # noqa: E402
 
 LIBRARY = tuple(
     sorted(

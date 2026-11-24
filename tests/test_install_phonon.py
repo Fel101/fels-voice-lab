@@ -18,8 +18,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import phonon_support  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
 import soundfile as sf  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 from tools import install_phonon as ip  # noqa: E402
@@ -179,14 +179,14 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertEqual(ip.environment_python(ROOT), ROOT / ENTRY["runtime"]["python"])
 
     def test_the_batch_file_runs_the_installer_with_the_labs_own_python(self):
-        data = (ROOT / "setup-phonon.bat").read_bytes()
+        data = (ROOT / "tools/setup-phonon.bat").read_bytes()
         self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), "batch files keep CRLF line ends")
         text = data.decode("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_phonon.py %*', text)
         self.assertIn("Run setup.bat first.", text)
 
     def test_the_setup_window_waits_for_a_key_so_a_double_click_can_be_read(self):
-        lines = [line.strip() for line in (ROOT / "setup-phonon.bat").read_text("utf-8").splitlines() if line.strip()]
+        lines = [line.strip() for line in (ROOT / "tools/setup-phonon.bat").read_text("utf-8").splitlines() if line.strip()]
         last_run = max(index for index, line in enumerate(lines) if "tools\\" in line)
         self.assertIn("pause", lines[last_run + 1:])
 
@@ -194,11 +194,11 @@ class ShippedFilesTests(unittest.TestCase):
         from tools import first_setup
         self.assertEqual(first_setup.MODELS["phonon"],
                          {"engine": "phonon-31m-en", "script": "tools/install_phonon.py", "gpu": False})
-        self.assertIn("setup-phonon.bat", first_setup.menu_text(16, first_setup.model_sizes()))
+        self.assertIn("tools\\setup-phonon.bat", first_setup.menu_text(16, first_setup.model_sizes()))
 
     def test_the_guides_describe_the_installer_with_the_numbers_it_ships(self):
         setup = " ".join((ROOT / "docs" / "SETUP.md").read_text("utf-8").split())
-        for needed in ("setup-phonon.bat", "tools\\install_phonon.py", "--dry-run", "--yes", "--checkpoint-only",
+        for needed in ("tools\\setup-phonon.bat", "tools\\install_phonon.py", "--dry-run", "--yes", "--checkpoint-only",
                        "requirements/phonon.txt", "catalog/phonon_snapshot.json", "Visual C++ Redistributable"):
             self.assertIn(needed, setup)
         model, voices = REAL_MANIFEST["repos"]
@@ -211,7 +211,7 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertLess(everything, 100 * 10**6, "the whole download stays under a hundred megabytes")
         for name in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"):
             text = " ".join((ROOT / name).read_text("utf-8").split())
-            self.assertTrue("setup-phonon.bat" in text or "tools/install_phonon.py" in text, name)
+            self.assertTrue("tools\\setup-phonon.bat" in text or "tools/install_phonon.py" in text, name)
 
     def test_the_installer_prints_only_plain_ascii(self):
         self.assertTrue((ROOT / "tools" / "install_phonon.py").read_bytes().isascii())
@@ -380,7 +380,9 @@ class SpeechCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             lab, wav = Path(folder) / "lab", Path(folder) / "clip.wav"
             lab.mkdir()
-            (lab / "engines.py").write_text(
+            (lab / "voice_lab").mkdir()
+            (lab / "voice_lab/__init__.py").touch()
+            (lab / "voice_lab/engines.py").write_text(
                 "import numpy as np\n"
                 "class Phonon:\n"
                 "    version = '0.5.0'\n"
@@ -389,7 +391,7 @@ class SpeechCheckTests(unittest.TestCase):
                 "    def speak(self, text, voice=None):\n"
                 "        t = np.arange(24000) / 24000\n"
                 "        return (0.1 * np.sin(2 * np.pi * 220 * t)).astype('float32'), 24000, {'total_s': 0.25, 'voice': voice}\n", "utf-8")
-            (lab / "engine_checks.py").write_text(
+            (lab / "voice_lab/engine_checks.py").write_text(
                 "def smoke_request(engine):\n    assert engine == 'phonon-31m-en'\n    return {'engine': engine, 'text': 'check', 'voice': 'Harper'}\n"
                 "def audible(samples, rate):\n    return None\n", "utf-8")
             done = subprocess.run([sys.executable, "-c", ip.SPEECH_CHECK, str(lab), str(wav)], capture_output=True, text=True,
@@ -403,7 +405,7 @@ class SpeechCheckTests(unittest.TestCase):
             self.assertEqual((rate, len(samples)), (24000, 24000))
 
     def test_the_names_the_check_script_uses_exist_in_the_lab(self):
-        import engines
+        from voice_lab import engines
         self.assertTrue(callable(engine_checks.smoke_request) and callable(engine_checks.audible))
         self.assertTrue(hasattr(engines, "Phonon"))
         compile(ip.SPEECH_CHECK, "<speech check>", "exec")

@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import library_backup  # noqa: E402
+from voice_lab import library_backup  # noqa: E402
 from tests.library_fixture import build_library  # noqa: E402
 from tools import backup_library  # noqa: E402
 

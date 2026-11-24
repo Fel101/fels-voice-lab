@@ -73,7 +73,7 @@ function card(name) {
 
 const KOKORO_FILES = ['.venv/Scripts/python.exe', 'hf-cache/snapshot'];
 const missingKokoro = {id: 'kokoro', state: 'not_installed', check: null, min_free_ram_gb: 8,
-  installation: {installed: false, missing: KOKORO_FILES, installer: 'setup-kokoro.bat'}};
+  installation: {installed: false, missing: KOKORO_FILES, installer: 'tools\\setup-kokoro.bat'}};
 const readyKokoro = {id: 'kokoro', state: 'not_checked', check: null, min_free_ram_gb: 8, installation: {installed: true, missing: []}};
 
 function job(extra = {}) {
@@ -136,26 +136,26 @@ test('detail text lists what is missing and what the last test measured', () => 
 test('a missing engine with an installer says what Install fetches, and its paths wait under Details', () => {
   const {context: c} = harness();
   const missing = ['hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff'];
-  const kokoro = {state: 'not_installed', installation: {missing, installer: 'setup-kokoro.bat'},
+  const kokoro = {state: 'not_installed', installation: {missing, installer: 'tools\\setup-kokoro.bat'},
     install_size: {download_bytes: 0.6e9, disk_bytes: 1.7e9}};
   assert.equal(c.engineDetailText(kokoro, 'cpu'), 'Install downloads about 0.6 GB and uses 1.7 GB of disk.');
   assert.equal(c.engineDetailText({...kokoro, install_size: null}, 'cpu'),
     'Install shows what it will download before anything changes.');
   assert.equal(c.engineMoreText(kokoro, null),
     'Missing: hf-cache/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff. Install adds it to this folder, as does '
-    + 'setup-kokoro.bat in the lab folder; docs/SETUP.md says what it installs.');
+    + 'tools\\setup-kokoro.bat in the lab folder; docs/SETUP.md says what it installs.');
   assert.equal(c.engineDetailText({state: 'not_installed', installation: {missing}}, 'cpu'), 'The app cannot install this model yet.');
   for (const row of [kokoro, {state: 'not_installed', installation: {missing}}]) {
     assert.doesNotMatch(c.engineDetailText(row, 'cpu'), /[\\/]|\.bat|SETUP/, 'no path on the card itself');
   }
-  assert.doesNotMatch(c.engineDetailText({state: 'not_checked', check: null, installation: {missing: [], installer: 'setup-kokoro.bat'}}, 'cpu'),
+  assert.doesNotMatch(c.engineDetailText({state: 'not_checked', check: null, installation: {missing: [], installer: 'tools\\setup-kokoro.bat'}}, 'cpu'),
     /setup-kokoro|Install/);
-  assert.equal(c.engineMoreText({state: 'usable', installation: {missing: [], installer: 'setup-kokoro.bat'}}, null), '');
+  assert.equal(c.engineMoreText({state: 'usable', installation: {missing: [], installer: 'tools\\setup-kokoro.bat'}}, null), '');
 });
 
 test('a running install leaves the text of its card as it was, and a failed one says where its output went', () => {
   const {context: c} = harness();
-  const row = {state: 'not_installed', installation: {missing: ['x'], installer: 'setup-kokoro.bat'}};
+  const row = {state: 'not_installed', installation: {missing: ['x'], installer: 'tools\\setup-kokoro.bat'}};
   assert.equal(c.elapsedText(0), '0 s');
   assert.equal(c.elapsedText(45.4), '45 s');
   assert.equal(c.elapsedText(60), '1 min 0 s');
@@ -167,7 +167,7 @@ test('a running install leaves the text of its card as it was, and a failed one 
   const failed = job({state: 'failed', exit_code: 1, seconds: 123});
   assert.equal(c.engineDetailText(row, 'cpu', failed),
     'The install stopped after 2 min 3 s. Show output has the end of it. Press Install to try again: it continues where it stopped.');
-  assert.equal(c.engineMoreText(row, failed), 'Missing: x. Install adds it to this folder, as does setup-kokoro.bat in the lab '
+  assert.equal(c.engineMoreText(row, failed), 'Missing: x. Install adds it to this folder, as does tools\\setup-kokoro.bat in the lab '
     + 'folder; docs/SETUP.md says what it installs. The last install stopped with exit code 1; all of its output is in '
     + 'out/install/kokoro-1.log.');
 });
@@ -209,7 +209,7 @@ test('a missing Kokoro card offers Install, and a missing card without an instal
   assert.equal(c.modelCards.kokoro.state.textContent, 'Not installed yet');
   assert.equal(c.modelCards.kokoro.more.hidden, false);
   assert.match(c.modelCards.kokoro.moreText.textContent,
-    /^Missing: \.venv\/Scripts\/python\.exe; hf-cache\/snapshot\. Install adds it to this folder, as does setup-kokoro\.bat/);
+    /^Missing: \.venv\/Scripts\/python\.exe; hf-cache\/snapshot\. Install adds it to this folder, as does tools\\setup-kokoro\.bat/);
   assert.equal(c.modelCards.kokoro.action, 'install');
   assert.equal(c.modelCards.kokoro.button.textContent, 'Install');
   assert.equal(c.modelCards.kokoro.button.hidden, false);
@@ -639,7 +639,7 @@ test('a model that runs only on the graphics card has CPU switched off, and says
   c.modelCards = {qwen: card('Qwen3-TTS 1.7B Base')};
   const only = 'Qwen3-TTS runs only on a graphics card in the Lab: its fast decoder records CUDA graphs.';
   const qwen = {id: 'qwen', name: 'Qwen3-TTS 1.7B Base', integrated: true, state: 'not_installed', device: 'cuda', switch: 'gpu',
-    installation: {installed: false, missing: ['x'], installer: 'setup-qwen.bat'}, check: null,
+    installation: {installed: false, missing: ['x'], installer: 'tools\\setup-qwen.bat'}, check: null,
     gpu: {choosable: true, reason: null, build: null, install: true, cpu: only}};
   c.renderEngineStatus(gpuService([qwen]));
   const view = c.modelCards.qwen;

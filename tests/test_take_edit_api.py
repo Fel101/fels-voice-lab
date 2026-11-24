@@ -12,8 +12,8 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import api_spec
-import take_edit
+from voice_lab import api_spec
+from voice_lab import take_edit
 from api_service import RATE, Service
 from audio_fixtures import speech_between_silences
 

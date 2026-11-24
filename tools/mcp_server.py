@@ -37,8 +37,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import lab_address  # noqa: E402 - beside this folder, standard library only
-import speech_input  # noqa: E402
+from voice_lab import lab_address  # noqa: E402 - beside this folder, standard library only
+from voice_lab import speech_input  # noqa: E402
 from app_version import APP_NAME, VERSION  # noqa: E402
 
 SERVER_NAME = lab_address.MCP_NAME

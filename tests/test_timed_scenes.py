@@ -13,12 +13,12 @@ from unittest import mock
 import numpy as np
 import soundfile as sf
 
-import export_panel
-import synthetic_label
-from scene_store import SceneBatchRunner
+from voice_lab import export_panel
+from voice_lab import synthetic_label
+from voice_lab.scene_store import SceneBatchRunner
 from tools import scene_export
-import timed_scene
-from script_import import parse_script
+from voice_lab import timed_scene
+from voice_lab.script_import import parse_script
 from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
 
 

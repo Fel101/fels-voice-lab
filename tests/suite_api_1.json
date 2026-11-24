@@ -1,6 +1,6 @@
 {
   "suite_api": 1,
-  "about": "The routes of Voice Lab's suite API and their fields, written by tools/build_api_docs.py from api_spec.py. The other apps of Fel's Studio rely on them; tests/test_suite_api.py fails when they change (docs/CONNECT.md, For Fel's other apps).",
+  "about": "The routes of Voice Lab's suite API and their fields, written by tools/build_api_docs.py from voice_lab/api_spec.py. The other apps of Fel's Studio rely on them; tests/test_suite_api.py fails when they change (docs/CONNECT.md, For Fel's other apps).",
   "routes": {
     "GET /api/health": {
       "status": 200,

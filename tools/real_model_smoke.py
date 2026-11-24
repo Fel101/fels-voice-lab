@@ -43,9 +43,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import evaluation_diagnostics  # noqa: E402
-import synthetic_label  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import evaluation_diagnostics  # noqa: E402
+from voice_lab import synthetic_label  # noqa: E402
 from tools import lab_cli  # noqa: E402
 
 SENTENCE = "Every model in the Lab should say this sentence clearly, at an even pace, and then stop."

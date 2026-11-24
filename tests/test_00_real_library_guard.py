@@ -22,11 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import real_library_guard
 from real_library_guard import LAB, RealLibraryError, protected
 
-import library_backup
-import serve
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from scene_store import SceneStore
+from voice_lab import library_backup
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.scene_store import SceneStore
 
 DATA = LAB / "data"
 MISSING = DATA / "guard-probe" / "not-a-folder"

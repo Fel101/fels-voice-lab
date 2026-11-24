@@ -20,8 +20,8 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import model_facts  # noqa: E402
-import synthetic_label  # noqa: E402
+from voice_lab import model_facts  # noqa: E402
+from voice_lab import synthetic_label  # noqa: E402
 from tools import real_model_smoke as smoke  # noqa: E402
 
 RATE = 24_000

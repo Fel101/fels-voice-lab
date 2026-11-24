@@ -19,16 +19,16 @@ import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import serve
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from local_ownership import LocalOwnership
-from performance_settings import effective_settings
-from scene_store import SceneStore, SceneBatchRunner, digest_json
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.local_ownership import LocalOwnership
+from voice_lab.performance_settings import effective_settings
+from voice_lab.scene_store import SceneStore, SceneBatchRunner, digest_json
 from tools.scene_export import (ExportError, load_takes, trimmed_captions, verify_caption_sets,
                            write_subtitles)
-from worker_pool import EnginePool, WorkerBusy, read_catalog, process_is_running
-from worker_process import WorkerProcess, WorkerUnavailable
+from voice_lab.worker_pool import EnginePool, WorkerBusy, read_catalog, process_is_running
+from voice_lab.worker_process import WorkerProcess, WorkerUnavailable
 
 
 class FixtureEngines:
@@ -295,7 +295,7 @@ class ReviewOwnershipTests(unittest.TestCase):
     def test_process_exit_releases_exclusive_ownership(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "lease.lock"
-            script = "from local_ownership import LocalOwnership; import sys; lease=LocalOwnership(sys.argv[1]); print(lease.acquire(),flush=True); sys.stdin.read()"
+            script = "from voice_lab.local_ownership import LocalOwnership; import sys; lease=LocalOwnership(sys.argv[1]); print(lease.acquire(),flush=True); sys.stdin.read()"
             # Test the lock-owning process itself, rather than a Windows venv
             # redirector whose child may still be exiting after launcher.wait().
             child = subprocess.Popen([getattr(sys,'_base_executable',sys.executable), "-u", "-c", script, str(path)], cwd=ROOT,
@@ -377,8 +377,8 @@ class ReviewOwnershipTests(unittest.TestCase):
                 pool.close()
 
     def test_chatterbox_worker_and_broker_share_containment_policy(self):
-        from worker_runtime import EngineWorkerRuntime
-        import reference_paths
+        from voice_lab.worker_runtime import EngineWorkerRuntime
+        from voice_lab import reference_paths
         with tempfile.TemporaryDirectory() as folder, patch.object(reference_paths, "LAB", Path(folder)):
             for engine in ("orig", "turbo"):
                 runtime = EngineWorkerRuntime(engine, "cpu")

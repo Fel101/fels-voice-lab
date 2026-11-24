@@ -64,7 +64,7 @@ def main(argv=()):
     python = environment / "Scripts/python.exe"
     unfinished = environment / UNFINISHED
     if python.is_file() and not unfinished.is_file():
-        if subprocess.run([str(python), "-c", "import numpy, scipy, soundfile, pyloudnorm; import serve"], cwd=ROOT).returncode:
+        if subprocess.run([str(python), "-c", "import numpy, scipy, soundfile, pyloudnorm; from voice_lab import serve"], cwd=ROOT).returncode:
             raise SystemExit("The .venv folder cannot load the Lab's core packages (the error is above), and setup.bat never "
                              "changes an environment that is already there. If an earlier setup was interrupted and nothing "
                              "else has been installed into it, delete the .venv folder and run setup.bat again.")

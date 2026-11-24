@@ -235,8 +235,8 @@ software for deceptive impersonation or fraud. [Responsible use](docs/RESPONSIBL
 3. Open **Fel's Voice Lab** from the Start menu (Setup.exe) or the desktop icon (`setup.bat`). Its dedicated window runs
    without a console; closing it stops its backend.
 
-To add a model later, press **Install** on its card in **Models & features**, or run its launcher, such as `setup-kokoro.bat`,
-`setup-phonon.bat` or `setup-chatterbox.bat`. Every model has one; the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only
+To add a model later, press **Install** on its card in **Models & features**, or run its launcher, such as `tools\setup-kokoro.bat`,
+`tools\setup-phonon.bat` or `tools\setup-chatterbox.bat`. Every model has one; the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 install only
 for a graphics card, an NVIDIA card or an AMD Radeon. The core alone opens the studio and manages its stores, but it cannot speak
 without a model.
 [Setup](docs/SETUP.md) covers every installer and the other models, and [troubleshooting](docs/TROUBLESHOOTING.md) says what

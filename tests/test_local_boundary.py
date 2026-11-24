@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import export_panel
-import reference_catalog
+from voice_lab import export_panel
+from voice_lab import reference_catalog
 from api_service import Service
 
 # What a browser sends for an <audio> on another website, for a link on another website, and for the Lab's own page.

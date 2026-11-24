@@ -19,10 +19,10 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-import ffmpeg_tools
-import serve
-from cast_store import MAX_UPLOAD_BYTES, CastStore
-from worker_pool import read_catalog
+from voice_lab import ffmpeg_tools
+from voice_lab import serve
+from voice_lab.cast_store import MAX_UPLOAD_BYTES, CastStore
+from voice_lab.worker_pool import read_catalog
 
 RATE = 24_000
 FFMPEG = ffmpeg_tools.find_ffmpeg()

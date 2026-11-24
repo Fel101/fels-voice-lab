@@ -20,15 +20,15 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import export_panel
-import ffmpeg_tools
-import lipsync
-import serve
-from cast_store import CastStore
+from voice_lab import export_panel
+from voice_lab import ffmpeg_tools
+from voice_lab import lipsync
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
 from tools import scene_export
-from scene_store import SceneBatchRunner, SceneStore
+from voice_lab.scene_store import SceneBatchRunner, SceneStore
 from tests.phoneme_stub import stub_phonemes
-from worker_pool import read_catalog
+from voice_lab.worker_pool import read_catalog
 
 HAS_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 

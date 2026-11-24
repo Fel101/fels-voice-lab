@@ -534,7 +534,7 @@ test('Generate for another engine never reads the Kokoro voices', async () => {
 
 test('when no voices turn up, Generate asks once and shows what the service says; pressing it again reads once more', async () => {
   const sent = [];
-  const notInstalled = 'Kokoro 82M is not installed. Open Models & features and press Install on its card, or run setup-kokoro.bat in the lab folder, then try again.';
+  const notInstalled = 'Kokoro 82M is not installed. Open Models & features and press Install on its card, or run tools\\setup-kokoro.bat in the lab folder, then try again.';
   const fixture = generateFixture((url, request) => { sent.push(JSON.parse(request.body)); return Promise.reject(new Error(notInstalled)); });
   const {refreshed} = openedBeforeTheInstall(fixture, {installed: []});
   fixture.c.generate(); await settle();
@@ -1239,8 +1239,8 @@ test('opening a restored library asks first, names the folder the server knows, 
 
 test('every control the System script reaches for is on the page, wired once, and the script loads before the app starts', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '..', 'serve.html'), 'utf8');
-  const script = fs.readFileSync(path.join(__dirname, '..', 'voice_lab_system.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'serve.html'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'web', 'voice_lab_system.js'), 'utf8');
   const wanted = new Set([...script.matchAll(/\$\('([A-Za-z]+)'\)/g), ...script.matchAll(/systemNote\('([A-Za-z]+)'/g)].map(match => match[1]));
   for (const id of ['backupCreate', 'restoreGo']) wanted.add(id);
   assert.ok(wanted.size >= 25);

@@ -44,7 +44,7 @@ function setup(takes = []) {
     else throw new Error('Unexpected request ' + url);
     return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
   } });
-  const html = fs.readFileSync(path.join(__dirname, '../compare.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../web/compare.html'), 'utf8');
   const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(text => text.includes('renderCastTakes'));
   assert.ok(script, 'Compare inline application script exists');
   vm.runInContext(script, context);

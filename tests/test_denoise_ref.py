@@ -11,8 +11,8 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import denoise_ref as dr
-import speaker_similarity as ss
+from voice_lab import denoise_ref as dr
+from voice_lab import speaker_similarity as ss
 
 try:
     FFMPEG_READY = dr.find_ffmpeg() is not None

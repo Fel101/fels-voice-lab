@@ -7,7 +7,7 @@ then a speech check.
     .venv\\Scripts\\python.exe tools\\install_phonon.py --checkpoint-only
 
 It prints what it will do and asks before it changes anything (--yes accepts the plan, --dry-run only shows it). Run it with
-the lab's own Python, which setup.bat creates; setup-phonon.bat does that for you. Phonon gets an environment of its own,
+the lab's own Python, which setup.bat creates; tools\\setup-phonon.bat does that for you. Phonon gets an environment of its own,
 .venv-phonon, made from the same Python 3.12 as .venv, so installing it changes no other model's packages. pip installs
 requirements/phonon.txt there with every wheel's SHA-256 checked, and the script refuses to replace a package that is already
 installed at another version. The files in catalog/phonon_snapshot.json (the model, and the 37 English preset voices with their
@@ -54,8 +54,8 @@ SPEECH_CHECK = """
 import json, sys, time
 sys.path.insert(0, sys.argv[1])
 import soundfile
-import engine_checks
-from engines import Phonon
+from voice_lab import engine_checks
+from voice_lab.engines import Phonon
 
 started = time.perf_counter()
 engine = Phonon("cpu")

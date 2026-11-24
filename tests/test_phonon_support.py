@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import performance_settings  # noqa: E402
-import phonon_support as ps  # noqa: E402
+from voice_lab import performance_settings  # noqa: E402
+from voice_lab import phonon_support as ps  # noqa: E402
 from phonon_fixtures import Lab, VOICES, record  # noqa: E402,F401
 
 CATALOG = json.loads((ROOT / "catalog" / "engines.json").read_text("utf-8"))

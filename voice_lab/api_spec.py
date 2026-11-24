@@ -1,0 +1,1766 @@
+"""The Voice Lab's HTTP API, written down once.
+
+Every route serve.py answers is a row in ROUTES below. The service's dispatch is built from this table (routes.py): serve.py
+registers one handler for each row and will not start with a row nobody answers or a handler with no row, so a new route has
+to be documented or marked internal on purpose. From the same table this module builds the OpenAPI document (openapi.json,
+also served at GET /api/openapi.json) and the reference tables in docs/API.md; tools/build_api_docs.py writes both files.
+
+A route is *documented* when scripts may rely on it: its shape changes only with a new version and a CHANGELOG line. It is
+*internal* when it exists for the Lab's own pages (the pages, their scripts, appearance, pickers); it can change at any time
+and is listed in docs/API.md and in openapi.json under x-internal-routes, but not described.
+
+Standard library only, so a script or a test can import it without the Lab's model environments.
+"""
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, replace
+
+from app_version import APP_NAME, SUITE_API, VERSION
+
+OPENAPI_VERSION = "3.1.0"
+# The codes an error answer carries beside its message (serve.ERROR_CODES), for a program to act on.
+ERROR_CODE_DOC = ("A short code a program can act on: `invalid_request` (400), `not_local` (403), `not_found` (404), `busy` "
+                  "(409), `already_exists` or `conflict` (409, where the route says so), `too_large` (413), `cancelled` (499), "
+                  "`failed` (500), `upstream_failed` (502), `model_not_installed` (503), `ffmpeg_not_installed` (503, where the "
+                  "route says so) or `timeout` (504).")
+DEFAULT_URL = "http://127.0.0.1:8765"
+
+
+@dataclass(frozen=True)
+class Field:
+    """A request field, a query-string parameter or a response header."""
+    name: str
+    type: str          # string, integer, number, boolean, object, or one of those with [] after it for a list
+    doc: str
+    required: bool = False
+
+
+@dataclass(frozen=True)
+class Route:
+    method: str
+    path: str                  # {name} marks a path parameter; a trailing /* is a prefix answered by one handler
+    group: str
+    summary: str               # one sentence, imperative
+    internal: bool = False
+    query: tuple = ()          # Field: query-string parameters
+    body: tuple = ()           # Field: members of the JSON request body
+    body_kind: str = "json"    # json, audio (with X-Reference-Metadata), archive (raw bytes), or none
+    reply: str = ""            # what the answer holds, in Markdown
+    reply_kind: str = "json"   # json, wav, ndjson, csv, audio, html, javascript or file
+    status: int = 200          # the success status
+    headers: tuple = ()        # Field: response headers worth knowing
+    errors: tuple = ()         # (status, when) pairs beyond the usual 400 and 404
+    notes: str = ""            # more Markdown for the reference
+    metadata: tuple = ()       # Field: members of the base64url JSON in the X-Reference-Metadata header
+    suite: bool = False        # part of the Lab's suite API, which the other apps of Fel's Studio rely on (SUITE_ROUTES)
+    answer: tuple = ()         # (name, type) pairs: the JSON answer's fields a suite route keeps (ANSWER_TYPES)
+
+
+def F(name, type, doc, required=False):
+    return Field(name, type, doc, required)
+
+
+def R(method, path, group, summary, **more):
+    return Route(method, path, group, summary, **more)
+
+
+ID = "[a-f0-9]{32}"
+EXAMPLE_ID = "0123456789abcdef0123456789abcdef"
+
+# Path parameters: (what it is, the pattern serve.py accepts, an example that fits it). tests/test_api_docs.py checks the
+# examples against the patterns and the patterns against the routes serve.py really matches.
+PATH_PARAMS = {
+    "character_id": ("A character's id, from `GET /api/cast`.", ID, EXAMPLE_ID),
+    "identity_id": ("A voice identity's id, from `GET /api/cast`.", ID, EXAMPLE_ID),
+    "reference_id": ("A reference recording version's id, from `GET /api/cast`.", ID, EXAMPLE_ID),
+    "take_id": ("A take's id: the `X-Take-Id` header of a performance, or an entry of `GET /api/takes`.", ID, EXAMPLE_ID),
+    "asset_sha": ("An automation audio asset SHA-256.", "[a-f0-9]{64}", "a" * 64),
+    "book_id": ("A book project ID returned from `GET /api/books`.", ID, EXAMPLE_ID),
+    "book_file": ("A verified chapter or audiobook file name.",
+                  "[a-z0-9][a-z0-9.-]*[.](?:wav|flac|m4b|mp3|jpg|json|cue|csv|srt|vtt)", "book.m4b"),
+    "dub_file": ("A file name listed in the dubbing delivery, captions or source preview.",
+                 "[a-z][a-z0-9-]+[.](?:mp4|wav|srt|vtt|ass|txt|json)", "dub.mp4"),
+    "delivery_id": ("A saved delivery or audition ID.", ID, EXAMPLE_ID),
+    "scene_id": ("A scene's id, from `GET /api/scenes`.", ID, EXAMPLE_ID),
+    "job_id": ("A job's id, from the call that started it.", ID, EXAMPLE_ID),
+    "session_id": ("A blind listening session's id, from `GET /api/evaluations/blind-sessions`.", ID, EXAMPLE_ID),
+    "item_id": ("A compared sample's id.", ID, EXAMPLE_ID),
+    "run_id": ("A registered comparison run's id, from `GET /api/evaluations`.", "[A-Za-z0-9_-]{1,80}", "neutral-clone-1"),
+    "export_id": ("An export package's folder name under `out/exports`, from `GET /api/exports`.",
+                  "[A-Za-z0-9][A-Za-z0-9._-]{0,89}", "panel-20261025T120000Z-1a2b3c4d"),
+    "engine_id": ("An engine id from `GET /api/catalog`.", "[a-z0-9][a-z0-9.-]{0,80}", "kokoro"),
+    "preview_file": ("The file name in a preview answer's `audio_url`, without its `.wav`.", "[A-Za-z0-9._-]+", "preview"),
+    "inbox_file": ("A file's `name` from `GET /api/inbox`, percent-encoded.", "(?:[A-Za-z0-9._~!'()*-]|%[0-9A-Fa-f]{2}){1,512}",
+                   "20261201T100211Z-voice-slate-Maya-take-3.voiceslate"),
+    "request_id": ("A request's id: the `X-Request-Id` it sent, or the one its answer names; an entry of `GET /api/queue`.",
+                   "[A-Za-z0-9._-]{1,64}", "take-1a2b3c"),
+}
+
+# The groups in the order the reference shows them, each with the sentence that opens its section.
+GROUPS = (
+    ("Service", "Is it running, what is loaded, which engines exist. None of these makes audio, except an engine check."),
+    ("Speaking", "Turn text into audio. `speak` and `performance` answer with the finished WAV file in one response."),
+    ("OpenAI-style", "For apps that can send text to any server that answers like OpenAI's speech API: give them "
+                     "`http://127.0.0.1:8765/v1` as the base address and any key. The Lab's voices, by the names `GET "
+                     "/api/voices` gives; nothing is kept in the library. Errors take OpenAI's shape: `{\"error\": "
+                     "{\"message\", \"type\", \"param\", \"code\"}}`, with the Lab's `code`."),
+    ("Cast", "Characters, the voices (identities) they speak with, the recordings that clone those voices, and "
+             "pronunciations. Retiring blocks new use of an item and everything made from it; purging deletes it."),
+    ("Takes", "Saved performances. Every `performance` call and every scene render saves a take with its text, settings, "
+              "model and provenance. An edit of a take (a trim, a cut of the silence, fades, a gain) is saved as a new take "
+              "that names its original."),
+    ("Scenes", "Ordered scripts rendered line by line through the same performance call. The manifest's fields are in "
+               "[scene-schema-v1.md](scenes/scene-schema-v1.md)."),
+    ("Live speech", "Short-lived sessions with ordered local audio input and speech replies."),
+    ("Automation", "Saved local recipes, provider profiles and resumable runs."),
+    ("Production", "Search saved projects and share local project or voice files."),
+    ("Books", "Local manuscript import, editable chapter scenes, chapter auditions and audiobook packages."),
+    ("Exports", "Delivery packages: a scene's selected takes, converted, checked and written to `out/exports`."),
+    ("Comparisons", "Listening comparisons and blind A/B sessions. See "
+                    "[evaluation-schema-v1.md](evaluation/evaluation-schema-v1.md)."),
+    ("Conversion", "Voice conversion: say a recording again in another voice."),
+    ("System", "The service's report, folder sizes, library backups and housekeeping."),
+    ("Pages", "The Lab's own pages and the scripts they load."),
+    ("Page helpers", "Data the Lab's pages read and write for themselves."),
+    ("Drama", "The Drama studio page's job API."),
+)
+
+KOKORO_FIELDS = (
+    F("voice", "string", "Without `engine`: a voice's `name` from `GET /api/voices`. A Cast voice speaks as that voice and "
+                         "nothing is kept (as `POST /api/performance` with `keep_take` false: `language`, `direction`, "
+                         "`settings` and `use_pronunciations` go with it); a preset voice speaks with its model. With `engine` "
+                         "`kokoro`, or no engine: a Kokoro voice id, or several joined with commas to blend them. Default "
+                         "`af_heart`. Phonon: one voice name from `phonon_voices` of `GET /api/info`. Default `Harper`."),
+    F("speed", "number", "Kokoro: speaking rate. Default 1.0."),
+    F("language", "string", "Kokoro and Qwen: the language. Default `English`, or for a Kokoro voice named without `engine`, "
+                            "the voice's own language. Phonon speaks English only."),
+)
+
+# A text of more than one part, as POST /api/speak and a clip of POST /api/performance that is not kept take it.
+LONG_TEXT = ("Text over 1,200 characters is split where a scene splits a long line, spoken part by part in the same call "
+             "and joined with a quarter-second pause; the answer is still one WAV, and `X-Parts` says how many parts it had. "
+             "The call can be cancelled between parts. A voice invented from a description (design mode) is refused for "
+             "such a text, since it would change from one part to the next.")
+
+# What an edit of a take takes. The preview and the save take the same fields; the save adds an idempotency key.
+EDIT_FIELDS = (
+    F("start_seconds", "number", "Where the kept part starts, in seconds from the start of the take. Default 0."),
+    F("end_seconds", "number", "Where the kept part ends. Default the end of the take. It must be after `start_seconds`."),
+    F("auto_trim", "boolean", "Cut the quiet before and after the speech inside that range. Default false."),
+    F("silence_threshold_db", "number", "Auto-trim: anything quieter than this counts as silence, from -90 to -10 dB. Default -50."),
+    F("keep_silence_ms", "number", "Auto-trim: how much of the silence to leave at each end, 0 to 2000 ms. Default 80."),
+    F("fade_in_ms", "number", "A fade in over the start of the result, 0 to 5000 ms. Default 0."),
+    F("fade_out_ms", "number", "A fade out over the end of the result, 0 to 5000 ms. Default 0."),
+    F("gain_db", "number", "Make the result louder or quieter, -60 to 24 dB. A gain that would clip is refused. Default 0."),
+)
+EDIT_REFUSALS = ("A field is unknown, not a number (or not true or false) or out of range; `end_seconds` is not after "
+                 "`start_seconds`; the edit changes nothing; the result would be under 0.05 seconds; the two fades are longer "
+                 "than the result; auto-trim finds nothing louder than the threshold; a gain would clip the loudest sample (the "
+                 "answer says how much the take can take); the take is retired; or its stored audio is missing or no longer "
+                 "matches its checksum.")
+EDIT_NOTES = ("An edit never changes the take it starts from. The steps run in this order: trim to `start_seconds` to "
+              "`end_seconds`; auto-trim inside that range (quiet inside the speech is never cut); the two fades, on a "
+              "raised-cosine curve; then the gain. A trim alone copies the samples exactly; a fade or a gain recalculates them and "
+              "rounds back to 16 bits. The new take keeps the parent's text, voice, settings and model, starts as a "
+              "`candidate`, and has its loudness and checks measured again. Its word and phoneme times, when the parent has "
+              "them, move with the trim, and a word the trim cuts away leaves them. An edit of an edit is allowed. Retiring "
+              "a take retires its edits, and purging it deletes them.")
+
+ENGINE_NOT_INSTALLED = ("The model is not installed (`code` `model_not_installed`). `error` begins by saying where to "
+                        "install it: Install on its Models & features card, or its launcher in the lab folder with the "
+                        "arguments that choose the model: `tools\\setup-kokoro.bat`, `tools\\setup-phonon.bat`, `tools\\setup-chatterbox.bat` "
+                        "(Chatterbox Turbo, or with `--original` Chatterbox 500M and Voice Conversion), `tools\\setup-qwen.bat` with "
+                        "`--model` and the Qwen3-TTS model, `tools\\setup-voxcpm.bat`, `tools\\setup-breeze.bat` or `tools\\setup-drama3.bat`.")
+ENGINE_FAILED = "The model is installed but could not load or run; `error` says what it reported."
+# What the X-Reference-Metadata header of a recording's upload holds.
+REFERENCE_METADATA = (
+    F("filename", "string", "The recording's file name; its ending says the format. Default `reference.wav`."),
+    F("transcript", "string", "The exact words spoken in it, up to 1200 characters. Models that clone with the words need "
+                              "them."),
+    F("origin", "string", "Where the recording came from, up to 1000 characters.", True),
+    F("allowed_use", "string", "Who may use it, and for what, up to 1000 characters.", True),
+    F("edits", "object", "Trim, sample rate, channel and noise reduction, as `POST /api/references/{reference_id}/versions` "
+                         "takes them."))
+
+ROUTES = [
+    # ---------------------------------------------------------------- Service
+    R("GET", "/api/health", "Service", "Say whether the service is ready, and which version it is.",
+      reply="`status` (`ready`, or `busy` while a model loads or generates), `busy`, `device`, `version`, `workers` (one entry "
+            "per loaded engine), `last_worker_error`, `last_unload`, `app` (`Fel's Voice Lab`, so a program can tell the Lab "
+            "from something else on the port), `lab_id` (the same for every service of one Lab folder and library) and `fels` "
+            "(`contract`, `app` (`voice-lab`), `version` and `api`: how the other apps of Fel's Studio recognise the Lab, "
+            "fels_suite.py).",
+      suite=True,
+      answer=(("status", "string"), ("busy", "boolean"), ("version", "string"), ("app", "string"), ("lab_id", "string"),
+              ("fels.contract", "integer"), ("fels.app", "string"), ("fels.version", "string"), ("fels.api", "integer"))),
+    R("GET", "/api/info", "Service", "Name the device, the loaded engines, the Kokoro and Phonon voices found and the free memory.",
+      reply="`device`, `loaded` (the engines in memory), `voices` (Kokoro voice names), `kokoro_languages`, `phonon_voices` "
+            "(the installed Phonon voices, each with `name`, `group`, `character`, `gender`, `age`, `locale` and "
+            "`description`) and `free_ram_gb`."),
+    R("GET", "/api/catalog", "Service", "List every engine the Lab knows, with its support level, pinned checkpoint, capabilities and license.",
+      reply="The engine catalog. An engine's `id` is the `engine` of the speaking calls; only engines whose "
+            "`integration.service_api` is true answer them. `support` is `supported` (tested for every release on the Lab's "
+            "test GPU and on the CPU where it runs), `works` (tested when it changes) or `experimental` (may break or have "
+            "limits, described in `support_note`). Each engine has a `licence` rating and reason, and can have a "
+            "separate `preset_licence` for its voice catalog. Each engine also has `facts`, what its card on the Models page "
+            "says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good "
+            "first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, "
+            "`converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its "
+            "`screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with "
+            "its `text` in plain words."),
+    R("GET", "/api/engines/status", "Service",
+      "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
+      reply="`device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: "
+            "`id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, "
+            "for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. "
+            "`installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files "
+            "are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs "
+            "it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), "
+            "and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, "
+            "and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), "
+            "`device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU "
+            "can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or "
+            "`null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer "
+            "also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, "
+            "from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. "
+            "`install` is the latest install started from the Models "
+            "page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), "
+            "`state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, "
+            "`downloading`, `unpacking`, `checking`, `finishing`, `waiting` or `null`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` "
+            "(the end of its output) and `log` (all of it, a path under the lab folder). A card that can retry an interrupted "
+            "install has `install_resume` with its `nvidia` choice and the `phase` where it was interrupted."),
+    R("POST", "/api/engines/{engine_id}/check", "Service",
+      "Check that one engine can speak now: confirm its files, load it and speak one short clip.",
+      body_kind="none",
+      reply="`check`: `status` (`passed`, `failed` or `not_installed`), `device`, `ran_on`, `checked_at`, `reason`, "
+            "`load_seconds`, `total_s`, `audio_seconds`, `real_time_factor` and, for a missing install, `missing`. Takes "
+            "seconds to minutes; the result is kept and shows in `GET /api/engines/status`.",
+      errors=((400, "The engine is unknown, or is not a speech engine."), (409, "The model worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/install", "Service",
+      "Install an engine with its guided installer (every engine in the catalog has one): read its plan, or run the "
+      "installer.",
+      body=(F("dry_run", "boolean", "Only read the plan: what the installer would do and whether this computer can take it. "
+                                    "Nothing is changed. Default false, which starts the install."),
+            F("nvidia", "boolean", "Install the engine's GPU build for this computer's graphics card (its installer's `--gpu`): "
+                                   "NVIDIA's CUDA build, or AMD's ROCm build on a computer whose card is an AMD Radeon. An "
+                                   "engine installed with the CPU build of PyTorch can get it afterwards. The Qwen3-TTS "
+                                   "models, VoxCPM2 and Breeze TTS 2 run only on a graphics card and always get the GPU "
+                                   "build, whatever this says. Default false.")),
+      reply="With `dry_run`, `plan`: `engine`, `nvidia`, `ok`, `paragraphs` (the plan, one string for each paragraph or "
+            "numbered step) and `problems` (why it cannot go ahead; empty when `ok`). Otherwise `install`: the job that "
+            "started, as in `GET /api/engines/status`, which is the route to poll for its progress. The job runs the script "
+            "the engine's launcher runs, with `--yes`. While it runs the service refuses every other load, check and clip.",
+      errors=((400, "The engine is unknown, has no installer (or no GPU build) in the app, or is installed already; or "
+                    "`dry_run` or `nvidia` is not true or false."),
+              (409, "An install is already running, or the model worker is busy."))),
+    R("POST", "/api/engines/{engine_id}/install/stop", "Service",
+      "Stop a guided model install. An active package command finishes first. Resumable model downloads are kept.",
+      body=(F("job_id", "string", "The install's `id` from its progress.", required=True),),
+      reply="`install`: the matching job, as in `GET /api/engines/status`. Poll until its state is final.",
+      errors=((400, "The job id is missing or invalid."), (409, "The current install does not match this job."))),
+    R("POST", "/api/engines/{engine_id}/uninstall", "Service",
+      "Uninstall a model: read what it would delete, or delete its files from the Lab's folder.",
+      body=(F("dry_run", "boolean", "Only read the plan: what would be deleted and what stays. Nothing is changed. Default "
+                                    "false, which deletes."),),
+      reply="With `dry_run`, `plan`: `engine`, `name`, `remove` (each folder's `path` in the Lab's folder, its `bytes`, and "
+            "`link` when it is a link or junction, which is removed as a link and never followed), `keep` (each folder that "
+            "stays, with `why`), `bytes`, `ok`, `paragraphs` and `problems`. Otherwise `uninstall`: the plan with `removed`, "
+            "`failed` (each `path` with its `reason`, such as a file another program has open) and `freed` bytes.",
+      errors=((400, "The engine is unknown, or has no files of its own to delete (another installed model uses them all), "
+                    "or `dry_run` is not true or false."),
+              (409, "An install is running, or the model worker is busy.")),
+      notes="A model's files are its checkpoint in `hf-cache`, with its preset voices' repository; the files it keeps "
+            "elsewhere (Breeze in `breeze/models`, Drama 3 in `out/drama3`); its worker's source folders (VoxCPM2 in "
+            "`out/voxcpm2`); and its own Python environment (`.venv-kokoro`). What another installed model uses stays: the "
+            "Chatterbox models share a checkpoint and `.venv-chatterbox`, the Qwen3-TTS models `.venv-fqwen`, which VoxCPM2 "
+            "also borrows from. The service's own `.venv` and the library are never touched. Every model is unloaded first, "
+            "and the model worker refuses other work until the files are gone. Install on the model's card puts it back."),
+    R("POST", "/api/engines/{engine_id}/device", "Service",
+      "Run one engine on the graphics card or on the CPU from its next load, as the switch on its Models & features card does.",
+      body=(F("device", "string", "`gpu` or `cpu`.", required=True),),
+      reply="`device`: `engine`, `choice`, `device` (the one its worker is now asked for, `cuda` or `cpu`) and `unloaded` "
+            "(true when the engine was loaded, so its next request loads it again). The choice is kept in "
+            "`data/engines/devices.json`. An engine whose environment holds the CPU build of PyTorch runs on the CPU whatever "
+            "is chosen, until its GPU build is installed.",
+      errors=((400, "The engine is unknown or runs only on the CPU (Phonon, Drama 3), `device` is not `gpu` or `cpu`, or "
+                    "`gpu` was asked of a service that runs on the CPU."),
+              (409, "The model worker is busy."))),
+    R("POST", "/api/load", "Service", "Load an engine into memory ahead of its first use.",
+      body=(F("engine", "string", "An engine id. Default `kokoro`."),
+            F("profile", "string", "Breeze only: its decode profile. Default `eager`.")),
+      reply="`engine`, `loaded`, `load_seconds`, `sample_rate`, `memory`, `backend`, `checkpoint`, `checkpoint_revision`, "
+            "`supported_speakers` and `supported_languages`.",
+      errors=((409, "The model worker is busy."), (500, ENGINE_FAILED), (503, ENGINE_NOT_INSTALLED))),
+    R("POST", "/api/unload", "Service", "Unload every engine and free the GPU.",
+      body_kind="none", reply="`{\"ok\": true}`.",
+      errors=((409, "A scene batch is being spoken with a model on the graphics card, from its first line to its last, or "
+                    "the worker has other work: `doing` says what the Lab is doing, as the end of \"Voice Lab is ...\" "
+                    "(`speaking a scene, 12 of 40 lines`), and `code` is `busy`"),),
+      notes="The other apps of Fel's Studio call this before NPC Forge takes the graphics card to itself (its One model "
+            "at a time switch). Without `wait_seconds` a busy Lab answers 409 at once; with it, the request waits its turn "
+            "in line, but a scene being spoken is refused at once, since it would wait for the whole scene. After the "
+            "unload the Lab no longer holds the GPU lock of Fel's Studio (`GET /api/gpu`). docs/CONNECT.md says more.",
+      suite=True, answer=(("ok", "boolean"),)),
+    R("GET", "/api/gpu", "Service", "Say who holds the graphics card: the GPU lock the apps of Fel's Studio share.",
+      reply="`device` (this service's, `cuda` or `cpu`), `held` (whether a model of this service is on the graphics card "
+            "now), `holders` (each app holding the lock, oldest first: `app`, `name`, `pid`, `what` (the model or the "
+            "work), `since`, `alone` and `this_service`) and `alone` (the app that has the card to itself or is clearing "
+            "it for itself, with the same fields, or null). For showing only: a model load decides by the lock itself."),
+    R("POST", "/api/prepare-reference", "Service", "Prepare a reference recording for an engine so its first clone is quick.",
+      body=(F("engine", "string", "An engine id that clones from a recording.", True),
+            F("path", "string", "A recording inside the Lab's reference storage.", True),
+            F("reference_text", "string", "The exact transcript, which Breeze, Qwen Base and Drama 3 need."),
+            F("exaggeration", "number", "Chatterbox: how strongly to act. Default 0.5."),
+            F("profile", "string", "Breeze only: its decode profile."),
+            F("xvec_only", "boolean", "Qwen Base only: use the speaker embedding alone, without a transcript.")),
+      reply="What the engine reports about the prepared reference.", errors=((409, "The model worker is busy."),)),
+    R("GET", "/api/performance/settings", "Service",
+      "Describe the settings each engine's performance takes, and the languages its picker offers.",
+      reply="`engines`: for each engine its controls (name, type, range, default), whether it takes a direction, and its "
+            "`languages`; and `unscreened_languages`: per engine, the languages the language screen did not clear."),
+    R("GET", "/api/queue", "Service", "Say what the model worker is doing, and what waits for it, in order.",
+      reply="`running`: null, or the request using the worker; `waiting`: the requests in line, first first; and "
+            "`max_waiting`. Each request has `id` (its `X-Request-Id`), `what` (such as `Take`, `Clip`, `Model test` or "
+            "`Install`), `engine` (null when it is not one model's work), `priority` (`normal`, or `low` for a scene batch), "
+            "`since` (when it started running, or joined the line), `seconds` (how long ago), `can_stop` and, for an install, "
+            "`detail` (what it is installing).",
+      notes="The worker does one load, clip, take, test or install at a time. A request that needs it while it is busy is "
+            "refused with 409 at once, unless it sent `wait_seconds` in its JSON body: then it waits in line, at most that "
+            "many seconds (up to 3600). Requests with `wait_priority` `low`, as a scene batch's lines send, wait behind the "
+            "others, and each priority keeps its order. At most 20 wait. A waiting request leaves the line when it is "
+            "cancelled, when its caller closes the connection, or when its time is up (409)."),
+    R("POST", "/api/queue/{request_id}/cancel", "Service", "Take a request out of the line, or stop it while it runs.",
+      body_kind="none",
+      reply="`cancelled`: `waiting` (it left the line, and answers 499 at once) or `running` (its model's process was ended: "
+            "it answers 499 within moments, and the next request loads the model again).",
+      errors=((400, "The running request cannot be stopped: an install, or an unload."),
+              (404, "No request with that id is waiting or running.")),
+      notes="Send your own `X-Request-Id` with the request you may want to stop, so you know its id before it answers."),
+    R("GET", "/api/openapi.json", "Service", "Return this API as an OpenAPI 3.1 document.",
+      reply="The same document as `openapi.json` in the program folder, built from the route table."),
+
+    # ---------------------------------------------------------------- Speaking
+    R("GET", "/api/voices", "Speaking", "List every voice a program can speak with by name.",
+      reply="`voices`: the Cast's voices first, then the preset voices of the models this service runs. Each has `name`, the "
+            "one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and "
+            "`model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and "
+            "`why_not`, a sentence saying what to do when it is not ready. `licence` has a `rating` "
+            "(`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. A "
+            "Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name "
+            "for it.",
+      notes="A Cast voice is named after its character when it is the character's only voice, or its only approved one; any "
+            "Cast voice is also `Character (Label)`. Retired and rejected voices are left out. A preset voice keeps its "
+            "model's name (`af_heart`, `Harper`), or is `model:voice` when a Cast voice or another model has that name. Kokoro's "
+            "and Phonon's voices are those installed; a Qwen CustomVoice checkpoint's speakers are listed while it is loaded, "
+            "since only the loaded checkpoint reports them. Nothing is loaded to answer.",
+      suite=True,
+      answer=(("voices[].name", "string"), ("voices[].aliases", "string[]"), ("voices[].kind", "string"),
+              ("voices[].model", "string"), ("voices[].model_name", "string"), ("voices[].label", "string"),
+              ("voices[].languages", "string[]"), ("voices[].takes_direction", "boolean"), ("voices[].ready", "boolean"),
+              ("voices[].why_not", "string|null"), ("voices[].character", "string"), ("voices[].identity_id", "string"),
+              ("voices[].status", "string"), ("voices[].voice_id", "string"),
+              ("voices[].licence.rating", "string"), ("voices[].licence.reason", "string"))),
+    R("POST", "/api/speak", "Speaking", "Speak text with one engine and answer with the finished WAV file.",
+      body=(F("text", "string", "What to say, 1 to 10,000 characters. " + LONG_TEXT, True),
+            F("engine", "string", "An engine id from `GET /api/catalog` whose `integration.service_api` is true. "
+                                  "Default `kokoro`."),
+            *KOKORO_FIELDS,
+            F("voice_description", "string", "Qwen VoiceDesign, VoxCPM2 and Breeze design mode: the voice to invent, in words."),
+            F("mode", "string", "For engines with several modes: `design`, `clone`, `continuation`, `custom_voice` or, for "
+                                "Breeze, `direction`. A checkpoint accepts the modes it supports."),
+            F("reference_path", "string", "Cloning: a recording inside the Lab's reference storage."),
+            F("reference_text", "string", "Cloning: the exact transcript of that recording."),
+            F("direction", "string", "Engines with a direction control: how to deliver the line, up to 1000 characters."),
+            F("seed", "integer", "Engines that take one: the random seed. Default 42."),
+            F("temperature", "number", "Phonon: how much the delivery varies, 0 to 1. Default 0.3. The other engines that take "
+                                       "a temperature list theirs under `capabilities` in `GET /api/catalog`."),
+            F("duration_delta", "number", "Phonon: shift the pace, from -0.5 (faster) to 0.5 (slower). Default 0."),
+            F("save_voice_as", "string", "Design mode only: keep the invented voice as a reusable reference under this "
+                                         "name, letters, digits, `_` and `-`, up to two folders deep.")),
+      reply="The whole 16-bit WAV file, in one response with a `Content-Length`. The call blocks until the clip is "
+            "finished; there is no streaming and no partial answer. Other engine-specific fields are listed under each "
+            "engine's `capabilities` in `GET /api/catalog`.",
+      reply_kind="wav",
+      headers=(F("X-Gen-Seconds", "string", "Seconds the engine took."),
+               F("X-Audio-Seconds", "string", "Seconds of audio in the file."),
+               F("X-First-Chunk", "string", "Seconds to the first audio, when the engine reports it; otherwise empty."),
+               F("X-Generation-Mode", "string", "The mode the engine ran in, when it reports one."),
+               F("X-Voice-Backend", "string", "The backend, when reported."),
+               F("X-Model-Checkpoint", "string", "The checkpoint, when reported."),
+               F("X-Checkpoint-Revision", "string", "The checkpoint's pinned revision, when reported."),
+               F("X-Voice-Asset-Path", "string", "With `save_voice_as`: the file the voice was saved to."),
+               F("X-Parts", "string", "How many parts a text over 1,200 characters was spoken in.")),
+      errors=((404, "`voice` names no voice in `GET /api/voices` and is not a Kokoro voice id."),
+              (409, "`save_voice_as` names a voice that already exists (`code` `already_exists`)."),
+              (413, "The request is over 64 KiB."), (500, ENGINE_FAILED), (503, ENGINE_NOT_INSTALLED),
+              (504, "The engine did not answer in time.")),
+      notes="Send no query string: `/api/speak?x=1` is a 404. Qwen, VoxCPM2 and Drama 3 refuse a field they do not take and "
+            "name it in the 400. To keep what you generate as a Cast take, use "
+            "[`POST /api/performance`](#post-api-performance).",
+      suite=True),
+    R("POST", "/api/stream", "Speaking", "Speak text with a Qwen3-TTS checkpoint and stream the audio as it is made.",
+      body=(F("text", "string", "What to say, 1 to 1200 characters.", True),
+            F("engine", "string", "A Qwen3-TTS engine id.", True),
+            F("mode", "string", "`design`, `clone` or `custom_voice`, as the checkpoint supports."),
+            F("voice_description", "string", "VoiceDesign: the voice to invent, in words."),
+            F("reference_path", "string", "Base (clone): a recording inside the Lab's reference storage."),
+            F("reference_text", "string", "Base (clone): the exact transcript."),
+            F("speaker", "string", "CustomVoice: a speaker the loaded checkpoint reports."),
+            F("language", "string", "The language. Default `English`."),
+            F("save_voice_as", "string", "VoiceDesign only: keep the voice as a reusable reference under this name.")),
+      reply="Newline-delimited JSON: one `start` line, `audio` lines (`sequence`, `sample_start`, `sample_count`, "
+            "`sample_rate`, `sample_format` `pcm_s16le` and the PCM as base64 in `data`) and a closing `complete` line with "
+            "the timings. A failure after the first line arrives as an `error` line, not a status code.",
+      reply_kind="ndjson",
+      notes="Use `POST /api/speak` when you want a file."),
+    R("POST", "/api/performance", "Speaking", "Speak a line as a Cast voice, and save it as a take unless asked not to.",
+      body=(F("identity_id", "string", "The voice identity to speak with, from `GET /api/cast`. Give this or `voice`."),
+            F("voice", "string", "A Cast voice's `name` from `GET /api/voices`, instead of `identity_id`."),
+            F("text", "string", "The line, 1 to 1200 characters; with `keep_take` false, up to 10,000. " + LONG_TEXT, True),
+            F("keep_take", "boolean", "Default true: the clip is saved as a take. False saves nothing in the library, for a "
+                                      "program that speaks all day; the clip is still labelled as AI-generated speech."),
+            F("line_id", "string", "Your own label for the line, 1 to 100 characters. Takes are grouped by voice and line. "
+                                   "Needed when the take is kept."),
+            F("reference_version_id", "string", "The recording to clone from. Default: the identity's approved recording. "
+                                                "Refused for a fixed or preset voice."),
+            F("language", "string", "Default: the voice's own language, else `English`."),
+            F("direction", "string", "How to deliver the line, up to 1000 characters. An engine with no verified "
+                                     "direction control refuses a non-empty one."),
+            F("settings", "object", "The engine's performance settings; see `GET /api/performance/settings`."),
+            F("use_pronunciations", "boolean", "Apply the character's pronunciation dictionary to the spoken text. The take "
+                                               "keeps both texts. Default false."),
+            F("idempotency_key", "string", "1 to 200 characters. Repeating a call with the same key and the same inputs "
+                                           "returns that take's audio without generating again. Only with a kept take."),
+            F("identity_snapshot", "object", "Used by scene batches: the voice's `identity_type`, `engine_id` and "
+                                             "`engine_options` as the scene saved them. The call is refused if the voice has "
+                                             "changed since.")),
+      reply="The clip's 16-bit WAV file, in one response. The call blocks until the clip is finished, and saved when kept.",
+      reply_kind="wav",
+      headers=(F("X-Take-Id", "string", "The saved take's id; absent when it was not kept."),
+               F("X-Take-Kept", "string", "`false` when `keep_take` was false."),
+               F("X-Parts", "string", "How many parts a text over 1,200 characters was spoken in."),
+               F("X-Cast-Character", "string", "The character's name."),
+               F("X-Cast-Identity", "string", "The voice's label."),
+               F("X-Cast-Line-Id", "string", "The `line_id` you sent."),
+               F("X-Gen-Seconds", "string", "Seconds the engine took."),
+               F("X-Audio-Seconds", "string", "Seconds of audio in the file."),
+               F("X-Voice-Backend", "string", "The backend."),
+               F("X-Model-Checkpoint", "string", "The checkpoint."),
+               F("X-Checkpoint-Revision", "string", "The checkpoint's pinned revision."),
+               F("X-Generation-Mode", "string", "`clone`, `direction`, `custom_voice` or `fixed_voice`."),
+               F("X-Idempotent-Replay", "string", "`true` when the answer is an earlier take for the same key; then only "
+                                                  "`X-Take-Id` and the three `X-Cast-*` headers come with it.")),
+      errors=((400, "The identity is rejected or retired, has no usable recording, the text or direction is too long, the "
+                    "settings do not fit the engine, `voice` names a preset voice, or `idempotency_key` was used before with "
+                    "different inputs or for an edit of a take, or sent with `keep_take` false."),
+              (404, "The identity, the recording or the voice named does not exist."),
+              (409, "The model worker is busy."),
+              (503, ENGINE_NOT_INSTALLED),
+              (504, "The engine did not answer in time.")),
+      notes="See [Speak as a Cast voice](#speak-as-a-cast-voice) for how to find the ids and what a retry does.",
+      suite=True),
+    R("POST", "/api/kokoro/phonemize", "Speaking", "Show the phonemes Kokoro would speak for a text.",
+      body=(F("text", "string", "1 to 1200 characters.", True), F("language", "string", "Default `English`.")),
+      reply="`language`, `language_name` and `segments`, each with its `graphemes` and `phonemes`.",
+      notes="Kokoro's language rules live in its own environment, so its worker answers: Kokoro is loaded first when it is "
+            "not loaded already, as for speaking, and the model loaded before it is unloaded. A text or a language it cannot "
+            "take is refused with a 400 before anything loads."),
+
+    # ---------------------------------------------------------------- OpenAI-style
+    R("POST", "/v1/audio/speech", "OpenAI-style", "Speak text as OpenAI's speech API does, in one of the Lab's voices.",
+      body=(F("input", "string", "What to say, 1 to 10,000 characters (OpenAI's own limit is 4,096). " + LONG_TEXT, True),
+            F("voice", "string", "A voice's name from `GET /v1/audio/voices`, the same names as `GET /api/voices`. "
+                                 "`{\"id\": \"Mira\"}` works too. OpenAI's own voices (alloy, nova...) are not the Lab's.",
+              True),
+            F("model", "string", "A model's id from `GET /v1/models`, which must be the voice's own. Any other name, such "
+                                 "as `tts-1`, means the voice's own model."),
+            F("response_format", "string", "`mp3` (the default, as OpenAI's), `opus` (in Ogg), `aac` (ADTS), `flac`, `wav` "
+                                           "or `pcm` (24 kHz, 16-bit signed little-endian, mono, no header). MP3, Opus "
+                                           "and AAC are made by FFmpeg."),
+            F("speed", "number", "0.25 to 4.0, default 1. Only a model with a speed control takes another value than 1, "
+                                 "and only in its own range (Kokoro 82M: 0.5 to 2.0)."),
+            F("instructions", "string", "How to say it, for a voice whose model takes an acting direction "
+                                        "(`takes_direction` in `GET /api/voices`). Other voices speak without it."),
+            F("stream_format", "string", "Only `audio`, the default: the answer is the whole file."),
+            F("wait_seconds", "number", "How long to wait in line while the model worker is busy, at most 3600. Default "
+                                        "600 here, since apps send a reply sentence by sentence.")),
+      reply_kind="audio",
+      reply="The clip in the format asked for: `audio/mpeg`, `audio/ogg`, `audio/aac`, `audio/flac`, `audio/wav` or "
+            "`audio/pcm`. Every format with room for it carries the AI-generated label; `pcm` and `aac` have none. No take "
+            "is kept.",
+      headers=(F("X-Audio-Seconds", "string", "The clip's length in seconds."),
+               F("X-Parts", "string", "How many parts a long text was spoken in, when more than one.")),
+      errors=((404, "No voice has that name (`not_found`)."),
+              (409, "Twenty requests already wait for the model worker, or this one waited `wait_seconds` (`busy`)."),
+              (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel` (`cancelled`)."),
+              (503, "The voice's model is not installed (`model_not_installed`), or the format is made by FFmpeg, which is "
+                    "not installed or cannot make it (`ffmpeg_not_installed`).")),
+      notes="Any `Authorization` header is accepted and ignored: like every route, this one answers programs on this "
+            "computer only. A cancel needs the request's own `X-Request-Id`, as on the Lab's other routes.",
+      suite=True),
+    R("POST", "/v1/audio/transcriptions", "OpenAI-style", "Transcribe a local audio file.", body_kind="multipart",
+      body=(F("file", "binary", "A local audio upload, up to 25 MiB.", True),
+            F("model", "string", "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model.", True),
+            F("language", "string", "Optional ISO language code."), F("prompt", "string", "Optional spelling prompt."),
+            F("temperature", "number", "Decoding temperature from 0 to 1."),
+            F("response_format", "string", "json, verbose_json, text, srt or vtt."),
+            F("timestamp_granularities[]", "string[]", "Optional word and segment timestamp granularity.")),
+      reply_kind="transcript", reply="Transcript text, optionally with timestamps or formatted as captions."),
+    R("POST", "/v1/audio/translations", "OpenAI-style", "Translate local speech to English.", body_kind="multipart",
+      body=(F("file", "binary", "A local audio upload, up to 25 MiB.", True),
+            F("model", "string", "Use whisper-1 or select a configured faster-whisper-tiny or faster-whisper-small model.", True),
+            F("prompt", "string", "Optional English spelling prompt."),
+            F("temperature", "number", "Decoding temperature from 0 to 1."),
+            F("response_format", "string", "json, verbose_json, text, srt or vtt.")),
+      reply_kind="transcript", reply="English transcript text, optionally with timestamps or as captions."),
+    R("GET", "/v1/models", "OpenAI-style", "List the models that have a voice ready to speak, as OpenAI lists models.",
+      reply="`object` (`list`) and `data`: each model's `id`, `object` (`model`), `created` (0), `owned_by` and `name`."),
+    R("GET", "/v1/audio/models", "OpenAI-style", "List the same models in the shape some apps ask for.",
+      reply="`models`: each model's `id` and `name`."),
+    R("GET", "/v1/audio/voices", "OpenAI-style", "List the voices ready to speak, for apps that offer a choice of voices.",
+      reply="`voices`: each voice's `id` (its name, to send as `voice`) and `name` (what it is and its model, to show).",
+      notes="Open WebUI reads this list, and `GET /v1/audio/models`, when its speech engine is OpenAI with another base "
+            "address."),
+
+    # ---------------------------------------------------------------- Cast
+    R("POST", "/api/cast/slate-clip/preview", "Cast", "Check a Voice Slate handoff file without saving it.",
+      body_kind="archive", reply="`clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.",
+      errors=((400, "The bundle or source file is invalid."), (413, "The bundle exceeds the upload limit."))),
+    R("POST", "/api/cast/slate-clip/import", "Cast", "Import a kept Voice Slate clip as a candidate.",
+      body_kind="archive", status=201, query=(F("character", "string", "The Cast character name or ID.", True),
+        F("engine_id", "string", "A reference-cloning engine from the preview.", True),
+        F("create_character", "string", "Send 1 to create the character when the name is new."),
+        F("accept_draft", "string", "Send 1 only after explicitly accepting an unchecked transcript draft."),
+        F("sidecar_sha256", "string", "Optional preview hash. Refuse a clip whose sidecar differs from the one reviewed.")),
+      reply="`status`, Cast character, identity and reference IDs, and `warnings`.",
+      notes="The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies "
+            "them. A master recording stays in Slate and an imported reference still needs Cast approval.",
+      errors=((400, "The clip or requested assignment is invalid."), (413, "The bundle exceeds the upload limit."))),
+    R("GET", "/api/inbox", "Cast", "List the clips Voice Slate handed over, waiting in the inbox.",
+      reply="`files`, oldest first, at most 200: each file's `name`, `sender` (an app id such as `voice-slate`, or null), "
+            "`sender_name`, `sent` (UTC, from the file name, or null), `size` in bytes and `state`. `ready` comes with "
+            "`clip`, the same summary as `POST /api/cast/slate-clip/preview`; `checking` means not checked yet; `refused` "
+            "comes with `code` (`kind`, `size`, `clip` or `unreadable`) and `problem`, a sentence. Also `engines` (the "
+            "models that can use a recording) and `folder` (where the inbox is).",
+      notes="The inbox is `inbox\\voice-lab\\` in the folder of Fel's Studio (`%LOCALAPPDATA%\\Fels\\`, or "
+            "`FELS_SUITE_DIR`). The service makes it when it starts; Voice Slate offers Send to Voice Lab only when it exists. "
+            "Each file is checked once as the file box checks a picked one, and again when it changes. One listing checks "
+            "new files for about 1.5 s, and the next one goes on. Nothing is imported until a caller asks."),
+    R("POST", "/api/inbox/{inbox_file}/import", "Cast", "Import a waiting clip as a candidate, then clear it from the inbox.",
+      status=201, body=(F("character", "string", "The Cast character name or ID.", True),
+        F("engine_id", "string", "A model from the listing's `engines`.", True),
+        F("create_character", "boolean", "Create the character when the name is new."),
+        F("accept_draft", "boolean", "Send true only after the person accepted an unchecked transcript draft."),
+        F("sidecar_sha256", "string", "The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is "
+                                      "refused.")),
+      reply="`status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to "
+            "the Recycle Bin.",
+      notes="The same check and import as `POST /api/cast/slate-clip/import`. After the import the file goes to the "
+            "Recycle Bin (it is deleted outside Windows). If that fails, the clip is still in Cast, `cleared` is false and "
+            "a warning says why; importing it again changes nothing.",
+      errors=((400, "The clip, its kind or size, or the requested assignment is invalid."),
+              (404, "The file is no longer in the inbox."))),
+    R("POST", "/api/inbox/{inbox_file}/dismiss", "Cast", "Send a waiting file to the Recycle Bin without importing it.",
+      body_kind="none", reply="`{\"ok\": true}`.",
+      notes="Any listed file can be dismissed, refused ones too. It is deleted outside Windows.",
+      errors=((404, "The file is no longer in the inbox."),
+              (500, "Windows could not move it to the Recycle Bin; the sentence says why."))),
+    R("GET", "/api/cast", "Cast", "List every character with its voices and their recordings.",
+      reply="`schema_version` and `characters`. Each character has `id`, `name`, `description`, `tags` and `identities`; each "
+            "identity has `id`, `engine_id`, `label`, `status` (`candidate`, `approved` or `rejected`), `kind` (`reference`, "
+            "`fixed_voice` or `preset_voice`), `engine_options`, `approved_reference_id`, `notes` and `references` (the "
+            "recordings, newest version first, each with `id`, `version`, `transcript`, `origin`, `allowed_use`, "
+            "`duration_seconds`, `audio_url` and `licence_rating`, null until one is chosen). Each voice has a `licence` "
+            "with its effective rating and reason. A voice can also report `voice_languages` and whether its "
+            "`approved_recording_available` file is present. Retired items say so."),
+    R("POST", "/api/characters", "Cast", "Create a character.", status=201,
+      body=(F("name", "string", "1 to 80 characters.", True), F("description", "string", "Up to 2000 characters."),
+            F("tags", "string[]", "Up to 40 characters each.")),
+      reply="`character`, as in `GET /api/cast`.",
+      suite=True,
+      answer=(("character.id", "string"), ("character.name", "string"), ("character.description", "string"),
+              ("character.tags", "string[]"), ("character.identities", "array"))),
+    R("POST", "/api/characters/from-design", "Cast",
+      "Design a voice from words and keep it as a new character's voice, ready to speak by the character's name.",
+      status=201,
+      body=(F("name", "string", "The new character's name, 1 to 80 characters. The voice is called by it.", True),
+            F("voice_description", "string", "The voice to invent, in words, up to 1000 characters: `A warm, low voice, "
+                                             "unhurried and a little hoarse.`", True),
+            F("text", "string", "The sample line the voice is designed with, up to 400 characters, which becomes its voice "
+                                "recording with these words as the transcript. Default: a short English line."),
+            F("engine", "string", "The model that designs the voice: `qwen3-tts-1.7b-voice-design` (the default), `voxcpm2` "
+                                  "or `breeze-tts-2`."),
+            F("clone_engine", "string", "The model that speaks the voice afterwards, from its recording. Default, for a "
+                                        "Qwen design: the first installed of Qwen3-TTS 1.7B Base, 0.6B Base, Chatterbox "
+                                        "Turbo, VoxCPM2 and Chatterbox 500M; for the others, the design model itself."),
+            F("language", "string", "Qwen VoiceDesign: the language of the sample line. Default `English`."),
+            F("seed", "integer", "The design's random seed. Default 42.")),
+      reply="`voice`: the new voice as `GET /api/voices` lists it, with `ready` true and `name`, the character's name; "
+            "`character_id`; `reference_id`, its recording; `engine`, the model that designed it; and `clone_engine`, the "
+            "one that speaks it.",
+      errors=((409, "A character of that name is in the Cast already (`already_exists`)."),
+              (500, ENGINE_FAILED),
+              (503, "The design model, or the model that speaks the voice afterwards, is not installed "
+                    "(`model_not_installed`): `error` says which.")),
+      notes="One call does what the page does when a designed clip is kept as a Cast voice: the design model speaks the "
+            "sample line, the clip is kept as the voice's recording with its origin and allowed use (the design model's "
+            "terms, as for `save_voice_as`), and the voice is approved. It then sounds the same in every clip, through "
+            "`POST /v1/audio/speech`, `POST /api/speak` or `POST /api/performance`, by its name. Nothing is saved when the "
+            "design fails. The first call loads the design model, which can take minutes: send `wait_seconds`. A voice "
+            "saved with `save_voice_as` of `POST /api/speak` is a recording under `data/voices`, not a Cast voice.",
+      suite=True,
+      answer=(("voice.name", "string"), ("voice.aliases", "string[]"), ("voice.kind", "string"), ("voice.model", "string"),
+              ("voice.character", "string"), ("voice.identity_id", "string"), ("voice.status", "string"),
+              ("voice.ready", "boolean"), ("voice.why_not", "string|null"), ("voice.licence.rating", "string"),
+              ("voice.licence.reason", "string"), ("character_id", "string"),
+              ("reference_id", "string"), ("engine", "string"), ("clone_engine", "string"))),
+    R("POST", "/api/characters/{character_id}", "Cast", "Rename a character or change its description.",
+      body=(F("name", "string", "1 to 80 characters. Leave out to keep it."),
+            F("description", "string", "Up to 2000 characters. Leave out to keep it.")),
+      reply="`character`."),
+    R("POST", "/api/characters/{character_id}/identities", "Cast", "Add a voice to a character.", status=201,
+      body=(F("engine_id", "string", "A recording-cloning engine, `kokoro`, `phonon-31m-en` or the Qwen CustomVoice engine that "
+                                     "the service exposes.", True),
+            F("label", "string", "1 to 80 characters.", True),
+            F("notes", "string", "Up to 2000 characters."),
+            F("voice", "string", "Kokoro: a voice name, or several joined with commas to blend them. Default `af_heart`."),
+            F("speaker", "string", "CustomVoice: a speaker the loaded checkpoint reports. Phonon: a voice name from "
+                                   "`phonon_voices` of `GET /api/info`."),
+            F("language", "string", "CustomVoice: a language the loaded checkpoint reports. Phonon: `English`, the default."),
+            F("default_direction", "string", "CustomVoice: the delivery instruction to use when a line gives none.")),
+      reply="`identity`. A new voice is a `candidate` until it is approved.",
+      notes="A cloning voice has no recording yet: upload one with "
+            "[`POST /api/identities/{identity_id}/references`](#post-api-identities-identity_id-references).",
+      suite=True,
+      answer=(("identity.id", "string"), ("identity.engine_id", "string"), ("identity.label", "string"),
+              ("identity.status", "string"), ("identity.kind", "string"), ("identity.references", "array"))),
+    R("POST", "/api/identities/{identity_id}/update", "Cast",
+      "Update a voice, approve or reject it, or rate its recording's licence.",
+      body=(F("label", "string", "1 to 80 characters."), F("notes", "string", "Up to 2000 characters."),
+            F("status", "string", "`candidate`, `approved` or `rejected`."),
+            F("reference_version_id", "string", "The recording to approve; needed to approve a cloning voice."),
+            F("licence_rating", "string|null", "Recording use: `yes`, `conditions`, `unclear` or `no`. Use null to clear it."),
+            F("licence_reference_id", "string", "The saved recording to rate. Defaults to the approved recording."),
+            F("engine_options", "object", "Kokoro: `{\"voice\": \"af_heart\"}`. Preset voices cannot change.")),
+      reply="`identity`.",
+      notes="Approving a cloning voice needs a recording with its exact transcript. Approving a voice sends another "
+            "approved voice of the same character and engine back to `candidate`.",
+      suite=True,
+      answer=(("identity.id", "string"), ("identity.status", "string"), ("identity.approved_reference_id", "string|null"),
+              ("identity.references[].id", "string"), ("identity.references[].licence_rating", "string|null"),
+              ("identity.licence.rating", "string"), ("identity.licence.reason", "string"))),
+    R("POST", "/api/identities/{identity_id}/references", "Cast", "Upload a recording for a cloning voice and save it as a "
+                                                                  "voice recording.",
+      status=201, body_kind="audio",
+      reply="`reference`: the saved version with its quality readings and `audio_url`.",
+      errors=((413, "The recording is over 32 MiB."),),
+      notes="Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, "
+            "base64url-encoded JSON: `{\"filename\": \"nell.wav\", \"transcript\": \"...\", \"origin\": \"...\", "
+            "\"allowed_use\": \"...\", \"edits\": {\"start_seconds\": 0.5, \"end_seconds\": 9.0, \"target_sample_rate\": "
+            "24000, \"channel\": \"mono\", \"noise_reduction\": {\"enabled\": false}}}`. `filename` sets the format; `edits` "
+            "is optional. The saved reference is 0.5 to 60 seconds.",
+      metadata=REFERENCE_METADATA,
+      suite=True,
+      answer=(("reference.id", "string"), ("reference.version", "integer"), ("reference.transcript", "string"),
+              ("reference.origin", "string"), ("reference.allowed_use", "string"), ("reference.duration_seconds", "number"),
+              ("reference.audio_url", "string"))),
+    R("POST", "/api/identities/{identity_id}/references/preview", "Cast",
+      "Process a recording the way an upload would, and return the result without saving anything.",
+      body_kind="audio", reply_kind="wav",
+      reply="The processed WAV. Its quality readings are in the `X-Reference-*` headers.",
+      headers=(F("X-Reference-Duration", "string", "Seconds."), F("X-Reference-Sample-Rate", "string", "Hertz."),
+               F("X-Reference-RMS", "string", "dBFS."),
+               F("X-Reference-Quality", "string", "Base64url-encoded JSON of the quality assessment.")),
+      errors=((413, "The recording is over 32 MiB."),),
+      notes="Same body and `X-Reference-Metadata` header as the upload."),
+    R("POST", "/api/identities/{identity_id}/references/from-take", "Cast",
+      "Save a take as a new reference recording for a cloning voice.", status=201,
+      body=(F("take_id", "string", "The take to copy.", True),
+            F("transcript", "string", "Default: the take's spoken text."),
+            F("edits", "object", "Trim, rate and channel edits, as for an upload."),
+            F("origin", "string", "Default: a note naming the take."),
+            F("allowed_use", "string", "Added to the take's own terms, which always carry over.")),
+      reply="`reference`."),
+    R("POST", "/api/references/{reference_id}/versions", "Cast",
+      "Save a new version of a reference recording with a different transcript or trim.", status=201,
+      body=(F("transcript", "string", "Up to 1200 characters. Default: the current one."),
+            F("origin", "string", "Cannot be blank."), F("allowed_use", "string", "Cannot be blank."),
+            F("start_seconds", "number", "Trim start in the source recording."),
+            F("end_seconds", "number", "Trim end."),
+            F("target_sample_rate", "integer", "8000 to 192000."),
+            F("channel", "string", "`mono`, `left` or `right`."),
+            F("noise_reduction", "object", "`enabled`, `profile_start_seconds`, `profile_end_seconds`, `strength`.")),
+      reply="`reference`: the new version. The earlier one is kept as it was."),
+    R("GET", "/api/references/{reference_id}/audio", "Cast", "Download a voice recording's processed WAV.",
+      reply_kind="wav", reply="The WAV.", headers=(F("X-Reference-Version", "string", "The version's id."),)),
+    R("GET", "/api/references/{reference_id}/source", "Cast", "Download the file a voice recording was made from, as it was uploaded.",
+      reply_kind="audio", reply="The recording as it was uploaded."),
+    R("POST", "/api/references/{reference_id}/transcript-suggestion", "Cast",
+      "Draft a transcript of a reference recording. Nothing is saved.", body_kind="none",
+      reply="`suggestion`: the drafted text and how it was made. Check it before saving it with a new version.",
+      errors=((409, "A transcription is already running."), (500, "The transcription failed."),
+              (503, "No transcription model is installed."))),
+    R("GET", "/api/pronunciations", "Cast", "List pronunciation entries.",
+      query=(F("character_id", "string", "A character's entries together with the shared ones. Default: only the shared ones."),),
+      reply="`pronunciations`: `id`, `character_id` (null when shared), `source`, `replacement`, `notes`."),
+    R("POST", "/api/pronunciations", "Cast", "Add a pronunciation, or change the one with the same term.",
+      body=(F("source", "string", "The written term, 1 to 100 characters.", True),
+            F("replacement", "string", "How to spell it for the engine, 1 to 200 characters.", True),
+            F("character_id", "string", "Omit for a shared entry."), F("notes", "string", "Up to 500 characters.")),
+      reply="`pronunciation`."),
+    R("POST", "/api/retirements", "Cast", "Retire a character, voice, recording or take: block new use of it and of "
+                                          "everything made from it. Nothing is deleted.",
+      status=201,
+      body=(F("kind", "string", "`character`, `identity`, `reference` or `take`.", True),
+            F("id", "string", "The item's id.", True), F("reason", "string", "Up to 300 characters.")),
+      reply="`retirement` and `affected`: how many items of each kind it reaches."),
+    R("POST", "/api/retirements/restore", "Cast", "Lift a retirement.",
+      body=(F("kind", "string", "As for retiring.", True), F("id", "string", "The item's id.", True)),
+      reply="`{\"restored\": true}`. Something retired because it came from a retired source stays blocked until that "
+            "source is restored."),
+    R("GET", "/api/purges/preview", "Cast", "Show what purging a retired item would delete.",
+      query=(F("kind", "string", "`character`, `identity`, `reference` or `take`.", True),
+             F("id", "string", "The item's id.", True)),
+      reply="`would_purge` (counts by kind), `media_files` and `external_copies`: copies of the audio outside Cast storage, "
+            "which a purge lists but never deletes.",
+      errors=((400, "The item is not retired."),)),
+    R("POST", "/api/purges", "Cast", "Permanently delete a retired item, everything made from it, and their audio.",
+      body=(F("kind", "string", "As for retiring.", True), F("id", "string", "The item's id.", True),
+            F("reason", "string", "Up to 300 characters."),
+            F("confirm", "boolean", "Must be `true`; anything else is refused.", True)),
+      reply="`batch_id`, `purged` (counts by kind), `media_files` and `external_copies`.",
+      errors=((400, "The item is not retired, `confirm` is not `true`, or a file could not be removed (nothing is purged "
+                    "then, so the call can be repeated)."),)),
+
+    # ---------------------------------------------------------------- Takes
+    R("GET", "/api/takes", "Takes", "List takes, oldest first.",
+      query=(F("identity_id", "string", "Only this voice's takes."), F("line_id", "string", "Only takes for this line.")),
+      reply="`takes`: each with `id`, `character_id`, `character_name`, `identity_id`, `identity_label`, `engine_id`, "
+            "`reference_version_id`, `line_id`, `text`, `spoken_text`, `language`, `direction`, `settings`, `model`, "
+            "`provenance`, `sample_rate`, `duration_seconds`, `status`, `rating`, `notes`, `created_at`, `loudness`, "
+            "`waveform_checks`, `licence` (the rating and reason for the specific recording and model used), "
+            "`has_word_timings`, `has_phoneme_timings`, `parent_take_id` and `edit` (null unless the "
+            "take is an edit of another take), `audio_url` and its retirement state."),
+    R("GET", "/api/takes/{take_id}", "Takes", "Read one take.", reply="`take`, as in `GET /api/takes`."),
+    R("GET", "/api/takes/{take_id}/audio", "Takes", "Download a take's WAV.", reply_kind="wav", reply="The WAV.",
+      headers=(F("X-Take-Id", "string", "The take's id."),)),
+    R("GET", "/api/takes/{take_id}/waveform", "Takes", "Draw a take: its peaks, its level and where the speech is.",
+      query=(F("points", "integer", "How many slices to summarise the take in, 10 to 2000. Default 600."),),
+      reply="`duration_seconds`, `sample_rate`, `points`, `peaks` (a `[min, max]` pair from -1 to 1 for each slice), "
+            "`peak_dbfs` and `rms_dbfs` (null for silence), and `speech`: the part louder than -50 dB, with its "
+            "`start_seconds` and `end_seconds`, or null when nothing is.",
+      errors=((400, "`points` is not a whole number from 10 to 2000, or the stored audio is missing or has changed."),)),
+    R("POST", "/api/takes/{take_id}/edit-preview", "Takes", "Hear an edit of a take without saving anything.",
+      body=EDIT_FIELDS, reply_kind="wav", reply="The edited audio as a 16-bit mono WAV. Nothing is saved, and the take is not changed.",
+      headers=(F("X-Audio-Seconds", "string", "Seconds of audio in the edited clip."),
+               F("X-Edit-Start-Seconds", "string", "Where in the take the kept part starts."),
+               F("X-Edit-End-Seconds", "string", "Where in the take the kept part ends."),
+               F("X-Peak-Dbfs", "string", "The loudest sample of the edited clip in dBFS; empty for silence.")),
+      errors=((400, EDIT_REFUSALS),), notes=EDIT_NOTES),
+    R("POST", "/api/takes/{take_id}/edit", "Takes", "Save an edit of a take as a new take.", status=201,
+      body=EDIT_FIELDS + (F("idempotency_key", "string", "1 to 200 characters. Repeating the call with the same key and the "
+                                                         "same edit returns the take that was made instead of making another."),),
+      reply="`take`, the new take as in `GET /api/takes` (its `parent_take_id` is this take and its `edit` says what was done), "
+            "and `replayed`. A repeat with the same `idempotency_key` answers `200` with `replayed: true` and the take "
+            "made the first time.",
+      errors=((400, EDIT_REFUSALS + " An `idempotency_key` used before for a different edit, another take or a performance is "
+                                    "refused too."),), notes=EDIT_NOTES),
+    R("POST", "/api/takes/{take_id}/update", "Takes", "Mark a take selected, rejected or candidate, rate it, or note it.",
+      body=(F("status", "string", "`candidate`, `selected` or `rejected`. Selecting a take returns the line's other "
+                                  "selected take to `candidate`."),
+            F("rating", "integer", "1 to 5."), F("notes", "string", "Up to 2000 characters.")),
+      reply="`take`.", errors=((400, "The take is retired."),)),
+    R("GET", "/api/takes/{take_id}/voice-match", "Takes",
+      "Score how closely a take's voice matches its reference recording, with the optional speaker model.",
+      reply="`voice_match`: `available`; when true, a `score`, a `band` (`likely_same`, `uncertain` or `likely_different`), "
+            "the `reference_version_id` and `proxy: true`; when false, a `reason` (a preset voice has no recording to compare "
+            "with, or the speaker model is not installed). A proxy for review, not an acceptance result."),
+
+    # ---------------------------------------------------------------- Scenes
+    R("GET", "/api/scenes", "Scenes", "List scenes.",
+      reply="`schema_version` and `scenes`: every scene in full, the most recently changed first. When a saved book owns a scene, "
+            "`chapter_books` maps its scene ID to the book ID, title and chapter position (starting at 1)."),
+    R("POST", "/api/scenes", "Scenes", "Create a scene from a manifest.", status=201,
+      body=(F("name", "string", "1 to 120 characters. Default `Untitled scene`."),
+            F("lines", "object[]", "1 to 500 lines, in order; see the scene schema.", True),
+            F("schema_version", "integer", "Default 1.")),
+      reply="`scene`, with its `scene_id`, `revision`, `checksum` and computed `segments`.",
+      errors=((413, "The request is over 2 MiB."),),
+      notes="Get a template from `GET /api/scenes/template.json` and fill in ids from `GET /api/cast`."),
+    R("GET", "/api/scenes/template.json", "Scenes", "Download a scene manifest template.",
+      reply="A manifest with placeholder ids."),
+    R("GET", "/api/scenes/template.csv", "Scenes", "Download the scene CSV header and one sample row.", reply_kind="csv",
+      reply="The CSV."),
+    R("POST", "/api/scenes/import/preview", "Scenes", "Read a script without creating anything.",
+      body=(F("format", "string", "`text` (one `NAME: words` line per speech), `fountain`, `srt`, `vtt` or `transcript`.", True),
+            F("content", "string", "The script, up to 2 MiB.", True)),
+      reply="`script`: `title` (a Fountain title page's Title, or empty), `lines` (each with `number`, its line in the "
+            "script, `speaker`, null for narration, `kind`, `text` and `direction`), `speakers` (each `name` and how many "
+            "`lines`), `narration` (how many lines have no speaker) and `unread` (each `number`, `text` and `reason`). "
+            "Subtitle previews also include `duration_ms`, planned `sections`, overlap `warnings`, and the original cue times.",
+      errors=((400, "The format or subtitle header is invalid."), (413, "The request is over 2 MiB.")),
+      notes="The import below reads the script the same way. Plain text: a direction in brackets or parentheses at the "
+            "start of the words, or after the name, is the line's acting direction, and a line with no name is narration. "
+            "Fountain: a parenthetical is the direction of the words after it; extensions such as (V.O.) and (CONT'D) are "
+            "taken off names; scene headings, transitions, notes and boneyard are left out; action is narration."),
+    R("POST", "/api/scenes/import", "Scenes", "Create a scene from JSON, CSV, a script or timed subtitles.",
+      status=201,
+      body=(F("format", "string", "`json`, `csv`, `text`, `fountain`, `srt`, `vtt` or `transcript`.", True), F("content", "string", "The text, up to 2 MiB.", True),
+            F("speakers", "object", "For scripts and subtitles, every named speaker mapped to "
+                                    "`{\"identity_id\": ...}` or to null to leave their lines out. A speaker missing from the "
+                                    "map is refused."),
+            F("narrator", "object", "For scripts and subtitles, `{\"identity_id\": ...}` for the lines with no speaker. "
+                                    "Without it they are left out."),
+            F("name", "string", "The scene's name for scripts and subtitles. Defaults to the Fountain title or a name for the format.")),
+      reply="`scene`; `scenes` also lists the saved scenes for a multi-section subtitle file. For scripts, `report` includes `lines` (how many were imported), `left_out` and `directions_left_out` "
+            "(each with the script's line `number`, `speaker` and `text`) and `unread`, as the preview gives it.",
+      errors=((400, "A subtitle cue is malformed, a voice cannot be used or is unassigned, or every line is left out."),
+              (413, "The request is over 2 MiB.")),
+      notes="A script's lines get the defaults a new line gets on the page: the voice's default acting direction when the "
+            "script gives none, 250 ms after the line, one take, and the model's own settings. A direction for a model "
+            "that takes none is left out and listed in `directions_left_out`. Subtitle scenes preserve their cue clock "
+            "and split long files into scenes of up to 30 minutes and 500 cues, with video offsets. `transcript` accepts the Slate "
+            "`fels-voice-transcript-v1` JSON and preserves its source media identity and original annotations."),
+    R("GET", "/api/sample", "Scenes", "Say whether the sample scene exists, and whether it can be made here.",
+      reply="`sample`: null, or its `scene_id`, `scene_name`, `characters` (each `id` and `name`) and `created_at`; "
+            "`can_make` (Kokoro 82M is installed) and `why_not`."),
+    R("POST", "/api/sample", "Scenes", "Make the sample scene: two characters with Kokoro preset voices and a nine-line scene "
+                                       "written for the Lab, ready to render.", status=201, body_kind="none",
+      reply="`made` and `sample`, as `GET /api/sample` gives it. When the sample exists already, it is answered with 200 "
+            "and nothing is made.",
+      errors=((503, "Kokoro 82M is not installed (`model_not_installed`)."),),
+      notes="The characters are named as samples and tagged `sample`, and their voices are approved. The scene comes "
+            "through the same script import as `POST /api/scenes/import`. What it made is recorded in "
+            "`data/scenes/sample.json`, so a library backup carries it."),
+    R("GET", "/api/sample/remove/preview", "Scenes", "Show what removing the sample scene would delete.",
+      reply="`scene` (null, or its `scene_id`, `name` and how many batch `jobs`), `would_remove` (counts of `character`, "
+            "`identity`, `reference` and `take`), `used_elsewhere` (the names of other scenes with a line in a sample "
+            "character's voice, which stop the removal) and `external_copies` (copies of the takes under `out/`, such as "
+            "export packages, which are listed and never deleted). With no sample, `scene` is null and nothing is counted."),
+    R("POST", "/api/sample/remove", "Scenes", "Delete everything the sample scene made, which leaves the library as it was.",
+      body=(F("confirm", "boolean", "Must be `true`; anything else is refused.", True),),
+      reply="`removed` (counts of `scene`, `jobs`, `character`, `identity`, `reference` and `take`) and `external_copies`.",
+      errors=((400, "`confirm` is not `true`, or another scene uses a sample character."),
+              (404, "There is no sample scene."),
+              (409, "A batch of the sample is making a line: it was cancelled; remove the sample again in a moment "
+                    "(`busy`).")),
+      notes="The scene goes with its batches and built previews; each character goes with its voices, any recording "
+            "added to it and every take made with them, and no record of the removal is kept. A take made with a sample "
+            "voice outside the sample scene, in Perform for example, goes too."),
+    R("GET", "/api/scenes/{scene_id}", "Scenes", "Read a scene.", reply="`scene`."),
+    R("POST", "/api/scenes/{scene_id}", "Scenes", "Replace a scene's name and lines.",
+      body=(F("name", "string", "1 to 120 characters."), F("lines", "object[]", "The full list of lines.", True),
+            F("expected_revision", "integer", "The revision you last read. A different one is refused, so a stale edit "
+                                              "cannot overwrite a newer one.")),
+      reply="`scene` at its next revision.",
+      errors=((400, "`expected_revision` is stale, or the manifest is invalid."), (413, "The request is over 2 MiB.")),
+      notes="There is no PUT: a scene is updated with this POST."),
+    R("GET", "/api/scenes/{scene_id}/export.json", "Scenes", "Download a scene as a manifest.", reply_kind="file",
+      reply="The manifest as a JSON file."),
+    R("GET", "/api/scenes/{scene_id}/export.csv", "Scenes", "Download a scene as CSV.", reply_kind="csv",
+      reply="The CSV file."),
+    R("GET", "/api/scenes/{scene_id}/segments", "Scenes", "Show how each line splits into synthesis segments.",
+      query=(F("line_id", "string", "Only this line."),), reply="`segments`: `seg-001`, `seg-002` and so on, per line."),
+    R("GET", "/api/scenes/{scene_id}/jobs", "Scenes", "List a scene's batch jobs, newest first.",
+      reply="`jobs`, each as `GET /api/scenes/jobs/{job_id}` gives it."),
+    R("POST", "/api/scenes/{scene_id}/jobs", "Scenes", "Queue a batch that renders the scene's lines as takes.", status=202,
+      body=(F("line_ids", "string[]", "Only these lines. Default: every line."),
+            F("segment_ids", "string[]", "Only these segments, as `line-id/seg-001`.")),
+      reply="`job`. Jobs run one take at a time; poll `GET /api/scenes/jobs/{job_id}`."),
+    R("GET", "/api/scenes/jobs/{job_id}", "Scenes", "Read a job's progress.",
+      reply="`job`: its `status` (`queued`, `running`, `paused`, `completed`, `failed` or `cancelled`), the counts `total`, "
+            "`queued`, `running`, `completed`, `failed` and `cancelled`, `progress` from 0 to 1, and `rows`: one per segment "
+            "to render, with its `status`, `take_id`, `attempts`, `error` and `engine_id`, in the order they render. A batch "
+            "renders all of one model's rows before the next model loads: `models` lists them in that order, each with "
+            "`engine_id`, `name`, `total` and `done` (rows finished, failed or cancelled)."),
+    R("GET", "/api/scenes/jobs/{job_id}/manifest.json", "Scenes", "Download a finished job's result manifest.",
+      reply_kind="file", reply="The manifest, only when its checksum verifies.",
+      errors=((409, "The manifest's checksum does not match (`code` `conflict`)."),)),
+    R("POST", "/api/scenes/jobs/{job_id}/pause", "Scenes", "Pause a job after the take in progress.", body_kind="none",
+      reply="`job`."),
+    R("POST", "/api/scenes/jobs/{job_id}/resume", "Scenes", "Resume a paused job.", body_kind="none", reply="`job`."),
+    R("POST", "/api/scenes/jobs/{job_id}/cancel", "Scenes", "Cancel a job. A take already being made is not undone.",
+      body=(F("stop_current", "boolean", "True also stops the line the job is rendering now, by ending its model's process, "
+                                         "instead of letting it finish; that line is marked cancelled, and the next request "
+                                         "loads the model again."),),
+      reply="`job`."),
+    R("POST", "/api/scenes/jobs/{job_id}/retry", "Scenes", "Queue the failed rows of a job again.", body_kind="none",
+      reply="`job`."),
+    R("POST", "/api/scenes/{scene_id}/select", "Scenes", "Choose which take a line, or one of its segments, uses.",
+      body=(F("line_id", "string", "The line.", True), F("take_id", "string", "The take.", True),
+            F("segment_id", "string", "For a line with several segments.")),
+      reply="`scene`."),
+    R("GET", "/api/scenes/{scene_id}/lines", "Scenes", "Say where every line of a scene stands, in one answer.",
+      reply="`scene_id`, `revision` and `lines`, in script order, each with its `line_id`, `status`, `reason`, "
+            "`segments_done` and `segments`. A status is `not_rendered`, `waiting` (a batch will reach it), `rendering`, "
+            "`failed` (the latest batch to try its current text failed; `reason` says why), `choose_take` (a take fits its "
+            "current text, voice and settings, and none is chosen), `out_of_date` (its chosen take, or every take it has, "
+            "was made before its text, voice or settings changed; `reason` says what changed) or `done` (its chosen take "
+            "still fits). A line has the first of `rendering`, `waiting`, `failed`, `out_of_date`, `not_rendered`, "
+            "`choose_take` and `done` that one of its segments has. Each segment has its `segment_id`, `status`, `reason`, "
+            "`chosen_take_id` and `takes`, newest first and without retired takes that are not chosen, each with `id`, "
+            "`created_at`, `duration_seconds`, `audio_url`, `waveform_checks`, `chosen`, `fits` and `reason`."),
+    R("POST", "/api/scenes/{scene_id}/choose-newest", "Scenes",
+      "Choose the newest take that fits for every segment without one.",
+      body=(F("line_ids", "string[]", "Only these lines. Default: every line."),),
+      reply="`scene`, at a new revision when it chose any, `chosen` (how many segments got a take) and `lines` (how many "
+            "lines they are in)."),
+    R("POST", "/api/scenes/{scene_id}/preview", "Scenes", "Assemble the selected takes into one preview.", status=201,
+      body_kind="none",
+      reply="`preview`: `audio_url` for the raw assembly, `mastered_audio_url` for the loudness-normalized copy, and the "
+            "measurements.",
+      errors=((400, "A line has no selected take, or its audio is missing."),)),
+    R("GET", "/api/scenes/{scene_id}/previews/{preview_file}.wav", "Scenes", "Download a preview's WAV.", reply_kind="wav",
+      reply="The WAV named by a preview answer's `audio_url` or `mastered_audio_url`."),
+
+    # ---------------------------------------------------------------- Exports
+    R("GET", "/api/automation/providers", "Automation", "List versioned provider destinations and capabilities.",
+      reply="Public provider profiles with their revisions."),
+    R("POST", "/api/automation/providers", "Automation", "Save a provider profile on this computer.",
+      status=201, body=(F("profile", "object", "The provider ID, base URL, model and capabilities.", True),
+                        F("key", "string", "Optional key kept in memory until the Lab closes.")),
+      reply="Public provider details with its current revision."),
+    R("POST", "/api/automation/providers/check", "Automation", "Check the selected provider's models without sending media.",
+      body=(F("provider", "string", "Configured provider ID.", True),
+            F("approve_provider_revision", "string", "Explicitly approved revision for an external destination.")),
+      reply="Connectivity and presence of the configured model."),
+    R("GET", "/api/automation/recipes", "Automation", "List the versioned recipes in this library.", reply="Saved recipes."),
+    R("POST", "/api/automation/recipes", "Automation", "Create or update a named recipe.", status=201,
+      body=(F("schema_version", "integer", "Recipe schema version 1.", True), F("name", "string", "Recipe name.", True),
+            F("input_kind", "string", "text, audio or scene.", True), F("steps", "object[]", "Ordered operations.", True),
+            F("id", "string", "Saved recipe ID when updating."), F("revision", "integer", "Saved revision when updating.")),
+      reply="Validated recipe with its ID and revision."),
+    R("POST", "/api/automation/preview", "Automation", "Check recipe inputs and preview providers and output destinations.",
+      body=(F("recipe", "object", "Unstored recipe schema."), F("recipe_id", "string", "Saved recipe ID."),
+            F("inputs", "string[]", "Text values, asset IDs or scene IDs.", True)),
+      reply="Execution plan without starting model work."),
+    R("POST", "/api/automation/assets", "Automation", "Upload a local audio asset for automation.", status=201,
+      body_kind="archive", query=(F("filename", "string", "File name with extension.", True),), reply="A content-addressed audio ID."),
+    R("GET", "/api/automation/assets/{asset_sha}", "Automation", "Read a saved automation file.", reply_kind="audio",
+      reply="The local audio file."),
+    R("GET", "/api/automation/runs", "Automation", "Read recent run statuses.", reply="Recent runs with per-item progress."),
+    R("POST", "/api/automation/runs", "Automation", "Queue a saved recipe on one or more inputs.", status=202,
+      body=(F("recipe_id", "string", "Saved recipe ID.", True), F("revision", "integer", "Require this recipe revision."),
+            F("approve_provider_revisions", "string[]", "Externally routed revisions explicitly approved after preview."),
+            F("inputs", "string[]", "Text, local audio asset IDs or saved scene IDs.", True)),
+      reply="The queued run and its input statuses."),
+    R("GET", "/api/automation/runs/{job_id}", "Automation", "Read a recipe run.", reply="A saved run and per-item status."),
+    R("POST", "/api/automation/runs/{job_id}/cancel", "Automation", "Cancel unfinished work for a recipe run.",
+      body_kind="none", reply="The updated run status."),
+    R("GET", "/api/projects/recent", "Page helpers", "List the five most recently changed projects.", internal=True),
+    R("GET", "/api/scenes/{scene_id}/preview", "Page helpers", "Open the latest mix for this scene revision.", internal=True),
+    R("GET", "/api/projects", "Production", "Search local books, timed scenes and scenes.",
+      query=(F("kind", "string", "`scene`, `dub` (timed scene), or `book`."), F("q", "string", "Search titles and script.")),
+      reply="Project IDs, title, type, voices, takes and job status."),
+    R("POST", "/api/portable/export", "Production", "Create a portable archive.", status=201,
+      body=(F("kind", "string", "`persona` (a voice file), `scene`, `dub` (timed scene), or `book`.", True), F("id", "string", "Project ID."),
+            F("identity_id", "string", "The Cast voice to export."), F("include_media", "boolean", "Include the book cover."),
+            F("include_voices", "boolean", "Include approved project references."),
+            F("author", "string", "Optional name of the voice-file author."), F("permission", "boolean", "Confirm permission to share a cloned voice and its recording.")),
+      reply="`archive`: its `id`, `kind`, `files` (how many it holds) and `download`, the path of "
+            "`GET /api/portable/{delivery_id}.zip` that answers it.",
+      notes="A voice file (`persona`) carries the voice's approved recording and a short take of it as an audition: make "
+            "one with `POST /api/performance` first, or the export says so. A voice designed from words needs no "
+            "`permission`; one cloned from a person's recording does.",
+      suite=True,
+      answer=(("archive.id", "string"), ("archive.kind", "string"), ("archive.files", "integer"),
+              ("archive.download", "string"))),
+    R("POST", "/api/portable/preview", "Production", "Verify a portable ZIP without importing it.", body_kind="archive",
+      reply="`archive`: its `kind`, `title`, `author`, `voices` (each with `label`, `engine_id`, `kind`, `model_installed`, "
+            "and for a voice with a recording its `sample`: `source_type` (`designed` or `recording`), `origin`, "
+            "`allowed_use` and `transcript`), `assets` and `archive_sha256`, which the import needs.",
+      suite=True,
+      answer=(("archive.kind", "string"), ("archive.title", "string"), ("archive.voices[].label", "string"),
+              ("archive.voices[].engine_id", "string"), ("archive.voices[].kind", "string"),
+              ("archive.voices[].model_installed", "boolean"), ("archive.voices[].sample.source_type", "string"),
+              ("archive.voices[].sample.origin", "string"), ("archive.voices[].sample.allowed_use", "string"),
+              ("archive.archive_sha256", "string"))),
+    R("POST", "/api/portable/voice-preview", "Production", "Play a verified archive voice sample without importing.",
+      body_kind="archive", query=(F("asset", "string", "Source voice sample asset.", True),),
+      reply_kind="wav", reply="The verified WAV in the supplied archive."),
+    R("POST", "/api/portable/import", "Production", "Import the exact portable ZIP previewed locally.", body_kind="archive", status=201,
+      reply="`imported`: for a voice file, `kind` (`persona`) and `identity`, the new voice as in `GET /api/cast`, a "
+            "`candidate` until it is approved; for a project, the new project's ids.",
+      metadata=(F("archive_sha256", "string", "The `archive_sha256` of `POST /api/portable/preview` for these exact bytes.",
+                  True),
+                F("permission", "boolean", "True once the person has seen the recording's origin and allowed use; needed "
+                                           "for a voice that carries a recording."),
+                F("character_id", "string", "A voice file: add the voice to this character instead of a new one."),
+                F("archive_voice_id", "string", "A project archive: import only this one of its voices."),
+                F("voices", "object", "A project archive: which Cast voice speaks for each of its voices."),
+                F("include_media", "boolean", "A project archive: also import its cover and other files."),
+                F("import_voice_samples", "boolean", "A project archive: also import its voices' recordings.")),
+      notes="Send the file's bytes as the body, and the fields below as base64url-encoded JSON in the "
+            "`X-Reference-Metadata` header.",
+      suite=True,
+      answer=(("imported.kind", "string"), ("imported.identity.id", "string"), ("imported.identity.status", "string"),
+              ("imported.identity.references[].id", "string"))),
+    R("GET", "/api/portable/{delivery_id}.zip", "Production", "Read a portable ZIP.", reply_kind="file",
+      reply="The generated local archive.", suite=True),
+    R("POST", "/api/audio-tools/sound", "Production", "Create a seeded procedural sound effect.", status=201,
+      body=(F("description", "string", "Description naming one supported sound.", True), F("seconds", "number", "Length in seconds."),
+            F("seed", "integer", "Repeatable sound seed.")), reply="Audio and sound receipt."),
+    R("POST", "/api/audio-tools/master", "Production", "Master a local WAV or FLAC to a separate WAV.", status=201, body_kind="archive",
+      reply="Audio and measured output receipt. Send X-Reference-Metadata with base64url JSON settings."),
+    R("GET", "/api/audio-tools/{delivery_id}/audio.wav", "Production", "Stream a saved audio tool WAV.", reply_kind="wav", reply="The saved WAV."),
+    R("GET", "/api/audio-tools/{delivery_id}/receipt.json", "Production", "Read an audio tool receipt.", reply="Provenance and readings from the saved file."),
+    R("POST", "/api/audio-tools/{delivery_id}/dub-background", "Production", "Attach a generated effect as the dub background.",
+      status=201, body=(F("scene_id", "string", "Timed scene ID.", True),), reply="The prepared background stem."),
+
+    R("GET", "/api/books", "Books", "List saved books.", reply="Book IDs, titles and chapter counts."),
+    R("POST", "/api/books/import/preview", "Books", "Preview an uploaded manuscript without creating a book.",
+      body_kind="archive", query=(F("name", "string", "TXT or Markdown file name.", True),
+                                  F("split", "string", "sentence, paragraph or chapter.")),
+      reply="Extracted chapters, passages, speakers, warnings, source SHA-256 and locally measured model speed.",
+      errors=((413, "The manuscript exceeds 24 MiB."),)),
+    R("POST", "/api/books", "Books", "Create a book and its editable chapter scenes.", status=201,
+      body=(F("metadata", "object", "Title and optional author, narrator, genre, description and year.", True),
+            F("chapters", "object[]", "Reviewed chapter and passage records from manuscript preview.", True),
+            F("voices", "object", "Named speakers and optional empty narrator label mapped to approved Cast IDs.", True),
+            F("source", "object", "Optional manuscript file name and SHA-256."),
+            F("paragraph_pause_ms", "integer", "Default pause after a paragraph."),
+            F("gap_ms", "integer", "Silence between chapters."),
+            F("pronunciations", "object", "Project phrases mapped to spoken replacements.")),
+      reply="Saved book, chapter scene IDs and cast warnings."),
+    R("GET", "/api/books/{book_id}", "Books", "Open a saved book and its latest published delivery.",
+      reply="Book details, chapter statuses, estimated duration and latest delivery."),
+    R("POST", "/api/books/{book_id}", "Books", "Save book metadata, chapter order or pronunciation rules.",
+      body=(F("expected_revision", "integer", "Current book revision.", True),
+            F("metadata", "object", "Book metadata."), F("gap_ms", "integer", "Silence between chapters."),
+            F("chapters", "string[]", "Existing chapter IDs in their new order."),
+            F("pronunciations", "object", "Project phrases mapped to spoken replacements.")),
+      reply="Revised book and chapter statuses."),
+    R("POST", "/api/books/{book_id}/cover", "Books", "Attach a local JPEG or PNG cover.", status=201, body_kind="archive",
+      query=(F("revision", "integer", "Current book revision.", True),),
+      errors=((413, "The image exceeds 5 MiB."),), reply="Book with its normalized JPEG cover identity."),
+    R("GET", "/api/books/{book_id}/cover.jpg", "Books", "Read the saved book cover.",
+      reply_kind="file", reply="The normalized and verified JPEG cover."),
+    R("POST", "/api/books/{book_id}/queue", "Books", "Queue missing or explicitly selected chapter renders.", status=202,
+      body=(F("chapters", "string[]", "Chapter scene IDs. Omit to queue the book."),
+            F("rerender", "boolean", "Generate new takes for every segment instead of missing segments only.")),
+      reply="Persistent scene job IDs and updated chapter status. Resume and cancel use the scene job endpoints."),
+    R("POST", "/api/books/{book_id}/chapters/{scene_id}/choose", "Books", "Select current finished chapter takes.",
+      body_kind="none", reply="Chapter scene and chosen takes."),
+    R("POST", "/api/books/{book_id}/chapters/{scene_id}/audition", "Books", "Assemble a chapter audition from selected takes.",
+      status=201, body_kind="none", reply="Checked chapter mix and its local audio URL."),
+    R("POST", "/api/books/{book_id}/exports", "Books", "Create a verified audiobook package.", status=201,
+      body=(F("expected_revision", "integer", "Current book revision.", True),
+            F("formats", "string[]", "WAV, FLAC, MP3 and M4B, in lowercase. Omit for all formats.")),
+      reply="Delivery ID, chapter offsets, audio levels, files and selected-take provenance."),
+    R("POST", "/api/books/{book_id}/exports/{delivery_id}/verify", "Books", "Verify an audiobook package.",
+      body_kind="none", reply="Verification result and number of checked files and chapters."),
+    R("GET", "/api/books/{book_id}/exports/{delivery_id}/{book_file}", "Books", "Stream a saved audiobook delivery file.",
+      reply_kind="file", reply="A declared file from the delivery.", errors=((416, "The requested range is outside the file."),)),
+    R("GET", "/api/books/{book_id}/auditions/{delivery_id}/{book_file}", "Books", "Stream a saved chapter audition.",
+      reply_kind="file", reply="The chapter WAV or its manifest.", errors=((416, "The requested range is outside the file."),)),
+    R("GET", "/api/live", "Live speech", "Discover local live speech capabilities.",
+      reply="ASR readiness, input format and speech engines with native streaming."),
+    R("POST", "/api/live", "Live speech", "Start a short-lived audio session.", status=201,
+      body=(F("language", "string", "Optional input language code."),), reply="Session ID, input format and cursor."),
+    R("GET", "/api/live/{session_id}", "Live speech", "Replay a live session's events.",
+      query=(F("after", "integer", "Return events after this cursor."),), reply="Text events, state and next sample offset."),
+    R("POST", "/api/live/{session_id}/audio", "Live speech", "Append ordered 16 kHz signed PCM samples.",
+      body_kind="archive", query=(F("offset", "integer", "Sample offset for this chunk.", True),),
+      reply="The next sample offset. Repeated identical chunks are accepted."),
+    R("POST", "/api/live/{session_id}/partial", "Live speech", "Recognize the audio received so far.", body_kind="none",
+      reply="A partial transcript and its event cursor."),
+    R("POST", "/api/live/{session_id}/final", "Live speech", "Finish the audio turn.", body_kind="none",
+      reply="Final recognized text and its event cursor."),
+    R("POST", "/api/live/{session_id}/cancel", "Live speech", "Cancel recognition or speech and clear the audio.",
+      body_kind="none", reply="Cancelled session status and event."),
+    R("POST", "/api/live/{session_id}/speak", "Live speech", "Stream reply audio from a local model.",
+      body=(F("text", "string", "Reply text, up to 500 characters.", True),
+            F("voice", "string", "Named voice for buffered playback."), F("engine", "string", "Engine for native speech streaming."),
+            F("voice_description", "string", "Engine-supported voice design description."),
+            F("language", "string", "Optional native speech language."), F("speaker", "string", "Native preset ID."),
+            F("mode", "string", "Native engine mode.")), reply_kind="ndjson", reply="Start, PCM audio and completion events."),
+    R("GET", "/api/dub-queue", "Scenes", "Read durable dubbing jobs and watch folders.",
+      reply="The latest jobs and the configured local watch folders."),
+    R("POST", "/api/dub-queue", "Scenes", "Queue one or more dubbing deliveries.", status=202,
+      body=(F("items", "object[]", "Scene IDs, export options and optional render_missing flag.", True),),
+      reply="The durable jobs and their current status."),
+    R("POST", "/api/dub-queue/jobs/{job_id}/retry", "Scenes", "Retry a terminal dubbing job.",
+      body_kind="none", reply="The updated job."),
+    R("POST", "/api/dub-queue/jobs/{job_id}/cancel", "Scenes", "Cancel a queued delivery or its pending render.",
+      body_kind="none", reply="The cancelled job."),
+    R("POST", "/api/dub-queue/watches", "Scenes", "Watch a selected local folder for dubbing manifests.", status=201,
+      body=(F("path", "string", "Existing local absolute folder for .dubjob.json manifests.", True),), reply="The watch."),
+    R("POST", "/api/dub-queue/watches/{job_id}/disable", "Scenes", "Turn off a dubbing watch folder.",
+      body_kind="none", reply="The disabled watch."),
+    R("GET", "/api/scenes/{scene_id}/dub", "Scenes", "Read the source, background stem and most recent dubbing delivery.",
+      reply="The attached assets, current scene revision and newest published delivery."),
+    R("POST", "/api/scenes/{scene_id}/dub/source", "Scenes", "Attach a local audio or video file to a timed scene.", body_kind="archive",
+      status=201, query=(F("name", "string", "Local media file name and extension.", True),),
+      reply="The SHA-256 and browser preview of the preserved source file. Send one supported media file up to 512 MiB.",
+      errors=((413, "The media is larger than 512 MiB."),)),
+    R("POST", "/api/scenes/{scene_id}/dub/background", "Scenes", "Attach an aligned audio-only background stem.",
+      body_kind="archive", status=201, query=(F("name", "string", "Local media file name and extension.", True),),
+      reply="The SHA-256 and preview metadata for the preserved background source."),
+    R("GET", "/api/scenes/{scene_id}/dub/captions/{dub_file}", "Scenes", "Export review text or captions on the cue clock.",
+      reply_kind="file", reply="Target TXT, source/target/bilingual SRT and VTT, or target/bilingual ASS."),
+    R("POST", "/api/scenes/{scene_id}/dub/translate", "Scenes", "Draft one line using an approved provider.",
+      body=(F("expected_revision", "integer", "Saved scene revision.", True),
+            F("line_id", "string", "The line to translate.", True), F("source_language", "string", "Source language code.", True),
+            F("target_language", "string", "Target language code.", True), F("provider", "string", "Selected provider.", True),
+            F("approve_provider_revision", "string", "Provider revision approved after showing the destination and fields.", True)),
+      reply="A draft for review and the unchanged scene revision."),
+    R("POST", "/api/scenes/{scene_id}/dub/exports", "Scenes", "Publish dubbed audio and optional video for selected takes.",
+      status=201, body=(F("expected_revision", "integer", "Saved scene revision.", True),
+                        F("target_language", "string", "Target language tag.", True),
+                        F("keep_original", "boolean", "Include the original as an alternate MP4 audio track."),
+                        F("background", "boolean", "Mix the attached background stem."),
+                        F("background_gain_db", "number", "Background gain from −30 to +6 dB."),
+                        F("duck", "boolean", "Duck the background during dialogue."),
+                        F("burn", "string", "Optional target, bilingual or karaoke burned captions."),
+                        F("additional_deliveries", "string[]", "Previous language deliveries for this source.")),
+      reply="Delivery ID, source checksum, selected takes, timing adjustments, stream metadata and file hashes."),
+    R("POST", "/api/scenes/{scene_id}/dub/exports/{delivery_id}/verify", "Scenes", "Verify a delivery manifest and files.",
+      body_kind="none", reply="Delivery ID and number of verified files."),
+    R("GET", "/api/scenes/{scene_id}/dub/source/{dub_file}", "Scenes", "Stream the source preview with byte ranges.",
+      reply_kind="file", reply="Browser-ready original.mp4 or original.wav.",
+      errors=((416, "The range is outside the file."),)),
+    R("GET", "/api/scenes/{scene_id}/dub/exports/{delivery_id}/{dub_file}", "Scenes",
+      "Stream a file declared by a dubbing delivery.", reply_kind="file",
+      reply="The requested manifest, video, audio stem or caption file.",
+      errors=((416, "The range is outside the file."),)),
+    R("GET", "/api/exports", "Exports", "List export packages and say which formats FFmpeg can write.",
+      query=(F("recheck", "string", "`1` asks FFmpeg again, after an install."),),
+      reply="`exports` (newest first, each with its `name`, `status` and, when complete, its scene, formats and counts) and "
+            "`ffmpeg` (`found`, `ready`, `version`, `formats`, a `message`, `own` (it is the Lab's own, which Install FFmpeg put "
+            "in) and `offer` (the FFmpeg `POST /api/ffmpeg/install` puts in: `version`, `builder`, `license`, "
+            "`download_bytes`, `disk_bytes`; `null` when the FFmpeg in use writes every format or is the Lab's own))."),
+    R("GET", "/api/ffmpeg/install", "Exports", "Say how the latest FFmpeg install is getting on.",
+      reply="`install`: the latest FFmpeg install since the service started, or `null`: `engine` (`ffmpeg`), `name`, "
+            "`state` (`running`, `finished` or `failed`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end "
+            "of its output) and `log`."),
+    R("POST", "/api/ffmpeg/install", "Exports",
+      "Install FFmpeg into the Lab's own folder, the build `offer` names: read the plan, or run the installer.",
+      body=(F("dry_run", "boolean", "Only read the plan; nothing is changed. Default false, which starts the install."),),
+      reply="With `dry_run`, `plan`: `engine`, `ok`, `paragraphs` and `problems`, as for an engine. Otherwise `install`: the "
+            "job that started, as `GET /api/ffmpeg/install` gives it, which is the route to poll. It runs "
+            "`tools/install_ffmpeg.py --yes`, which downloads the build, checks its SHA-256 and unpacks `ffmpeg.exe` and "
+            "`ffprobe.exe` into `ffmpeg/`; from then on the Lab uses that FFmpeg. Speech is not held up while it runs.",
+      errors=((400, "`dry_run` is not true or false."),
+              (409, "An install, of FFmpeg or of a model, is already running."))),
+    R("POST", "/api/exports/preview", "Exports", "Check an export request and report what it would write, writing nothing.",
+      body=(F("scene_id", "string", "The scene to export.", True),
+            F("formats", "string[]", "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."),
+            F("wav_precision", "string", "PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16."),
+            F("filename_template", "string", "Default `{line_id}`."), F("name", "string", "The package folder's name."),
+            F("output_rate", "integer", "Sample rate in hertz."),
+            F("trim_start_seconds", "number", "Cut from the start of each clip."),
+            F("trim_end_seconds", "number", "Cut from the end of each clip."),
+            F("fade_in_ms", "integer", "Fade in."), F("fade_out_ms", "integer", "Fade out."),
+            F("loudness_lufs", "number", "Normalize each clip to this loudness."),
+            F("loudness_true_peak", "number", "True-peak ceiling with `loudness_lufs`. Default -1."),
+            F("limiter_dbfs", "number", "Peak limiter ceiling.")),
+      reply="`dry_run` and `log`: the plan, line by line."),
+    R("POST", "/api/exports", "Exports", "Write an export package. An existing package is never overwritten.", status=201,
+      body=(F("scene_id", "string", "The scene to export.", True),
+            F("formats", "string[]", "`wav`, `flac`, `ogg`, `mp3`, `m4a`. Default `[\"wav\"]`."),
+            F("wav_precision", "string", "PCM_16, PCM_24 or FLOAT for WAV. Default PCM_16."),
+            F("filename_template", "string", "Default `{line_id}`."), F("name", "string", "The package folder's name."),
+            F("output_rate", "integer", "Sample rate in hertz."),
+            F("trim_start_seconds", "number", "Cut from the start of each clip."),
+            F("trim_end_seconds", "number", "Cut from the end of each clip."),
+            F("fade_in_ms", "integer", "Fade in."), F("fade_out_ms", "integer", "Fade out."),
+            F("loudness_lufs", "number", "Normalize each clip to this loudness."),
+            F("loudness_true_peak", "number", "True-peak ceiling with `loudness_lufs`. Default -1."),
+            F("limiter_dbfs", "number", "Peak limiter ceiling.")),
+      reply="`ok`, `export` (the package's summary) and `log`.",
+      errors=((409, "Another package is still being written."),)),
+    R("POST", "/api/exports/{export_id}/verify", "Exports", "Check a written package against its manifest.",
+      body_kind="none", reply="`ok`, `name` and `log`.", errors=((400, "The package is missing or does not verify."),)),
+
+    # ---------------------------------------------------------------- Comparisons
+    R("GET", "/api/evaluations/suites", "Comparisons", "List the named test suites.", reply="The suite definitions."),
+    R("GET", "/api/evaluations", "Comparisons", "List registered runs.", reply="`runs`."),
+    R("GET", "/api/evaluations/runs/{run_id}", "Comparisons", "Read a run with its samples, unblinded.", reply="`run`."),
+    R("POST", "/api/evaluations/runs/import", "Comparisons", "Register a checksummed run manifest from `out/comparisons`.", status=201,
+      body=(F("manifest_path", "string", "The manifest's path.", True),), reply="`run`."),
+    R("POST", "/api/evaluations/cast-import", "Comparisons", "Make a run from saved Cast takes, to compare them.", status=201,
+      body=(F("take_ids", "string[]", "The takes to compare.", True),
+            F("title", "string", "Default `Saved voice comparison`.")),
+      reply="`run`."),
+    R("GET", "/api/evaluations/blind-sessions", "Comparisons", "List blind listening sessions.", reply="`sessions`."),
+    R("POST", "/api/evaluations/blind-sessions", "Comparisons", "Start a blind A/B session over a run.", status=201,
+      body=(F("run_id", "string", "The run to compare.", True),
+            F("evaluator", "string", "Who is listening. Default `local listener`.")),
+      reply="`session`: trials with A and B labels and opaque audio URLs only."),
+    R("GET", "/api/evaluations/blind-sessions/{session_id}", "Comparisons", "Read a session. Models stay hidden until reveal.",
+      reply="`session`."),
+    R("POST", "/api/evaluations/blind-sessions/{session_id}/ratings", "Comparisons", "Save or revise the scores for a trial.",
+      body=(F("trial_id", "string", "The trial.", True),
+            F("ratings", "object", "`left` and `right`, each with integer scores 1 to 5 for `intelligibility`, "
+                                   "`identity_consistency`, `acting_fit`, `naturalness` and `artifacts`; and an optional "
+                                   "`preference` of `A`, `B`, `tie` or null.", True),
+            F("notes", "string", "Free text.")),
+      reply="`session`."),
+    R("POST", "/api/evaluations/blind-sessions/{session_id}/reveal", "Comparisons",
+      "Reveal which engine made which sample, once every trial is scored on both sides.", body_kind="none",
+      reply="`session`, now revealed and locked."),
+    R("GET", "/api/evaluations/blind-audio/{item_id}", "Comparisons", "Play one concealed audition copy.", reply_kind="wav",
+      reply="The WAV."),
+    R("GET", "/api/evaluations/items/{item_id}", "Comparisons", "Read the diagnostics for a sample, unblinded.",
+      reply="`item`."),
+    R("POST", "/api/evaluations/items/{item_id}/transcript", "Comparisons", "Attach a heard transcript to a sample.",
+      body=(F("heard_text", "string", "What was heard.", True),
+            F("evaluator", "object", "Who or what transcribed it: its `name` and `version`.", True)),
+      reply="`item_id` and `diagnostics`, including the comparison with the expected text: word and character error rates "
+            "and the differences."),
+
+    # ---------------------------------------------------------------- Conversion
+    R("POST", "/api/convert", "Conversion", "Say a recording again in another voice, with Chatterbox voice conversion.",
+      status=201,
+      body=(F("source_path", "string", "The performance to convert: a WAV, FLAC or Ogg file of up to 60 seconds in the Lab's "
+                                       "reference, saved-voice, Cast, scene or conversion folders, such as a file kept with "
+                                       "`POST /api/conversion/uploads`.", True),
+            F("target_reference_path", "string", "The voice to convert to: a WAV, FLAC or Ogg recording of up to 10 seconds in "
+                                                 "the reference, saved-voice, Cast reference or conversion folders. A file "
+                                                 "kept with `POST /api/conversion/uploads` must have been sent as a target.",
+              True),
+            F("target_reference_id", "string", "A Cast voice recording; its file must be the target file.")),
+      reply="`conversion`: `conversion_id`, `audio_url`, `audio_path`, `manifest_path` and the manifest, which names both "
+            "inputs by checksum, and for a file chosen from this computer its original name and, for the target, the origin "
+            "and allowed use it was given.",
+      errors=((409, "The model worker is busy."),)),
+    R("POST", "/api/conversion/uploads", "Conversion", "Keep a recording from this computer as a source performance or a "
+                                                       "target voice for voice conversion.",
+      status=201, body_kind="audio",
+      reply="`upload`: `path` (for `POST /api/convert`), `role`, `original_name`, `original_sha256`, `uploaded_at`, "
+            "`duration_seconds`, `sample_rate_hz` and, for a target, `permission`, `origin` and `allowed_use`.",
+      errors=((413, "The recording is over 32 MiB."),),
+      notes="Send the recording's bytes as the body (WAV, FLAC, Ogg, MP3 or M4A) and, in the `X-Reference-Metadata` header, "
+            "base64url-encoded JSON: `{\"filename\": \"take.mp3\", \"role\": \"source\"}` for the performance, or `{\"filename\": "
+            "\"voice.wav\", \"role\": \"target\", \"permission\": true, \"origin\": \"...\", \"allowed_use\": \"...\"}` for the "
+            "voice to convert to, which is refused without all three. `filename` sets the format and the label, and names "
+            "nothing on disk: the recording is kept as a mono WAV named by the SHA-256 of the bytes sent, in "
+            "`out/conversions/uploads/source` or `.../target`, so the same file sent twice is kept once, with a JSON of the "
+            "rest beside it. A source may be 0.5 to 60 seconds long and a target 0.5 to 10."),
+
+    # ---------------------------------------------------------------- System
+    R("GET", "/api/asr/install", "System", "Check local speech recognition and its install progress.",
+      reply="`speech_recognition` reports installed model files. `install` contains the latest job."),
+    R("POST", "/api/asr/install", "System", "Plan or start the speech recognition install.",
+      status=202, body=(F("dry_run", "boolean", "Return the plan without downloading anything."),),
+      reply="The install plan or the progress snapshot.", errors=((409, "An install is running."),)),
+    R("GET", "/api/system", "System", "Report the version, the system, the library, FFmpeg, disk space and engine states.",
+      query=(F("recheck", "string", "`1` asks FFmpeg again."),),
+      reply="`generated_at`, `app`, `system`, `library`, `ffmpeg` (as `GET /api/exports` gives it), `disk`, `engines`, `log`, "
+            "`backups`, `setup` (states for connections, provider profiles and speech recognition), and `diagnostics`, "
+            "a plain-text report with workspace counts and setup states. It omits scripts, transcripts and names."),
+    R("GET", "/api/system/storage", "System", "Measure the library's folders and what a cleanup would remove.",
+      reply="`library`, `other` and `cleanup`. Never walks the Drama model folder."),
+    R("GET", "/api/system/backups", "System", "List backups, what a new one would include, and the running job.",
+      reply="`folder`, `backups`, `plan`, `task` and `suggested_folder`."),
+    R("POST", "/api/system/backups", "System", "Back up the library to one ZIP, in the background.", status=202,
+      body=(F("include", "string[]", "The optional sections to add: `voices`, `exports`, `drama`, `dubs` and `audio-tools`. Default: all of them."),),
+      reply="`task`: poll `GET /api/system/task`.", errors=((409, "A backup, check or restore is already running."),)),
+    R("POST", "/api/system/backups/verify", "System", "Read a backup back in full and check every file, in the background.",
+      status=202, body=(F("name", "string", "The backup's file name, from the list.", True),),
+      reply="`task`.", errors=((409, "A backup, check or restore is already running."),)),
+    R("POST", "/api/system/backups/restore", "System", "Restore a backup into a new folder inside the library, in the "
+                                                       "background.",
+      status=202,
+      body=(F("name", "string", "The backup's file name.", True),
+            F("folder", "string", "A new folder's name: letters, digits, spaces, dots, dashes and underscores.", True)),
+      reply="`task`. The library in use is never touched.",
+      errors=((409, "A backup, check or restore is already running."),)),
+    R("GET", "/api/system/task", "System", "Say how the running backup, check or restore is getting on.",
+      reply="`task`: its kind, state and progress, or null."),
+    R("POST", "/api/system/cleanup", "System", "Remove old worker scratch folders, desktop sessions and service logs.",
+      body_kind="none", reply="What was removed, and anything that could not be."),
+
+    # ---------------------------------------------------------------- Pages (internal)
+    *[R("GET", path, "Pages", summary, internal=True, reply_kind=kind)
+      for path, summary, kind in (
+          ("/", "The Lab's main page.", "html"), ("/index.html", "The Lab's main page.", "html"),
+          ("/compare", "The Compare page.", "html"), ("/compare.html", "The Compare page.", "html"),
+          ("/theme.js", "The appearance script.", "javascript"),
+          ("/voice_lab_i18n.js", "The page's language helper.", "javascript"),
+          ("/voice_lab_queue.js", "A page script.", "javascript"),
+          ("/voice_workflows.js", "A page script.", "javascript"), ("/voice_library.js", "A page script.", "javascript"),
+          ("/drama3-studio.js", "The Drama studio script.", "javascript"),
+          ("/voice_lab_studio.js", "A page script.", "javascript"), ("/voice_lab_cast.js", "A page script.", "javascript"),
+          ("/voice_lab_scenes.js", "A page script.", "javascript"),
+          ("/voice_lab_books.js", "A page script.", "javascript"),
+          ("/voice_lab_projects.js", "A page script.", "javascript"),
+          ("/voice_lab_audio.js", "A page script.", "javascript"),
+          ("/voice_lab_automation.js", "A page script.", "javascript"),
+          ("/voice_lab_cast_bindings.js", "A page script.", "javascript"),
+          ("/voice_lab_take_edit.js", "A page script.", "javascript"),
+          ("/voice_lab_generate.js", "A page script.", "javascript"), ("/voice_lab_system.js", "A page script.", "javascript"),
+          ("/voice_lab_app.js", "A page script.", "javascript"), ("/voice_lab_drama.js", "A page script.", "javascript"),
+          ("/out/*", "A file from the program's `out` folder, such as a finished voice conversion and its manifest.", "file"))],
+
+    # ---------------------------------------------------------------- Page helpers (internal)
+    R("GET", "/api/preferences", "Page helpers", "Read the saved theme, page language and update preference.", internal=True,
+      reply="`theme`, `language`, and `check_updates`."),
+    R("POST", "/api/preferences", "Page helpers", "Save each preference supplied, keeping the saved values of the others.",
+      internal=True,
+      body=(F("theme", "string", "`system`, `light`, `dark` or `forest`."),
+            F("check_updates", "boolean", "Ask GitHub for a newer release once a day when the page opens."),
+            F("language", "string", "A page language offered beside Theme. The default is English (`en`)."))),
+    R("GET", "/api/reference-audio", "Page helpers", "Play a recording from the reference screen by path.", internal=True,
+      reply_kind="audio"),
+    R("GET", "/api/references", "Page helpers", "List the recordings the reference screen offers.", internal=True),
+    R("GET", "/api/voice-library", "Page helpers", "List the saved voices the voice picker offers.", internal=True),
+    R("GET", "/api/conversion/sources", "Page helpers", "List the performances the conversion picker offers.", internal=True),
+    R("GET", "/api/conversion/targets", "Page helpers", "List the voices the conversion picker offers.", internal=True),
+    R("POST", "/api/system/use-library", "Page helpers", "Point the desktop app at a restored library the next time it "
+                                                         "starts.",
+      internal=True, body=(F("folder", "string", "A restored folder's name.", True),)),
+    R("GET", "/api/updates", "Page helpers", "Say which version this is and what the last check for a newer release found, "
+                                             "without asking GitHub.", internal=True,
+      reply="`current`, `releases` (the releases page on GitHub), `check_on_open`, `due` (true when the page should check "
+            "now: the once-a-day check is on and the last check is a day old, or an hour old if it failed) and `last` (the last "
+            "check, as `POST /api/updates/check` answered it, or null)."),
+    R("POST", "/api/updates/check", "Page helpers", "Ask GitHub which release is the newest and whether it is newer than this "
+                                                    "version.", internal=True, body_kind="none",
+      reply="`current`, `latest` (null while no release is published), `newer`, `message`, `checked_at` and `release` (its "
+            "`tag`, `name`, `url`, `published_at` and `notes`).",
+      errors=((502, "GitHub could not be reached, or refused to answer."),)),
+    R("POST", "/api/update/plan", "Page helpers", "Say what Update now would do: the plan of `update.bat --dry-run`.",
+      internal=True, body_kind="none",
+      reply="`plan` (`ok`, and `problem` when there is no plan; else `newer`, `message`, `from`, `to`, `release`, `steps` and "
+            "`notes`, sentences the page shows), `blocked` (why Update now must wait, or null) and `how` (`window` when "
+            "the Lab opens again by itself, `console` when serve.bat must be started again).",
+      errors=((502, "The updater could not be started or did not answer."),)),
+    R("POST", "/api/update/start", "Page helpers", "Close the Lab and update it: the updater runs in a window of its own and "
+                                                   "opens the Lab again.", internal=True, body_kind="none", status=202,
+      reply="`how`, as the plan says it.",
+      errors=((409, "A model or FFmpeg is installing, a backup is running, a scene batch is rendering, or the update has "
+                    "already started."),),
+      notes="The service stops a moment after it answers. A service the desktop window started leaves the updater to the "
+            "window, which starts it once it has closed."),
+    R("GET", "/api/update/notice", "Page helpers", "What the last update, undo or Update now left for the page to say.",
+      internal=True,
+      reply="`notice`: null, or `state` (`updated`, `undone`, `current` or `failed`), `from`, `to`, `at`, and `release_url`, "
+            "`advice` (each a `text` and the `engines` it is about) and `problems`, or `message`."),
+    R("POST", "/api/update/notice/dismiss", "Page helpers", "Forget the notice once the page has shown it.", internal=True,
+      body_kind="none", reply="`{\"ok\": true}`."),
+    R("POST", "/api/system/open-folder", "Page helpers", "Show the Lab's folder in File Explorer.", internal=True,
+      body_kind="none", reply="`folder`: the folder's path."),
+    R("GET", "/api/system/connect", "Page helpers", "Say where other programs reach this service, for Connected apps.",
+      internal=True,
+      reply="`url` (this service), `known_url` (where programs look first), `note` (why this service is not there, or null), "
+            "`in_address_file` (whether the address file names it), `address_file`, `window_port` (what the desktop window "
+            "asks for; 0 is any free port), `test` (a command that asks for its health), `guide` (the API guide of this "
+            "version, on GitHub), `mcp` (`name`, `claude_code`: the line that adds this Lab's MCP server to Claude Code, and "
+            "`settings`: its `mcpServers` entry for other apps), `connect_guide` (docs/CONNECT.md of this version) and "
+            "`openai_base` (the base address for apps that speak to OpenAI's speech API)."),
+    R("GET", "/api/system/connected-apps", "Page helpers", "Find NPC Forge and Altera in the order Fel's Studio uses.",
+      internal=True, reply="`apps` by app id, each with `url` and `version` (or null) and discovery `notes`. "
+                           "`suite_problem` is a note when the configured suite folder could not be used, otherwise null."),
+    R("POST", "/api/system/connect/port", "Page helpers", "Choose the port the desktop window's service asks for, from the next "
+                                                          "time the window opens.",
+      internal=True, body=(F("port", "integer", "0 for any free port, or 1024 to 65535; 8765 is the default.", True),),
+      reply="`window_port`."),
+
+    # ---------------------------------------------------------------- Drama (internal)
+    R("GET", "/api/drama3/*", "Drama", "Everything below `/api/drama3/` that is read: `info`, and `jobs/{id}` with its "
+                                       "`audio`, `metadata` and `package`.", internal=True),
+    R("GET", "/api/drama3/info", "Drama", "The Drama runtime's capabilities, sources and jobs.", internal=True),
+    R("GET", "/api/drama3/jobs/{job_id}", "Drama", "A Drama job, from an offset into its log.", internal=True),
+    R("GET", "/api/drama3/jobs/{job_id}/audio", "Drama", "A Drama job's audio.", internal=True, reply_kind="wav"),
+    R("GET", "/api/drama3/jobs/{job_id}/metadata", "Drama", "A Drama job's metadata file.", internal=True, reply_kind="file"),
+    R("GET", "/api/drama3/jobs/{job_id}/package", "Drama", "A Drama job's package.", internal=True, reply_kind="file"),
+    R("POST", "/api/drama3/jobs", "Drama", "Start a Drama job.", internal=True, status=202),
+    R("POST", "/api/drama3/jobs/{job_id}/cancel", "Drama", "Cancel a Drama job.", internal=True),
+]
+
+# The routes that use the model worker. serve.py takes wait_seconds and wait_priority out of every POST's JSON body; these are
+# the routes where they matter.
+WAIT_FIELDS = (
+    F("wait_seconds", "number", "Wait in line up to this many seconds (at most 3600) while the model worker is busy, instead "
+                                "of the 409 answered at once without it. See `GET /api/queue`."),
+    F("wait_priority", "string", "`normal` (the default), or `low` to wait behind the others, as a scene batch's lines do."),
+)
+WAIT_ERRORS = ((409, "The model worker is busy and the request sent no `wait_seconds`, waited that long, or found 20 "
+                     "requests already waiting. Or, with `code` `gpu_busy`, the model would load on the graphics card while "
+                     "another app of Fel's Studio has it to itself (NPC Forge's One model at a time): refused at once, "
+                     "even with `wait_seconds`, and `holder` names that app, what it is doing and since when."),
+               (499, "The request was cancelled with `POST /api/queue/{request_id}/cancel`: while it waited, or while it ran."))
+WAITING_ROUTES = {"/api/engines/{engine_id}/check", "/api/load", "/api/unload", "/api/prepare-reference", "/api/speak",
+                  "/api/stream", "/api/performance", "/api/kokoro/phonemize", "/api/convert", "/api/characters/from-design"}
+
+
+def _waits(route):
+    """A worker route's row with the wait fields, and its 409 and 499 said once: a 409 of its own comes first."""
+    own = [meaning for status, meaning in route.errors if status == 409 and "worker is busy" not in meaning]
+    busy = WAIT_ERRORS[0][1]
+    conflict = (409, own[0].rstrip(".") + "; or t" + busy[1:] if own else busy)
+    others = tuple(item for item in route.errors if item[0] not in (409, 499))
+    return replace(route, body=route.body + WAIT_FIELDS, body_kind="json", errors=others + (conflict, WAIT_ERRORS[1]))
+
+
+ROUTES = [_waits(route) if route.method == "POST" and route.path in WAITING_ROUTES else route for route in ROUTES]
+
+
+# ------------------------------------------------------------------------------------------------ the table, read
+
+def key(route):
+    return f"{route.method} {route.path}"
+
+
+def path_names(path):
+    """The parameter names in a path template, in order."""
+    return re.findall(r"\{([a-z_0-9]+)\}", path)
+
+
+def shape(path):
+    """The path with every parameter written {}: how the source scan spells a route."""
+    return re.sub(r"\{[a-z_0-9]+\}", "{}", path)
+
+
+def documented():
+    return [route for route in ROUTES if not route.internal]
+
+
+def internal():
+    return [route for route in ROUTES if route.internal]
+
+
+def anchor(route):
+    """The id of the route's heading in docs/API.md."""
+    return re.sub(r"[^a-z0-9_]+", "-", f"{route.method} {route.path}".lower()).strip("-")
+
+
+def operation_id(route):
+    return re.sub(r"[^a-z0-9]+", "_", f"{route.method} {route.path}".lower()).strip("_")
+
+
+def groups_in_use(routes):
+    seen = {route.group for route in routes}
+    return [(name, intro) for name, intro in GROUPS if name in seen]
+
+
+# ------------------------------------------------------------------------------------------------ the suite API
+
+# The types an answer field of a suite route may have: a JSON type, `string[]` for a list of text, and `|null` after a type for
+# a field that may be null.
+ANSWER_TYPES = ("string", "integer", "number", "boolean", "object", "array", "string[]")
+
+
+def suite_routes():
+    """The routes of the Lab's suite API (contract 11 of Fel's Studio): what NPC Forge, Altera and other programs may rely on.
+    Their fields keep their names, types and meanings until SUITE_API goes up; tests/suite_api_<SUITE_API>.json holds them."""
+    return [route for route in ROUTES if route.suite]
+
+
+def answer_type(kind):
+    """An answer field's JSON Schema."""
+    base, _, null = kind.partition("|")
+    schema = {"type": "array", "items": {"type": "string"}} if base == "string[]" else {"type": base}
+    if null:
+        schema["type"] = [schema["type"], "null"]
+    return schema
+
+
+def answer_schema(answer):
+    """The JSON Schema of a suite route's answer, from its dotted field names: `fels.api`, `voices[].name` (each item of the
+    list `voices`)."""
+    root = {"type": "object", "properties": {}}
+    for name, kind in answer:
+        node, parts = root, name.split(".")
+        for index, part in enumerate(parts):
+            listed = part.endswith("[]")
+            field = part[:-2] if listed else part
+            members = node.setdefault("properties", {})
+            if index == len(parts) - 1 and not listed:
+                members[field] = answer_type(kind)
+                break
+            if listed:
+                node = members.setdefault(field, {"type": "array", "items": {"type": "object"}})["items"]
+            else:
+                node = members.setdefault(field, {"type": "object"})
+    return root
+
+
+def _fields_snapshot(fields):
+    return {item.name: {"type": item.type, "required": item.required} for item in fields}
+
+
+def suite_snapshot():
+    """What the suite API's routes take and answer, as tests/suite_api_<SUITE_API>.json keeps it: for each route its success
+    status, its request (what kind of body, path parameters and their patterns, query, JSON and metadata fields) and its
+    answer (what kind, its JSON fields with their types, and its headers)."""
+    routes = {}
+    for route in suite_routes():
+        body_kind = route.body_kind if route.body or route.body_kind != "json" or route.metadata else "none"
+        routes[key(route)] = {
+            "status": route.status,
+            "request": {
+                "kind": "none" if route.method == "GET" else body_kind,
+                "path": {name: PATH_PARAMS[name][1] for name in path_names(route.path)},
+                "query": _fields_snapshot(route.query),
+                "fields": _fields_snapshot(route.body),
+                "metadata": _fields_snapshot(route.metadata),
+            },
+            "answer": {"kind": route.reply_kind, "fields": dict(route.answer),
+                       "headers": [item.name for item in route.headers]},
+        }
+    return {
+        "suite_api": SUITE_API,
+        "about": "The routes of Voice Lab's suite API and their fields, written by tools/build_api_docs.py from voice_lab/api_spec.py. "
+                 "The other apps of Fel's Studio rely on them; tests/test_suite_api.py fails when they change "
+                 "(docs/CONNECT.md, For Fel's other apps).",
+        "routes": routes,
+    }
+
+
+def suite_changes(frozen, current):
+    """How the suite API `current` differs from the snapshot `frozen`, as (breaking, added): two lists of sentences. A change
+    that breaks a program written for `frozen` needs a new SUITE_API; an addition does not, since a program ignores a field
+    it does not know and need not send a new optional one."""
+    breaking, added = [], []
+    old_routes, new_routes = frozen.get("routes", {}), current.get("routes", {})
+    for route, old in old_routes.items():
+        new = new_routes.get(route)
+        if new is None:
+            breaking.append(f"{route} is no longer in the suite API.")
+            continue
+        if new["status"] != old["status"]:
+            breaking.append(f"{route} answers {new['status']} instead of {old['status']}.")
+        for part, label in (("request", "takes"), ("answer", "answers")):
+            if new[part]["kind"] != old[part]["kind"]:
+                breaking.append(f"{route} {label} {new[part]['kind']} instead of {old[part]['kind']}.")
+        if new["request"]["path"] != old["request"]["path"]:
+            breaking.append(f"{route} takes other path parameters.")
+        for part, what in (("query", "query parameter"), ("fields", "field"), ("metadata", "X-Reference-Metadata field")):
+            was, now = old["request"][part], new["request"][part]
+            for name, field in was.items():
+                if name not in now:
+                    breaking.append(f"{route} no longer takes the {what} {name}.")
+                elif now[name]["type"] != field["type"]:
+                    breaking.append(f"{route} takes {name} as {now[name]['type']} instead of {field['type']}.")
+                elif now[name]["required"] and not field["required"]:
+                    breaking.append(f"{route} needs {name} now.")
+            for name, field in now.items():
+                if name in was:
+                    continue
+                if field["required"]:
+                    breaking.append(f"{route} needs a new field, {name}.")
+                else:
+                    added.append(f"{route} takes a new {what}, {name}.")
+        was, now = old["answer"]["fields"], new["answer"]["fields"]
+        for name, kind in was.items():
+            if name not in now:
+                breaking.append(f"{route} no longer answers {name}.")
+            elif now[name] != kind:
+                breaking.append(f"{route} answers {name} as {now[name]} instead of {kind}.")
+        added += [f"{route} answers a new field, {name}." for name in now if name not in was]
+        was, now = old["answer"]["headers"], new["answer"]["headers"]
+        breaking += [f"{route} no longer sends the header {name}." for name in was if name not in now]
+        added += [f"{route} sends a new header, {name}." for name in now if name not in was]
+    added += [f"{route} is new in the suite API." for route in new_routes if route not in old_routes]
+    return breaking, added
+
+
+# ------------------------------------------------------------------------------------------------ OpenAPI
+
+_MEDIA = {"json": "application/json", "wav": "audio/wav", "ndjson": "application/x-ndjson", "csv": "text/csv",
+          "audio": "audio/*", "html": "text/html", "javascript": "text/javascript", "file": "application/octet-stream"}
+
+
+def _schema(kind):
+    if kind == "binary":
+        return {"type": "string", "format": "binary"}
+    if kind.endswith("[]"):
+        return {"type": "array", "items": _schema(kind[:-2])}
+    return answer_type(kind)
+
+
+def _fields_schema(fields):
+    schema = {"type": "object", "properties": {item.name: {**_schema(item.type), "description": item.doc} for item in fields}}
+    required = [item.name for item in fields if item.required]
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _error(meaning, schema="Error"):
+    return {"description": meaning, "content": {"application/json": {"schema": {"$ref": f"#/components/schemas/{schema}"}}}}
+
+
+def _error_schema(route):
+    """OpenAI's error shape for the OpenAI-style routes, the Lab's for every other."""
+    return "OpenAIError" if route.path.startswith("/v1/") else "Error"
+
+
+def _operation(route):
+    parameters = []
+    for name in path_names(route.path):
+        doc, pattern, example = PATH_PARAMS[name]
+        parameters.append({"name": name, "in": "path", "required": True, "description": doc, "example": example,
+                           "schema": {"type": "string", "pattern": f"^{pattern}$"}})
+    for item in route.query:
+        parameters.append({"name": item.name, "in": "query", "required": item.required, "description": item.doc,
+                           "schema": _schema(item.type)})
+    operation = {"operationId": operation_id(route), "summary": route.summary, "tags": [route.group]}
+    if route.suite:
+        operation["x-fels-suite-api"] = SUITE_API
+    if route.notes:
+        operation["description"] = route.notes
+    if route.metadata:
+        parameters.append({"name": "X-Reference-Metadata", "in": "header", "required": True,
+                           "description": "Base64url-encoded JSON: " + ", ".join(
+                               f"`{item.name}`" + ("" if item.required else " (optional)") for item in route.metadata) + ".",
+                           "schema": {"type": "string", "contentEncoding": "base64url",
+                                      "contentMediaType": "application/json",
+                                      "contentSchema": _fields_schema(route.metadata)}})
+    elif route.body_kind == "audio":
+        parameters.append({"name": "X-Reference-Metadata", "in": "header", "required": True,
+                           "description": "Base64url-encoded JSON: `filename`, `transcript`, `origin`, `allowed_use` and "
+                                          "optional `edits`.", "schema": {"type": "string"}})
+    if route.body_kind in ("audio", "archive"):
+        operation["requestBody"] = {"required": True, "content": {
+            "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}
+    elif route.body_kind == "multipart":
+        operation["requestBody"] = {"required": True, "content": {
+            "multipart/form-data": {"schema": _fields_schema(route.body)}}}
+    elif route.body_kind == "json" and route.body:
+        operation["requestBody"] = {"required": any(item.required for item in route.body),
+                                    "content": {"application/json": {"schema": _fields_schema(route.body)}}}
+    if parameters:
+        operation["parameters"] = parameters
+    media = _MEDIA.get(route.reply_kind)
+    success = {"description": route.reply or "The answer."}
+    if route.reply_kind == "transcript":
+        success["content"] = {kind: {"schema": {"type": shape}} for kind, shape in (
+            ("application/json", "object"), ("text/plain", "string"), ("text/vtt", "string"))}
+    elif route.reply_kind == "json":
+        success["content"] = {media: {"schema": answer_schema(route.answer) if route.answer else {"type": "object"}}}
+    else:
+        success["content"] = {media: {"schema": {"type": "string", "format": "binary"}}}
+    if route.headers:
+        success["headers"] = {item.name: {"description": item.doc, "schema": {"type": "string"}} for item in route.headers}
+    responses = {str(route.status): success}
+    for status, meaning in route.errors:
+        responses[str(status)] = _error(meaning, _error_schema(route))
+    responses["default"] = {"$ref": f"#/components/responses/{_error_schema(route)}"}
+    operation["responses"] = responses
+    return operation
+
+
+def build_openapi():
+    """The OpenAPI 3.1 document for the documented routes."""
+    public = documented()
+    paths = {}
+    for route in public:
+        paths.setdefault(route.path, {})[route.method.lower()] = _operation(route)
+    return {
+        "openapi": OPENAPI_VERSION,
+        "info": {
+            "title": f"{APP_NAME} HTTP API",
+            "version": VERSION,
+            "summary": "The local service behind the Voice Lab's pages, for scripts and other programs.",
+            "description": "Listens on 127.0.0.1 only. JSON in, JSON out, except where a call returns audio. Every error is "
+                           "a JSON object with an `error` message. See docs/API.md for the conventions, the speaking calls "
+                           "and the command-line tool.",
+            "license": {"name": "MIT", "identifier": "MIT"},
+            "x-fels-suite-api": SUITE_API,
+        },
+        "servers": [{"url": DEFAULT_URL, "description": "The default port. `serve.py --port` changes it."}],
+        "tags": [{"name": name, "description": intro} for name, intro in groups_in_use(public)],
+        "paths": paths,
+        "components": {
+            "schemas": {"Error": {"type": "object", "required": ["error", "code"],
+                                  "properties": {"error": {"type": "string", "description": "What went wrong."},
+                                                 "code": {"type": "string", "description": ERROR_CODE_DOC}}},
+                        "OpenAIError": {"type": "object", "required": ["error"], "properties": {"error": {
+                            "type": "object", "required": ["message", "type", "code"],
+                            "properties": {"message": {"type": "string", "description": "What went wrong."},
+                                           "type": {"type": "string",
+                                                    "description": "`invalid_request_error` (4xx) or `server_error` (5xx)."},
+                                           "param": {"type": ["string", "null"], "description": "Always null."},
+                                           "code": {"type": "string", "description": ERROR_CODE_DOC}}}}}},
+            "responses": {"Error": {"description": "Any other failure: a JSON object with an `error` message and a `code`.",
+                                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+                          "OpenAIError": {"description": "Any other failure, in OpenAI's shape.",
+                                          "content": {"application/json": {
+                                              "schema": {"$ref": "#/components/schemas/OpenAIError"}}}}},
+        },
+        "x-internal-routes": sorted(key(route) for route in internal()),
+    }
+
+
+def openapi_text():
+    return json.dumps(build_openapi(), indent=2, ensure_ascii=False) + "\n"
+
+
+# ------------------------------------------------------------------------------------------------ the Markdown reference
+
+def _cell(text):
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
+def _table(header, rows):
+    lines = ["| " + " | ".join(header) + " |", "|" + "|".join("---" for _ in header) + "|"]
+    lines += ["| " + " | ".join(_cell(str(value)) for value in row) + " |" for row in rows]
+    return lines
+
+
+def _section(route):
+    lines = [f'<a id="{anchor(route)}"></a>', "", f"#### `{route.method} {route.path}`", "", route.summary, ""]
+    names = path_names(route.path)
+    if names:
+        lines += _table(["Path parameter", "Meaning"], [(f"`{name}`", PATH_PARAMS[name][0]) for name in names]) + [""]
+    if route.query:
+        lines += _table(["Query parameter", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.query]) + [""]
+    if route.body_kind == "audio":
+        lines += ["**Request:** the recording's bytes, and an `X-Reference-Metadata` header.", ""]
+    elif route.body_kind == "archive":
+        lines += ["**Request:** file bytes (`application/octet-stream`)"
+                  + (", and an `X-Reference-Metadata` header." if route.metadata else "."), ""]
+    elif route.body_kind == "multipart":
+        lines += ["**Request:** a `multipart/form-data` file upload.", ""]
+        lines += _table(["Request field", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.body]) + [""]
+    elif route.body and route.body_kind == "json":
+        lines += _table(["Request field", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.body]) + [""]
+    reply = {"json": "JSON", "wav": "`audio/wav`", "ndjson": "`application/x-ndjson`", "csv": "`text/csv`",
+             "audio": "audio", "transcript": "JSON or caption text", "html": "HTML", "javascript": "JavaScript", "file": "a file"}[route.reply_kind]
+    if route.metadata:
+        lines += _table(["`X-Reference-Metadata` field", "Type", "Meaning"],
+                        [(f"`{item.name}`" + (" (required)" if item.required else ""), item.type, item.doc)
+                         for item in route.metadata]) + [""]
+    lines += [f"**Answer:** `{route.status}`, {reply}." + (f" {route.reply}" if route.reply else ""), ""]
+    if route.suite:
+        lines += [f"**Suite API {SUITE_API}:** the other apps of Fel's Studio rely on this route. Its fields keep their "
+                  "names and types until the suite API number goes up ([For Fel's other apps](CONNECT.md#for-fels-other-apps)).",
+                  ""]
+    if route.answer:
+        lines += _table(["Answer field", "Type"], [(f"`{name}`", kind) for name, kind in route.answer]) + [""]
+    if route.headers:
+        lines += _table(["Answer header", "Meaning"], [(f"`{item.name}`", item.doc) for item in route.headers]) + [""]
+    if route.errors:
+        lines += _table(["Also answers", "When"], [(f"`{status}`", meaning) for status, meaning in route.errors]) + [""]
+    if route.notes:
+        lines += [route.notes, ""]
+    return lines
+
+
+def render_reference():
+    """The reference part of docs/API.md: every documented route, by group, then the internal routes."""
+    public = documented()
+    lines = []
+    for name, intro in groups_in_use(public):
+        rows = [route for route in public if route.group == name]
+        lines += [f"### {name}", "", intro, ""]
+        lines += _table(["Method", "Path", "What it does"],
+                        [(route.method, f"[`{route.path}`](#{anchor(route)})", route.summary) for route in rows]) + [""]
+        for route in rows:
+            lines += _section(route)
+    lines += ["### Internal routes", "",
+              "These serve the Lab's own pages. They can change at any time and are not part of the API.", ""]
+    lines += _table(["Method", "Path", "Used for"],
+                    [(route.method, f"`{route.path}`", route.summary) for route in internal()]) + [""]
+    return "\n".join(lines).rstrip("\n") + "\n"

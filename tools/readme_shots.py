@@ -34,7 +34,7 @@ for folder in (ROOT, ROOT / "tests"):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
-import ffmpeg_tools  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
 import test_browser_flow as flow  # noqa: E402  (the DevTools driver the browser test uses)
 from tools import lab_cli  # noqa: E402
 from tools.real_model_smoke import NO_WINDOW, START_SECONDS, NotStarted, free_port  # noqa: E402

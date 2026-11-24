@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import phonon_support as ps  # noqa: E402
+from voice_lab import phonon_support as ps  # noqa: E402
 
 
 def record(name, locale="en-us", language="en", filename=None, **more):

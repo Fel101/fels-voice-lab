@@ -94,7 +94,7 @@ These checks catch gross errors. They do not measure boundary accuracy.
 
 ```bash
 .venv-asr\Scripts\python.exe -I align_worker.py --model-dir hf-cache\faster-whisper-tiny-d90ca5fe --manifest <items.json>
-.venv\Scripts\python.exe align_takes.py --all
+.venv\Scripts\python.exe -m voice_lab.align_takes --all
 ```
 
 The first command aligns any clips listed in a manifest. The second aligns the Cast takes that have no record.

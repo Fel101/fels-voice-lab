@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import kokoro_support
-from kokoro_support import (KOKORO_LANGUAGES, discover_kokoro_voices,
+from voice_lab import kokoro_support
+from voice_lab.kokoro_support import (KOKORO_LANGUAGES, discover_kokoro_voices,
                             normalize_kokoro_voices, resolve_kokoro_language)
-from scene_store import SUPPORTED_LANGUAGES
+from voice_lab.scene_store import SUPPORTED_LANGUAGES
 
 
 class KokoroM7ContractTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class KokoroM7ContractTests(unittest.TestCase):
             folder.mkdir()
             for name in ("af_heart", "am_fenrir", "ef_dora", "ff_siwis"):
                 (folder / (name + ".pt")).write_bytes(b"discovery fixture; not a checkpoint")
-            with patch("kokoro_support.kokoro_snapshot_dir", return_value=Path(temp)):
+            with patch("voice_lab.kokoro_support.kokoro_snapshot_dir", return_value=Path(temp)):
                 voices = discover_kokoro_voices()
         self.assertIn("af_heart", voices)
         self.assertIn("am_fenrir", voices)
@@ -30,7 +30,7 @@ class KokoroM7ContractTests(unittest.TestCase):
                          ["af_heart", "am_fenrir"])
         with self.assertRaisesRegex(ValueError, "more than once"):
             normalize_kokoro_voices("af_heart,af_heart", ["af_heart"])
-        with self.assertRaisesRegex(ValueError, r"^This Kokoro voice is not installed: af_missing\. Run setup-kokoro\.bat "
+        with self.assertRaisesRegex(ValueError, r"^This Kokoro voice is not installed: af_missing\. Run tools\\setup-kokoro\.bat "
                                                 r"--voices af_missing in the lab folder to add it\.$"):
             normalize_kokoro_voices("af_missing", ["af_heart"])
         with self.assertRaisesRegex(ValueError, "These Kokoro voices are not installed: af_missing, bf_missing"):
@@ -98,21 +98,21 @@ class KokoroWorkerPhonemeTests(unittest.TestCase):
     """The phonemes come from Kokoro's worker, which holds the language rules; nothing needs the model loaded."""
 
     def test_the_kokoro_worker_answers_without_a_loaded_model(self):
-        from worker_runtime import EngineWorkerRuntime
+        from voice_lab.worker_runtime import EngineWorkerRuntime
         runtime = EngineWorkerRuntime("kokoro", "cpu")
-        with patch("kokoro_support.phonemize_kokoro", return_value={"language": "a", "segments": []}) as phonemize:
+        with patch("voice_lab.kokoro_support.phonemize_kokoro", return_value={"language": "a", "segments": []}) as phonemize:
             result, stop = runtime.dispatch("phonemize", {"text": "Hello", "language": "English"})
         self.assertEqual((result, stop), ({"language": "a", "segments": []}, False))
         phonemize.assert_called_once_with("Hello", "English")
         self.assertIsNone(runtime.engine)
 
     def test_another_engines_worker_refuses(self):
-        from worker_runtime import EngineWorkerRuntime
+        from voice_lab.worker_runtime import EngineWorkerRuntime
         with self.assertRaisesRegex(ValueError, "Only Kokoro"):
             EngineWorkerRuntime("phonon-31m-en", "cpu").phonemize({"text": "Hello"})
 
     def test_the_protocol_carries_the_method(self):
-        import worker_protocol
+        from voice_lab import worker_protocol
         self.assertIn("phonemize", worker_protocol.METHODS)
         self.assertEqual(worker_protocol.request(1, "phonemize", text="Hi")["method"], "phonemize")
 
@@ -137,7 +137,7 @@ class PoolPhonemeTests(unittest.TestCase):
             self.alive = False
 
     def pool(self, worker):
-        from worker_pool import EnginePool
+        from voice_lab.worker_pool import EnginePool
         pool = EnginePool("cpu", 0, worker_factory=lambda entry: worker, idle_poll_seconds=0.1)
         self.addCleanup(pool.close)
         return pool

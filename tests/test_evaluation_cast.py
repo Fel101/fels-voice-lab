@@ -14,9 +14,9 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-from cast_store import CastStore
-from evaluation_cast import import_cast_takes
-from evaluation_store import EvaluationStore, RATING_FIELDS
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_cast import import_cast_takes
+from voice_lab.evaluation_store import EvaluationStore, RATING_FIELDS
 
 
 class CastComparisonTests(unittest.TestCase):
@@ -113,7 +113,7 @@ class CastComparisonTests(unittest.TestCase):
         self.assertFalse((self.root.parent / 'not-this-lab').exists())
 
     def test_failed_mastering_leaves_no_run_or_partial_owned_files(self):
-        with patch('evaluation_cast._listening_copy', side_effect=ValueError('Unreadable audio')):
+        with patch('voice_lab.evaluation_cast._listening_copy', side_effect=ValueError('Unreadable audio')):
             with self.assertRaisesRegex(ValueError, 'Unreadable audio'):
                 self.import_takes()
         self.assertEqual(self.evaluations.list_runs(), [])
@@ -121,7 +121,7 @@ class CastComparisonTests(unittest.TestCase):
         self.assertTrue(all(self.cast.get_media_path('take', take['id']).is_file() for take in self.takes))
 
     def test_http_import_uses_selected_state_and_rejects_foreign_origin(self):
-        import serve
+        from voice_lab import serve
         class Engines:
             entries = {}
         server = ThreadingHTTPServer(('127.0.0.1', 0), serve.make_handler(

@@ -17,10 +17,10 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import cast_store  # noqa: E402
-import ffmpeg_tools  # noqa: E402
-import serve  # noqa: E402
-from cast_store import CastStore  # noqa: E402
+from voice_lab import cast_store  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.cast_store import CastStore  # noqa: E402
 from tests.test_service_log import FakeEngines  # noqa: E402
 
 RATE = 24_000

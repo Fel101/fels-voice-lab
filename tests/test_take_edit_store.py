@@ -18,11 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from audio_fixtures import speech_between_silences
-from cast_store import CAST_SCHEMA_VERSION, CastStore, RetirementReader
+from voice_lab.cast_store import CAST_SCHEMA_VERSION, CastStore, RetirementReader
 from library_fixture import temp_cast
-from scene_store import SceneStore
+from voice_lab.scene_store import SceneStore
 from tools.scene_export import ExportError, load_takes
-from worker_pool import read_catalog
+from voice_lab.worker_pool import read_catalog
 
 RATE = 24_000
 TEXT = "Hold the line now"
@@ -221,7 +221,7 @@ class SavingTests(EditedTakeCase):
 
     def test_a_failure_while_saving_removes_the_new_audio(self):
         before = (self.store.all_take_ids(), self.take_folders())
-        with mock.patch("cast_store._waveform_checks", side_effect=RuntimeError("boom")):
+        with mock.patch("voice_lab.cast_store._waveform_checks", side_effect=RuntimeError("boom")):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 self.store.create_edited_take(self.parent["id"], {"start_seconds": 0.3})
         self.assertEqual((self.store.all_take_ids(), self.take_folders()), before)

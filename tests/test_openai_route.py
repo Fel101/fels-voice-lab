@@ -17,11 +17,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service  # noqa: E402
-import ffmpeg_tools  # noqa: E402
-import kokoro_support  # noqa: E402
-import openai_speech  # noqa: E402
-import phonon_support  # noqa: E402
-import synthetic_label  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
+from voice_lab import openai_speech  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
+from voice_lab import synthetic_label  # noqa: E402
 
 
 class LineEngines(api_service.FakeEngines):

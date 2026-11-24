@@ -14,12 +14,12 @@ from unittest import mock
 import numpy as np
 import soundfile as sf
 
-from cast_store import CastStore
-from scene_store import SceneStore
+from voice_lab.cast_store import CastStore
+from voice_lab.scene_store import SceneStore
 from tests.test_export_panel import HAS_FFMPEG, ExportPanelBase, tone_wav
-import portable_projects
-import connector_profiles
-import dubbing
+from voice_lab import portable_projects
+from voice_lab import connector_profiles
+from voice_lab import dubbing
 from app_version import REPOSITORY
 from tests.test_browser_flow import BROWSER, DevToolsPage
 
@@ -304,7 +304,9 @@ class ProjectFilesTests(ExportPanelBase):
             mock.patch.dict("os.environ", {"VOICE_LAB_PROVIDER_FILE": ""}),
             mock.patch.object(connector_profiles, "SETTINGS", self.root / "providers.json"),
             mock.patch.object(connector_profiles, "_session_keys", {}),
-            mock.patch("system_report.asr_installation.status", return_value={"models": {"tiny": True, "small": False}}),
+            mock.patch(
+                "voice_lab.system_report.asr_installation.status", return_value={"models": {"tiny": True, "small": False}}
+            ),
         ):
             connector_profiles.save(
                 {"id": "provider-private", "base_url": profile_address, "model": "example", "capabilities": ["translate"]},

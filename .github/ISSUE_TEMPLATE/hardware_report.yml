@@ -40,7 +40,7 @@ body:
     attributes:
       label: How the models were installed
       description: >-
-        For example "setup.bat, recommended models" or "setup-kokoro.bat --nvidia". Add the NVIDIA driver version if you
+        For example "setup.bat, recommended models" or "tools\setup-kokoro.bat --nvidia". Add the NVIDIA driver version if you
         used --nvidia (nvidia-smi prints it).
   - type: textarea
     id: result

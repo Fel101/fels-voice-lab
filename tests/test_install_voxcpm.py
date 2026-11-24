@@ -16,9 +16,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import engine_install  # noqa: E402
-import voxcpm_worker  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
+from voice_lab import voxcpm_worker  # noqa: E402
 from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_7600  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
@@ -137,12 +137,12 @@ class ShippedFilesTests(unittest.TestCase):
         self.assertEqual((lines["torch"], lines["torchaudio"]), (qwen["torch"], qwen["torchaudio"]))
 
     def test_the_launcher_and_the_models_page_run_the_installer(self):
-        text = (ROOT / "setup-voxcpm.bat").read_text("utf-8")
+        text = (ROOT / "tools/setup-voxcpm.bat").read_text("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_voxcpm.py %*', text)
-        self.assertIn(b"\r\n", (ROOT / "setup-voxcpm.bat").read_bytes())
+        self.assertIn(b"\r\n", (ROOT / "tools/setup-voxcpm.bat").read_bytes())
         self.assertEqual(engine_install.INSTALLERS["voxcpm2"], "tools/install_voxcpm.py")
         self.assertEqual(engine_install.GPU_BUILDS["voxcpm2"], "tools.install_voxcpm")
-        self.assertEqual(engine_checks.GUIDED_INSTALLERS["voxcpm2"], "setup-voxcpm.bat")
+        self.assertEqual(engine_checks.GUIDED_INSTALLERS["voxcpm2"], "tools\\setup-voxcpm.bat")
 
     def test_an_8_gb_card_is_big_enough_for_the_worker(self):
         voxcpm_worker.check_gpu_memory("NVIDIA GeForce RTX 5070 Laptop GPU", 8151 * 2**20)  # what an 8 GB card reports

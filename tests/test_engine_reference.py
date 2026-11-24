@@ -9,7 +9,7 @@ from unittest import mock
 import numpy as np
 import soundfile as sf
 
-import engines
+from voice_lab import engines
 
 
 class FakeKokoro:
@@ -69,9 +69,9 @@ class KokoroWorkerReferenceTests(unittest.TestCase):
     """Kokoro has .venv-kokoro to itself, so its own worker makes the default reference the cloning checks clone."""
 
     def make(self, voices, ensure):
-        from worker_runtime import EngineWorkerRuntime
+        from voice_lab.worker_runtime import EngineWorkerRuntime
         model = FakeKokoro()
-        with mock.patch("kokoro_support.discover_kokoro_voices", return_value=voices), \
+        with mock.patch("voice_lab.kokoro_support.discover_kokoro_voices", return_value=voices), \
                 mock.patch.object(engines, "ensure_reference", ensure), contextlib.redirect_stdout(io.StringIO()) as printed:
             EngineWorkerRuntime._make_default_reference(model)
         return model, printed.getvalue()

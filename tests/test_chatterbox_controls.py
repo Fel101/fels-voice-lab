@@ -1,6 +1,6 @@
 import unittest
 
-from chatterbox_support import normalize_chatterbox_sampling
+from voice_lab.chatterbox_support import normalize_chatterbox_sampling
 
 
 class ChatterboxSamplingContractTests(unittest.TestCase):

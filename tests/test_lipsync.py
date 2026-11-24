@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import kokoro_support
-import kokoro_timing as kt
-import lipsync
+from voice_lab import kokoro_support
+from voice_lab import kokoro_timing as kt
+from voice_lab import lipsync
 from tests.phoneme_stub import stub_phonemes
 
 MISAKI = importlib.util.find_spec("misaki") is not None

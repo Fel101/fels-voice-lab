@@ -30,15 +30,15 @@ from scipy.signal import resample_poly
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import ffmpeg_tools  # noqa: E402  finding FFmpeg and what this build can encode
-import synthetic_label  # noqa: E402  the AI-generated speech label every delivered file carries
-import timed_scene  # noqa: E402  the same mixer used for timed previews
-import word_timing  # noqa: E402  pure helpers only: phrase grouping and offsets; the exporter never writes Cast data
-from fit import fit_status  # noqa: E402  slot status only; the stretch itself is not applied by the exporter
-from lipsync import check_track, prime_for_takes, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
-from output_license import license_profile, take_licence, worst_licence  # noqa: E402
-from scene_selection import validate_selected_take  # noqa: E402
-from cast_store import RetirementReader, has_recording_licences
+from voice_lab import ffmpeg_tools  # noqa: E402  finding FFmpeg and what this build can encode
+from voice_lab import synthetic_label  # noqa: E402  the AI-generated speech label every delivered file carries
+from voice_lab import timed_scene  # noqa: E402  the same mixer used for timed previews
+from voice_lab import word_timing  # noqa: E402  pure helpers only: phrase grouping and offsets; the exporter never writes Cast data
+from voice_lab.fit import fit_status  # noqa: E402  slot status only; the stretch itself is not applied by the exporter
+from voice_lab.lipsync import check_track, prime_for_takes, track_for_takes  # noqa: E402  mouth-shape tracks from stored word times; estimates
+from voice_lab.output_license import license_profile, take_licence, worst_licence  # noqa: E402
+from voice_lab.scene_selection import validate_selected_take  # noqa: E402
+from voice_lab.cast_store import RetirementReader, has_recording_licences
 
 
 FORMATS = {"wav", "flac", "ogg", "mp3", "m4a"}
@@ -1099,7 +1099,7 @@ def export_package(args):
                            "sample-count durations from decoded selected segments, validated with ffprobe, plus scene pauses"),
                 "caption_granularity": ("one caption per timed cue" if scene.get("timeline") else
                                         "word phrases where every take of a line has stored word times; one caption per line otherwise"),
-                "word_timing": "stored forced-alignment records from align_takes.py; their checks are in each take's word_timings",
+                "word_timing": "stored forced-alignment records from voice_lab/align_takes.py; their checks are in each take's word_timings",
                 "lip_sync": "per-line mouth-shape tracks: Kokoro takes use their stored phoneme times; other English takes use aligned words shared over estimated phoneme times",
             },
             "scene_mix": {

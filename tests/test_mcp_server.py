@@ -23,14 +23,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import api_service  # noqa: E402
-import api_spec  # noqa: E402
-import housekeeping  # noqa: E402
-import kokoro_support  # noqa: E402
-import lab_address  # noqa: E402
+from voice_lab import api_spec  # noqa: E402
+from voice_lab import housekeeping  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
+from voice_lab import lab_address  # noqa: E402
 import mcp_server  # noqa: E402
-import phonon_support  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
 from app_version import APP_NAME, VERSION  # noqa: E402
-from worker_process import WorkerCancelled  # noqa: E402
+from voice_lab.worker_process import WorkerCancelled  # noqa: E402
 
 SERVER = ROOT / "tools" / "mcp_server.py"
 

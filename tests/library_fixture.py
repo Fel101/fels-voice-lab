@@ -6,10 +6,10 @@ from pathlib import Path
 
 import numpy as np
 
-import library_backup
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from scene_store import SceneStore
+from voice_lab import library_backup
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.scene_store import SceneStore
 
 RATE = 24_000
 

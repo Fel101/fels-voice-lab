@@ -25,10 +25,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service  # noqa: E402
-import api_spec  # noqa: E402
-import kokoro_support  # noqa: E402
-import voice_names  # noqa: E402
-from route_groups import cast as cast_routes  # noqa: E402
+from voice_lab import api_spec  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
+from voice_lab import voice_names  # noqa: E402
+from voice_lab.route_groups import cast as cast_routes  # noqa: E402
 from tools import build_api_docs, suite_api_check  # noqa: E402
 
 SNAPSHOT = ROOT / "tests" / f"suite_api_{api_spec.SUITE_API}.json"
@@ -341,7 +341,9 @@ class SequenceTests(StandInLabTest):
     def test_something_that_is_not_the_lab_is_named(self):
         service = self.lab()
         said = []
-        with mock.patch("route_groups.engines.fels_suite.health_block", lambda *args: {"app": "npc-forge", "api": 45}):
+        with mock.patch(
+            "voice_lab.route_groups.engines.fels_suite.health_block", lambda *args: {"app": "npc-forge", "api": 45}
+        ):
             self.assertFalse(suite_api_check.run(suite_api_check.Lab(service.base), say=said.append))
         self.assertIn("is not Voice Lab", said[0])
 
@@ -466,8 +468,8 @@ class FromDesignTests(StandInLabTest):
         self.assertEqual(service.cast.list_cast(), [])
 
     def test_every_design_model_has_models_to_speak_it(self):
-        import engine_adapters
-        from cast_store import REFERENCE_ENGINES
+        from voice_lab import engine_adapters
+        from voice_lab.cast_store import REFERENCE_ENGINES
 
         self.assertEqual(cast_routes.DESIGNERS, engine_adapters.engines_where("saves_designs"))
         self.assertIn(engine_adapters.DEFAULT_DESIGNER, cast_routes.DESIGNERS)

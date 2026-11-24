@@ -23,7 +23,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import updates  # noqa: E402
+from voice_lab import updates  # noqa: E402
 from app_version import REPOSITORY, VERSION  # noqa: E402
 from tools import install_drama3, install_kokoro, install_voxcpm, update  # noqa: E402
 
@@ -152,8 +152,8 @@ class ServiceCheckTests(unittest.TestCase):
             self.assertIsNone(updates.UpdateChecks(temp).state(True)["last"])
 
     def test_the_service_answers_from_the_last_check_and_asks_github_only_when_told(self):
-        import serve
-        from cast_store import CastStore
+        from voice_lab import serve
+        from voice_lab.cast_store import CastStore
 
         class Checks:
             calls = 0
@@ -732,10 +732,10 @@ class FinishTests(unittest.TestCase):
         )
         self.assertIn(
             "- Kokoro's pinned packages changed (requirements\\kokoro-cpu.txt). Delete the .venv-kokoro folder and install it "
-            f"again: press Install on its card in Models & features, or run setup-kokoro.bat. {KEPT}",
+            f"again: press Install on its card in Models & features, or run tools\\setup-kokoro.bat. {KEPT}",
             text,
         )
-        self.assertIn("- Phonon's model files changed. Run setup-phonon.bat to fetch them.", text)
+        self.assertIn("- Phonon's model files changed. Run tools\\setup-phonon.bat to fetch them.", text)
         self.assertNotIn("Chatterbox", text)  # not installed here
         self.assertIn("Updated to version 0.2.0.", text)
         self.assertIn("out\\update\\0.1.0-to-0.2.0\\files: catalog/engines.json", text)
@@ -748,8 +748,8 @@ class FinishTests(unittest.TestCase):
             [
                 "The pinned packages of Qwen3-TTS 1.7B VoiceDesign and Qwen3-TTS 1.7B CustomVoice changed "
                 "(requirements\\qwen-nvidia.txt). Delete the .venv-fqwen folder, which they share, and install them again: "
-                "press Install on their cards in Models & features, or run setup-qwen.bat --model 1.7b-voice-design and "
-                f"setup-qwen.bat --model 1.7b-custom-voice. {KEPT}"
+                "press Install on their cards in Models & features, or run tools\\setup-qwen.bat --model 1.7b-voice-design and "
+                f"tools\\setup-qwen.bat --model 1.7b-custom-voice. {KEPT}"
             ],
         )
         # All four lists of model files changed: VoiceDesign's revision is an older one, CustomVoice's files are already in
@@ -758,7 +758,9 @@ class FinishTests(unittest.TestCase):
         self.assertEqual(len(qwen), 4)
         self.assertEqual(
             self.lab.finish(*qwen),
-            ["Qwen3-TTS 1.7B VoiceDesign's model files changed. Run setup-qwen.bat --model 1.7b-voice-design to fetch them."],
+            [
+                "Qwen3-TTS 1.7B VoiceDesign's model files changed. Run tools\\setup-qwen.bat --model 1.7b-voice-design to fetch them."
+            ],
         )
         # Installing again fetches the new files too, so they are named with the packages and not on their own.
         advice = self.lab.finish("requirements/qwen-nvidia.txt", *qwen)
@@ -772,7 +774,7 @@ class FinishTests(unittest.TestCase):
         self.lab.install("Chatterbox Turbo", "cpu")
         self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [])
         self.lab.install("Chatterbox 500M and Voice Conversion", "cpu", old=True)
-        fetch = "Chatterbox 500M and Voice Conversion's model files changed. Run setup-chatterbox.bat --original"
+        fetch = "Chatterbox 500M and Voice Conversion's model files changed. Run tools\\setup-chatterbox.bat --original"
         self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [f"{fetch} to fetch them."])
         self.lab.environment(".venv-chatterbox", "rocm")  # the GPU build, which its installer must be asked for again
         self.assertEqual(self.lab.finish("catalog/chatterbox_snapshot.json"), [f"{fetch} --gpu to fetch them."])
@@ -783,7 +785,7 @@ class FinishTests(unittest.TestCase):
         self.lab.drama()
         # The pins its receipt names are its installer's, as after the update from 0.1.0, which rewrote the installer.
         self.assertEqual(self.lab.finish("tools/install_drama3.py"), [])
-        fetch = "Drama 3's pinned files changed. Run setup-drama3.bat to fetch them."
+        fetch = "Drama 3's pinned files changed. Run tools\\setup-drama3.bat to fetch them."
         for receipt in ({"model_sha256": "0" * 64}, {"runtime_archive_sha256": "0" * 64}):
             self.lab.drama(**receipt)
             self.assertEqual(self.lab.finish("tools/install_drama3.py"), [fetch])
@@ -808,21 +810,21 @@ class FinishTests(unittest.TestCase):
             advice[:2],
             [
                 "Kokoro's pinned packages changed (requirements\\amd-rocm.txt). Delete the .venv-kokoro folder and install it "
-                "again: press Install on its card in Models & features with its switch on GPU, or run setup-kokoro.bat --gpu. "
+                "again: press Install on its card in Models & features with its switch on GPU, or run tools\\setup-kokoro.bat --gpu. "
                 f"{KEPT}",
                 "The pinned packages of Chatterbox Turbo and Chatterbox 500M and Voice Conversion changed "
                 "(requirements\\amd-rocm.txt). Delete the .venv-chatterbox folder, which they share, and install them again: "
-                "press Install on their cards in Models & features with their switches on GPU, or run setup-chatterbox.bat "
-                f"--gpu and setup-chatterbox.bat --original --gpu. {KEPT}",
+                "press Install on their cards in Models & features with their switches on GPU, or run tools\\setup-chatterbox.bat "
+                f"--gpu and tools\\setup-chatterbox.bat --original --gpu. {KEPT}",
             ],
         )
         # The models that run only on a graphics card always get its build: their installers need no --gpu.
         for text, (environment, command) in zip(
             advice[2:],
             [
-                (".venv-fqwen", "setup-qwen.bat --model 0.6b-base"),
-                (".venv-voxcpm", "setup-voxcpm.bat"),
-                (".venv-breeze", "setup-breeze.bat"),
+                (".venv-fqwen", "tools\\setup-qwen.bat --model 0.6b-base"),
+                (".venv-voxcpm", "tools\\setup-voxcpm.bat"),
+                (".venv-breeze", "tools\\setup-breeze.bat"),
             ],
         ):
             self.assertIn(f"(requirements\\amd-rocm.txt). Delete the {environment} folder and install it again", text)
@@ -840,7 +842,7 @@ class FinishTests(unittest.TestCase):
             self.lab.finish("requirements/kokoro-nvidia.txt"),
             [
                 "Kokoro's pinned packages changed (requirements\\kokoro-nvidia.txt). Delete the .venv-kokoro folder and install "
-                "it again: press Install on its card in Models & features with its switch on GPU, or run setup-kokoro.bat --gpu. "
+                "it again: press Install on its card in Models & features with its switch on GPU, or run tools\\setup-kokoro.bat --gpu. "
                 f"{KEPT}"
             ],
         )
@@ -852,13 +854,13 @@ class FinishTests(unittest.TestCase):
             self.lab.finish(update.AMD_LOCK),
             [
                 "Kokoro's pinned packages changed (requirements\\amd-rocm.txt). Delete the .venv-kokoro folder and install it "
-                f"again: press Install on its card in Models & features, or run setup-kokoro.bat. {KEPT}"
+                f"again: press Install on its card in Models & features, or run tools\\setup-kokoro.bat. {KEPT}"
             ],
         )
         self.lab.environment(".venv-kokoro", "cuda")
         self.assertEqual(
             self.lab.finish("catalog/kokoro_snapshot.json"),
-            ["Kokoro's model files changed. Run setup-kokoro.bat --gpu to fetch them."],
+            ["Kokoro's model files changed. Run tools\\setup-kokoro.bat --gpu to fetch them."],
         )
         self.assertNotIn("--nvidia", said + self.lab.text)
         self.lab.install("Kokoro", "cuda")  # the files the new version pins are in place already
@@ -884,7 +886,7 @@ class FinishTests(unittest.TestCase):
         self.assertIn("Updated to version 0.2.0.", self.lab.text)
 
     def test_the_build_of_pytorch_is_read_as_the_models_page_reads_it(self):
-        import engine_devices
+        from voice_lab import engine_devices
 
         entry = {"runtime": {"python": ".venv-kokoro/Scripts/python.exe"}}
         for build in (None, "cpu", "cuda", "rocm", "torch-2.6.0+cpu"):
@@ -898,7 +900,7 @@ class FinishTests(unittest.TestCase):
         self.assertIsNone(update.torch_build(self.lab.root, ".venv-missing"))
 
     def test_the_models_and_lists_are_the_installers_own(self):
-        import engine_checks
+        from voice_lab import engine_checks
         from tools import amd_build as amd
         from tools import install_breeze as ib
         from tools import install_chatterbox as ic
@@ -919,21 +921,21 @@ class FinishTests(unittest.TestCase):
         self.assertEqual(
             update.MODELS,
             {
-                "Kokoro": (ik.ENVIRONMENT, "setup-kokoro.bat", (ik.MANIFEST,)),
-                "Phonon": (ip.ENVIRONMENT, "setup-phonon.bat", (ip.MANIFEST,)),
-                "Chatterbox Turbo": (ic.ENVIRONMENT, "setup-chatterbox.bat", (ic.MANIFEST,)),
+                "Kokoro": (ik.ENVIRONMENT, "tools\\setup-kokoro.bat", (ik.MANIFEST,)),
+                "Phonon": (ip.ENVIRONMENT, "tools\\setup-phonon.bat", (ip.MANIFEST,)),
+                "Chatterbox Turbo": (ic.ENVIRONMENT, "tools\\setup-chatterbox.bat", (ic.MANIFEST,)),
                 "Chatterbox 500M and Voice Conversion": (
                     ic.ENVIRONMENT,
-                    "setup-chatterbox.bat --original",
+                    "tools\\setup-chatterbox.bat --original",
                     (ic.ORIGINAL_MANIFEST,),
                 ),
                 **{
-                    spec["name"]: (iq.ENVIRONMENT, f"setup-qwen.bat --model {spec['short']}", (spec["manifest"],))
+                    spec["name"]: (iq.ENVIRONMENT, f"tools\\setup-qwen.bat --model {spec['short']}", (spec["manifest"],))
                     for spec in iq.MODELS.values()
                 },
-                "VoxCPM2": (iv.ENVIRONMENT, "setup-voxcpm.bat", (iv.MANIFEST, iv.SOURCE_MANIFEST)),
-                "Breeze TTS 2": (ib.ENVIRONMENT, "setup-breeze.bat", (ib.MANIFEST,)),
-                "Drama 3": (None, "setup-drama3.bat", ("tools/install_drama3.py",)),
+                "VoxCPM2": (iv.ENVIRONMENT, "tools\\setup-voxcpm.bat", (iv.MANIFEST, iv.SOURCE_MANIFEST)),
+                "Breeze TTS 2": (ib.ENVIRONMENT, "tools\\setup-breeze.bat", (ib.MANIFEST,)),
+                "Drama 3": (None, "tools\\setup-drama3.bat", ("tools/install_drama3.py",)),
             },
         )
         # Every model the Models page can install is here, with the command its card names.

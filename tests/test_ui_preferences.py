@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from ui_preferences import UiPreferences
+from voice_lab.ui_preferences import UiPreferences
 
 DEFAULTS = {"theme": "system", "check_updates": False, "language": "en"}
 

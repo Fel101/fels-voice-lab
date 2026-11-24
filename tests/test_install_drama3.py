@@ -19,11 +19,11 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import drama3_runtime  # noqa: E402
-import drama3_worker  # noqa: E402
-import engine_checks  # noqa: E402
-import engine_install  # noqa: E402
-import ram_needs  # noqa: E402
+from voice_lab import drama3_runtime  # noqa: E402
+from voice_lab import drama3_worker  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
+from voice_lab import ram_needs  # noqa: E402
 from tools import install_drama3 as idr  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 
@@ -88,12 +88,12 @@ class ShippedPinsTests(unittest.TestCase):
             self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
 
     def test_the_launcher_and_the_models_page_run_the_installer_without_a_gpu_build(self):
-        text = (ROOT / "setup-drama3.bat").read_text("utf-8")
+        text = (ROOT / "tools/setup-drama3.bat").read_text("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_drama3.py %*', text)
-        self.assertIn(b"\r\n", (ROOT / "setup-drama3.bat").read_bytes())
+        self.assertIn(b"\r\n", (ROOT / "tools/setup-drama3.bat").read_bytes())
         self.assertEqual(engine_install.INSTALLERS["drama-3"], "tools/install_drama3.py")
         self.assertNotIn("drama-3", engine_install.GPU_BUILDS)
-        self.assertEqual(engine_checks.GUIDED_INSTALLERS["drama-3"], "setup-drama3.bat")
+        self.assertEqual(engine_checks.GUIDED_INSTALLERS["drama-3"], "tools\\setup-drama3.bat")
 
 
 class ProblemAndPlanTests(unittest.TestCase):

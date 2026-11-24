@@ -16,14 +16,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import ffmpeg_tools  # noqa: E402
-import housekeeping  # noqa: E402
-import library_backup  # noqa: E402
-import serve  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
+from voice_lab import housekeeping  # noqa: E402
+from voice_lab import library_backup  # noqa: E402
+from voice_lab import serve  # noqa: E402
 from app_version import VERSION  # noqa: E402
-from evaluation_store import EvaluationStore  # noqa: E402
-from request_log import RequestLog  # noqa: E402
-from scene_store import SceneStore  # noqa: E402
+from voice_lab.evaluation_store import EvaluationStore  # noqa: E402
+from voice_lab.request_log import RequestLog  # noqa: E402
+from voice_lab.scene_store import SceneStore  # noqa: E402
 from tests.library_fixture import PRIVATE_LINE, PRIVATE_NAME, PRIVATE_VOICE, build_library  # noqa: E402
 
 DEAD_PID = 2_147_483_646

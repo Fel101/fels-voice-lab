@@ -13,11 +13,11 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 import numpy as np
 import soundfile as sf
-import serve
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from lines import REFERENCE_TEXT
-from worker_pool import EnginePool, process_is_running
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.lines import REFERENCE_TEXT
+from voice_lab.worker_pool import EnginePool, process_is_running
 
 
 def main():

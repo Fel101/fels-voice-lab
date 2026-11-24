@@ -1,4 +1,4 @@
-"""Scripts in plain text and Fountain: the reader (script_import.py), and the preview and import routes that make a scene."""
+"""Scripts in plain text and Fountain: the reader (script_import.py), and the preview and from voice_lab import routes that make a scene."""
 
 import json
 import sys
@@ -13,10 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve  # noqa: E402
-from cast_store import CastStore  # noqa: E402
-from scene_store import SceneBatchRunner, SceneStore  # noqa: E402
-from script_import import parse_script  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.cast_store import CastStore  # noqa: E402
+from voice_lab.scene_store import SceneBatchRunner, SceneStore  # noqa: E402
+from voice_lab.script_import import parse_script  # noqa: E402
 from tests.test_scenes import FakeEngines, tone_wav  # noqa: E402
 
 SCRIPTS = ROOT / "tests" / "fixtures" / "scripts"

@@ -16,9 +16,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import breeze_worker  # noqa: E402
-import engine_checks  # noqa: E402
-import engine_install  # noqa: E402
+from voice_lab import breeze_worker  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
 from tests.test_amd_build import DEVICES, R9700, RADEON_780M, RADEON_VII, RX_5600_XT, RX_7600  # noqa: E402
 from tests.test_install_phonon import FileServer  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
@@ -34,7 +34,7 @@ def loader_constants():
     """The literal settings of breeze/loader.py, read from its source: importing it needs PyTorch, which the lab's .venv lacks."""
     import ast
 
-    tree = ast.parse((ROOT / "breeze" / "loader.py").read_text("utf-8"))
+    tree = ast.parse((ROOT / "voice_lab/breeze/loader.py").read_text("utf-8"))
     found = {}
     for node in tree.body:
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -100,13 +100,13 @@ class ShippedFilesTests(unittest.TestCase):
             self.assertNotIn(name, packages)
 
     def test_the_launcher_and_the_models_page_run_the_installer(self):
-        text = (ROOT / "setup-breeze.bat").read_text("utf-8")
+        text = (ROOT / "tools/setup-breeze.bat").read_text("utf-8")
         self.assertIn('".venv\\Scripts\\python.exe" tools\\install_breeze.py %*', text)
         self.assertIn("non-commercial", text)
-        self.assertIn(b"\r\n", (ROOT / "setup-breeze.bat").read_bytes())
+        self.assertIn(b"\r\n", (ROOT / "tools/setup-breeze.bat").read_bytes())
         self.assertEqual(engine_install.INSTALLERS["breeze-tts-2"], "tools/install_breeze.py")
         self.assertEqual(engine_install.GPU_BUILDS["breeze-tts-2"], "tools.install_breeze")
-        self.assertEqual(engine_checks.GUIDED_INSTALLERS["breeze-tts-2"], "setup-breeze.bat")
+        self.assertEqual(engine_checks.GUIDED_INSTALLERS["breeze-tts-2"], "tools\\setup-breeze.bat")
 
 
 class ProblemAndPlanTests(unittest.TestCase):

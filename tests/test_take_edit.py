@@ -12,7 +12,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import take_edit
+from voice_lab import take_edit
 
 RATE = 24_000
 

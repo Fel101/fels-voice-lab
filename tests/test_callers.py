@@ -19,18 +19,18 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import api_service  # noqa: E402
-import engine_install  # noqa: E402
-import engine_uninstall  # noqa: E402
-import kokoro_support  # noqa: E402
-from lab_errors import NotInstalled  # noqa: E402
-import phonon_support  # noqa: E402
-import scene_store  # noqa: E402
-import synthetic_label  # noqa: E402
-import voice_names  # noqa: E402
+from voice_lab import engine_install  # noqa: E402
+from voice_lab import engine_uninstall  # noqa: E402
+from voice_lab import kokoro_support  # noqa: E402
+from voice_lab.lab_errors import NotInstalled  # noqa: E402
+from voice_lab import phonon_support  # noqa: E402
+from voice_lab import scene_store  # noqa: E402
+from voice_lab import synthetic_label  # noqa: E402
+from voice_lab import voice_names  # noqa: E402
 from tools import lab_cli  # noqa: E402
 from test_cast import tone_wav  # noqa: E402
-from worker_pool import EnginePool, WorkerBusy, read_catalog  # noqa: E402
-from worker_process import WorkerCancelled  # noqa: E402
+from voice_lab.worker_pool import EnginePool, WorkerBusy, read_catalog  # noqa: E402
+from voice_lab.worker_process import WorkerCancelled  # noqa: E402
 
 CATALOG = {entry["id"]: entry for entry in read_catalog()["engines"]}
 RATE = 24_000
@@ -74,7 +74,7 @@ class Worker:
 
 class WorkerMessageTests(unittest.TestCase):
     def test_a_1200_character_kokoro_answer_with_its_phoneme_times_fits_in_one_message(self):
-        import worker_protocol
+        from voice_lab import worker_protocol
 
         # 0.3.0 failed such a part: Kokoro's phoneme and word times for 1,180 characters ran past 64 KiB.
         timing = {"phonemes": [{"symbol": "a", "start": index * 0.025, "end": index * 0.025 + 0.025} for index in range(1400)],
@@ -154,18 +154,18 @@ class LongTextTests(unittest.TestCase):
         self.assertEqual(worker.texts, [])
 
     def test_which_requests_design_a_voice(self):
-        import engine_adapters
+        from voice_lab import engine_adapters
 
         designs = {key for key in CATALOG if voice_names_designs(engine_adapters.get(key), {})}
         self.assertEqual(designs, {"voxcpm2", "qwen3-tts-1.7b-voice-design", "breeze-tts-2", "drama-3"})
-        from worker_pool import designs_voice
+        from voice_lab.worker_pool import designs_voice
 
         self.assertFalse(designs_voice(engine_adapters.get("voxcpm2"), {"mode": "clone"}))
         self.assertFalse(designs_voice(engine_adapters.get("breeze-tts-2"), {"mode": "direction"}))
 
 
 def voice_names_designs(adapter, req):
-    from worker_pool import designs_voice
+    from voice_lab.worker_pool import designs_voice
 
     return designs_voice(adapter, req)
 
@@ -583,13 +583,13 @@ class UninstallingFromThePageTests(unittest.TestCase):
             installer.uninstall("kokoro")
 
     def test_the_page_offers_it_on_an_installed_card_and_asks_first(self):
-        page = (ROOT / "voice_lab_studio.js").read_text(encoding="utf-8")
+        page = (ROOT / "web/voice_lab_studio.js").read_text(encoding="utf-8")
         self.assertIn("uninstall=cardNode('button','',LabText.t('studio.uninstall'))", page)
-        catalog = json.loads((ROOT / "locales" / "en.json").read_text(encoding="utf-8"))
+        catalog = json.loads((ROOT / "web/locales/en.json").read_text(encoding="utf-8"))
         self.assertEqual(catalog["messages"]["studio.uninstall"], "Uninstall…")
         self.assertIn("view.uninstallButton.hidden=missing||running||row.state==='not_integrated';", page)
         self.assertIn("{dry_run:true}", page[page.index("function planUninstall") :])
-        html = (ROOT / "serve.html").read_text(encoding="utf-8")
+        html = (ROOT / "web/serve.html").read_text(encoding="utf-8")
         self.assertIn('<dialog id="uninstallDialog"', html)
 
 

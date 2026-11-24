@@ -16,11 +16,11 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import serve
+from voice_lab import serve
 from library_fixture import temp_cast
-from worker_pool import EnginePool, process_is_running, read_catalog
-from worker_process import WorkerProcess, WorkerTimeout, WorkerUnavailable
-from worker_protocol import MAX_MESSAGE_BYTES, PROTOCOL_VERSION, ProtocolError, decode_message, encode_message, request
+from voice_lab.worker_pool import EnginePool, process_is_running, read_catalog
+from voice_lab.worker_process import WorkerProcess, WorkerTimeout, WorkerUnavailable
+from voice_lab.worker_protocol import MAX_MESSAGE_BYTES, PROTOCOL_VERSION, ProtocolError, decode_message, encode_message, request
 
 FAKE_WORKER = ROOT / "tests" / "fixtures" / "fake_worker.py"
 
@@ -352,7 +352,7 @@ class QueueTests(unittest.TestCase):
 
     def serve(self, cast=None, scenes=None):
         """The service's address, and its scene batch runner when there are scenes."""
-        from scene_store import SceneBatchRunner
+        from voice_lab.scene_store import SceneBatchRunner
 
         server = serve.LocalThreadingHTTPServer(("127.0.0.1", 0), serve.BaseHTTPRequestHandler)
         port = server.server_address[1]
@@ -467,7 +467,7 @@ class QueueTests(unittest.TestCase):
 
     def scene_service(self, lines):
         """A service with scenes, one Kokoro voice (it needs no recording), and a saved scene of `lines` lines for it."""
-        from scene_store import SceneStore
+        from voice_lab.scene_store import SceneStore
 
         cast = temp_cast(self)
         character = cast.create_character("Nell", "")

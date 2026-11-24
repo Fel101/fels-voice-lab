@@ -8,8 +8,8 @@ import unittest
 
 import soundfile as sf
 
-import audio_tools
-import export_panel
+from voice_lab import audio_tools
+from voice_lab import export_panel
 from tests.test_export_panel import ExportPanelBase, HAS_FFMPEG, tone_wav
 
 

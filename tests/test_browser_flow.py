@@ -33,13 +33,13 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import ffmpeg_tools
-import serve
+from voice_lab import ffmpeg_tools
+from voice_lab import serve
 from app_version import VERSION
-from cast_store import CastStore
-from evaluation_store import EvaluationStore
-from scene_store import SceneBatchRunner, SceneStore
-from worker_pool import read_catalog
+from voice_lab.cast_store import CastStore
+from voice_lab.evaluation_store import EvaluationStore
+from voice_lab.scene_store import SceneBatchRunner, SceneStore
+from voice_lab.worker_pool import read_catalog
 
 BROWSER_PATHS = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -808,7 +808,7 @@ class EmptyLibraryPageTests(unittest.TestCase):
             server.engines.engine_status = lambda: {
                 "device": "cpu", "busy": False, "speed": [], "engines": [
                     {"id": "kokoro", "name": "Kokoro 82M", "state": "not_installed",
-                     "installation": {"installed": False, "installer": "setup-kokoro.bat"}},
+                     "installation": {"installed": False, "installer": "tools\\setup-kokoro.bat"}},
                 ],
             }
             page = None
@@ -876,7 +876,7 @@ class GenerateAfterInstallTests(unittest.TestCase):
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class InstallWindowTests(unittest.TestCase):
     def test_stop_with_the_keyboard_and_retry_from_the_model_card(self):
-        from engine_install import EngineInstaller
+        from voice_lab.engine_install import EngineInstaller
         from tests.fixtures.interruptible_model_install import write_launcher
 
         with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:
@@ -896,7 +896,7 @@ class InstallWindowTests(unittest.TestCase):
                     pool.busy = False
 
                 def probe(_):
-                    return {"installed": (root / "check.pid").is_file(), "installer": "setup-kokoro.bat"}
+                    return {"installed": (root / "check.pid").is_file(), "installer": "tools\\setup-kokoro.bat"}
 
                 def status():
                     installation = probe(None)
@@ -1028,7 +1028,7 @@ class CastEditorTests(unittest.TestCase):
     def test_a_kokoro_voice_keeps_the_preset_voices_chosen_for_it(self):
         """The Cast editor sent the chosen voices where the service did not look, so every Kokoro voice made in the page was
         saved as af_heart, and no blend could be made there."""
-        import kokoro_support
+        from voice_lab import kokoro_support
 
         installed = ["af_heart", "bf_emma", "bm_george"]
         with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp, \
@@ -1136,7 +1136,7 @@ class SamplePageTests(unittest.TestCase):
     the library as it was."""
 
     def test_the_sample_is_heard_without_typing_and_removing_it_leaves_the_library_as_it_was(self):
-        import kokoro_support
+        from voice_lab import kokoro_support
         from tests.test_sample_project import library_state
 
         with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp, \
@@ -1355,7 +1355,7 @@ class ModelHelpPageTests(unittest.TestCase):
 @unittest.skipUnless(BROWSER, "needs headless Microsoft Edge or Google Chrome")
 class ConnectedAppsPageTests(unittest.TestCase):
     def test_system_shows_verified_apps_the_slate_count_and_gpu_details(self):
-        import fels_suite
+        from voice_lab import fels_suite
         from tests.test_connect import stand_in_app
         from tests.test_inbox import contract_clip
 
@@ -1423,8 +1423,8 @@ class InboxPageTests(unittest.TestCase):
     def test_a_clip_in_the_inbox_shows_on_the_cast_page_and_imports_as_a_candidate(self):
         import datetime
 
-        import fels_suite
-        from slate_inbox import SlateInbox
+        from voice_lab import fels_suite
+        from voice_lab.slate_inbox import SlateInbox
         from tests.test_inbox import contract_clip
 
         with tempfile.TemporaryDirectory(prefix="voice-lab-browser-", ignore_cleanup_errors=True) as temp:

@@ -16,7 +16,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import hardware  # noqa: E402
+from voice_lab import hardware  # noqa: E402
 from tools import amd_build as amd  # noqa: E402
 from tools import install_kokoro as base  # noqa: E402
 

@@ -12,8 +12,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_adapters  # noqa: E402
-import model_facts  # noqa: E402
+from voice_lab import engine_adapters  # noqa: E402
+from voice_lab import model_facts  # noqa: E402
 
 CATALOG = json.loads((ROOT / "catalog" / "engines.json").read_text(encoding="utf-8"))
 # MODEL_CAPABILITIES.md's rows, by the engines each one is about.

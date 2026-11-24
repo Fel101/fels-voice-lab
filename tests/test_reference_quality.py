@@ -19,10 +19,10 @@ from scipy.signal import fftconvolve
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import reference_quality as rq  # noqa: E402
-import serve  # noqa: E402
-from cast_store import CastStore  # noqa: E402
-from worker_pool import read_catalog  # noqa: E402
+from voice_lab import reference_quality as rq  # noqa: E402
+from voice_lab import serve  # noqa: E402
+from voice_lab.cast_store import CastStore  # noqa: E402
+from voice_lab.worker_pool import read_catalog  # noqa: E402
 
 RATE = 24_000
 

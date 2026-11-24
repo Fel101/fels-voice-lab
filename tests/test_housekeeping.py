@@ -11,12 +11,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import housekeeping
-import worker_pool
-from housekeeping import DAY, Item, apply, pid_may_be_alive, plan, run_startup_sweep, summarize
+from voice_lab import housekeeping
+from voice_lab import worker_pool
+from voice_lab.housekeeping import DAY, Item, apply, pid_may_be_alive, plan, run_startup_sweep, summarize
 from tools import cleanup_runtime
-from worker_pool import EnginePool
-from worker_process import WorkerProcess
+from voice_lab.worker_pool import EnginePool
+from voice_lab.worker_process import WorkerProcess
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = 1_800_000_000.0

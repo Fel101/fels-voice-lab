@@ -19,19 +19,19 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import common
-import engine_checks
-import engine_devices
-import engine_install
-import ram_needs
-import reference_paths
-import serve
-import worker_pool
-import worker_runtime
-from cast_store import CastStore
-from engine_install import EngineInstaller, paragraphs
+from voice_lab import common
+from voice_lab import engine_checks
+from voice_lab import engine_devices
+from voice_lab import engine_install
+from voice_lab import ram_needs
+from voice_lab import reference_paths
+from voice_lab import serve
+from voice_lab import worker_pool
+from voice_lab import worker_runtime
+from voice_lab.cast_store import CastStore
+from voice_lab.engine_install import EngineInstaller, paragraphs
 from tests.test_amd_build import R9700, RADEON_780M, RADEON_VII, RX_5600_XT, RX_7600
-from worker_pool import EnginePool, WorkerBusy
+from voice_lab.worker_pool import EnginePool, WorkerBusy
 
 PLAN = """Fel's Voice Lab: Kokoro 82M on the CPU
 

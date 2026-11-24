@@ -25,8 +25,8 @@ encoders, ASR models, FFmpeg or Windows are explicitly skipped when absent.
 The last two check the page's JavaScript. TypeScript's checker reads the page's scripts as one program, the way the page
 loads them, so a function or variable that is misspelt, or used where no script defines it, fails the check, even in a
 branch no test reaches. `npm ci` installs the one development tool, TypeScript, at the version `package-lock.json` pins,
-into `node_modules`; nothing of it reaches people who use the Lab. The check reads `jsconfig.json`, which lists the scripts
-in the order `serve.html` loads them (a new script goes there too), and `types/page.d.ts` declares the few names the
+into `node_modules`; nothing of it reaches people who use the Lab. The check reads `web/jsconfig.json`, which lists the scripts
+in the order `serve.html` loads them (a new script goes there too), and `web/types/page.d.ts` declares the few names the
 scripts share through `window`. It is not strict: an element from `$` can be any element. When it reports something that
 is not a mistake, say so with a JSDoc type where it happens rather than switching the check off. Scripts follow the Python
 rule for formatting: reformat one with Prettier (`npx prettier@3.10.1 --write <file>`, which reads `.prettierrc.json`)
@@ -89,7 +89,7 @@ third-party licenses for borrowed code and document its source and modifications
 
 ## Fel's Studio: the shared file and the ports
 
-The Lab is one of the four apps of Fel's Studio. `fels_suite.py` and `tests/suite_vectors.json` are the suite's, the same in
+The Lab is one of the four apps of Fel's Studio. `voice_lab/fels_suite.py` and `tests/suite_vectors.json` are the suite's, the same in
 every app's repository: do not change them here. A change goes into the suite's contract first, then into every app's copy
 at once. `tests/test_fels_suite.py` runs the shared cases, and the test run gets its own temporary suite folder
 (`FELS_SUITE_DIR`, set by `tests/real_library_guard.py`), so it never touches the one the apps on this computer use.
@@ -110,7 +110,7 @@ The ports the apps use. An example in the docs that needs some other port uses 8
 
 ## Translate the Lab
 
-Use `locales/en.json` as the source. Copy it to `locales/<language-tag>.json`
+Use `web/locales/en.json` as the source. Copy it to `web/locales/<language-tag>.json`
 and give the language its name as speakers write it. Keep `"draft": true` until
 a speaker has checked the translation in the running Lab. A missing message uses
 English. Keep model syntax such as `[laugh]`, `[voice:Mira]` and `<|speaker:0|>`

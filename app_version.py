@@ -1,7 +1,7 @@
 """The one place the application's name and version live.
 
 The page footer, /api/health, the service log and `serve.py --version` all read it from here. Change it in this file
-only, and describe the new version in CHANGELOG.md.
+only, and describe the new version in CHANGELOG.md. Keep this file at the root for released updaters and installers.
 """
 
 APP_NAME = "Fel's Voice Lab"

@@ -7,8 +7,8 @@ import urllib.error
 import urllib.request
 import zipfile
 
-from recorder_clip import ClipRefused
-from slate_bundle import read_bundle
+from voice_lab.recorder_clip import ClipRefused
+from voice_lab.slate_bundle import read_bundle
 from tests.recorder_fixtures import sidecar_template
 from tests.test_export_panel import ExportPanelBase, tone_wav
 

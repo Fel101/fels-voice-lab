@@ -11,20 +11,20 @@ than the computer has in all, more with a browser full of tabs open.
 
 | Model | Free RAM it asks for | 8 GB computer | 16 GB computer | 32 GB computer | Disk | Installer |
 |---|---|---|---|---|---|---|
-| Phonon 31M English | 2 GB | Yes | Yes | Yes | 0.3 GB | `setup-phonon.bat` |
-| Kokoro 82M | 3 GB | Yes | Yes | Yes | 1.7 GB | `setup-kokoro.bat` |
-| Chatterbox Turbo 350M (cloning) | 8 GB | No | With little else open | Yes | 5 GB | `setup-chatterbox.bat` |
-| Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | 3.2 GB, and Turbo's environment | `setup-chatterbox.bat --original` |
-| Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `setup-qwen.bat --model` (NVIDIA or AMD) |
-| VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `setup-voxcpm.bat` (NVIDIA or AMD) |
-| Breeze TTS 2 | 12 GB, and a graphics card with 8 GB (10 GB is better) | No | No | Yes | 12.5 GB | `setup-breeze.bat` (NVIDIA or AMD) |
-| Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `setup-drama3.bat` |
+| Phonon 31M English | 2 GB | Yes | Yes | Yes | 0.3 GB | `tools\setup-phonon.bat` |
+| Kokoro 82M | 3 GB | Yes | Yes | Yes | 1.7 GB | `tools\setup-kokoro.bat` |
+| Chatterbox Turbo 350M (cloning) | 8 GB | No | With little else open | Yes | 5 GB | `tools\setup-chatterbox.bat` |
+| Chatterbox 500M and Voice Conversion | 10 GB | No | Only just | Yes | 3.2 GB, and Turbo's environment | `tools\setup-chatterbox.bat --original` |
+| Qwen3-TTS (four models) | 10 GB, and a graphics card | No | Only just | Yes | 5.3 GB, and 2.5 or 4.5 GB a model | `tools\setup-qwen.bat --model` (NVIDIA or AMD) |
+| VoxCPM2 2B | 10 GB, and a graphics card with 7 GB | No | Only just | Yes | 10 GB | `tools\setup-voxcpm.bat` (NVIDIA or AMD) |
+| Breeze TTS 2 | 12 GB, and a graphics card with 8 GB (10 GB is better) | No | No | Yes | 12.5 GB | `tools\setup-breeze.bat` (NVIDIA or AMD) |
+| Drama 3 (35B, Q4) | 26 GB | No | No | With nearly everything closed | 21 GB | `tools\setup-drama3.bat` |
 
 The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card, an NVIDIA card or an AMD Radeon
 ([graphics cards](#graphics-cards)).
 
 The RAM numbers are the Lab's own rule, a measured peak with room to spare where one was measured; they live in
-[ram_needs.py](../ram_needs.py). Only one model is loaded at a time, so the largest one you use is what counts.
+[ram_needs.py](../voice_lab/ram_needs.py). Only one model is loaded at a time, so the largest one you use is what counts.
 
 How fast, measured on one computer on its CPU (an AMD Ryzen 7 PRO 8845HS mini PC): Phonon makes a second of speech in about
 0.2 s and Kokoro in about 0.3 s, so both are faster than real time. Chatterbox Turbo takes 2.5 to 3 s for each second of
@@ -76,7 +76,7 @@ again.
 is denied, let the scan finish, or allow the Lab's folder in the scanner, and run the installer again.
 
 **After updating from a version that put Kokoro and Phonon in `.venv`.** Models & features now says they are not installed:
-they live in `.venv-kokoro` and `.venv-phonon`. Run `setup-kokoro.bat` and `setup-phonon.bat` (or press **Install** on their
+they live in `.venv-kokoro` and `.venv-phonon`. Run `tools\setup-kokoro.bat` and `tools\setup-phonon.bat` (or press **Install** on their
 cards). The model files already in `hf-cache` are kept, so only the packages download again.
 
 ## A model will not load
@@ -98,7 +98,7 @@ Chatterbox keeps a line to a few sentences (give it 1,200 characters and it stop
 ## Graphics cards
 
 **NVIDIA.** Kokoro and the Chatterbox models can run on an NVIDIA card with a GPU build of PyTorch: `setup.bat` offers it when it
-finds an NVIDIA driver, or run `setup-kokoro.bat --gpu` and `setup-chatterbox.bat --gpu` (`--nvidia` asks for NVIDIA's build
+finds an NVIDIA driver, or run `tools\setup-kokoro.bat --gpu` and `tools\setup-chatterbox.bat --gpu` (`--nvidia` asks for NVIDIA's build
 alone). The Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 run only on a graphics card; on an NVIDIA one, **Install** on their cards
 puts in their NVIDIA build. Every NVIDIA build was checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB), so a
 [hardware report](#reporting-a-problem) from another NVIDIA card is welcome.
@@ -138,7 +138,7 @@ puts in their NVIDIA build. Every NVIDIA build was checked on a laptop with a Ge
 **AMD.** Every model that runs on a graphics card in the Lab runs on an AMD Radeon card with AMD's ROCm build of PyTorch. On a
 computer without an NVIDIA driver, **Install** on the cards of the Qwen3-TTS models, VoxCPM2 and Breeze TTS 2 (or their
 launchers) puts it in; Kokoro and the Chatterbox models get it from **Install** or **Install GPU build** with their switch on
-GPU, from the question `setup.bat` asks, or from `setup-kokoro.bat --gpu` and `setup-chatterbox.bat --gpu`.
+GPU, from the question `setup.bat` asks, or from `tools\setup-kokoro.bat --gpu` and `tools\setup-chatterbox.bat --gpu`.
 [Setup](SETUP.md#amd-radeon-cards) says what it installs. The Lab was checked on a Radeon AI PRO R9700, so a
 [hardware report](#reporting-a-problem) from another AMD card is welcome.
 

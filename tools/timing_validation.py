@@ -21,9 +21,9 @@ sys.path.insert(0, str(ROOT))
 
 import soundfile as sf  # noqa: E402
 
-from common import pick_device  # noqa: E402  (sets the model cache and device selection before any model import)
-import lipsync  # noqa: E402
-import word_timing  # noqa: E402
+from voice_lab.common import pick_device  # noqa: E402  (sets the model cache and device selection before any model import)
+from voice_lab import lipsync  # noqa: E402
+from voice_lab import word_timing  # noqa: E402
 
 EVIDENCE = ROOT / "docs" / "evidence" / "timing-validation.json"
 REFERENCE = "Kokoro af_heart predicted durations at 25 ms frames: the synthesis model's own timing, not a human label"
@@ -60,7 +60,7 @@ def main(argv=None):
     parser.add_argument("--publish", action="store_true", help="write docs/evidence/timing-validation.json")
     args = parser.parse_args(argv)
 
-    from worker_pool import EnginePool  # imported after the environment is set up
+    from voice_lab.worker_pool import EnginePool  # imported after the environment is set up
     texts = english_texts(args.limit)
     scratch = ROOT / "out" / "timing-validation" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     scratch.mkdir(parents=True, exist_ok=True)

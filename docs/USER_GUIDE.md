@@ -84,7 +84,7 @@ navigation says what it is doing and what waits for it; see [One thing at a time
 
 1. Open **Voice cloning**, type a **Name for this voice** and choose a **Model** that clones.
    Press **Install** on a model's card in **Models & features** to add one.
-   Chatterbox Turbo clones on an ordinary CPU (or run `setup-chatterbox.bat`,
+   Chatterbox Turbo clones on an ordinary CPU (or run `tools\setup-chatterbox.bat`,
    [setup](SETUP.md#chatterbox-turbo-on-the-cpu)); Chatterbox 500M and Drama 3,
    which needs 26 GB of free RAM, clone on the CPU too, and the Qwen3-TTS Base
    models, VoxCPM2 and Breeze TTS 2 on a graphics card, NVIDIA's or AMD's.
@@ -630,7 +630,7 @@ not understood. The app keeps those choices so existing scenes still open, but l
 
 ## Word times and captions
 
-Run `.venv\Scripts\python.exe align_takes.py --all` to record word times for every Cast take that has none.
+Run `.venv\Scripts\python.exe -m voice_lab.align_takes --all` to record word times for every Cast take that has none.
 The run takes about a minute for 150 takes and writes nothing else. Scene exports then write captions as word
 phrases wherever every take of a line has word times; any other line keeps one caption. The times are
 approximate and have not been checked against trusted timings, so listen before relying on a caption's timing.

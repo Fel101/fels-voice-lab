@@ -11,13 +11,13 @@ from unittest.mock import patch
 
 import numpy as np
 
-from cast_store import DIRECTION_ENGINES
-from engine_checks import CHECK_TEXT, CHECK_VOICE
-from voxcpm_worker import (MIN_GPU_GIB, RUN_ON_PATCHES_PER_TOKEN, RUN_ON_TRIES, VoxCPMWorker, _integer, _number,
+from voice_lab.cast_store import DIRECTION_ENGINES
+from voice_lab.engine_checks import CHECK_TEXT, CHECK_VOICE
+from voice_lab.voxcpm_worker import (MIN_GPU_GIB, RUN_ON_PATCHES_PER_TOKEN, RUN_ON_TRIES, VoxCPMWorker, _integer, _number,
                            check_gpu_memory, generate_until_it_ends, retry_seed, run_on_ratio, token_count)
-from worker_pool import EnginePool, read_catalog
+from voice_lab.worker_pool import EnginePool, read_catalog
 from tests.page_source import page_source
-from worker_runtime import ENGINE_IDS
+from voice_lab.worker_runtime import ENGINE_IDS
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -17,9 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_adapters  # noqa: E402
-from engine_adapters.base import Adapter  # noqa: E402
-from engine_checks import CHECK_TEXT  # noqa: E402
+from voice_lab import engine_adapters  # noqa: E402
+from voice_lab.engine_adapters.base import Adapter  # noqa: E402
+from voice_lab.engine_checks import CHECK_TEXT  # noqa: E402
 
 # Where an engine may be named besides the adapters, the installers (tools/), the tests, the docs and the catalog: its family's
 # own modules, which read its files, hold its model code or run in its worker, and the route table, whose examples name them.
@@ -37,7 +37,6 @@ FAMILY_MODULES = {
     "kokoro_support.py",
     "kokoro_timing.py",
     "phonon_support.py",
-    "qwen_download.py",
     "qwen_support.py",
     "qwen_worker.py",
     "voxcpm_worker.py",
@@ -67,8 +66,10 @@ def catalog_ids():
 
 def shared_files():
     """The top-level modules and page scripts other than the families' own, and the route groups (route_groups/)."""
-    top = [path for path in sorted(ROOT.glob("*.py")) + sorted(ROOT.glob("*.js")) if path.name not in FAMILY_MODULES]
-    return top + sorted(ROOT.glob("route_groups/*.py"))
+    top = [
+        path for path in sorted(ROOT.glob("voice_lab/*.py")) + sorted(ROOT.glob("web/*.js")) if path.name not in FAMILY_MODULES
+    ]
+    return top + sorted(ROOT.glob("voice_lab/route_groups/*.py"))
 
 
 def names(text):
@@ -91,7 +92,9 @@ class EngineAdapterTests(unittest.TestCase):
         # In a Python of their own, as other tests put stand-ins for model packages in this one's sys.modules. The service's
         # environment holds requirements/core.txt only, so a model package imported at the top of an adapter would break it.
         models = ("torch", "ptts", "kokoro", "chatterbox", "transformers", "faster_qwen3_tts", "voxcpm")
-        script = f"import sys, engine_adapters; print(','.join(m for m in {models!r} if m in sys.modules))"
+        script = (
+            f"import sys; from voice_lab import engine_adapters; print(','.join(m for m in {models!r} if m in sys.modules))"
+        )
         result = subprocess.run([sys.executable, "-c", script], cwd=ROOT, capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "", "importing the adapters imported a model package")
@@ -129,8 +132,8 @@ import numpy as np
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
-import engine_adapters
-from engine_adapters.base import Adapter
+from voice_lab import engine_adapters
+from voice_lab.engine_adapters.base import Adapter
 
 
 class Pretend(Adapter):
@@ -165,9 +168,17 @@ sys.modules["pretend_family"] = family
 engine_adapters.FAMILIES += ("pretend_family",)
 engine_adapters.ADAPTERS = engine_adapters._load()
 
-import cast_store, engine_checks, engine_devices, engine_install, output_license, performance_settings, ram_needs
-import scene_store, worker_pool, worker_runtime
-from worker_pool import EnginePool, read_catalog
+from voice_lab import cast_store
+from voice_lab import engine_checks
+from voice_lab import engine_devices
+from voice_lab import engine_install
+from voice_lab import output_license
+from voice_lab import performance_settings
+from voice_lab import ram_needs
+from voice_lab import scene_store
+from voice_lab import worker_pool
+from voice_lab import worker_runtime
+from voice_lab.worker_pool import EnginePool, read_catalog
 
 catalog = read_catalog()
 kokoro = next(entry for entry in catalog["engines"] if entry["id"] == "kokoro")

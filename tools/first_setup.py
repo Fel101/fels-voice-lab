@@ -10,7 +10,7 @@ setup-desktop.bat does), then offers the guided model installers: Kokoro and Pho
 computer, and Chatterbox Turbo, which clones a voice from a recording and wants more memory. It prints the plan of every model it
 is about to install (each installer's own --dry-run), asks once, and then runs those installers one after another with --yes. A
 model that is already installed is left alone, and running setup.bat again after an interruption continues where it stopped.
-setup-kokoro.bat, setup-phonon.bat and setup-chatterbox.bat stay for adding a model later, and so does the Install button on
+tools\\setup-kokoro.bat, tools\\setup-phonon.bat and tools\\setup-chatterbox.bat stay for adding a model later, and so does the Install button on
 Models & features.
 
 On a computer with an NVIDIA driver, or one whose graphics card is an AMD Radeon, it offers Kokoro and Chatterbox Turbo the GPU
@@ -33,10 +33,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import common  # noqa: E402  (points the model cache at this folder before anything else is imported)
-import hardware  # noqa: E402
-import engine_checks  # noqa: E402
-import ffmpeg_tools  # noqa: E402
+from voice_lab import common  # noqa: E402  (points the model cache at this folder before anything else is imported)
+from voice_lab import hardware  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import ffmpeg_tools  # noqa: E402
 
 # What each model is called here, its catalog id and installer, and whether a GPU build of PyTorch exists for it.
 MODELS = {
@@ -48,8 +48,8 @@ CHOICES = {"recommended": ("kokoro", "phonon"), "all": ("kokoro", "phonon", "cha
 # For the models with a GPU build: the name setup gives them, and their environment and launcher, for switching one to the
 # graphics card later.
 GPU_MODELS = {
-    "kokoro": ("Kokoro", ".venv-kokoro", "setup-kokoro.bat"),
-    "chatterbox": ("Chatterbox Turbo", ".venv-chatterbox", "setup-chatterbox.bat"),
+    "kokoro": ("Kokoro", ".venv-kokoro", "tools\\setup-kokoro.bat"),
+    "chatterbox": ("Chatterbox Turbo", ".venv-chatterbox", "tools\\setup-chatterbox.bat"),
 }
 # Below this much RAM in all, Chatterbox Turbo is unlikely ever to find the free memory it asks for.
 CLONING_TOTAL_RAM_GB = 15
@@ -89,9 +89,9 @@ def model_sizes(root=ROOT):
     """{model: (bytes to download, bytes on disk)} for a first install of each guided model on the CPU, from the numbers its
     installer plans with: its packages, and the model files it fetches by default (install_sizes, which the Models page
     shows too)."""
-    import install_sizes
-    from chatterbox_support import TURBO_ENGINE_ID
-    from phonon_support import PHONON_ENGINE_ID
+    from voice_lab import install_sizes
+    from voice_lab.chatterbox_support import TURBO_ENGINE_ID
+    from voice_lab.phonon_support import PHONON_ENGINE_ID
 
     engines = {"kokoro": "kokoro", "phonon": PHONON_ENGINE_ID, "chatterbox": TURBO_ENGINE_ID}
     sizes = {name: install_sizes.model_bytes(engine, Path(root)) for name, engine in engines.items()}
@@ -120,8 +120,8 @@ def menu_text(total_ram_gb, sizes):
         f"     {sizes_text(CHOICES['recommended'], sizes)}",
         "  2  Kokoro, Phonon and Chatterbox Turbo, which also clones a voice from a recording of more than five seconds.",
         f"     {sizes_text(CHOICES['all'], sizes)}",
-        "  3  None now. Add them later with the Install buttons on Models & features, or with setup-kokoro.bat,",
-        "     setup-phonon.bat and setup-chatterbox.bat.",
+        "  3  None now. Add them later with the Install buttons on Models & features, or with tools\\setup-kokoro.bat,",
+        "     tools\\setup-phonon.bat and tools\\setup-chatterbox.bat.",
         textwrap.fill(cloning, width=WIDTH, break_on_hyphens=False),
     ]
     return "\n".join(lines)

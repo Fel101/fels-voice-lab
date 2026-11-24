@@ -17,12 +17,12 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from breeze_worker import OUT_OF_MEMORY, BreezeWorker, _integer, _number
-import serve
-from cast_store import CastStore
+from voice_lab.breeze_worker import OUT_OF_MEMORY, BreezeWorker, _integer, _number
+from voice_lab import serve
+from voice_lab.cast_store import CastStore
 from library_fixture import temp_cast
-from worker_pool import EnginePool
-from worker_process import WorkerProcess
+from voice_lab.worker_pool import EnginePool
+from voice_lab.worker_process import WorkerProcess
 from tests.audio_fixtures import owned_reference
 
 FAKE_WORKER = ROOT / "tests" / "fixtures" / "fake_worker.py"

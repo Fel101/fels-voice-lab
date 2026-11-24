@@ -13,7 +13,7 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import speaker_similarity as ss
+from voice_lab import speaker_similarity as ss
 from tests import recorder_fixtures as fx
 from tests.test_export_panel import ExportPanelBase
 
@@ -218,7 +218,7 @@ class NumpyEncoderTests(unittest.TestCase):
     def test_the_encoder_needs_only_its_weights(self):
         with mock.patch.object(ss, "ENCODER_WEIGHTS", ROOT / "no-such-folder" / "ve.safetensors"):
             self.assertFalse(ss.encoder_available())
-        imports = [line.split()[1] for line in (ROOT / "speaker_similarity.py").read_text(encoding="utf-8").splitlines()
+        imports = [line.split()[1] for line in (ROOT / "voice_lab/speaker_similarity.py").read_text(encoding="utf-8").splitlines()
                    if line.startswith(("import ", "from "))]
         self.assertFalse({name.split(".")[0] for name in imports} & {"torch", "chatterbox", "librosa", "safetensors"}, imports)
 

@@ -30,7 +30,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import lab_address  # noqa: E402 - beside this folder, standard library only
+from voice_lab import lab_address  # noqa: E402 - beside this folder, standard library only
 
 DEFAULT_URL = lab_address.KNOWN_URL
 QUICK_SECONDS = 10           # health and cast answer at once

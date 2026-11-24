@@ -67,7 +67,7 @@ $cast = Invoke-RestMethod "$url/api/cast"
 Stop-Process -Id $service.Id -Force
 if ($health.version -ne $version) { throw "The Lab says version $($health.version) after the update, not $version" }
 if ($cast.characters.name -notcontains 'Kept through the update') { throw "The update lost the library's character" }
-$dropped = @(git diff --diff-filter=D --name-only $previousTag HEAD)
+$dropped = @(git diff --no-renames --diff-filter=D --name-only $previousTag HEAD)
 foreach ($file in $dropped) { if (Test-Path (Join-Path $lab $file)) { throw "Setup left $file, which $version no longer has" } }
 $record = Get-Content "$lab\out\update\last.json" -Raw | ConvertFrom-Json
 if ($record.method -ne 'setup' -or $record.from -ne $previousTag.Substring(1) -or $record.to -ne $version) {

@@ -24,10 +24,9 @@ pinned packages or model files changed: per environment, by the build of PyTorch
 installer would fetch. --finish and the record in out\\update\\last.json are how one version hands over to the next: keep both
 working as they are.
 
-Setup.exe of a newer version, run over an installed Lab, is an update too. It has copied the new files itself, so it ends with
---after-setup (installer\\FelsVoiceLab.iss): this removes the files the new version no longer has, by the file lists of the
-releases Setup carries (tools\\build_installer.py), records the update as "setup", and finishes it with the core packages
-from Setup's own wheels. Setup keeps no copy of the files it replaced, so --undo refuses that update.
+Setup.exe of a newer version, run over an installed Lab, is an update too. It removes old files, copies the new files and ends
+with --after-setup (installer\\FelsVoiceLab.iss). This records the update as "setup" and finishes with the core packages from
+Setup's own wheels. Setup keeps no copy of the files it replaced, so --undo refuses that update.
 """
 
 import argparse
@@ -49,7 +48,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import updates  # noqa: E402
+from voice_lab import updates  # noqa: E402
 from app_version import REPOSITORY, VERSION  # noqa: E402
 
 FOLDER = "out/update"
@@ -100,37 +99,37 @@ VOXCPM_SOURCE = "catalog/voxcpm2_source.json"
 # can hold several models. Chatterbox 500M and Voice Conversion share a checkpoint and a command. Drama 3 runs from .venv, and
 # its installer holds the pins of its files.
 MODELS = {
-    "Kokoro": (".venv-kokoro", "setup-kokoro.bat", ("catalog/kokoro_snapshot.json",)),
-    "Phonon": (".venv-phonon", "setup-phonon.bat", ("catalog/phonon_snapshot.json",)),
-    "Chatterbox Turbo": (".venv-chatterbox", "setup-chatterbox.bat", ("catalog/chatterbox_turbo_snapshot.json",)),
+    "Kokoro": (".venv-kokoro", "tools\\setup-kokoro.bat", ("catalog/kokoro_snapshot.json",)),
+    "Phonon": (".venv-phonon", "tools\\setup-phonon.bat", ("catalog/phonon_snapshot.json",)),
+    "Chatterbox Turbo": (".venv-chatterbox", "tools\\setup-chatterbox.bat", ("catalog/chatterbox_turbo_snapshot.json",)),
     "Chatterbox 500M and Voice Conversion": (
         ".venv-chatterbox",
-        "setup-chatterbox.bat --original",
+        "tools\\setup-chatterbox.bat --original",
         ("catalog/chatterbox_snapshot.json",),
     ),
     "Qwen3-TTS 0.6B Base": (
         ".venv-fqwen",
-        "setup-qwen.bat --model 0.6b-base",
+        "tools\\setup-qwen.bat --model 0.6b-base",
         ("catalog/qwen3_tts_0.6b_base_snapshot.json",),
     ),
     "Qwen3-TTS 1.7B Base": (
         ".venv-fqwen",
-        "setup-qwen.bat --model 1.7b-base",
+        "tools\\setup-qwen.bat --model 1.7b-base",
         ("catalog/qwen3_tts_1.7b_base_snapshot.json",),
     ),
     "Qwen3-TTS 1.7B VoiceDesign": (
         ".venv-fqwen",
-        "setup-qwen.bat --model 1.7b-voice-design",
+        "tools\\setup-qwen.bat --model 1.7b-voice-design",
         ("catalog/qwen3_tts_1.7b_voice_design_snapshot.json",),
     ),
     "Qwen3-TTS 1.7B CustomVoice": (
         ".venv-fqwen",
-        "setup-qwen.bat --model 1.7b-custom-voice",
+        "tools\\setup-qwen.bat --model 1.7b-custom-voice",
         ("catalog/qwen3_tts_1.7b_custom_voice_snapshot.json",),
     ),
-    "VoxCPM2": (".venv-voxcpm", "setup-voxcpm.bat", ("catalog/voxcpm2_snapshot.json", VOXCPM_SOURCE)),
-    "Breeze TTS 2": (".venv-breeze", "setup-breeze.bat", ("catalog/breeze_tts2_snapshot.json",)),
-    "Drama 3": (None, "setup-drama3.bat", ("tools/install_drama3.py",)),
+    "VoxCPM2": (".venv-voxcpm", "tools\\setup-voxcpm.bat", ("catalog/voxcpm2_snapshot.json", VOXCPM_SOURCE)),
+    "Breeze TTS 2": (".venv-breeze", "tools\\setup-breeze.bat", ("catalog/breeze_tts2_snapshot.json",)),
+    "Drama 3": (None, "tools\\setup-drama3.bat", ("tools/install_drama3.py",)),
 }
 # The model each name in MODELS is installed as on the Models page, so the page can give the advice an Install button.
 MODEL_ENGINES = {
@@ -742,7 +741,7 @@ def pending_files(root, listing):
 
 
 def drama3_changes(root, receipt):
-    """What setup-drama3.bat would fetch now, by the pins its installer holds: (whether it fetches anything, the model file it
+    """What tools\\setup-drama3.bat would fetch now, by the pins its installer holds: (whether it fetches anything, the model file it
     then no longer uses or None). It fetches the model or the speech.cpp runtime when the receipt names others, and the model's
     licence, notice and cards when one differs from its SHA-256; a model of another name goes beside the old one."""
     from tools import install_drama3 as drama
@@ -976,9 +975,8 @@ def summary_text(root, record, kept):
 
 def after_setup(root, *, args, runner=subprocess.run, say=say):
     """--after-setup: Setup.exe has copied this version over version `args.from_version` in this folder. Finish as update.bat
-    does once its files are in place: remove each file this version no longer has, when it is as that release shipped it
-    (copied first to out\\update\\<from>-to-<to>; one changed here is left), record the update with the method "setup", and
-    run finish with the packages from Setup's wheels. Setup's last page shows what it says (`args.summary`)."""
+    does once its files are in place: keep backups of the dropped files (including those removed by [InstallDelete]),
+    leave locally edited files in place, and run finish with Setup's wheels. Its last page shows the summary (`args.summary`)."""
     root = Path(root)
     lists = read_setup_files(args.setup_files)
     this, released = lists["this"], lists["releases"].get(args.from_version)
@@ -1006,16 +1004,20 @@ def after_setup(root, *, args, runner=subprocess.run, say=say):
             path for path in set(this) | set(released) if this.get(path) != released.get(path) and not protected(path)
         )
         backup = root / record["backup"] / "files"
+        staged = Path(args.setup_files).with_name("retired")
         for path in sorted(set(released) - set(this)):
-            local = None if protected(path) else digest(root / path)
-            if local is None:
+            if protected(path):
                 continue
-            if local != released[path]:
+            local = digest(root / path)
+            if local is not None and local != released[path]:
                 kept.append(path)
                 continue
+            source = root / path if local is not None else staged / path
+            if local is None and digest(source) != released[path]:
+                continue
             (backup / path).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(root / path, backup / path)
-            remove_file(root, path)
+            shutil.copy2(source, backup / path)
+            remove_file(root, path)  # also removes any directory that [InstallDelete] left empty
             removed.append(path)
     record.update(
         {

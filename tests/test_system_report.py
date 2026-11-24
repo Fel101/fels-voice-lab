@@ -12,13 +12,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import engine_checks  # noqa: E402
-import housekeeping  # noqa: E402
-import library_backup  # noqa: E402
-import system_report  # noqa: E402
-from cast_store import CAST_SCHEMA_VERSION  # noqa: E402
+from voice_lab import engine_checks  # noqa: E402
+from voice_lab import housekeeping  # noqa: E402
+from voice_lab import library_backup  # noqa: E402
+from voice_lab import system_report  # noqa: E402
+from voice_lab.cast_store import CAST_SCHEMA_VERSION  # noqa: E402
 from tests.library_fixture import PRIVATE_LINE, PRIVATE_NAME, PRIVATE_VOICE, build_library  # noqa: E402
-from worker_pool import read_catalog  # noqa: E402
+from voice_lab.worker_pool import read_catalog  # noqa: E402
 
 GB = 1024 ** 3
 DEAD_PID = 2_147_483_646

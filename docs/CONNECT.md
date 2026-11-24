@@ -188,7 +188,7 @@ Open **GPU details** to see which app is using the card, what it is doing, and w
 - **`GET /api/health`** carries a `fels` block, `{"contract": 1, "app": "voice-lab", "version": "...", "api": 1}`, so an app
   can tell the Lab from another app on the same port.
 
-The four apps share these rules in one file, [fels_suite.py](../fels_suite.py), the same in each app, with its test cases in
+The four apps share these rules in one file, [fels_suite.py](../voice_lab/fels_suite.py), the same in each app, with its test cases in
 [tests/suite_vectors.json](../tests/suite_vectors.json).
 
 ### Sharing the graphics card

@@ -160,5 +160,5 @@ sidecar has no hash for the master, so the report records the master's SHA-256 a
 `tests\test_recorder_import.py`, `tests\test_recorder_identity.py`, `tests\test_slate_bundle.py` and
 `tests\test_inbox.py` use generated audio only. `test_inbox.py` makes its `.voiceslate` file by hand from the suite
 contract's rules and hands it over as Voice Slate will; the page's own test is in `tests\test_browser_flow.py`. The identity tests need the
-Chatterbox Turbo encoder weights (`setup-chatterbox.bat` fetches them); the ones that clean a clip also need FFmpeg (found as `denoise_ref.find_ffmpeg()` does). They skip
+Chatterbox Turbo encoder weights (`tools\setup-chatterbox.bat` fetches them); the ones that clean a clip also need FFmpeg (found as `denoise_ref.find_ffmpeg()` does). They skip
 what is missing and say so.

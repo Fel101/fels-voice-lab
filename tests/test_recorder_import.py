@@ -17,11 +17,11 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import recorder_import as ri
-import recorder_identity
-from cast_store import CastStore
-from recorder_clip import ClipRefused, find_sidecars, load_clip
-from reference_paths import resolve_reference_path
+from voice_lab import recorder_import as ri
+from voice_lab import recorder_identity
+from voice_lab.cast_store import CastStore
+from voice_lab.recorder_clip import ClipRefused, find_sidecars, load_clip
+from voice_lab.reference_paths import resolve_reference_path
 from tests import recorder_fixtures as fx
 
 
