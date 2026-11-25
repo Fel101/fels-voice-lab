@@ -21,11 +21,15 @@ def _model_entries():
     return {entry["id"]: entry for entry in read_catalog()["engines"]}
 
 
-def model_licence(engine_id, *, preset=False):
-    entry = _model_entries().get(engine_id, {})
+def catalog_licence(entry, *, preset=False):
+    """A catalog entry's licence rating and reason, or with preset=True its preset voices', where the catalog rates them apart."""
     if preset and entry.get("preset_licence"):
         return entry["preset_licence"]
     return entry.get("licence") or {"rating": "unclear", "reason": "The model has no licence rating in the Lab catalog."}
+
+
+def model_licence(engine_id, *, preset=False):
+    return catalog_licence(_model_entries().get(engine_id, {}), preset=preset)
 
 
 def worst_licence(*licences):

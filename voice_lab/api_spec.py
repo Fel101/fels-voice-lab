@@ -208,8 +208,9 @@ ROUTES = [
             "says, from the catalog, its adapter, its installer and the language screen: `first_model` (marked as a good "
             "first model), and `runs` (`cpu`, `gpu`, `gpu_memory_gb`), `voices` (`clones`, `presets`, `designs`, "
             "`converts`), `direction` (`takes`, `acts_tags`), `languages` (`offered`, each `label`, `language` and its "
-            "`screen` result; `filter`, the languages the page's question matches) and `output` (`status`), each with "
-            "its `text` in plain words."),
+            "`screen` result; `filter`, the languages the page's question matches) and `output` (`rating`, the model's "
+            "licence rating; `preset_rating`, its voice catalog's where that has its own; and `status`, `restricted` or "
+            "`unknown` as in an export's licence profile), each with its `text` in plain words."),
     R("GET", "/api/engines/status", "Service",
       "Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.",
       reply="`device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: "

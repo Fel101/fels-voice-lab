@@ -1,10 +1,10 @@
 """What each model's card on the Models page says, in plain words, and what its three questions filter on (roadmap issue 3).
 
 Every fact comes from the project's records, never from text in the page: the catalog (catalog/engines.json) for what a
-model can do, its adapter (engine_adapters/) for where it runs, its voices, directions, languages and what its audio may
-be used for, its installer for the graphics memory it needs (the minimum the installer itself refuses below), and the
-language screen's evidence (docs/evidence/language-matrix.json) for how each language came out. Where a record says
-nothing, the card says "not stated". GET /api/catalog gives each engine its `facts`; tests/test_model_facts.py checks
+model can do and its licence rating, its adapter (engine_adapters/) for where it runs, its voices, directions, languages
+and anything more about what its audio may be used for, its installer for the graphics memory it needs (the minimum the
+installer itself refuses below), and the language screen's evidence (docs/evidence/language-matrix.json) for how each
+language came out. Where a record says nothing, the card says "not stated". GET /api/catalog gives each engine its `facts`; tests/test_model_facts.py checks
 them against MODEL_CAPABILITIES.md."""
 
 import importlib
@@ -13,6 +13,7 @@ import math
 
 from voice_lab import engine_adapters
 from voice_lab import language_matrix
+from voice_lab.output_license import catalog_licence
 
 WORKING = {"supported", "worker_verified"}
 EXPERIMENTAL = "experimental"
@@ -23,6 +24,13 @@ SCREEN_WORDS = {
     "inconclusive": "Inconclusive",
 }
 MARKUP_WORDS = {"square": "square brackets", "round": "round brackets"}
+# A licence rating in the words of the Cast's badges (cast.licence_* in web/locales/en.json).
+RATING_WORDS = {
+    "yes": "Commercial use allowed",
+    "conditions": "Allowed, with conditions",
+    "unclear": "Not cleared",
+    "no": "Non-commercial only",
+}
 
 
 def _status(capabilities, key):
@@ -180,17 +188,25 @@ def languages(entry, adapter, cells, names):
     return {"offered": rows, "filter": sorted(set(main) | set(partly)), "summary": summary, "text": " ".join(sentences)}
 
 
-def output_use(adapter):
+def output_use(entry, adapter):
+    """What its audio may be used for: the catalog's licence rating and reason, which its Cast voices and takes start from
+    (output_license.voice_licence). Where the catalog rates its preset voices apart, theirs comes first, since those are
+    the voices it speaks with; then what its adapter adds. `rating` is the model's, `preset_rating` its preset voices' where
+    they have their own, and `status` its terms' status in an export's licence profile, `restricted` or `unknown`."""
     profile = (adapter.output_license if adapter else None) or {}
-    words = adapter.output_use_words if adapter else None
-    if words:
-        return {"status": profile.get("status", "unknown"), "text": words}
-    if profile.get("status") == "restricted":
-        return {
-            "status": "restricted",
-            "text": "What its audio may be used for: restricted by its licence (THIRD_PARTY_NOTICES.md).",
-        }
-    return {"status": "not_stated", "text": "What its audio may be used for: not stated."}
+    licence = catalog_licence(entry)
+    answer = {"rating": licence["rating"], "status": profile.get("status", "unknown")}
+    model = f"{RATING_WORDS[licence['rating']]}. {licence['reason']}"
+    if entry.get("preset_licence"):
+        preset = catalog_licence(entry, preset=True)
+        answer["preset_rating"] = preset["rating"]
+        sentences = [f"What its audio may be used for: {RATING_WORDS[preset['rating']]} with its preset voices.",
+                     preset["reason"], f"The model itself: {model}"]
+    else:
+        sentences = [f"What its audio may be used for: {model}"]
+    if adapter and adapter.output_use_note:
+        sentences.append(adapter.output_use_note)
+    return {**answer, "text": " ".join(sentences)}
 
 
 def facts(entry, evidence=None):
@@ -203,7 +219,7 @@ def facts(entry, evidence=None):
         "voices": voices(entry, adapter),
         "direction": direction(entry, adapter),
         "languages": languages(entry, adapter, cells.get(entry["id"], {}), names),
-        "output": output_use(adapter),
+        "output": output_use(entry, adapter),
     }
 
 

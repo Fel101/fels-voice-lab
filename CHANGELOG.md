@@ -16,9 +16,12 @@
 
 - **Licence badges.** Cast voices and takes show the stricter of the model's licence and the saved recording's allowed
   use. Rate each recording version in **Edit voice**. A voice designed from words takes its design model's rating, a
-  recording made from a take takes the take's, and a trimmed recording keeps its own. `GET /api/voices`, Cast and take
-  responses, and export manifests include the rating and reason. `POST /api/identities/{identity_id}/update` can save
-  the recording's rating.
+  recording made from a take takes the take's, and a trimmed recording keeps its own. A design saved from **Recent
+  clips** in Model studio counts as designed; one saved there with 0.4.0 or earlier says Not cleared until you rate it.
+  `GET /api/voices`, Cast and take responses, and export manifests include the rating and reason.
+  `POST /api/identities/{identity_id}/update` can save the recording's rating. Model cards give the model's rating and
+  its reason in the badges' words, where they said "not stated" for most models; Phonon's starts with its preset voices',
+  Not cleared. `GET /api/catalog` has it as `rating` in each model's `facts.output`.
 
 - **Model support levels.** Every model card says Supported, Works or Experimental and what the level means. **Which
   model fits?** can show only release-tested models. `GET /api/catalog` includes `support` and the `support_note` for

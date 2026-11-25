@@ -1,11 +1,14 @@
 """Export receipts keep each model's own terms apart from the application's MIT licence."""
 import unittest
+from pathlib import Path
 
 from voice_lab.output_license import (
     DESIGN_ORIGIN, LICENCE_RATINGS, designer_of, license_profile, model_licence, voice_licence, worst_licence,
 )
 from voice_lab.reference_catalog import design_provenance
 from voice_lab.worker_pool import read_catalog
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class OutputLicenseTests(unittest.TestCase):
@@ -29,6 +32,14 @@ class OutputLicenseTests(unittest.TestCase):
         # A rating saved in Cast is the recording's own, and wins over the design model's.
         self.assertEqual(voice_licence("turbo", "reference", "conditions", origin)["rating"], "conditions")
         self.assertEqual(voice_licence("turbo", "reference", None, "My own recording")["rating"], "unclear")
+
+    def test_the_page_labels_a_design_saved_from_recent_clips_as_the_service_does(self):
+        # web/voice_workflows.js writes a design's origin in these words and this form (tests/voice_workflows.test.cjs).
+        self.assertIn(f"var DESIGN_ORIGIN = '{DESIGN_ORIGIN}';", (ROOT / "web" / "voice_workflows.js").read_text(encoding="utf-8"))
+        made = design_provenance("voxcpm2", {"checkpoint": "openbmb/VoxCPM2", "checkpoint_revision": "abc"}, {})["origin"]
+        self.assertEqual(made, f"{DESIGN_ORIGIN}voxcpm2; openbmb/VoxCPM2 revision abc.")
+        self.assertEqual(design_provenance("voxcpm2", {}, {})["origin"],
+                         f"{DESIGN_ORIGIN}voxcpm2; unrecorded checkpoint revision unrecorded revision.")
 
     def test_worst_recording_or_model_rating_wins(self):
         for engine, ratings in {

@@ -14,8 +14,10 @@ sys.path.insert(0, str(ROOT))
 
 from voice_lab import engine_adapters  # noqa: E402
 from voice_lab import model_facts  # noqa: E402
+from voice_lab import output_license  # noqa: E402
 
 CATALOG = json.loads((ROOT / "catalog" / "engines.json").read_text(encoding="utf-8"))
+CATALOG_BY_ID = {entry["id"]: entry for entry in CATALOG["engines"]}
 # MODEL_CAPABILITIES.md's rows, by the engines each one is about.
 TABLE_ROWS = {
     "Kokoro 82M": ["kokoro"],
@@ -96,20 +98,36 @@ class CardFactsTests(unittest.TestCase):
             self.assertIsNone(model_facts.gpu_memory_gb(engine_adapters.get("breeze-tts-2")))
         self.assertEqual(facts["turbo"]["runs"]["text"], "Runs with or without a graphics card.")
 
-    def test_what_the_audio_may_be_used_for_says_not_stated_where_nothing_states_it(self):
+    def test_what_the_audio_may_be_used_for_is_the_licence_rating_its_voices_start_from(self):
+        # The card says the rating a Cast voice of it starts from, in the words of the voice's badge, never "not stated"
+        # beside a rated voice.
         facts = all_facts()
-        self.assertIn("not stated", facts["phonon-31m-en"]["output"]["text"])
-        self.assertIn("37 preset voices", facts["phonon-31m-en"]["output"]["text"])
-        self.assertIn("non-commercial", facts["breeze-tts-2"]["output"]["text"])
-        self.assertIn("Built with Fish Audio", facts["drama-3"]["output"]["text"])
-        for engine_id in ("kokoro", "voxcpm2", "qwen3-tts-1.7b-base"):
-            self.assertEqual(
-                facts[engine_id]["output"], {"status": "not_stated", "text": "What its audio may be used for: not stated."}
-            )
         for engine_id, item in facts.items():
-            profile = engine_adapters.get(engine_id).output_license
-            if profile["status"] == "restricted":
-                self.assertNotIn("not stated", item["output"]["text"], engine_id)
+            with self.subTest(engine_id):
+                output, preset = item["output"], CATALOG_BY_ID[engine_id].get("preset_licence")
+                self.assertEqual(output["rating"], output_license.model_licence(engine_id)["rating"])
+                self.assertEqual(output.get("preset_rating"), preset and preset["rating"])
+                self.assertNotIn("not stated", output["text"])
+                # Where its preset voices are rated apart, theirs comes first: they are the voices it speaks with.
+                first = preset["rating"] if preset else output["rating"]
+                if preset:
+                    self.assertEqual(output_license.voice_licence(engine_id, "preset_voice")["rating"], first)
+                self.assertTrue(output["text"].startswith(f"What its audio may be used for: {model_facts.RATING_WORDS[first]}"))
+        self.assertEqual(facts["qwen3-tts-1.7b-voice-design"]["output"]["text"],
+                         "What its audio may be used for: Commercial use allowed. Qwen3-TTS uses Apache-2.0.")
+        phonon = facts["phonon-31m-en"]["output"]["text"]
+        self.assertTrue(phonon.startswith("What its audio may be used for: Not cleared with its preset voices. "), phonon)
+        self.assertIn("The model itself: Commercial use allowed.", phonon)
+        self.assertIn("Ask Gradium", phonon)
+        self.assertIn("Non-commercial only", facts["breeze-tts-2"]["output"]["text"])
+        self.assertIn("Built with Fish Audio", facts["drama-3"]["output"]["text"])
+        self.assertIn("Perth watermark", facts["turbo"]["output"]["text"])
+
+    def test_the_rating_words_are_the_cast_badges_words(self):
+        english = json.loads((ROOT / "web" / "locales" / "en.json").read_text(encoding="utf-8"))
+        english = english["messages"]
+        self.assertEqual(model_facts.RATING_WORDS, {rating: english[f"cast.licence_{rating}"] for rating in model_facts.RATING_WORDS})
+        self.assertEqual(set(model_facts.RATING_WORDS), set(output_license.LICENCE_RATINGS))
 
     def test_a_language_the_screen_did_not_understand_is_not_offered_to_the_question(self):
         facts = all_facts()
@@ -175,9 +193,7 @@ class CapabilitiesTableTests(unittest.TestCase):
             self.assertTrue(any(word in text for word in ("--gpu", "GPU build", "AMD's build", "NVIDIA")))
         restricted = item["output"]["status"] == "restricted"
         self.assertEqual(restricted, "non-commercial" in text or "Fish terms" in text)
-        self.assertEqual(
-            "not stated" in item["output"]["text"] and "37 preset voices" in item["output"]["text"], "no licence" in text
-        )
+        self.assertEqual(item["output"].get("preset_rating") == "unclear", "no licence" in text)
         self.assertEqual("watermark" in item["output"]["text"], "watermark" in text)
         self.check_languages(engine_id, item["languages"], text)
 
