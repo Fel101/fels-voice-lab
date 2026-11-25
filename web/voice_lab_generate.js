@@ -134,6 +134,9 @@ function requestSpeech() {
     var backend = r.headers.get('X-Voice-Backend'); if (backend) { meta += ' / ' + backend; }
     var checkpoint = r.headers.get('X-Model-Checkpoint'); if (checkpoint) { meta += ' / ' + checkpoint; }
     var revision = r.headers.get('X-Checkpoint-Revision'); if (revision) { meta += LabText.t('studio.revision', {revision: revision}); }
+    // Kept with the clip, for the origin of a design saved from Recent clips (VoiceLabWorkflows.openFromClip).
+    if (checkpoint) { historyBody._checkpoint = checkpoint; }
+    if (revision) { historyBody._checkpoint_revision = revision; }
     var sampling = r.headers.get('X-Effective-Sampling-Settings'); if (sampling) { meta += LabText.t('studio.effective_sampling', {sampling: sampling}); }
     // Leave one-letter model codes out. The language picker already shows the selected language.
     var language = r.headers.get('X-Voice-Language');
@@ -283,7 +286,8 @@ function streamGenerate() {
     var wav=new Blob([wavHeader(state.sampleRate,state.sampleCount)].concat(state.pcmParts),{type:'audio/wav'});
     var completion=state.complete, meta=LabText.t('studio.native_faster_qwen_generator_generator', {first_chunk_seconds: Number(completion.generator_first_chunk_s).toFixed(2), first_byte_seconds: Number(completion.service_first_byte_s).toFixed(2), first_audio_seconds: Number(completion.service_first_audio_s).toFixed(2), playback_seconds: ((state.playbackStartMs-requestStarted)/1000).toFixed(2), gaps: state.gapCount, gap_seconds: state.gapSeconds.toFixed(2), audio_seconds: Number(completion.audio_seconds).toFixed(2), generation_seconds: Number(completion.generation_total_s).toFixed(2), chunk_count: completion.chunk_count});
     if(completion.backend){meta+=' / '+completion.backend;}
-    if(completion.checkpoint){meta+=' / '+completion.checkpoint;}
+    if(completion.checkpoint){meta+=' / '+completion.checkpoint;historyBody._checkpoint=completion.checkpoint;}
+    if(completion.checkpoint_revision){historyBody._checkpoint_revision=completion.checkpoint_revision;}
     if(completion.reference_cache_hit!==null&&completion.reference_cache_hit!==undefined){meta+=' / voice recording cached: '+completion.reference_cache_hit;}
     if(completion.saved_asset){meta+=' / saved voice recording: '+completion.saved_asset;}
     makeHistory(wav,historyBody,meta); $('status').textContent=meta;

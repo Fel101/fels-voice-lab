@@ -180,7 +180,7 @@ def _model_pin(engine_id, options):
     entry = next((row for row in read_catalog()["engines"] if row["id"] == engine_id), {})
     return {
         "name": entry.get("name", engine_id),
-        "allowed_use": output_use(engine_adapters.get(engine_id))["text"],
+        "allowed_use": output_use(entry, engine_adapters.get(engine_id))["text"],
         "checkpoint": options.get("checkpoint") or entry.get("checkpoint"),
         "revision": options.get("checkpoint_revision") or entry.get("local_revision"),
         "revision_basis": "Cast identity" if options.get("checkpoint_revision") else "Lab catalog",

@@ -7,6 +7,10 @@
   var cloneEngines = ['drama-3','qwen3-tts-1.7b-base','qwen3-tts-0.6b-base','voxcpm2','turbo','orig','breeze-tts-2'];
   // The cloning model this page last chose by itself. Any other value in the picker was chosen by the person, and stays.
   var cloneEngineDefault = null;
+  // How the origin of a voice designed from words begins, as the service writes it (DESIGN_ORIGIN in
+  // voice_lab/output_license.py). No person is in such a recording, so the service rates it by the model that designed it.
+  // The service reads these words, so they stay in English in every language.
+  var DESIGN_ORIGIN = 'Original synthetic voice design via ';
   var transcriptFields = {reference:'referenceText',qwenReference:'qwenReferenceText',
     voxPromptReference:'voxPromptText',dramaReference:'dramaTranscript'};
   var referenceSelectors = ['reference','qwenReference','voxReference','voxPromptReference','dramaReference','chatterboxReference'];
@@ -191,7 +195,11 @@
     el('cloneTranscript').value = body.text || '';
     var parent = body._reference_provenance;
     if (!parent && body.reference_path && body.mode!=='design' && body.mode!=='custom_voice') parent = {origin:LabText.t('studio.where_this_recording_came_from'),allowed_use:LabText.t('studio.who_may_use_the_recording')};
-    el('cloneOrigin').value = (parent && parent.origin ? LabText.t('studio.generated_with_source', {engine: body.engine, origin: parent.origin}) : LabText.t('studio.generated_locally', {engine: body.engine}));
+    // A design is labelled as the service labels the designs it saves itself (reference_catalog.design_provenance).
+    el('cloneOrigin').value = body.mode === 'design' ? DESIGN_ORIGIN + body.engine + '; ' +
+        (body._checkpoint || 'unrecorded checkpoint') + ' revision ' + (body._checkpoint_revision || 'unrecorded revision') + '.' :
+      parent && parent.origin ? LabText.t('studio.generated_with_source', {engine: body.engine, origin: parent.origin}) :
+        LabText.t('studio.generated_locally', {engine: body.engine});
     el('cloneAllowedUse').value = (parent && parent.allowed_use ? parent.allowed_use + '; ' : '') +
       (body.engine === 'breeze-tts-2' ? LabText.t('studio.non_commercial_only_breeze_model') :
         body.engine === 'drama-3' ? LabText.t('studio.subject_to_fish_audio_community') : LabText.t('studio.subject_to_the_source_model'));

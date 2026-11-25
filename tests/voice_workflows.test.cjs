@@ -96,6 +96,22 @@ test('a studio clip hands off to a cloning model without inventing approval or d
   assert.match(h.node('cloneAllowedUse').value,/Non-commercial/);assert.equal(h.node('clonePermission').checked,false);
   assert.match(h.node('cloneStatus').textContent,/Verify/);
 });
+test('a design saved from Recent clips is labelled a design, as the service labels its own, and saved that way',async()=>{
+  const h=harness(),design={engine:'qwen3-tts-1.7b-voice-design',mode:'design',text:'I carry letters over the pass.',
+    voice_description:'A courier.',_checkpoint:'Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign',_checkpoint_revision:'5ecdb67'};
+  h.ctx.VoiceLabWorkflows.openFromClip(new Blob(['voice']),design);
+  const origin='Original synthetic voice design via qwen3-tts-1.7b-voice-design; Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign revision 5ecdb67.';
+  assert.equal(h.node('cloneOrigin').value,origin);assert.equal(h.node('clonePermission').checked,false);
+  h.node('cloneName').value='Isla';h.node('clonePermission').checked=true;
+  await h.node('cloneSave').trigger('click');
+  const upload=h.requests.find(r=>r.options?.headers?.['X-Reference-Metadata']);
+  assert.equal(JSON.parse(Buffer.from(upload.options.headers['X-Reference-Metadata'],'base64url').toString()).origin,origin);
+  // A clip that kept no checkpoint says so, in the service's words; a clone of a recording is not a design.
+  h.ctx.VoiceLabWorkflows.openFromClip(new Blob(['voice']),{engine:'voxcpm2',mode:'design',text:'Words.'});
+  assert.equal(h.node('cloneOrigin').value,'Original synthetic voice design via voxcpm2; unrecorded checkpoint revision unrecorded revision.');
+  h.ctx.VoiceLabWorkflows.openFromClip(new Blob(['voice']),{engine:'voxcpm2',mode:'clone',reference_path:'/a.wav',text:'Words.'});
+  assert.doesNotMatch(h.node('cloneOrigin').value,/Original synthetic voice design/);
+});
 test('Unicode reference metadata is encoded without corrupting origin or transcript',()=>{
   const h=harness(),metadata={transcript:'你好，世界。',origin:'Maël’s voice'};
   assert.deepEqual(JSON.parse(Buffer.from(h.ctx.VoiceLabWorkflows.metadataHeader(metadata),'base64url').toString()),metadata);

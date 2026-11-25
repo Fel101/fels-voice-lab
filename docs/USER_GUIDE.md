@@ -182,7 +182,8 @@ Every recent studio result has **Save as a reusable Cast voice**. This opens Voi
 cloning with the audio, proposed transcript and source/model terms carried into
 the form. Name it, listen, correct the proposed words and record permission before
 saving. Qwen VoiceDesign output becomes a voice recording for Qwen Base to clone,
-because the design and cloning checkpoints are separate. Saving a preset voice's audio
+because the design and cloning checkpoints are separate. A design's origin says which model
+designed it, so its Cast badge takes that model's rating. Saving a preset voice's audio
 for another model to clone does not change the preset.
 
 ### Keep voices in the Cast library
@@ -571,8 +572,10 @@ screen heard, because the language a line names is only a note for it.
 
 Every fact comes from the Lab's records (the catalog, each model's adapter, its installer and the language screen), and
 [MODEL_CAPABILITIES.md](../MODEL_CAPABILITIES.md) says the same; a test checks the two against each other. Where the records
-say nothing, the card says **not stated**: the audio of most models, for example, and of Phonon's preset voices, whose
-repository states no licence. GET `/api/catalog` gives each model's `facts` and `support` level.
+say nothing, the card says **not stated**: how much graphics memory some models need, for example. What its audio may be
+used for is the model's licence rating, in the words of the badges in Cast: Phonon's card starts with its preset voices'
+rating, **Not cleared**, since their repository states no licence. GET `/api/catalog` gives each model's `facts` and
+`support` level.
 
 ## Check which models can speak
 

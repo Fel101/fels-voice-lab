@@ -51,9 +51,9 @@ class Adapter:
     performance_defaults = None  # the settings a take uses where the line sets none
     control_ui = None  # each setting's label and bounds, for the Perform and scene forms
     output_license = None  # what its code, weights and clips allow, for each take's licence profile
-    # What its audio may be used for, in plain words, for its card on the Models page (model_facts.py), drawn from
-    # output_license and THIRD_PARTY_NOTICES.md; None when nothing states it, which the card says.
-    output_use_words = None
+    # What its card on the Models page (model_facts.py) adds about what its audio may be used for, after the catalog's licence
+    # rating and reason, drawn from output_license and THIRD_PARTY_NOTICES.md; None when the rating says it all.
+    output_use_note = None
     first_model = False  # the Models page marks it as a good first model (model_facts.py)
     acted_markup = None  # the tags it acts instead of saying: "square" ([laugh]) or "round" ((laugh)), for word timing
     converts = False  # it converts a recording into another voice (POST /api/convert) and never speaks text

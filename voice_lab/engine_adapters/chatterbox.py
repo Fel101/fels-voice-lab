@@ -35,9 +35,7 @@ class Chatterbox(Adapter):
     gpu_build = "tools.install_chatterbox"
     sizes_install = True
     manifest = "ORIGINAL_MANIFEST"  # the installer's manifest that lists its files
-    output_use_words = (
-        "What its audio may be used for: not stated. Every clip carries Resemble AI's Perth watermark, which the Lab keeps."
-    )
+    output_use_note = "Every clip carries Resemble AI's Perth watermark, which the Lab keeps."
     output_license = {
         "code_license": "MIT Chatterbox runtime, separately installed.",
         "weights_license": "MIT upstream Chatterbox checkpoint.",
