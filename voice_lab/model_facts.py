@@ -200,8 +200,11 @@ def output_use(entry, adapter):
     if entry.get("preset_licence"):
         preset = catalog_licence(entry, preset=True)
         answer["preset_rating"] = preset["rating"]
-        sentences = [f"What its audio may be used for: {RATING_WORDS[preset['rating']]} with its preset voices.",
-                     preset["reason"], f"The model itself: {model}"]
+        sentences = [
+            f"What its audio may be used for: {RATING_WORDS[preset['rating']]} with its preset voices.",
+            preset["reason"],
+            f"The model itself: {model}",
+        ]
     else:
         sentences = [f"What its audio may be used for: {model}"]
     if adapter and adapter.output_use_note:

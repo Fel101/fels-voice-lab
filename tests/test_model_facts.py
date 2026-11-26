@@ -113,8 +113,10 @@ class CardFactsTests(unittest.TestCase):
                 if preset:
                     self.assertEqual(output_license.voice_licence(engine_id, "preset_voice")["rating"], first)
                 self.assertTrue(output["text"].startswith(f"What its audio may be used for: {model_facts.RATING_WORDS[first]}"))
-        self.assertEqual(facts["qwen3-tts-1.7b-voice-design"]["output"]["text"],
-                         "What its audio may be used for: Commercial use allowed. Qwen3-TTS uses Apache-2.0.")
+        self.assertEqual(
+            facts["qwen3-tts-1.7b-voice-design"]["output"]["text"],
+            "What its audio may be used for: Commercial use allowed. Qwen3-TTS uses Apache-2.0.",
+        )
         phonon = facts["phonon-31m-en"]["output"]["text"]
         self.assertTrue(phonon.startswith("What its audio may be used for: Not cleared with its preset voices. "), phonon)
         self.assertIn("The model itself: Commercial use allowed.", phonon)
@@ -126,7 +128,9 @@ class CardFactsTests(unittest.TestCase):
     def test_the_rating_words_are_the_cast_badges_words(self):
         english = json.loads((ROOT / "web" / "locales" / "en.json").read_text(encoding="utf-8"))
         english = english["messages"]
-        self.assertEqual(model_facts.RATING_WORDS, {rating: english[f"cast.licence_{rating}"] for rating in model_facts.RATING_WORDS})
+        self.assertEqual(
+            model_facts.RATING_WORDS, {rating: english[f"cast.licence_{rating}"] for rating in model_facts.RATING_WORDS}
+        )
         self.assertEqual(set(model_facts.RATING_WORDS), set(output_license.LICENCE_RATINGS))
 
     def test_a_language_the_screen_did_not_understand_is_not_offered_to_the_question(self):

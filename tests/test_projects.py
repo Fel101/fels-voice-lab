@@ -194,7 +194,9 @@ class ProjectFilesTests(ExportPanelBase):
         file.write_bytes(raw)
         models = self.checked_json("/api/catalog", 200)["engines"]
         words = next(entry["facts"]["output"]["text"] for entry in models if entry["id"] == "kokoro")
-        self.assertEqual(words, "What its audio may be used for: Commercial use allowed. Kokoro and its voice packs use Apache-2.0.")
+        self.assertEqual(
+            words, "What its audio may be used for: Commercial use allowed. Kokoro and its voice packs use Apache-2.0."
+        )
         page = self.open_page()
         page.open(self.base + "/#projects")
         page.click("#portableImportPanel summary")
