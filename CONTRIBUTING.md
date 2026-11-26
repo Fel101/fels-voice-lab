@@ -120,7 +120,7 @@ a speaker has checked the translation in the running Lab. A missing message uses
 English. Keep model syntax such as `[laugh]`, `[voice:Mira]` and `<|speaker:0|>`
 as written.
 
-In 0.4.0, model card facts, voice descriptions, service messages outside the
+Model card facts, voice descriptions, service messages outside the
 common error codes, and diagnostics use English. Native file and audio controls
 follow the browser's language.
 

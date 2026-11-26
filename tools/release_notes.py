@@ -6,8 +6,9 @@
 
 A release's notes are shown on GitHub's release page, where a link such as [setup](docs/SETUP.md) leads nowhere, so each one
 is pointed at the file as it is at the tag. The release workflow (.github/workflows/release.yml) passes --tag, which also
-refuses a tag that is not "v" and the version, because update.bat refuses such a release. Exit status 1, with the reason, when
-the version has no section in the changelog, its heading has no date, or its section is empty.
+refuses a tag that is not "v" and the version, because update.bat refuses such a release. GitHub shows each line break of
+the notes as written, so a paragraph or a list item whose lines were wrapped is joined into one line. Exit status 1, with the
+reason, when the version has no section in the changelog, its heading has no date, or its section is empty.
 """
 
 import argparse
@@ -27,6 +28,8 @@ HEADING = re.compile(r"## (?P<version>\S+)(?:\s+—\s+(?P<date>.*?))?\s*")
 # An inline link or image whose target has no spaces, with an optional title. The changelog uses no other kind.
 LINK = re.compile(r"(?P<label>!?\[[^\]]*\])\((?P<target>[^)\s]+)(?P<title>\s+\"[^\"]*\")?\)")
 SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+# A line that starts a block of its own: a list item, a heading, a quote, a table row or a fence.
+BLOCK_START = re.compile(r"\s*(?:[-*+] |\d+\. |#|>|\||```)")
 
 
 class NotesError(Exception):
@@ -73,6 +76,29 @@ def section(text, version):
     return body + "\n"
 
 
+def unwrap(text):
+    """Join the wrapped lines of each paragraph and list item, since GitHub's release page shows every line break."""
+    joined, fenced = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            fenced = not fenced
+            joined.append(line)
+            continue
+        continues = (
+            not fenced
+            and joined
+            and joined[-1].strip()
+            and line.strip()
+            and not BLOCK_START.match(line)
+            and not joined[-1].strip().startswith(("#", "|", "```"))
+        )
+        if continues:
+            joined[-1] = joined[-1].rstrip() + " " + line.strip()
+        else:
+            joined.append(line)
+    return "\n".join(joined) + "\n"
+
+
 def absolute_links(text, repository, tag):
     """The text with every link into the repository pointed at the file as it is at the tag. A link to a heading of the
     changelog itself points at CHANGELOG.md, and an image at the file's raw bytes so that it still shows."""
@@ -96,7 +122,7 @@ def notes(version, *, changelog=CHANGELOG, repository=app_version.REPOSITORY, ta
     check_version(version)
     tag = tag or f"v{version}"
     check_tag(tag, version)
-    return absolute_links(section(Path(changelog).read_text(encoding="utf-8"), version), repository, tag)
+    return absolute_links(unwrap(section(Path(changelog).read_text(encoding="utf-8"), version)), repository, tag)
 
 
 def main(argv=None):

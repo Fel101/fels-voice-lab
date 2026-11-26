@@ -1,68 +1,48 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — 2026-11-26
 
-### Changed
+**From 0.4.0, press Update now** on **System & backups**, or run `update.bat` or the new Setup.exe. It keeps your library
+and models, and `update.bat --undo` puts 0.4.0 back.
 
-- **Program folders.** The Lab's Python code is in `voice_lab/` and the pages are in `web/`. Individual model launchers
-  are in `tools\`, alongside the installers. The desktop shortcut, `serve.bat` and the Claude Code MCP command still work.
+The Lab is now one of the four free apps of Fel's Studio: Voice Slate records voices with permission, Voice Lab designs and
+clones them, NPC Forge makes characters for games, and Altera lets you talk with them. Each works on its own, and together
+they hand clips, voices and characters to each other on your computer. [Every change in detail](docs/releases/1.0.0.md).
 
-- **Stop model installs.** Use **Stop** in a model's install progress. The installer finishes any active package command
-  and keeps resumable downloads, and so does closing the Lab. The card shows how to continue.
-  `POST /api/engines/{engine_id}/install/stop` takes the job ID from `GET /api/engines/status`.
+### What changed for you
 
-- **Connected apps.** Open **System & backups** to find NPC Forge and Altera, see how many Voice Slate clips are waiting
-  in Cast, and check who is using the graphics card. The Lab's address and copy buttons are under **Connect other programs**.
-
-- **Licence badges.** Cast voices and takes show the stricter of the model's licence and the saved recording's allowed
-  use. Rate each recording version in **Edit voice**. A voice designed from words takes its design model's rating, a
-  recording made from a take takes the take's, and a trimmed recording keeps its own. A design saved from **Recent
-  clips** in Model studio counts as designed; one saved there with 0.4.0 or earlier says Not cleared until you rate it.
-  `GET /api/voices`, Cast and take responses, and export manifests include the rating and reason.
-  `POST /api/identities/{identity_id}/update` can save the recording's rating. Model cards give the model's rating and
-  its reason in the badges' words, where they said "not stated" for most models; Phonon's starts with its preset voices',
-  Not cleared. `GET /api/catalog` has it as `rating` in each model's `facts.output`.
-
-- **Model support levels.** Every model card says Supported, Works or Experimental and what the level means. **Which
-  model fits?** can show only release-tested models. `GET /api/catalog` includes `support` and the `support_note` for
-  experimental models. The real-model smoke run can check all Supported models with `--supported`.
+- **Clips from Voice Slate wait in Cast.** Voice Slate's **Send to Voice Lab** leaves a clip in the Lab's inbox, even while
+  the Lab is closed. **Cast library** shows it with **Preview**, and **Import as candidate** makes it a voice.
+- **NPC Forge and Altera speak with your voices.** They find the Lab by themselves. **Connected apps** on **System &
+  backups** shows them, the clips waiting for you and who is using the graphics card.
+- **One graphics card for the four apps.** The light in the header says who holds the card. While NPC Forge has it to
+  itself (its One model at a time switch), a line that would load a model on the card says so instead, and a scene batch
+  waits. Models on the CPU keep working.
+- **Licence badges** on Cast voices and takes give the stricter of the model's licence and the recording's allowed use.
+  Rate each recording in **Edit voice**.
+- **Support levels.** Every model card says Supported, Works or Experimental, and **Which model fits?** can show only the
+  release-tested models.
+- **Stop** a model's install; it keeps what has downloaded, and **Install** goes on from there.
+- **The program's files moved** into `voice_lab\`, `web\` and `tools\`. The desktop shortcut, `serve.bat` and the Claude
+  Code command keep working.
 
 ### Fixed
 
-- A Voice Slate clip whose sidecar was edited by hand could fail with a server error instead of a reason: a
-  `transcript_status` that is a list or an object, or in a `.voiceslate` file a number of more than 4,300 digits. The
-  first is now a warning, as an unknown status is, and the second is refused. A file in the inbox that the check cannot
-  handle is listed as refused, so the other files still show.
+- A Voice Slate clip whose details were edited by hand could fail with a server error instead of a reason.
 
-### For the other apps of Fel's Studio
+### After updating
 
-- **One folder for the four apps.** The Lab writes its address where Voice Slate, NPC Forge and Altera look for it,
-  `apps\voice-lab.json` in the suite folder (`%LOCALAPPDATA%\Fels`, or wherever `FELS_SUITE_DIR` points), and makes the
-  inbox where they can leave files for it. Its own address file stays, for tools from 0.4.0.
-  [Connect other apps](docs/CONNECT.md#the-other-apps-of-fels-studio).
-- **`GET /api/health`** has a `fels` block: the contract, the app's id `voice-lab`, its version and its suite API number, 1.
-- **`lab_cli.py` and the MCP server** look in the suite's address file first.
-- **Sharing the graphics card.** While a voice model is on the graphics card, the Lab holds the suite's GPU lock, shared
-  with the other apps. When NPC Forge wants the card to itself (its One model at a time switch), a request that would load
-  a model on the card answers `409` with `code` `gpu_busy` and names Forge, and a scene batch waits for the card. Models on
-  the CPU keep working. [Sharing the graphics card](docs/CONNECT.md#sharing-the-graphics-card).
-- **`POST /api/unload`** says what the Lab is doing when it answers `409`, in `doing`, and counts a whole scene spoken on
-  the graphics card as busy.
-- **`GET /api/gpu`** is new: who holds the graphics card, shared or alone. The page's header shows it as a light.
-- **Clips from Voice Slate wait in the inbox.** Voice Slate's Send to Voice Lab puts a `.voiceslate` clip in the Lab's
-  inbox, and **Cast library** shows it within ten seconds of the page getting focus, with **Preview** and **Dismiss**.
-  It is imported as a candidate only when you press **Import as candidate**, and the file then goes to the Recycle Bin.
-  A file that fails a check is listed with the reason. [The Voice Slate guide](docs/RECORDER_BRIDGE.md).
-- **`GET /api/inbox`, `POST /api/inbox/{inbox_file}/import` and `POST /api/inbox/{inbox_file}/dismiss`** are new.
-- **Suite API 1.** The calls NPC Forge, Altera and other programs make to the Lab are one marked set, and keep their fields
-  until the suite API number goes up. The API guide marks them, `openapi.json` marks them with `x-fels-suite-api` and
-  describes their answers' fields, and `tests/suite_api_1.json` keeps them.
-  [For Fel's other apps](docs/CONNECT.md#for-fels-other-apps) gives the calls for four tasks.
-- **`POST /api/characters/from-design`** is new: it designs a voice from words and keeps it as a new character's voice,
-  approved and ready to speak by the character's name, in one call.
-- **`tools/suite_api_check.py`** runs those four tasks against a running Lab and says whether each one works.
-- **The API guide** lists the `X-Reference-Metadata` fields of a recording's upload and of `POST /api/portable/import`,
-  and what the voice-file routes answer.
+No model needs installing again. A design saved from **Recent clips** with 0.4.0 or earlier says Not cleared until you rate
+it in **Edit voice**. A script of your own that ran a file from the Lab's folder by its old place needs the new one.
+
+### For scripts and the other apps
+
+- Suite API 1: the calls NPC Forge, Altera and other programs make are one marked set that keeps its fields
+  ([For Fel's other apps](docs/CONNECT.md#for-fels-other-apps)). `GET /api/health` has a `fels` block.
+- New: `GET /api/gpu`, the inbox routes, `POST /api/characters/from-design` and `tools/suite_api_check.py`. A request
+  that would load a model while another app has the card to itself answers `409` `gpu_busy`, naming the app.
+- The Lab writes its address to the suite folder too (`%LOCALAPPDATA%\Fels\apps\voice-lab.json`), as well as where 0.4.0
+  wrote it.
 
 ## 0.4.0 — 2026-11-18
 

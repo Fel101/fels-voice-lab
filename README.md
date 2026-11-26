@@ -49,7 +49,7 @@ desktop window, the speech models install from the page or with `setup.bat`, and
 its own. It was built and checked on one Windows machine with an AMD GPU, and every NVIDIA build the installers offer was
 checked on a laptop with a GeForce RTX 5070 Laptop GPU (8 GB). There are no Linux or macOS results. Original application code
 is MIT; borrowed code and optional models keep their own licenses. See [third-party terms](THIRD_PARTY_NOTICES.md).
-Several of 0.4.0's workspaces draw on the workflows of [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash
+Several of the Lab's workspaces draw on the workflows of [VoiceStudio](https://github.com/debpalash/voicestudio) by Palash
 Debnath and its contributors.
 
 ## Hear it
@@ -86,8 +86,8 @@ VoxCPM2.
 
 https://github.com/user-attachments/assets/e1bbee2f-c3ce-4242-96af-819682310bfe
 
-The animation and the video show 0.3.0, which opened on **Model studio**. 0.4.0 opens on **Home**, with links to your
-five most recent scenes, dubs and books. On an empty library, Home shows ways to start a scene or narrate a document.
+The animation and the video show 0.3.0, which opened on **Model studio**. Since 0.4.0 the Lab opens on **Home**, with links
+to your five most recent scenes, dubs and books. On an empty library, Home shows ways to start a scene or narrate a document.
 
 ![Home showing a recent scene](docs/images/home.png)
 
@@ -284,7 +284,7 @@ What is planned, and what anyone can pick up, is in the pinned
 | [Scene schema](docs/scenes/scene-schema-v1.md) | Scripts, stable IDs and selection rules |
 | [HTTP API](docs/API.md) | Calls for scripts and other programs: speak, speak as a Cast voice, the command-line tool, and [`openapi.json`](openapi.json) |
 | [Responsible use](docs/RESPONSIBLE_USE.md) | Recording/voice rights and output restrictions |
-| [Changelog](CHANGELOG.md) | What is in this release, and its known limits; [0.4.0 in detail](docs/releases/0.4.0.md) |
+| [Changelog](CHANGELOG.md) | What is in this release, and its known limits; [1.0.0 in detail](docs/releases/1.0.0.md) |
 
 ## Verify
 

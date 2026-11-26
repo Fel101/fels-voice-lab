@@ -98,6 +98,23 @@ class LinkTests(unittest.TestCase):
             self.link("[a](../elsewhere/README.md)")
 
 
+class UnwrapTests(unittest.TestCase):
+    def test_a_wrapped_paragraph_and_list_item_become_one_line_each(self):
+        text = (
+            "**From 1.1.0, press Update now**, which keeps\nyour library.\n\n### Fixes\n\n"
+            "- A fix whose line\n  was wrapped.\n- Another.\n1. A step\n   on two lines.\n"
+        )
+        self.assertEqual(
+            release_notes.unwrap(text),
+            "**From 1.1.0, press Update now**, which keeps your library.\n\n### Fixes\n\n"
+            "- A fix whose line was wrapped.\n- Another.\n1. A step on two lines.\n",
+        )
+
+    def test_headings_tables_quotes_and_fenced_code_keep_their_lines(self):
+        text = "### A heading\nA paragraph.\n\n| a | b |\n| - | - |\n> A quote\n\n```\nline one\nline two\n```\n"
+        self.assertEqual(release_notes.unwrap(text), text)
+
+
 class NotesTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
