@@ -67,27 +67,25 @@ models' pinned revisions, the seeds, and how close the Lab's voice match finds e
 
 ## A look at it
 
-Everything below is the real page and the real service. Mira and Tobin are characters that exist only in a library made
-for it. In the animation and the pictures their voices are Kokoro 82M's preset voices, and in the video with sound they
-were designed from descriptions, so no person's recording was used or cloned. The waveforms, lengths and loudness
-readings are the models'.
+The tour shows the real Voice Lab 1.0.0 page and service. Its voices were designed from written descriptions, so no
+person's recording was used or cloned. The screenshots below the tour use two Kokoro 82M presets for Mira and Tobin.
 
 ### The whole path
 
-![A Lab fresh from setup installs Kokoro 82M from Model studio and says its first words, gives two characters Kokoro voices (one a blend of two), performs a line, then imports a four-line script as a scene, renders it and plays it](docs/images/lab-tour.gif)
+![The Voice Lab tour designs a voice from words, imports a clip from Voice Slate, checks licence badges, renders a scene and shows NPC Forge and Altera in Connected apps](docs/images/lab-tour.gif)
 
-A Lab fresh from setup, in a minute and a half: install a model, make a voice, perform a line, render a scene. The page
-was driven by a script, and the waits for the install and the model's first load are sped up.
+Design a voice from words, bring a clip in from Voice Slate and check what the voices and takes may be used for.
+The tour follows two characters from their first audition through a finished scene. It also shows who is using the
+GPU and where NPC Forge and Altera connect.
 
-The same path with sound and a narrator, in 3 minutes 39 seconds, with bigger models after the install: Qwen3-TTS
-VoiceDesign designs Mira's and Tobin's voices from written descriptions, VoxCPM2 clones Mira's and Chatterbox Turbo
-Tobin's, and the scene plays in their voices. The narrator is the designed voice of the cloning demo above, cloned by
-VoxCPM2.
+The three-minute video includes the auditions and the finished scene. Qwen3-TTS VoiceDesign creates Isla and Bram
+from written descriptions. VoxCPM2 speaks for Isla, Chatterbox Turbo speaks for Bram and a voice designed with
+VoxCPM2 narrates the tour as Ash. The page was driven by a script, and the waits for the models are sped up.
 
-https://github.com/user-attachments/assets/e1bbee2f-c3ce-4242-96af-819682310bfe
+https://github.com/user-attachments/assets/d19c686c-b245-4db8-9b75-7c3523bb37ce
 
-The animation and the video show 0.3.0, which opened on **Model studio**. Since 0.4.0 the Lab opens on **Home**, with links
-to your five most recent scenes, dubs and books. On an empty library, Home shows ways to start a scene or narrate a document.
+**Home** links to your five most recent scenes, dubs and books. On an empty library, it shows ways to start a scene
+or narrate a document.
 
 ![Home showing a recent scene](docs/images/home.png)
 
