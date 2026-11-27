@@ -233,8 +233,10 @@ class EngineInstaller:
             nvidia, card = gpu_target() if (row.get("gpu") or {}).get("install") else (False, None)
             answer = install_sizes.model_bytes(row["id"], self.root, nvidia=nvidia, card=card)
             row["install_size"] = install_sizes.size_fields(answer)
-            if row["id"] == "kokoro":
-                cpu = install_sizes.model_bytes("kokoro", self.root) if nvidia or card is not None else answer
+            adapter = engine_adapters.get(row["id"])
+            if adapter is not None and adapter.sample_voices:
+                # The first screen offers the sample scene's model with both downloads, so each needs its size.
+                cpu = install_sizes.model_bytes(row["id"], self.root) if nvidia or card is not None else answer
                 row["install_variants"] = {
                     "cpu": install_sizes.size_fields(cpu),
                     "gpu": row["install_size"] if (row.get("gpu") or {}).get("install") else None,

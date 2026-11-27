@@ -389,8 +389,9 @@ function wireFirstRun(){
     return planInstall(action.engine,action.gpu ?? (modelCards[action.engine]||{}).installGpu);
   });
   $('firstRunGpu').addEventListener('click',function(){
-    firstRun.engine='kokoro';
-    return planInstall('kokoro',true);
+    var action=firstRun.action;if(!action||action.kind!=='install'){return;}
+    firstRun.engine=action.engine;
+    return planInstall(action.engine,true);
   });
   $('go').addEventListener('click',function(){if(firstRun.ready){firstRun.ready=null;$('firstRun').hidden=true;}});
 }
@@ -418,7 +419,7 @@ function renderFirstRun(status){
   var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only&&!row.install_resume;});
   var running=activeInstall(job);
   var available=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;});
-  var offer=rows.find(function(row){return row.install_resume;})||available.find(function(row){return row.id==='kokoro';})||available[0];
+  var offer=rows.find(function(row){return row.install_resume;})||available.find(function(row){return row.install_variants;})||available[0];
   if(installed&&firstRun.engine&&job&&job.engine===firstRun.engine&&job.state==='finished'){studioReady(job);}
   firstRun.action=null;$('firstRunSample').hidden=true;
   var gpuButton=$('firstRunGpu');gpuButton.hidden=true;
@@ -452,11 +453,11 @@ function renderFirstRun(status){
     firstRun.action.gpu=false;
     if(!failed){$('firstRunText').textContent=LabText.t('studio.first_kokoro');}
     button.textContent=variants.cpu
-      ? LabText.t('studio.first_kokoro_cpu_size',{size:gigabytes(variants.cpu.download_bytes)})
+      ? LabText.t('studio.first_kokoro_cpu_size',{download_size:gigabytes(variants.cpu.download_bytes)})
       : LabText.t('studio.first_kokoro_cpu');
     if(offer.gpu&&offer.gpu.install){
       gpuButton.textContent=variants.gpu
-        ? LabText.t('studio.first_kokoro_gpu_size',{size:gigabytes(variants.gpu.download_bytes)})
+        ? LabText.t('studio.first_kokoro_gpu_size',{download_size:gigabytes(variants.gpu.download_bytes)})
         : LabText.t('studio.first_kokoro_gpu');
       gpuButton.hidden=false;gpuButton.disabled=!!status.busy;
     }

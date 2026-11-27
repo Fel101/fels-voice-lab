@@ -9,6 +9,7 @@ read, and a model that reports its voices only once it is loaded (Qwen CustomVoi
 from voice_lab import engine_adapters
 from voice_lab import engine_checks
 from voice_lab.output_license import made_from, model_licence
+from voice_lab.recorder_clip import expiry_problem
 
 # The models whose clips take an acting direction ("quietly, as if tired"); cast_store.DIRECTION_ENGINES is the same set.
 DIRECTION_MODELS = engine_adapters.engines_where("takes_direction")
@@ -63,6 +64,8 @@ def cast_voices(characters, entries, installed):
                 approved_recording = recordings.get(identity.get("approved_reference_id"))
                 if approved_recording is None or approved_recording.get("retired"):
                     why = "It has no approved voice recording yet. Approve one in Cast."
+                else:
+                    why = expiry_problem(approved_recording.get("release_expires"))
             voices.append(
                 {
                     "name": f"{character['name']} ({identity['label']})",

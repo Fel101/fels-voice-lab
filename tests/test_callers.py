@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -24,6 +25,7 @@ from voice_lab import engine_uninstall  # noqa: E402
 from voice_lab import kokoro_support  # noqa: E402
 from voice_lab.lab_errors import NotInstalled  # noqa: E402
 from voice_lab.output_license import DESIGN_ORIGIN  # noqa: E402
+from voice_lab import recorder_clip  # noqa: E402
 from voice_lab import phonon_support  # noqa: E402
 from voice_lab import scene_store  # noqa: E402
 from voice_lab import synthetic_label  # noqa: E402
@@ -327,6 +329,23 @@ class VoiceListTests(ServiceCase):
             {name: voices[name]["made_from"] for name in ("Rosa", "Ash", "Kit", "Lee", "Nell", "af_heart")},
             {"Rosa": "recording", "Ash": "words", "Kit": "words", "Lee": "recording", "Nell": "model", "af_heart": "model"},
         )
+
+    def test_a_voice_whose_speaker_permission_expired_is_not_ready(self):
+        # The list says which voices can speak now, so a voice whose Slate release has run out is listed with the reason.
+        self.installed.add("qwen3-tts-1.7b-base")
+        cast = self.service.cast
+        voice = cast.create_identity(cast.create_character("Rosa")["id"], "qwen3-tts-1.7b-base", "Recorded")
+        recording = cast.add_reference(voice["id"], "rosa.wav", tone_wav(), transcript="A test line.",
+                                       origin="Recorded with Voice Slate", allowed_use="Permitted for test use",
+                                       release_expires="2027-02-22")  # fmt: skip
+        with mock.patch.object(recorder_clip, "date", wraps=date) as clock:
+            clock.today.return_value = date(2027, 2, 22)
+            cast.update_identity(voice["id"], {"status": "approved", "reference_version_id": recording["id"]})
+            self.assertEqual((self.voices()["Rosa"]["ready"], self.voices()["Rosa"]["why_not"]), (True, None))
+            clock.today.return_value = date(2027, 2, 23)
+            rosa = self.voices()["Rosa"]
+        self.assertFalse(rosa["ready"])
+        self.assertIn("permission expired on 2027-02-22", rosa["why_not"])
 
     def test_names_are_found_without_regard_to_case_and_unknown_ones_say_where_to_look(self):
         self.service.add_voice("Nell", "Warm")

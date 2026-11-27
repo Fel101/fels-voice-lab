@@ -591,7 +591,9 @@ class CastStore:
         db.execute("BEGIN IMMEDIATE")
         if not db.execute(query).fetchone():
             db.execute("ALTER TABLE reference_versions ADD COLUMN release_expires TEXT")
-            if data_root is not None:
+            # Only a library with saved recordings has the columns the backfill reads.
+            columns = {row[1] for row in db.execute("PRAGMA table_info(reference_versions)")}
+            if data_root is not None and {"source_sha256", "parent_reference_id"} <= columns:
                 for ref_id, source_hash in db.execute("SELECT id,source_sha256 FROM reference_versions").fetchall():
                     try:
                         sidecar = _safe_relative(data_root, f"media/references/{ref_id}/recorder-clip.json")
