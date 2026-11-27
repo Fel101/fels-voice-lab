@@ -1,12 +1,22 @@
 """Coordinate Stop between the service and a guided model installer."""
 
 import os
+import random
 import subprocess
 import time
 from pathlib import Path
 
 CONTROL_ENV = "VOICE_LAB_INSTALL_CONTROL"
 STOPPED = 125
+# Windows refuses to replace the phase file while another program has it open: the service reading it for the page, or a
+# virus scanner looking at the new file. The installer tries again for this long before it gives up.
+BUSY_SECONDS = 3.0
+
+
+def _pause(attempt):
+    """Wait a little longer after each refusal, by a random amount, so two programs that read and write the file on their
+    own timers cannot stay in step and meet at every try (five tries 50 ms apart did on a GitHub runner)."""
+    time.sleep(min(0.25, 0.01 * 2 ** attempt) * random.uniform(0.5, 1.5))
 
 
 class InstallControl:
@@ -16,13 +26,13 @@ class InstallControl:
         self.stop_path = self.folder / "stop"
 
     def current_phase(self):
-        for _ in range(5):
+        for attempt in range(5):
             try:
                 return self.phase_path.read_text(encoding="ascii")
             except FileNotFoundError:
                 return "preparing"
             except PermissionError:  # Windows can deny a read while the installer replaces the file.
-                time.sleep(0.05)
+                _pause(attempt)
         return "waiting"
 
     def request_stop(self):
@@ -34,14 +44,17 @@ class InstallControl:
         # the phase, so it can never decide to kill a process that is about to start changing packages.
         temporary = self.phase_path.with_suffix(".tmp")
         temporary.write_text(phase, encoding="ascii")
-        for attempt in range(5):
+        deadline = time.monotonic() + BUSY_SECONDS
+        attempt = 0
+        while True:
             try:
                 temporary.replace(self.phase_path)
                 break
             except PermissionError:
-                if attempt == 4:
+                if time.monotonic() >= deadline:
                     raise
-                time.sleep(0.05)
+                _pause(attempt)
+                attempt += 1
         if self.stop_path.exists():
             raise SystemExit(STOPPED)
 

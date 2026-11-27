@@ -8,6 +8,8 @@
   "Created with Source model not recorded".
 - A voice designed from words says what its model's licence allows and that no person's recording is in it, not
   "Unknown; review checkpoint terms and reference rights".
+- A model's install no longer stops with "Access is denied" when Windows or a virus scanner holds its progress file for
+  a moment: the installer tries again for up to three seconds.
 - `tools/real_model_smoke.py` prints its table on a Windows console that cannot show a model's own progress bars.
 - Links to Altera use its new address, github.com/Fel101/fels-altera.
 
