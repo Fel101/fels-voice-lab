@@ -348,7 +348,9 @@ ROUTES = [
             "one name to send back as `voice`; `aliases`, other names that mean it; `kind`, `cast` or `preset`; `model` and "
             "`model_name`; `label`; `languages`; `takes_direction`, whether its model uses an acting `direction`; `ready`, and "
             "`why_not`, a sentence saying what to do when it is not ready. `licence` has a `rating` "
-            "(`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. A "
+            "(`yes`, `conditions`, `unclear` or `no`) and a `reason` for it. `made_from` is `recording` for a voice "
+            "cloned from a recording (a person's voice, or any recording the Lab cannot trace to a design), `words` for "
+            "one designed from words, and `model` for one of a model's own voices. A "
             "Cast voice also has `character`, `identity_id` and `status`; a preset voice has `voice_id`, its model's own name "
             "for it.",
       notes="A Cast voice is named after its character when it is the character's only voice, or its only approved one; any "
@@ -362,7 +364,8 @@ ROUTES = [
               ("voices[].languages", "string[]"), ("voices[].takes_direction", "boolean"), ("voices[].ready", "boolean"),
               ("voices[].why_not", "string|null"), ("voices[].character", "string"), ("voices[].identity_id", "string"),
               ("voices[].status", "string"), ("voices[].voice_id", "string"),
-              ("voices[].licence.rating", "string"), ("voices[].licence.reason", "string"))),
+              ("voices[].licence.rating", "string"), ("voices[].licence.reason", "string"),
+              ("voices[].made_from", "string"))),
     R("POST", "/api/speak", "Speaking", "Speak text with one engine and answer with the finished WAV file.",
       body=(F("text", "string", "What to say, 1 to 10,000 characters. " + LONG_TEXT, True),
             F("engine", "string", "An engine id from `GET /api/catalog` whose `integration.service_api` is true. "

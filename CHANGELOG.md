@@ -13,6 +13,12 @@
 - `tools/real_model_smoke.py` prints its table on a Windows console that cannot show a model's own progress bars.
 - Links to Altera use its new address, github.com/Fel101/fels-altera.
 
+### For scripts and the other apps
+
+- `GET /api/voices` says what each voice is made from: `made_from` is `recording` for a voice cloned from a recording,
+  `words` for one designed from words (also when its recording was made from one of its takes), and `model` for one of a
+  model's own voices. A program can then tell a person's voice from a designed one.
+
 ### For contributors
 
 - The bug report is a form, like the other Fel's Studio apps', and asks for the Lab's own report.

@@ -25,7 +25,7 @@ from voice_lab import loudness
 from voice_lab.db_snapshots import snapshot_before_migration
 from voice_lab.evaluation_diagnostics import TAKE_CHECKER, take_checks
 from voice_lab import engine_adapters
-from voice_lab.output_license import LICENCE_RATINGS, take_licence, voice_licence
+from voice_lab.output_license import LICENCE_RATINGS, made_from, take_licence, voice_licence
 from voice_lab import reference_quality
 from voice_lab import speaker_similarity
 from voice_lab import synthetic_label
@@ -323,6 +323,17 @@ def _loudness_readings(path):
 def has_recording_licences(db):
     """Also used by the read-only exporter, which can open a library before the Lab migrates it."""
     return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recording_licences'").fetchone() is not None
+
+
+def _first_origin(lineage, reference_id):
+    """The origin of the recording that a recording was first made from, following the recording each was made from (by
+    a take or an edit), so that a take of a designed voice saved as a recording is still made from words. `lineage` maps
+    each recording's id to its origin and the id of the recording it was made from."""
+    origin, seen = None, set()
+    while reference_id in lineage and reference_id not in seen:
+        seen.add(reference_id)
+        origin, reference_id = lineage[reference_id]
+    return origin
 
 
 class CastStore:
@@ -1667,6 +1678,8 @@ class CastStore:
     def list_cast(self):
         with self._connect() as db:
             reader = RetirementReader(db)
+            lineage = {row["id"]: (row["origin"], row["parent_reference_id"])
+                       for row in db.execute("SELECT id,origin,parent_reference_id FROM reference_versions")}
             result = []
             for char in db.execute("SELECT * FROM characters ORDER BY name COLLATE NOCASE,id").fetchall():
                 item = dict(char)
@@ -1690,6 +1703,7 @@ class CastStore:
                     ident["licence_rating"] = recording.get("licence_rating")
                     ident["licence"] = voice_licence(ident["engine_id"], ident["kind"], ident["licence_rating"],
                                                      recording.get("origin"))
+                    ident["made_from"] = made_from(ident["kind"], _first_origin(lineage, recording.get("id")))
                     item["identities"].append(ident)
                 result.append(item)
         return result

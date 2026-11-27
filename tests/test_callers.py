@@ -23,6 +23,7 @@ from voice_lab import engine_install  # noqa: E402
 from voice_lab import engine_uninstall  # noqa: E402
 from voice_lab import kokoro_support  # noqa: E402
 from voice_lab.lab_errors import NotInstalled  # noqa: E402
+from voice_lab.output_license import DESIGN_ORIGIN  # noqa: E402
 from voice_lab import phonon_support  # noqa: E402
 from voice_lab import scene_store  # noqa: E402
 from voice_lab import synthetic_label  # noqa: E402
@@ -300,6 +301,32 @@ class VoiceListTests(ServiceCase):
         self.assertEqual(status, 200)
         self.assertEqual(reply["identity"]["licence"], self.voices()["Mira"]["licence"])
         self.assertEqual(reply["identity"]["licence"]["rating"], "no")
+
+    def test_each_voice_says_whether_a_recording_words_or_a_model_made_it(self):
+        # A program that must not speak with a person's voice needs to know which voices were cloned from a recording.
+        cast = self.service.cast
+        recorded = cast.create_identity(cast.create_character("Rosa")["id"], "qwen3-tts-1.7b-base", "Recorded")
+        cast.add_reference(recorded["id"], "rosa.wav", tone_wav(), transcript="A test line.",
+                           origin="Recorded with Voice Slate", allowed_use="Permitted for test use")  # fmt: skip
+        designed = cast.create_identity(cast.create_character("Ash")["id"], "qwen3-tts-1.7b-base", "Designed")
+        design = cast.add_reference(designed["id"], "ash.wav", tone_wav(), transcript="A test line.",
+                                    origin=f"{DESIGN_ORIGIN}voxcpm2; openbmb/VoxCPM2 revision abc.",
+                                    allowed_use="Designed from words")  # fmt: skip
+        # A take of the designed voice saved as another voice's recording is still made from words; one saved with no
+        # recording it came from is treated as a person's.
+        kept = cast.create_identity(cast.create_character("Kit")["id"], "qwen3-tts-1.7b-base", "From a take")
+        cast.add_reference(kept["id"], "kit.wav", tone_wav(), transcript="A test line.",
+                           origin="Derived from local take 1 (voxcpm2, abc).", allowed_use="Designed from words",
+                           parent_reference_id=design["id"])  # fmt: skip
+        lost = cast.create_identity(cast.create_character("Lee")["id"], "qwen3-tts-1.7b-base", "Unknown")
+        cast.add_reference(lost["id"], "lee.wav", tone_wav(), transcript="A test line.",
+                           origin="Derived from local take 2 (voxcpm2, abc).", allowed_use="Unknown")  # fmt: skip
+        self.service.add_voice("Nell", "Warm")
+        voices = self.voices()
+        self.assertEqual(
+            {name: voices[name]["made_from"] for name in ("Rosa", "Ash", "Kit", "Lee", "Nell", "af_heart")},
+            {"Rosa": "recording", "Ash": "words", "Kit": "words", "Lee": "recording", "Nell": "model", "af_heart": "model"},
+        )
 
     def test_names_are_found_without_regard_to_case_and_unknown_ones_say_where_to_look(self):
         self.service.add_voice("Nell", "Warm")

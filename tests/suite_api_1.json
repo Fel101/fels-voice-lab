@@ -80,7 +80,8 @@
           "voices[].status": "string",
           "voices[].voice_id": "string",
           "voices[].licence.rating": "string",
-          "voices[].licence.reason": "string"
+          "voices[].licence.reason": "string",
+          "voices[].made_from": "string"
         },
         "headers": []
       }

@@ -8,7 +8,7 @@ read, and a model that reports its voices only once it is loaded (Qwen CustomVoi
 
 from voice_lab import engine_adapters
 from voice_lab import engine_checks
-from voice_lab.output_license import model_licence
+from voice_lab.output_license import made_from, model_licence
 
 # The models whose clips take an acting direction ("quietly, as if tired"); cast_store.DIRECTION_ENGINES is the same set.
 DIRECTION_MODELS = engine_adapters.engines_where("takes_direction")
@@ -76,6 +76,7 @@ def cast_voices(characters, entries, installed):
                     "languages": identity_languages(identity, engine_adapters.get(identity["engine_id"])),
                     "takes_direction": identity["engine_id"] in DIRECTION_MODELS,
                     "licence": identity["licence"],
+                    "made_from": identity.get("made_from") or made_from(identity["kind"]),
                     "ready": why is None,
                     "why_not": why,
                     "_short": character["name"] if identity is default else None,
@@ -107,6 +108,7 @@ def preset_voices(entries, installed, loaded_info=None):
                     "languages": list(voice["languages"]),
                     "takes_direction": bool(adapter.takes_direction),
                     "licence": model_licence(model, preset=True),
+                    "made_from": "model",
                     "ready": ready,
                     "why_not": None if ready else not_installed(entry),
                     "_request": {"engine": model, **voice["request"]},

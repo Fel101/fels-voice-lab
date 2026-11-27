@@ -65,6 +65,16 @@ def voice_licence(engine_id, kind, recording_rating=None, recording_origin=None)
     return worst_licence(model, recording_licence(recording_rating, recording_origin))
 
 
+def made_from(kind, recording_origin=None):
+    """What a Cast voice is made from, as GET /api/voices says in `made_from`: "model" for one of a model's own voices,
+    "words" for a voice designed from words, else "recording": a person's voice, or any recording the Lab cannot trace to
+    a design. `recording_origin` is the origin of the recording the voice was first made from (cast_store._first_origin
+    follows a recording made from a take back to it)."""
+    if kind in {"preset_voice", "fixed_voice"}:
+        return "model"
+    return "words" if designer_of(recording_origin) is not None else "recording"
+
+
 def take_licence(take, recording_rating, recording_origin=None):
     kind = "reference" if take["reference_version_id"] else "preset_voice"
     return voice_licence(take["engine_id"], kind, recording_rating, recording_origin)
