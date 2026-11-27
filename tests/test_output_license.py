@@ -33,6 +33,13 @@ class OutputLicenseTests(unittest.TestCase):
         self.assertEqual(voice_licence("turbo", "reference", "conditions", origin)["rating"], "conditions")
         self.assertEqual(voice_licence("turbo", "reference", None, "My own recording")["rating"], "unclear")
 
+    def test_a_designed_voice_says_what_its_model_allows_and_that_no_person_is_in_it(self):
+        allowed = design_provenance("qwen3-tts-1.7b-voice-design", {}, {})["allowed_use"]
+        self.assertTrue(allowed.startswith("Commercial use allowed. Qwen3-TTS uses Apache-2.0."), allowed)
+        self.assertIn("no person's recording is in it", allowed)
+        self.assertNotIn("Unknown", allowed)
+        self.assertTrue(design_provenance("breeze-tts-2", {}, {})["allowed_use"].startswith("Non-commercial only."))
+
     def test_the_page_labels_a_design_saved_from_recent_clips_as_the_service_does(self):
         # web/voice_workflows.js writes a design's origin in these words and this form (tests/voice_workflows.test.cjs).
         self.assertIn(f"var DESIGN_ORIGIN = '{DESIGN_ORIGIN}';", (ROOT / "web" / "voice_workflows.js").read_text(encoding="utf-8"))

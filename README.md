@@ -5,7 +5,7 @@ clone a recording you have permission to use, save the voice in your Cast, and t
 
 > **Part of Fel's Studio.** Four free apps that run on your own PC and work together. [Voice Slate](https://github.com/Fel101/fels-voice-slate)
 > records voices with consent, [Voice Lab](https://github.com/Fel101/fels-voice-lab) designs and clones voices,
-> [NPC Forge](https://github.com/Fel101/fels-npc-forge) makes characters for games, and [Altera](https://github.com/Fel101/Altera)
+> [NPC Forge](https://github.com/Fel101/fels-npc-forge) makes characters for games, and [Altera](https://github.com/Fel101/fels-altera)
 > lets you talk with them. Each one also works on its own.
 
 **Start with Kokoro 82M** for ready-made voices, even without a graphics card. Kokoro, Chatterbox Turbo and the three

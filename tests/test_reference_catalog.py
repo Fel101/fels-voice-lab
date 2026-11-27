@@ -223,8 +223,8 @@ class ReferenceCatalogTests(ReferenceFixtures):
     def test_new_designs_keep_exact_text_description_and_model_restrictions(self):
         entries = {row["id"]: row for row in read_catalog()["engines"]}
         for engine, required_terms in (("breeze-tts-2", ("Non-Commercial", "self-hosted")),
-                                       ("qwen3-tts-1.7b-voice-design", ("Apache-2.0", "Unknown")),
-                                       ("voxcpm2", ("Apache-2.0", "Unknown"))):
+                                       ("qwen3-tts-1.7b-voice-design", ("Apache-2.0", "Commercial use allowed")),
+                                       ("voxcpm2", ("Apache-2.0", "no person's recording"))):
             path = self.lab / "data/voices" / f"{engine}.wav"
             request = {"engine": engine, "save_voice_as": f"characters/{engine}",
                        "text": "My exact spoken words.", "voice_description": "A calm lower register."}

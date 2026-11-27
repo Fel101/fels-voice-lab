@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A voice cloned from a recording, such as a Voice Slate clip, says **Made from a recording** in **Cast library**, not
+  "Created with Source model not recorded".
+- A voice designed from words says what its model's licence allows and that no person's recording is in it, not
+  "Unknown; review checkpoint terms and reference rights".
+- `tools/real_model_smoke.py` prints its table on a Windows console that cannot show a model's own progress bars.
+- Links to Altera use its new address, github.com/Fel101/fels-altera.
+
+### For contributors
+
+- The bug report is a form, like the other Fel's Studio apps', and asks for the Lab's own report.
+- CONTRIBUTING says to run the CPU smoke pass where the models have PyTorch's ordinary CPU or CUDA build.
+
 ## 1.0.0 — 2026-11-26
 
 **From 0.4.0, press Update now** on **System & backups**, or run `update.bat` or the new Setup.exe. It keeps your library

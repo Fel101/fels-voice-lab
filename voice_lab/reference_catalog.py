@@ -16,7 +16,8 @@ from urllib.parse import quote
 
 import soundfile as sf
 
-from voice_lab.output_license import DESIGN_ORIGIN, license_profile
+from voice_lab.model_facts import RATING_WORDS
+from voice_lab.output_license import DESIGN_ORIGIN, license_profile, model_licence
 
 
 AUDIO_TYPES = {".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg"}
@@ -84,9 +85,13 @@ def design_provenance(engine, result, model):
     profile = license_profile(engine, model, {})
     checkpoint = result.get("checkpoint") or model.get("checkpoint") or "unrecorded checkpoint"
     revision = result.get("checkpoint_revision") or model.get("local_revision") or "unrecorded revision"
+    # The model's rating, as its licence badge says, rather than the adapter's general note for cloned voices ("Unknown;
+    # review checkpoint terms and reference rights"), which read as alarming for a voice with no person in it.
+    rating = model_licence(engine)
     return {
         "origin": f"{DESIGN_ORIGIN}{engine}; {checkpoint} revision {revision}.",
-        "allowed_use": f"{profile['weights_license']} {profile['output_use']}",
+        "allowed_use": (f"{RATING_WORDS[rating['rating']]}. {rating['reason']} The voice was designed from words: no "
+                        "person's recording is in it."),
         "checkpoint": checkpoint,
         "checkpoint_revision": revision,
         "license": profile,

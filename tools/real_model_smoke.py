@@ -308,6 +308,11 @@ def build_parser():
 
 
 def main(argv=None):
+    # A problem can quote a model's own output, such as tqdm's block characters, which Windows' cp1252 console cannot
+    # print; report.json is already saved by then, so show a stand-in character rather than stop before the table.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     parser = build_parser()
     args = parser.parse_args(argv)
     if sum((bool(args.models), args.all_installed, args.supported)) != 1:

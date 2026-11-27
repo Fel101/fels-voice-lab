@@ -196,7 +196,7 @@ answer, not an error: there is nothing to update to yet.
 
 Open **System & backups**, press **Copy report for a bug report**, and paste it into a
 [hardware report](https://github.com/Fel101/fels-voice-lab/issues/new?template=hardware_report.yml) or a
-[bug report](https://github.com/Fel101/fels-voice-lab/issues/new?template=bug_report.md). The report names the version, Windows
+[bug report](https://github.com/Fel101/fels-voice-lab/issues/new?template=bug_report.yml). The report names the version, Windows
 and Python, the processor, graphics cards and memory, which models passed their test on which device and how fast, and what
 FFmpeg can write. It holds no scripts, transcripts, voice names or recordings, and your home folder reads as `~`. Each installer
 also leaves a small `installation.json` receipt in `out\kokoro`, `out\phonon` or `out\chatterbox` that is worth adding.

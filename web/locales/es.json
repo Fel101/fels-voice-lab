@@ -1699,6 +1699,7 @@
     "cast.speech_from_to_s_louder": "Voz del {start_seconds} a {end_seconds} s (más fuerte que {threshold_db} dB).",
     "cast.no_speech_found_this_take": "No se encontró voz: esta toma es más silenciosa que el nivel de silencio por defecto.",
     "cast.source_model_not_recorded": "Modelo de fuente no grabado",
+    "cast.made_from_a_recording": "A partir de una grabación",
     "cast.the_saved_voice_recording_is": "La grabación de voz guardada no está disponible. Abre Edit voice para ver sus versiones.",
     "cast.this_voice_s_model_is": "El modelo de voz de esta no está en el catálogo instalado.",
     "cast.a_saved_speaker_pack_is": "Una carpeta de hablantes guardada falta. Actualiza primero los packs de hablantes Kokoro instalados.",

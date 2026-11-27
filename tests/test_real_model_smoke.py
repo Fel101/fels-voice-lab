@@ -81,6 +81,19 @@ class ChoosingTests(unittest.TestCase):
                 smoke.main(argv)
             self.assertEqual(raised.exception.code, 2)
 
+    def test_a_problem_a_cp1252_console_cannot_show_still_prints_the_table(self):
+        console = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        original_run, original_stdout = smoke.run, sys.stdout
+        smoke.run = lambda args: print("turbo: it printed ▊▊▊ while loading.") or 1
+        sys.stdout = console
+        try:
+            code = smoke.main(["turbo"])
+        finally:
+            smoke.run, sys.stdout = original_run, original_stdout
+        console.flush()
+        self.assertEqual(code, 1)
+        self.assertIn(b"it printed ??? while loading", console.buffer.getvalue())
+
 
 class WorkflowTests(unittest.TestCase):
     """.github/workflows/real-model.yml first runs on GitHub when the project is published, so its commands are read here."""

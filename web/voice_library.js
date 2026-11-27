@@ -114,7 +114,9 @@
       card.appendChild(node('span',LabText.statusName(voice.identity_status||'candidate')+(voice.identity_kind==='fixed_voice'?(blend.length>1?LabText.t('cast.speaker_blend'):LabText.t('cast.preset_voice_2')):''),'voice-kind'));
       card.appendChild(node('h3',parts[0]));card.appendChild(node('p',parts.slice(1).join(' · ')||voice.identity_label,'voice-role'));
       if(voice.licence)appendLicenceBadge(card,voice.licence);
-      card.appendChild(node('p',LabText.t('cast.created_with', {model: engineName(maker,makerName)})));
+      // A voice cloned from a recording, such as a Voice Slate clip, was not made by a model until one of its takes was.
+      card.appendChild(node('p',maker||makerName?LabText.t('cast.created_with', {model: engineName(maker,makerName)})
+        :voice.identity_kind==='reference'?LabText.t('cast.made_from_a_recording'):LabText.t('cast.source_model_not_recorded')));
       if(maker!==voice.engine_id)card.appendChild(node('p',LabText.t('cast.generate_dialogue_with', {model: engineName(voice.engine_id,voice.engine_name)}),'meta'));
       var audition=voice.audition;
       if(audition&&audition.audio_url){

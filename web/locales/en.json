@@ -1699,6 +1699,7 @@
     "cast.speech_from_to_s_louder": "Speech from {start_seconds} to {end_seconds} s (louder than {threshold_db} dB).",
     "cast.no_speech_found_this_take": "No speech found: this take is quieter than the default silence level.",
     "cast.source_model_not_recorded": "Source model not recorded",
+    "cast.made_from_a_recording": "Made from a recording",
     "cast.the_saved_voice_recording_is": "The saved voice recording is unavailable. Open Edit voice to see its versions.",
     "cast.this_voice_s_model_is": "This voice’s model is not in the installed catalogue.",
     "cast.a_saved_speaker_pack_is": "A saved speaker pack is missing. Refresh installed Kokoro speaker packs first.",

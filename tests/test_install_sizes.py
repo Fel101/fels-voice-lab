@@ -99,7 +99,8 @@ class StatusTests(unittest.TestCase):
         )
         self.assertNotIn("install_size", phonon)  # installed
         self.assertNotIn("install_size", manual)  # no Install on its card
-        with mock.patch.dict(os.environ):
+        # This PC's own runtime.local.json may name a card that the one-card list here does not have.
+        with mock.patch.dict(os.environ), mock.patch.object(amd, "visible_setting", return_value=(None, None)):
             os.environ.pop(amd.VARIABLE, None)
             on_amd = self.installer(amd_cards=[R9700]).with_sizes({"engines": [row(TURBO_ENGINE_ID, gpu_install=True)]})
         self.assertEqual(

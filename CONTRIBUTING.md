@@ -148,6 +148,8 @@ version number, a tag and a GitHub release that agree:
    section links to.
 2. Run every check. On the development PC, run `.venv\Scripts\python.exe tools/real_model_smoke.py --supported --device cuda`
    and again with `--device cpu`. Install every Supported model first. The CPU pass selects models that can run on the CPU.
+   Run the CPU pass where the models' environments have PyTorch's ordinary CPU or CUDA build: AMD's ROCm build has no
+   fast CPU path (no MKL), so on an AMD PC a model such as Chatterbox Turbo can take many minutes for one sentence there.
    Both passes report missing models and a Test that ran on the wrong device as failures. Listen to the clips from both
    passes. Test Works models when they change. Commit, then tag that commit `v` and the version (`git tag v0.3.0`) and push
    the commit and the tag.

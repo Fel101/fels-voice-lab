@@ -1,0 +1,80 @@
+name: Bug report
+description: Something does not work the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting this.
+
+        **Please do not attach recordings or voices of real people, transcripts, or anything private.** Do not upload a
+        recognizable voice without that person's permission. Remove personal folder names from anything you paste.
+
+        For a security problem, do not open an issue: see the Security policy.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Model studio and choose Kokoro 82M
+        2. Type a line and press Generate
+        3. ...
+  - type: textarea
+    id: messages
+    attributes:
+      label: Messages
+      description: |
+        The message on the page, and the last lines of the Lab's window or its log. Leave out transcripts and
+        anything private.
+      render: text
+  - type: textarea
+    id: report
+    attributes:
+      label: The Lab's own report
+      description: >-
+        In System & backups, choose Show the report to review it, then use Copy report for a bug report and paste the
+        text here. It names the version, Windows, the graphics card and the models installed.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it was installed
+      options:
+        - Setup.exe
+        - The release ZIP and setup.bat
+        - git clone
+    validations:
+      required: true
+  - type: dropdown
+    id: window
+    attributes:
+      label: Where you used it
+      options:
+        - The desktop window
+        - The browser page
+        - Another app through the Lab's API (Voice Slate, NPC Forge, Altera, a script)
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: What were you doing?
+      options:
+        - Installing, starting or updating
+        - Installing or testing a model
+        - Designing or cloning a voice
+        - Model studio or Perform lines
+        - Scenes, batch rendering or audiobooks
+        - Cast, licences or consent
+        - Voice Slate clips
+        - Connected apps
+        - Something else

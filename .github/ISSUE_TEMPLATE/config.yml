@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/Fel101/fels-voice-lab/security/advisories/new
+    about: Report it privately, as SECURITY.md says, not in a public issue.
+  - name: A question or an idea to talk over
+    url: https://github.com/Fel101/fels-voice-lab/discussions
+    about: Ask in Discussions.
