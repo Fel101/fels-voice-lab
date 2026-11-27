@@ -19,6 +19,7 @@ function clearReferenceEditor() {
   micChunks=[];$('micStart').hidden=false;$('micStop').hidden=true;$('micStart').disabled=false;
   referenceDecodePending=false;$('saveReference').disabled=false;$('saveReferenceVersion').disabled=false;$('previewReference').disabled=false;
   $('referenceFile').value='';$('referenceTranscript').value='';$('referenceOrigin').value='';$('referenceAllowedUse').value='';
+  $('referenceReleaseExpiry').hidden=true;$('referenceReleaseExpiry').textContent='';
   setReferencePlayer(null);
   $('referenceAnalysis').textContent=LabText.t('cast.no_recording_loaded');$('referenceStatus').textContent='';
   $('trimStart').value='0';$('trimEnd').value='';$('noiseReductionEnabled').checked=false;syncNoiseReductionFields();
@@ -219,6 +220,9 @@ function loadSavedReference(reference) {
   if(!reference){return;}
   var revision=++referenceLoadRevision;
   $('referenceTranscript').value=reference.transcript||''; $('referenceOrigin').value=reference.origin||''; $('referenceAllowedUse').value=reference.allowed_use||'';
+  var expiry=$('referenceReleaseExpiry');
+  expiry.textContent=referenceExpiryText(reference);
+  expiry.hidden=!reference.release_expires;
   $('trimStart').value=reference.edit.start_seconds||0; $('trimEnd').value=reference.edit.end_seconds||reference.duration_seconds;
   $('referenceRate').value=String(reference.edit.target_sample_rate||reference.sample_rate); $('referenceChannel').value=reference.edit.channel||'mono';
   var noise=reference.edit.noise_reduction||{};$('noiseReductionEnabled').checked=noise.enabled===true;
@@ -557,16 +561,23 @@ function slateStatus(source) {
   return source && source.inbox ? $('slateInboxStatus') : $('slateImportStatus');
 }
 // Show a checked clip in the form: what it is, the speaker's name to start from, the models and the draft question.
+function referenceExpiryText(record) {
+  return record.release_expires
+    ? LabText.t(record.release_expired ? 'cast.permission_expired_on' : 'cast.permission_valid_through', {date:record.release_expires})
+    : '';
+}
 function showSlateClip(clip, engines) {
   var picker = $('slateEngine'), draft = clip.transcript_status === 'asr_draft';
+  var speaker = clip.speaker_display_name || clip.speaker || '';
   slateReviewedSidecar = clip.sidecar_sha256;
   $('slateClipDetails').textContent = [
-    clip.file + ' · ' + Number(clip.seconds).toFixed(2) + ' s',
+    [speaker, clip.file, Number(clip.seconds).toFixed(2) + ' s'].filter(Boolean).join(' · '),
     clip.transcript,
     LabText.t('cast.origin', {origin: clip.origin}),
     LabText.t('cast.allowed_use', {allowed_use: clip.allowed_use}),
-  ].concat(clip.warnings).join('\n');
-  $('slateCharacter').value = clip.speaker || '';
+    referenceExpiryText(clip),
+  ].concat(clip.warnings).filter(Boolean).join('\n');
+  $('slateCharacter').value = speaker.slice(0,80);
   picker.textContent = '';
   engines.forEach(function (engine) {
     option(picker, engine, sceneModelName(engine));
@@ -652,7 +663,7 @@ function inboxSignature(file) {
 }
 // The speaker of a checked clip; otherwise the name the sender gave, without the time and sender the inbox put before it.
 function inboxFileLabel(file) {
-  if (file.clip) return file.clip.speaker || file.clip.file;
+  if (file.clip) return file.clip.speaker_display_name || file.clip.speaker || file.clip.file;
   var given = file.sender ? file.name.replace(/^\d{8}T\d{6}Z-/, '') : file.name;
   return file.sender && given.startsWith(file.sender + '-') ? given.slice(file.sender.length + 1) : file.name;
 }

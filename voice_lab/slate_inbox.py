@@ -7,6 +7,7 @@ import. Nothing is imported without the person's yes; after an import or a Dismi
 import os
 import threading
 import time
+from datetime import date
 
 from voice_lab import fels_suite
 from voice_lab.recorder_clip import ClipRefused
@@ -81,7 +82,7 @@ class SlateInbox:
             stamp = os.stat(entry["path"], follow_symlinks=False)
         except OSError:
             return {"state": "checking"}  # it went while the folder was read; the next listing leaves it out
-        key = (stamp.st_size, stamp.st_mtime_ns)
+        key = (stamp.st_size, stamp.st_mtime_ns, date.today())
         known = self._checked.get(entry["name"])
         if known and known[0] == key:
             return known[1]

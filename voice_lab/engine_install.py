@@ -233,6 +233,12 @@ class EngineInstaller:
             nvidia, card = gpu_target() if (row.get("gpu") or {}).get("install") else (False, None)
             answer = install_sizes.model_bytes(row["id"], self.root, nvidia=nvidia, card=card)
             row["install_size"] = install_sizes.size_fields(answer)
+            if row["id"] == "kokoro":
+                cpu = install_sizes.model_bytes("kokoro", self.root) if nvidia or card is not None else answer
+                row["install_variants"] = {
+                    "cpu": install_sizes.size_fields(cpu),
+                    "gpu": row["install_size"] if (row.get("gpu") or {}).get("install") else None,
+                }
         return status
 
     def gpu_build(self, key):

@@ -112,6 +112,23 @@ class SceneTests(unittest.TestCase):
             time.sleep(0.025)
         self.fail(f"Batch job {job_id} did not reach {expected}: {self.scenes.get_job(job_id)['status']}")
 
+    def test_scene_stays_editable_and_can_render_other_lines_when_a_release_expires(self):
+        expired = self.cast.add_reference(self.identity["id"], "expired.wav", tone_wav(),
+            transcript="A synthetic recording.", origin="Test", allowed_use="Test", release_expires="2020-01-01")
+        good = self.scene_payload()["lines"][0]
+        restricted = {**good, "line_id": "line-002", "reference_version_id": expired["id"]}
+        scene = self.scenes.create_scene(self.scene_payload([good, restricted]))
+        scene_id = scene["scene_id"]
+        with self.assertRaisesRegex(ValueError, "Line line-002:.*expired on 2020-01-01"):
+            self.scenes.create_job(scene_id)
+        scene = self.scenes.update_scene(scene_id, self.scene_payload([good, restricted], name="Edited scene"),
+                                         expected_revision=scene["revision"])
+        self.assertEqual(scene["name"], "Edited scene")
+        segment = scene["lines"][0]["segments"][0]["id"]
+        job = self.scenes.create_job(scene_id, segment_ids=[f"line-001/{segment}"])
+        self.assertEqual(job["total"], 1)
+        self.assertEqual(len(self.scenes.get_scene(scene_id)["lines"]), 2)
+
     def test_scene_schema_rejects_bad_ids_characters_languages_and_text_before_generation(self):
         invalid = [
             self.scene_payload(lines=[self.scene_payload()["lines"][0], self.scene_payload()["lines"][0]]),

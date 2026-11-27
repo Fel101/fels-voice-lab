@@ -18,6 +18,7 @@ from voice_lab import engine_adapters
 from voice_lab.cast_store import MAX_REFERENCE_TEXT, REFERENCE_POLICIES, TRANSCRIPT_ENGINES
 from voice_lab.model_facts import output_use
 from voice_lab.output_license import designer_of
+from voice_lab.recorder_clip import release_expiry
 from voice_lab.reference_catalog import _choose_audition
 from voice_lab import synthetic_label
 from voice_lab.book_store import Books, metadata, milliseconds, pronunciations
@@ -188,7 +189,7 @@ def _model_pin(engine_id, options):
 
 
 def _voice(cast, ident, files, audio):
-    item = cast.get_generation_identity(ident) if audio else cast.get_identity(ident)
+    item = cast.get_generation_identity(ident, check_expiry=False) if audio else cast.get_identity(ident)
     entry = {
         "id": ident,
         "label": item["label"],
@@ -213,6 +214,8 @@ def _voice(cast, ident, files, audio):
             "source_id": reference["id"],
             "sha256": reference["audio_sha256"],
         }
+        if reference["release_expires"]:
+            entry["sample"]["release_expires"] = reference["release_expires"]
     return entry
 
 
@@ -397,6 +400,7 @@ def _sample(envelope, archive, item):
         raise ValueError("The voice recording's transcript exceeds the Lab's limit.")
     if any(len(sample[key]) > 1000 for key in ("origin", "allowed_use")):
         raise ValueError("Shorten the origin and allowed-use notes in the source Lab and export again.")
+    release_expiry({"release": {"expires": sample.get("release_expires")}})
     return sample, _wav(archive, sample["asset"], 30)
 
 
@@ -564,6 +568,7 @@ def _import_voice(sc, envelope, archive, item, target, permission):
             transcript=reference.get("transcript", ""),
             origin=reference["origin"],
             allowed_use=reference["allowed_use"],
+            release_expires=reference.get("release_expires"),
         )
     if not target:
         for row in pronunciation_rows:
@@ -571,7 +576,7 @@ def _import_voice(sc, envelope, archive, item, target, permission):
     if audition:
         saved, raw = audition
         audio, rate = sf.read(io.BytesIO(raw), dtype="float32")
-        voice = sc.cast.get_generation_identity(entry["id"], uploaded["id"] if uploaded else None)
+        voice = sc.cast.get_generation_identity(entry["id"], uploaded["id"] if uploaded else None, check_expiry=False)
         sc.cast.create_take(
             voice,
             line_id="imported-audition",

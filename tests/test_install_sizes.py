@@ -108,6 +108,16 @@ class StatusTests(unittest.TestCase):
             install_sizes.size_fields(install_sizes.model_bytes(TURBO_ENGINE_ID, ROOT, card=R9700)),
         )
 
+    def test_first_run_gets_both_kokoro_download_sizes_on_a_supported_gpu(self):
+        installer = self.installer(present=True, cards=[RTX_5070])
+        status = installer.with_sizes({"engines": [row("kokoro", gpu_install=True)]})
+        variants = status["engines"][0]["install_variants"]
+        self.assertEqual(variants["cpu"], install_sizes.size_fields(install_sizes.model_bytes("kokoro", ROOT)))
+        self.assertEqual(variants["gpu"], install_sizes.size_fields(install_sizes.model_bytes("kokoro", ROOT, nvidia=True)))
+        self.assertLess(variants["cpu"]["download_bytes"], variants["gpu"]["download_bytes"])
+        on_cpu = self.installer().with_sizes({"engines": [row("kokoro")]})
+        self.assertIsNone(on_cpu["engines"][0]["install_variants"]["gpu"])
+
     def test_the_status_route_carries_the_sizes(self):
         pool = EnginePool("cpu", 0, worker_factory=lambda entry: None)
         lab = temp_cast(self)

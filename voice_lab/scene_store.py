@@ -471,7 +471,9 @@ class SceneStore:
             try:
                 identity_key = canonical_json([identity_id, source.get("reference_version_id")])
                 if identity_key not in identities:
-                    identities[identity_key] = self.cast.get_generation_identity(identity_id, source.get("reference_version_id"))
+                    identities[identity_key] = self.cast.get_generation_identity(
+                        identity_id, source.get("reference_version_id"), check_expiry=False
+                    )
                 identity = identities[identity_key]
             except (ValueError, KeyError) as exc:
                 message = str(exc)
@@ -957,6 +959,8 @@ class SceneStore:
             unknown_segments = selected_segments - valid_segments
             if unknown_segments:
                 raise ValueError("Unknown scene segment selectors: " + ", ".join(f"{line}/{segment}" for line, segment in sorted(unknown_segments)) + ".")
+            selected_lines = {line_id for line_id, _ in selected_segments}
+            lines = [line for line in lines if line["line_id"] in selected_lines]
         if persistent_id is not None:
             _validate_id(persistent_id, "batch job id")
         job_id, stamp = persistent_id or new_id(), utc_now()

@@ -26,6 +26,7 @@ from voice_lab.db_snapshots import snapshot_before_migration
 from voice_lab.evaluation_diagnostics import TAKE_CHECKER, take_checks
 from voice_lab import engine_adapters
 from voice_lab.output_license import LICENCE_RATINGS, made_from, take_licence, voice_licence
+from voice_lab.recorder_clip import MAX_SIDECAR_BYTES, expiry_problem, release_expiry
 from voice_lab import reference_quality
 from voice_lab import speaker_similarity
 from voice_lab import synthetic_label
@@ -360,7 +361,7 @@ class CastStore:
             with _CAST_SCHEMA_LOCK:
                 snapshot_before_migration(db, self.db_path, db.execute("PRAGMA user_version").fetchone()[0],
                                           CAST_SCHEMA_VERSION, "cast")
-                self._migrate(db)
+                self._migrate(db, self.data_root)
             yield db
             db.commit()
         except Exception:
@@ -387,7 +388,7 @@ class CastStore:
         return end
 
     @staticmethod
-    def _migrate(db):
+    def _migrate(db, data_root=None):
         version = db.execute("PRAGMA user_version").fetchone()[0]
         if version > CAST_SCHEMA_VERSION:
             raise RuntimeError(f"Cast database schema {version} is newer than this voice-lab build.")
@@ -574,12 +575,46 @@ class CastStore:
                 "ALTER TABLE takes ADD COLUMN parent_take_id TEXT",
                 "ALTER TABLE takes ADD COLUMN edit_json TEXT NOT NULL DEFAULT ''",
                 "CREATE INDEX takes_parent ON takes(parent_take_id) WHERE parent_take_id IS NOT NULL"])
-        # This additive migration leaves schema 9 readable by 0.4.0 after an update rollback.
+        CastStore._migrate_release_expiry(db, data_root)
+        # The additive changes leave schema 9 readable by previous versions after an update rollback.
         if not has_recording_licences(db):
             db.execute("""CREATE TABLE IF NOT EXISTS recording_licences (
                 reference_id TEXT PRIMARY KEY REFERENCES reference_versions(id) ON DELETE CASCADE,
                 rating TEXT NOT NULL CHECK(rating IN ('yes','conditions','unclear','no'))
             )""")
+
+    @staticmethod
+    def _migrate_release_expiry(db, data_root):
+        query = "SELECT 1 FROM pragma_table_info('reference_versions') WHERE name='release_expires'"
+        if db.execute(query).fetchone():
+            return
+        db.execute("BEGIN IMMEDIATE")
+        if not db.execute(query).fetchone():
+            db.execute("ALTER TABLE reference_versions ADD COLUMN release_expires TEXT")
+            if data_root is not None:
+                for ref_id, source_hash in db.execute("SELECT id,source_sha256 FROM reference_versions").fetchall():
+                    try:
+                        sidecar = _safe_relative(data_root, f"media/references/{ref_id}/recorder-clip.json")
+                        with sidecar.open("rb") as handle:
+                            raw = handle.read(MAX_SIDECAR_BYTES + 1)
+                        if len(raw) > MAX_SIDECAR_BYTES:
+                            continue
+                        saved = json.loads(raw)
+                        export = saved.get("export") if isinstance(saved, dict) else None
+                        expires = release_expiry(saved) if isinstance(export, dict) and str(
+                            export.get("sha256", "")).lower() == source_hash else None
+                    except (OSError, RuntimeError, ValueError):
+                        continue  # Older references may have no saved Slate sidecar.
+                    if expires:
+                        db.execute("UPDATE reference_versions SET release_expires=? WHERE id=?", (expires, ref_id))
+                db.execute("""WITH RECURSIVE inherited(id, expires) AS (
+                    SELECT id, release_expires FROM reference_versions WHERE release_expires IS NOT NULL
+                    UNION
+                    SELECT child.id, inherited.expires FROM reference_versions child
+                    JOIN inherited ON child.parent_reference_id=inherited.id WHERE child.release_expires IS NULL
+                ) UPDATE reference_versions SET release_expires=(SELECT expires FROM inherited
+                    WHERE inherited.id=reference_versions.id) WHERE release_expires IS NULL""")
+        db.commit()
 
     def _row(self, query, args=()):
         with self._connect() as db:
@@ -706,6 +741,8 @@ class CastStore:
                 if REFERENCE_POLICIES.get(row["engine_id"], {}).get("requires_transcript_for_cast", True) and not ref["transcript"].strip():
                     raise ValueError("Add the exact words of the voice recording before approving this voice.")
                 self._validate_reference(ref, row["engine_id"])
+                if "status" in changes or "reference_version_id" in changes:
+                    self._check_reference_expiry(ref["release_expires"])
             elif row["kind"] in {"fixed_voice", "preset_voice"}:
                 selected_reference = None
             elif status != "approved":
@@ -736,6 +773,12 @@ class CastStore:
             db.execute("UPDATE identities SET label=?,notes=?,status=?,engine_options_json=?,approved_reference_id=?,updated_at=? WHERE id=?",
                        (label, notes, status, json.dumps(options, ensure_ascii=False), selected_reference, stamp, identity_id))
         return self.get_identity(identity_id)
+
+    @staticmethod
+    def _check_reference_expiry(expires):
+        problem = expiry_problem(expires)
+        if problem:
+            raise ValueError(problem)
 
     @staticmethod
     def _validate_reference(ref, engine_id):
@@ -866,10 +909,12 @@ class CastStore:
         return output.getvalue(), metrics
 
     def add_reference(self, identity_id, filename, source_bytes, *, transcript="", origin="", allowed_use="",
-                      edits=None, parent_reference_id=None, parent_take_id=None, licence_rating=None):
+                      edits=None, parent_reference_id=None, parent_take_id=None, licence_rating=None,
+                      release_expires=None):
         identity_id = _validate_id(identity_id, "identity id")
         if licence_rating is not None and licence_rating not in LICENCE_RATINGS:
             raise ValueError("Choose a licence rating for the voice recording.")
+        release_expires = release_expiry({"release": {"expires": release_expires}})
         identity = self._row("SELECT * FROM identities WHERE id=?", (identity_id,))
         if identity is None:
             raise KeyError("Voice identity not found.")
@@ -922,13 +967,13 @@ class CastStore:
                 db.execute("""INSERT INTO reference_versions
                     (id,identity_id,version,source_name,source_path,audio_path,source_sha256,audio_sha256,transcript,
                      sample_rate,channels,duration_seconds,peak_dbfs,rms_dbfs,clipped_samples,origin,allowed_use,
-                     parent_reference_id,parent_take_id,edit_json,created_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     parent_reference_id,parent_take_id,edit_json,created_at,release_expires)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (ref_id, identity_id, version, filename, self._relative(source_path), self._relative(audio_path),
                      source_hash, audio_hash, transcript, metrics["sample_rate"], metrics["channels"],
                      metrics["duration_seconds"], metrics["peak_dbfs"], metrics["rms_dbfs"], metrics["clipped_samples"],
                      origin, allowed_use, parent_reference_id, parent_take_id,
-                     json.dumps(edit_record, ensure_ascii=False), stamp))
+                     json.dumps(edit_record, ensure_ascii=False), stamp, release_expires))
                 if licence_rating is not None:
                     db.execute("INSERT INTO recording_licences(reference_id,rating) VALUES(?,?)", (ref_id, licence_rating))
         except Exception:
@@ -989,13 +1034,13 @@ class CastStore:
                 db.execute("""INSERT INTO reference_versions
                     (id,identity_id,version,source_name,source_path,audio_path,source_sha256,audio_sha256,transcript,
                      sample_rate,channels,duration_seconds,peak_dbfs,rms_dbfs,clipped_samples,origin,allowed_use,
-                     parent_reference_id,parent_take_id,edit_json,created_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     parent_reference_id,parent_take_id,edit_json,created_at,release_expires)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (ref_id, previous["identity_id"], version, previous["source_name"], previous["source_path"],
                      self._relative(audio_path), previous["source_sha256"], audio_hash, transcript, metrics["sample_rate"],
                      metrics["channels"], metrics["duration_seconds"], metrics["peak_dbfs"], metrics["rms_dbfs"],
                      metrics["clipped_samples"], origin, allowed_use, reference_id, previous["parent_take_id"],
-                     json.dumps(edit, ensure_ascii=False), stamp))
+                     json.dumps(edit, ensure_ascii=False), stamp, previous["release_expires"]))
                 # Trimming or cleaning a recording does not change who may use it, so the rating follows unless its
                 # origin or allowed use changed.
                 if origin == previous["origin"] and allowed_use == previous["allowed_use"]:
@@ -1007,7 +1052,7 @@ class CastStore:
             raise
         return self._with_quality(ref_id, metrics)
 
-    def get_generation_identity(self, identity_id, reference_version_id=None):
+    def get_generation_identity(self, identity_id, reference_version_id=None, *, check_expiry=True):
         identity_id = _validate_id(identity_id, "identity id")
         row = self._row("SELECT * FROM identities WHERE id=?", (identity_id,))
         if row is None:
@@ -1031,6 +1076,8 @@ class CastStore:
             if reference["identity_id"] != identity_id:
                 raise ValueError("That voice recording belongs to another voice.")
             self._validate_reference(reference, row["engine_id"])
+            if check_expiry:
+                self._check_reference_expiry(reference["release_expires"])
             reference["audio_path"] = str(self._media_path(reference["audio_path_relative"]))
         elif reference_version_id is not None:
             raise ValueError("This voice is one of a model's preset voices, so it does not use a voice recording.")
@@ -1061,8 +1108,10 @@ class CastStore:
             f"{take['model'].get('checkpoint_revision', 'revision not reported')})."
         )
         parent_version_id = provenance.get("reference_version_id")
+        release_expires = None
         if parent_version_id:
             parent = self.get_reference(parent_version_id)
+            release_expires = parent["release_expires"]
             if parent["id"] != provenance.get("reference_version_id"):
                 raise ValueError("The source take's reference provenance is inconsistent.")
             if parent["allowed_use"] not in requested_use:
@@ -1076,6 +1125,7 @@ class CastStore:
             origin=derived_origin, allowed_use=requested_use, edits=edits,
             parent_reference_id=parent_version_id, parent_take_id=take_id,
             licence_rating=None if str(allowed_use or "").strip() or inherited == "unclear" else inherited,
+            release_expires=release_expires,
         )
 
     def get_reference(self, reference_id):
@@ -1096,6 +1146,10 @@ class CastStore:
         result["audio_url"] = f"/api/references/{result['id']}/audio"
         result["warnings"] = (["This reference contains clipped samples (>= -0.01 dBFS)." ]
                                if result["clipped_samples"] else [])
+        problem = expiry_problem(result["release_expires"])
+        result["release_expired"] = bool(problem)
+        if problem:
+            result["warnings"].append(problem)
         return result
 
     def get_media_path(self, kind, item_id):
@@ -1620,20 +1674,24 @@ class CastStore:
             return  # Not Cast storage, so Cast retirement does not apply.
         with self._connect() as db:
             reader = RetirementReader(db)
-            for (reference_id,) in db.execute(
-                    "SELECT id FROM reference_versions WHERE audio_path=? OR source_path=?", (relative, relative)).fetchall():
+            for reference_id, release_expires in db.execute(
+                    "SELECT id,release_expires FROM reference_versions WHERE audio_path=? OR source_path=?",
+                    (relative, relative)).fetchall():
                 if reader.state("reference", reference_id):
                     raise ValueError("This reference recording is retired; new use is blocked.")
+                self._check_reference_expiry(release_expires)
             for (take_id,) in db.execute("SELECT id FROM takes WHERE audio_path=?", (relative,)).fetchall():
                 if reader.state("take", take_id):
                     raise ValueError("This take is retired; new use is blocked.")
 
     def assert_identity_usable(self, identity_id, reference_version_id=None):
-        """Raise when a voice, or the recording chosen for it, is retired. Used before queueing batch rows."""
+        """Check the voice and its recording before queueing batch rows."""
         if self.retirement_state("identity", identity_id):
             raise ValueError("This voice is retired; restore it before rendering.")
         if reference_version_id and self.retirement_state("reference", reference_version_id):
             raise ValueError("This reference recording is retired; choose another reference before rendering.")
+        if reference_version_id:
+            self._check_reference_expiry(self.get_reference(reference_version_id)["release_expires"])
 
     def take_summaries_for(self, take_ids):
         """Checks, loudness, retirement, and purge state for many takes, read in batches for scene rows."""

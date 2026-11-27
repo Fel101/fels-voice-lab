@@ -864,6 +864,22 @@ test("the note's Install starts the same install as the card, and a busy service
   assert.equal(fields.installTitle.textContent, 'Install the GPU build of Kokoro 82M');
 });
 
+test('the first Kokoro screen offers both estimated downloads and honors each device choice', async () => {
+  for (const useGpu of [false, true]) {
+    const {context: c, fields, calls} = harness({'/api/engines/kokoro/install': {plan: {ok: true}}});
+    c.wireFirstRun();
+    c.modelCards = {kokoro: card('Kokoro 82M')};
+    const row = {...kokoroMissing, switch: 'gpu', gpu: {choosable: true, install: true},
+      install_variants: {cpu: {download_bytes: 623e6}, gpu: {download_bytes: 2423e6}}};
+    c.renderEngineStatus(snapshot([row], {device: 'cuda'}));
+    assert.equal(fields.firstRunButton.textContent, 'Kokoro for CPU · about 0.6 GB');
+    assert.equal(fields.firstRunGpu.textContent, 'Kokoro for GPU · about 2.4 GB');
+    assert.equal(fields.firstRunGpu.hidden, false);
+    await (useGpu ? fields.firstRunGpu : fields.firstRunButton).handlers.click();
+    assert.equal(calls[0].body.nvidia, useGpu);
+  }
+});
+
 test('while it installs the note shows its progress, and a failed install says where its output is', async () => {
   const {context: c, fields} = harness();
   c.wireFirstRun();

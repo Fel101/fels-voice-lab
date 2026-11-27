@@ -226,6 +226,8 @@ ROUTES = [
             "`null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer "
             "also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, "
             "from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. "
+            "Kokoro also has `install_variants` with `cpu` and `gpu` estimates. The GPU estimate is available on a "
+            "computer that can install that build. "
             "`install` is the latest install started from the Models "
             "page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), "
             "`state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, "
@@ -530,7 +532,8 @@ ROUTES = [
 
     # ---------------------------------------------------------------- Cast
     R("POST", "/api/cast/slate-clip/preview", "Cast", "Check a Voice Slate handoff file without saving it.",
-      body_kind="archive", reply="`clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.",
+      body_kind="archive", reply="`clip` (speaker ID and display name, transcript, origin, allowed use, release expiry, "
+                                "hashes and warnings) and `engines`.",
       errors=((400, "The bundle or source file is invalid."), (413, "The bundle exceeds the upload limit."))),
     R("POST", "/api/cast/slate-clip/import", "Cast", "Import a kept Voice Slate clip as a candidate.",
       body_kind="archive", status=201, query=(F("character", "string", "The Cast character name or ID.", True),
@@ -538,7 +541,7 @@ ROUTES = [
         F("create_character", "string", "Send 1 to create the character when the name is new."),
         F("accept_draft", "string", "Send 1 only after explicitly accepting an unchecked transcript draft."),
         F("sidecar_sha256", "string", "Optional preview hash. Refuse a clip whose sidecar differs from the one reviewed.")),
-      reply="`status`, Cast character, identity and reference IDs, and `warnings`.",
+      reply="`status`, Cast character, identity and reference IDs, `clip` and `warnings`.",
       notes="The bundle contains the kept WAV and its exact sidecar. The existing recorder bridge validates and copies "
             "them. A master recording stays in Slate and an imported reference still needs Cast approval.",
       errors=((400, "The clip or requested assignment is invalid."), (413, "The bundle exceeds the upload limit."))),
@@ -559,7 +562,7 @@ ROUTES = [
         F("accept_draft", "boolean", "Send true only after the person accepted an unchecked transcript draft."),
         F("sidecar_sha256", "string", "The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is "
                                       "refused.")),
-      reply="`status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to "
+      reply="`status`, Cast character, identity and reference IDs, `clip`, `warnings`, and `cleared`: whether the file went to "
             "the Recycle Bin.",
       notes="The same check and import as `POST /api/cast/slate-clip/import`. After the import the file goes to the "
             "Recycle Bin (it is deleted outside Windows). If that fails, the clip is still in Cast, `cleared` is false and "

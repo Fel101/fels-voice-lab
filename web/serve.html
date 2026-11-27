@@ -219,7 +219,7 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
 <section class="card" id="home">
   <h2>{{ui:home.home}}</h2>
   <div id="homeFirstRun">
-  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><button type="button" id="firstRunSample" hidden>{{ui:home.open_the_sample_scene}}</button><a href="#models" id="firstRunModels">{{ui:home.every_model_is_in_models}}</a></div></div>
+  <div class="workflow-note" id="firstRun" role="status" hidden><strong id="firstRunTitle"></strong><p id="firstRunText"></p><div class="row"><button class="go" type="button" id="firstRunButton" hidden></button><button type="button" id="firstRunGpu" hidden></button><button type="button" id="firstRunSample" hidden>{{ui:home.open_the_sample_scene}}</button><a href="#models" id="firstRunModels">{{ui:home.every_model_is_in_models}}</a></div></div>
   </div>
   <div id="homeStart" hidden>
     <p>{{ui:home.start_a_scene_or_turn}}</p>
@@ -366,7 +366,10 @@ fieldset.workflow-controls { border:0; padding:0; margin:0; min-width:0; }
     <label class="field">{{ui:cast.exact_words_in_the_recording}}<textarea id="referenceTranscript" placeholder="{{ui:cast.type_and_verify_every_word}}"></textarea></label>
     <div class="cast-actions"><button type="button" id="suggestTranscript">{{ui:cast.suggest_the_words_from_the}}</button><span class="meta">{{ui:cast.a_local_draft_to_check}}</span> <a href="#system">{{ui:cast.speech_recognition_setup}}</a></div>
     <div class="cast-grid"><label class="field">{{ui:cast.where_it_comes_from}}<input id="referenceOrigin" type="text" maxlength="1000" placeholder="{{ui:cast.where_this_recording_design_came}}"></label>
-      <label class="field">{{ui:cast.who_may_use_it_and}}<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="{{ui:cast.permission_and_use_limits_restrictions}}"></label></div>
+      <div>
+        <label class="field">{{ui:cast.who_may_use_it_and}}<input id="referenceAllowedUse" type="text" maxlength="1000" placeholder="{{ui:cast.permission_and_use_limits_restrictions}}"></label>
+        <p id="referenceReleaseExpiry" class="muted" hidden></p>
+      </div></div>
     <div id="referenceLicence" hidden>
       <div class="cast-actions">
         <label class="field compact">{{ui:cast.recording_licence}}<select id="referenceLicenceRating" aria-describedby="referenceLicenceHelp">

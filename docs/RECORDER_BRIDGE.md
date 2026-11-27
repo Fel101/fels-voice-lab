@@ -46,11 +46,15 @@ use the same list through `GET /api/inbox`, `POST /api/inbox/{inbox_file}/import
 ## Save for Voice Lab: the file box
 
 Open a kept clip in Voice Slate and choose **Save for Voice Lab** from the clip actions. This creates one `.voiceslate` file
-with the exact kept WAV and exact sidecar, wherever you save it. In Voice Lab, open **Cast library → Import from Voice
+with the exact kept WAV and a copy of its sidecar, wherever you save it. Voice Slate adds the speaker's current display
+name when it is available. In Voice Lab, open **Cast library → Import from Voice
 Slate** and pick the file. The same form opens as for a clip in the inbox. The file you picked stays where it is.
 
-Both ways keep the speaker's master and any release document in Voice Slate. The file keeps the release pointer from the
-sidecar, and the comparison with the master is not run: import the Voice Slate folder from the command line for that.
+Both ways keep the speaker's master and any release document in Voice Slate. Voice Lab shows the expiry beside the use
+terms and treats the recorded date as the last valid day. After that date, the recording stays available and new approval
+or generation requires renewed permission. Record the renewed release in Voice Slate, keep a clip with the renewed
+permission, then import and approve it in Cast. To compare the kept clip against its master, import the Voice Slate
+folder from the command line.
 
 The `.voiceslate` file is an uncompressed ZIP with two fixed member names, `clip.wav` and `clip.json`. The reader checks the
 sidecar, the WAV's hash, the consent statement and the chosen model's needs before anything reaches Cast.

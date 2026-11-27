@@ -301,7 +301,7 @@ List every engine the Lab knows, with its support level, pinned checkpoint, capa
 
 Say which engines are installed and usable here, and what each check measured. Reads files and stored results only.
 
-**Answer:** `200`, JSON. `device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), `state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, `downloading`, `unpacking`, `checking`, `finishing`, `waiting` or `null`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder). A card that can retry an interrupted install has `install_resume` with its `nvidia` choice and the `phase` where it was interrupted.
+**Answer:** `200`, JSON. `device` (the service's: `cuda` for a graphics card, or `cpu`), `busy`, `engines` (one row per catalog engine: `id`, `name`, `integrated`, `installation`, `state`, `check`, `check_outdated`, `min_free_ram_gb`, `device` and, for an integrated engine, `switch`, `device_choice` and `gpu`), `ram`, `install`, `speed` and `store_error`. `installation` holds `installed`, `missing` (the files not found), `environment`, `checkpoint` and, while files are missing from an engine that has a guided installer, `installer`: the launcher in the lab folder that installs it. `min_free_ram_gb` is the free RAM in GB the Lab wants before it loads the engine (`null` when none is set), and `ram` is this computer's `total_gb` and `free_gb`. An engine's `device` is the one its worker is asked for, and `check` is its last check there. `switch` is what its GPU/CPU switch shows (`gpu` or `cpu`), `device_choice` the choice kept for it (`null` when it follows the service), and `gpu` holds `choosable` (GPU can be picked), `reason` (why not), `build` (the PyTorch build in its environment: `cuda`, `rocm`, `cpu` or `null`) and `install` (Install puts in its GPU build). An engine that is not installed and has a guided installer also has `install_size`: `download_bytes` and `disk_bytes` for a first install of the build its Install puts in, from the installer's own numbers (its plan gives the exact figure), or `null` when they cannot be read. Kokoro also has `install_variants` with `cpu` and `gpu` estimates. The GPU estimate is available on a computer that can install that build. `install` is the latest install started from the Models page, or `null` when none has run since the service started: `id`, `engine`, `name`, `nvidia` (requests a GPU build), `state` (`running`, `stopping`, `stopped`, `finished` or `failed`), `phase` (`preparing`, `environment`, `packages`, `downloading`, `unpacking`, `checking`, `finishing`, `waiting` or `null`), `started_at`, `ended_at`, `seconds`, `exit_code`, `lines` (the end of its output) and `log` (all of it, a path under the lab folder). A card that can retry an interrupted install has `install_resume` with its `nvidia` choice and the `phase` where it was interrupted.
 
 <a id="post-api-engines-engine_id-check"></a>
 
@@ -891,7 +891,7 @@ Check a Voice Slate handoff file without saving it.
 
 **Request:** file bytes (`application/octet-stream`).
 
-**Answer:** `200`, JSON. `clip` (transcript, origin, allowed use, hashes and warnings) and `engines`.
+**Answer:** `200`, JSON. `clip` (speaker ID and display name, transcript, origin, allowed use, release expiry, hashes and warnings) and `engines`.
 
 | Also answers | When |
 |---|---|
@@ -914,7 +914,7 @@ Import a kept Voice Slate clip as a candidate.
 
 **Request:** file bytes (`application/octet-stream`).
 
-**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, and `warnings`.
+**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, `clip` and `warnings`.
 
 | Also answers | When |
 |---|---|
@@ -951,7 +951,7 @@ Import a waiting clip as a candidate, then clear it from the inbox.
 | `accept_draft` | boolean | Send true only after the person accepted an unchecked transcript draft. |
 | `sidecar_sha256` | string | The `clip.sidecar_sha256` the person reviewed. A clip whose sidecar differs is refused. |
 
-**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, `warnings`, and `cleared`: whether the file went to the Recycle Bin.
+**Answer:** `201`, JSON. `status`, Cast character, identity and reference IDs, `clip`, `warnings`, and `cleared`: whether the file went to the Recycle Bin.
 
 | Also answers | When |
 |---|---|

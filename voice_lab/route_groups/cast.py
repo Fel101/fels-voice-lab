@@ -210,7 +210,7 @@ def register(router, lab):
                 store=cast,
                 identity_check=False,
             )
-        return {key: result[key] for key in ("status", "character_id", "identity_id", "reference_id", "warnings")}
+        return {key: result[key] for key in ("status", "character_id", "identity_id", "reference_id", "clip", "warnings")}
 
     @router.post("/api/cast/slate-clip/preview")
     def preview_slate_clip(self, parsed, req):

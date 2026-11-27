@@ -386,7 +386,11 @@ function wireFirstRun(){
     var action=firstRun.action;if(!action){return;}
     if(action.kind==='progress'){return showProgress(action.engine);}
     firstRun.engine=action.engine;
-    return planInstall(action.engine,(modelCards[action.engine]||{}).installGpu);
+    return planInstall(action.engine,action.gpu ?? (modelCards[action.engine]||{}).installGpu);
+  });
+  $('firstRunGpu').addEventListener('click',function(){
+    firstRun.engine='kokoro';
+    return planInstall('kokoro',true);
   });
   $('go').addEventListener('click',function(){if(firstRun.ready){firstRun.ready=null;$('firstRun').hidden=true;}});
 }
@@ -413,9 +417,11 @@ function renderFirstRun(status){
   var rows=status.engines||[],job=status.install||null,box=$('firstRun'),button=$('firstRunButton');
   var installed=rows.some(function(row){return row.installation&&row.installation.installed&&!row.task_only&&!row.install_resume;});
   var running=activeInstall(job);
-  var offer=rows.find(function(row){return row.install_resume;})||rows.find(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;});
+  var available=rows.filter(function(row){return row.state==='not_installed'&&(row.installation||{}).installer;});
+  var offer=rows.find(function(row){return row.install_resume;})||available.find(function(row){return row.id==='kokoro';})||available[0];
   if(installed&&firstRun.engine&&job&&job.engine===firstRun.engine&&job.state==='finished'){studioReady(job);}
   firstRun.action=null;$('firstRunSample').hidden=true;
+  var gpuButton=$('firstRunGpu');gpuButton.hidden=true;
   if(firstRun.ready&&installed){
     box.hidden=false;button.hidden=true;$('firstRunModels').hidden=true;
     $('firstRunTitle').textContent=LabText.t('studio.is_installed', {ready: firstRun.ready});
@@ -441,6 +447,20 @@ function renderFirstRun(status){
     ?LabText.t('studio.the_install_stopped_exit_code', {exit_code: job.exit_code, elapsed: elapsedText(job.seconds), log: job.log})
     :offer.install_resume?stoppedInstall(offer.install_resume.phase):LabText.t('studio.install_to_hear_the_lab', {name: offer.name, download_details: installSizeText(offer)});
   button.textContent=LabText.t('studio.install', {name: offer.name});button.disabled=!!status.busy;
+  var variants=offer.install_variants;
+  if(variants&&!offer.install_resume){
+    firstRun.action.gpu=false;
+    if(!failed){$('firstRunText').textContent=LabText.t('studio.first_kokoro');}
+    button.textContent=variants.cpu
+      ? LabText.t('studio.first_kokoro_cpu_size',{size:gigabytes(variants.cpu.download_bytes)})
+      : LabText.t('studio.first_kokoro_cpu');
+    if(offer.gpu&&offer.gpu.install){
+      gpuButton.textContent=variants.gpu
+        ? LabText.t('studio.first_kokoro_gpu_size',{size:gigabytes(variants.gpu.download_bytes)})
+        : LabText.t('studio.first_kokoro_gpu');
+      gpuButton.hidden=false;gpuButton.disabled=!!status.busy;
+    }
+  }
 }
 function placeCards(status){
   var main=$('modelOverview'),more=$('modelMore');

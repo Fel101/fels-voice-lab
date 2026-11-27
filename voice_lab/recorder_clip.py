@@ -13,6 +13,7 @@ import io
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path, PurePosixPath
 
 import soundfile as sf
@@ -33,6 +34,27 @@ class ClipRefused(ValueError):
     def __init__(self, problems):
         self.problems = [problems] if isinstance(problems, str) else list(problems)
         super().__init__("; ".join(self.problems))
+
+
+def release_expiry(data):
+    release = data.get("release")
+    expires = release.get("expires") if isinstance(release, dict) else None
+    if expires is None or expires == "":
+        return None
+    try:
+        if isinstance(expires, str) and date.fromisoformat(expires).isoformat() == expires:
+            return expires
+    except ValueError:
+        pass
+    raise ClipRefused("The Voice Slate release expiry must be a date in YYYY-MM-DD format.")
+
+
+def expiry_problem(expires):
+    # Voice Slate treats the recorded date as the last valid day in local time.
+    if expires and expires < date.today().isoformat():
+        return (f"The speaker's permission expired on {expires}. Record the renewed release in Voice Slate, "
+                "keep a clip with the renewed permission, then import and approve it in Cast.")
+    return None
 
 
 @dataclass(frozen=True)
@@ -57,6 +79,15 @@ class RecorderClip:
     @property
     def speaker(self):
         return str(self.data.get("speaker") or self.sidecar_path.parent.name)
+
+    @property
+    def speaker_display_name(self):
+        name = self.data.get("speaker_display_name")
+        return name.strip() if isinstance(name, str) and name.strip() else self.speaker
+
+    @property
+    def release_expires(self):
+        return release_expiry(self.data)
 
     @property
     def schema(self):
@@ -113,12 +144,16 @@ class RecorderClip:
 
     def summary(self):
         denoise = self.denoise
-        return {"id": self.id, "speaker": self.speaker, "file": self.wav_path.name, "schema": self.schema,
+        warning = expiry_problem(self.release_expires)
+        return {"id": self.id, "speaker": self.speaker, "speaker_display_name": self.speaker_display_name,
+                "file": self.wav_path.name, "schema": self.schema,
                 "seconds": round(self.duration_seconds, 3), "created": self.created, "source": self.source,
                 "transcript": self.transcript, "transcript_status": self.transcript_status,
-                "origin": self.origin, "allowed_use": self.allowed_use, "flags": self.flags,
+                "origin": self.origin, "allowed_use": self.allowed_use, "release_expires": self.release_expires,
+                "release_expired": bool(warning),
+                "flags": self.flags,
                 "noise_reduction": denoise, "export_sha256": self.export_sha256,
-                "sidecar_sha256": self.sidecar_sha256, "warnings": list(self.warnings)}
+                "sidecar_sha256": self.sidecar_sha256, "warnings": [*self.warnings, *([warning] if warning else [])]}
 
 
 def sha256_bytes(data):
@@ -185,6 +220,7 @@ def load_clip(sidecar, *, accept_asr_draft=False):
     An ``asr_draft`` transcript (the speech recognizer's unreviewed guess) is refused unless ``accept_asr_draft``.
     """
     path, raw, data = _read_sidecar(sidecar)
+    release_expiry(data)
     problems, warnings = [], []
     schema = data.get("schema")
     if not isinstance(schema, str) or not schema.startswith(SCHEMA_PREFIX):

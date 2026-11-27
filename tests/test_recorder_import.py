@@ -9,7 +9,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import soundfile as sf
@@ -18,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from voice_lab import recorder_import as ri
-from voice_lab import recorder_identity
+from voice_lab import recorder_clip, recorder_identity
 from voice_lab.cast_store import CastStore
 from voice_lab.recorder_clip import ClipRefused, find_sidecars, load_clip
 from voice_lab.reference_paths import resolve_reference_path
@@ -58,6 +60,62 @@ class BridgeCase(unittest.TestCase):
 
 
 class RegistrationTests(BridgeCase):
+    def test_release_is_valid_through_its_local_date_and_checked_again_at_generation(self):
+        source = self.make(change=lambda data: data.update(release={"expires": "2027-02-22"}))
+        with patch.object(recorder_clip, "date", wraps=date) as clock:
+            clock.today.return_value = date(2027, 2, 21)
+            preview = load_clip(source).summary()
+            self.assertEqual(preview["release_expires"], "2027-02-22")
+            self.assertFalse(any("expired" in warning for warning in preview["warnings"]))
+            report = self.register(source)
+            recording, identity = report["reference_id"], report["identity_id"]
+            approve = {"status": "approved", "reference_version_id": recording}
+            clock.today.return_value = date(2027, 2, 22)
+            self.store.update_identity(identity, approve)
+            self.assertEqual(self.store.get_generation_identity(identity)["reference"]["release_expires"], "2027-02-22")
+            clock.today.return_value = date(2027, 2, 23)
+            for start in (
+                lambda: self.store.get_generation_identity(identity),
+                lambda: self.store.assert_identity_usable(identity, recording),
+                lambda: self.store.assert_media_usable(self.store.get_media_path("reference", recording)),
+            ):
+                with self.assertRaisesRegex(ValueError, r"expired on 2027-02-22.*renewed"):
+                    start()
+            self.assertTrue(self.store.get_media_path("reference", recording).is_file())
+            self.assertEqual(self.store.get_reference(recording)["release_expires"], "2027-02-22")
+            edited = self.store.add_reference_version(recording, {"allowed_use": "Updated description"})
+            self.assertEqual(edited["release_expires"], "2027-02-22")
+            self.store.update_identity(identity, {"notes": "Keep this voice in the project."})
+
+    def test_expired_at_import_can_be_reviewed_and_replaced_by_a_renewed_release(self):
+        source = self.make(change=lambda data: data.update(release={"expires": "2020-01-01"}))
+        first = self.register(source)
+        self.assertTrue(any("2020-01-01" in warning for warning in first["warnings"]))
+        with self.assertRaisesRegex(ValueError, "permission expired"):
+            self.store.update_identity(first["identity_id"], {"status": "approved",
+                                       "reference_version_id": first["reference_id"]})
+        fx.edited(source, lambda data: data["release"].update(expires="2099-01-01"))
+        renewed = self.register(source)
+        self.assertNotEqual(first["reference_id"], renewed["reference_id"])
+        self.assertEqual(first["identity_id"], renewed["identity_id"])
+        self.store.update_identity(renewed["identity_id"], {"status": "approved",
+                                   "reference_version_id": renewed["reference_id"]})
+        self.assertEqual(self.store.get_generation_identity(renewed["identity_id"])["reference"]["id"],
+                         renewed["reference_id"])
+
+    def test_existing_slate_reference_and_its_edits_recover_the_saved_expiry(self):
+        source = self.make(change=lambda data: data.update(release={"expires": "2020-01-01"}))
+        saved = self.register(source)
+        recording = saved["reference_id"]
+        edited = self.store.add_reference_version(recording, {})
+        with self.store._connect() as db:
+            db.execute("ALTER TABLE reference_versions DROP COLUMN release_expires")
+            db.execute("PRAGMA user_version=9")
+        for reference_id in (recording, edited["id"]):
+            self.assertEqual(self.store.get_reference(reference_id)["release_expires"], "2020-01-01")
+            with self.assertRaisesRegex(ValueError, "permission expired"):
+                self.store.get_generation_identity(saved["identity_id"], reference_id)
+
     def test_a_valid_clip_is_registered_with_its_metadata_intact(self):
         sidecar = self.make()
         meta = json.loads(sidecar.read_text(encoding="utf-8"))
@@ -68,6 +126,7 @@ class RegistrationTests(BridgeCase):
         ref = self.store.get_reference(report["reference_id"])
         self.assertEqual(ref["transcript"], meta["transcript"])
         self.assertEqual(ref["allowed_use"], meta["allowed_use"])
+        self.assertIsNone(ref["release_expires"])
         self.assertTrue(ref["origin"].startswith(meta["origin"]), "the person's own origin text comes first")
         self.assertIn(meta["id"], ref["origin"], "Voice Slate's clip id travels with the voice")
         self.assertEqual(ref["source_name"], meta["export"]["file"])

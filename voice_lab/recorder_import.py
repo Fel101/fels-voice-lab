@@ -115,9 +115,10 @@ def _find_identity(character, engine_id, label):
 
 
 def _same_registration(reference, clip):
-    """Same audio with the same transcript, origin and allowed use: nothing new to register."""
+    """A renewed release is a new recording version, even when the WAV and terms match."""
     return (reference["source_sha256"] == clip.export_sha256 and reference["transcript"] == clip.transcript and
-            reference["allowed_use"] == clip.allowed_use and reference["origin"] == compose_origin(clip))
+            reference["allowed_use"] == clip.allowed_use and reference["origin"] == compose_origin(clip) and
+            reference["release_expires"] == clip.release_expires)
 
 
 def plan_import(clip, *, character, engine_id=DEFAULT_ENGINE, label=None, create_character=False, store=None):
@@ -150,6 +151,7 @@ def _import_record(clip, ids, warnings, stamp):
     data = clip.data
     return {"schema": IMPORT_SCHEMA, "imported_at": stamp,
             "recorder_clip": {"id": clip.id, "speaker": clip.speaker, "schema": clip.schema, "created": clip.created,
+                              "speaker_display_name": clip.speaker_display_name, "release_expires": clip.release_expires,
                               "source": clip.source, "export_sha256": clip.export_sha256,
                               "sidecar_sha256": clip.sidecar_sha256, "transcript_status": clip.transcript_status,
                               "consent_confirmed": data.get("consent_confirmed"), "flags": clip.flags,
@@ -204,15 +206,16 @@ def import_clip(clip, *, character, engine_id=DEFAULT_ENGINE, label=None, create
     else:
         reference = store.add_reference(
             identity["id"], clip.wav_path.name, clip.wav_bytes, transcript=clip.transcript,
-            origin=compose_origin(clip), allowed_use=clip.allowed_use,
+            origin=compose_origin(clip), allowed_use=clip.allowed_use, release_expires=clip.release_expires,
             edits={"target_sample_rate": 24_000, "channel": "mono"})
         status = "registered"
         created.append("reference")
     ids = {"character_id": found["id"], "identity_id": identity["id"], "reference_id": reference["id"],
            "engine_id": engine_id, "reference_version": reference["version"]}
-    warnings = list(clip.warnings)
+    summary = clip.summary()
+    warnings = list(summary["warnings"])
     if status == "registered" and plan["reference"]["earlier_import_with_other_details"]:
-        warnings.append("this audio was registered before with a different transcript, origin or allowed use; "
+        warnings.append("this audio was registered before with different transcript, origin, allowed use or release details; "
                         "this is a new version of the voice recording, and the earlier one is kept")
     folder = store.get_media_path("reference_source", reference["id"]).parent
     record = (json.dumps(_import_record(clip, ids, warnings, stamp), indent=2, ensure_ascii=False) + "\n").encode("utf-8")
@@ -226,7 +229,7 @@ def import_clip(clip, *, character, engine_id=DEFAULT_ENGINE, label=None, create
     except ValueError as exc:             # registered, so this would be a bug here, not a bad clip: say so plainly
         raise RuntimeError(f"Reference {reference['id']} was registered but the worker policy refuses it: {exc}") from exc
     report = {"status": status, "created": created, "wrote_provenance": written, **ids,
-              "reference_audio": str(audio), "folder": str(folder), "clip": clip.summary(), "warnings": warnings,
+              "reference_audio": str(audio), "folder": str(folder), "clip": summary, "warnings": warnings,
               "identity_check": None, "identity_check_file": None}
     if identity_check:
         report["identity_check"] = check_identity(clip, min_similarity=min_similarity, against=against, embed=embed)
@@ -270,9 +273,11 @@ def _show_clip(clip):
     _say(f"    \"{_plain(clip.transcript, 90)}\"")
     _say(f"    origin: {_plain(clip.origin, 90)}")
     _say(f"    allowed use: {_plain(clip.allowed_use, 90)}")
+    if clip.release_expires:
+        _say(f"    permission valid through {clip.release_expires}")
     _say(f"    noise reduction: {noise}" + ("  (Voice Slate did not check the voice still matches)"
                                             if denoise["enabled"] and not denoise["recorder_identity_checked"] else ""))
-    for warning in clip.warnings:
+    for warning in clip.summary()["warnings"]:
         _say(f"    note: {warning}")
 
 

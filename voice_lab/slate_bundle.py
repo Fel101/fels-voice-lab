@@ -1,4 +1,4 @@
-"""Read the exact kept WAV and sidecar in a Voice Slate handoff file."""
+"""Read the exact kept WAV and the exported sidecar in a Voice Slate handoff file."""
 
 import io
 import json
