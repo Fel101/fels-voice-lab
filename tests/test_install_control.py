@@ -60,12 +60,13 @@ class PhaseTests(unittest.TestCase):
         self.assertGreaterEqual(time.monotonic() - started, 0.2)
 
     def test_the_waits_grow_to_a_quarter_second_and_are_not_all_the_same_length(self):
-        with mock.patch.object(install_control.time, "sleep") as sleep, \
-                mock.patch.object(install_control.random, "uniform", return_value=1.0):
+        with (
+            mock.patch.object(install_control.time, "sleep") as sleep,
+            mock.patch.object(install_control.random, "uniform", return_value=1.0),
+        ):
             for attempt in range(7):
                 install_control._pause(attempt)
-        self.assertEqual([round(call.args[0], 3) for call in sleep.call_args_list],
-                         [0.01, 0.02, 0.04, 0.08, 0.16, 0.25, 0.25])
+        self.assertEqual([round(call.args[0], 3) for call in sleep.call_args_list], [0.01, 0.02, 0.04, 0.08, 0.16, 0.25, 0.25])
         with mock.patch.object(install_control.time, "sleep") as sleep:
             for _ in range(20):
                 install_control._pause(5)

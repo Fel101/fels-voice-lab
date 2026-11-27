@@ -16,7 +16,7 @@ BUSY_SECONDS = 3.0
 def _pause(attempt):
     """Wait a little longer after each refusal, by a random amount, so two programs that read and write the file on their
     own timers cannot stay in step and meet at every try (five tries 50 ms apart did on a GitHub runner)."""
-    time.sleep(min(0.25, 0.01 * 2 ** attempt) * random.uniform(0.5, 1.5))
+    time.sleep(min(0.25, 0.01 * 2**attempt) * random.uniform(0.5, 1.5))
 
 
 class InstallControl:
