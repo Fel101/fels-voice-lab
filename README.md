@@ -282,7 +282,7 @@ What is planned, and what anyone can pick up, is in the pinned
 | [Scene schema](docs/scenes/scene-schema-v1.md) | Scripts, stable IDs and selection rules |
 | [HTTP API](docs/API.md) | Calls for scripts and other programs: speak, speak as a Cast voice, the command-line tool, and [`openapi.json`](openapi.json) |
 | [Responsible use](docs/RESPONSIBLE_USE.md) | Recording/voice rights and output restrictions |
-| [Changelog](CHANGELOG.md) | What is in this release, and its known limits; [1.0.0 in detail](docs/releases/1.0.0.md) |
+| [Changelog](CHANGELOG.md) | What is in this release, and its known limits; [1.0.1 in detail](docs/releases/1.0.1.md) |
 
 ## Verify
 

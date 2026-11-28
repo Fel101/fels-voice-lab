@@ -1,28 +1,41 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-11-27
+
+**From 1.0.0, press Update now** on **System & backups**, or run `update.bat` or the new Setup.exe. It keeps your library
+and models. [Every change in detail](docs/releases/1.0.1.md).
+
+### New
+
+- **A speaker's permission can end.** When a Voice Slate release has an end date, the import preview and **Cast
+  library** show it beside the allowed use. After that day, the voice cannot be approved or used for new speech until
+  you import a clip with the renewed permission. Its recordings, takes and saved scenes stay.
+- **Speakers keep their names.** A clip from Voice Slate 1.0.1 shows the speaker's name as written there, such as 美咲 or
+  Renée, also when it was changed after the clip was kept, and Cast suggests it as the character's name.
+- **Choose Kokoro for the CPU or the GPU** on the first screen, with the download size of each.
 
 ### Fixed
 
-- A voice cloned from a recording, such as a Voice Slate clip, says **Made from a recording** in **Cast library**, not
-  "Created with Source model not recorded".
-- A voice designed from words says what its model's licence allows and that no person's recording is in it, not
-  "Unknown; review checkpoint terms and reference rights".
+- A voice cloned from a recording says **Made from a recording** in **Cast library**, and a voice designed from words
+  says what its model's licence allows.
 - A model's install no longer stops with "Access is denied" when Windows or a virus scanner holds its progress file for
-  a moment: the installer tries again for up to three seconds.
-- `tools/real_model_smoke.py` prints its table on a Windows console that cannot show a model's own progress bars.
+  a moment.
 - Links to Altera use its new address, github.com/Fel101/fels-altera.
+
+### After updating
+
+No model needs installing again. Voices imported from Voice Slate before this version get their permission's end date
+from the clip details the Lab kept, so one whose permission has already ended stops speaking until it is renewed.
 
 ### For scripts and the other apps
 
-- `GET /api/voices` says what each voice is made from: `made_from` is `recording` for a voice cloned from a recording,
-  `words` for one designed from words (also when its recording was made from one of its takes), and `model` for one of a
-  model's own voices. A program can then tell a person's voice from a designed one.
+- `GET /api/voices` says what each voice is made from (`made_from`: `recording`, `words` or `model`), and lists a voice
+  whose speaker's permission has ended as not ready, with the reason in `why_not`.
+- The Voice Slate preview and import answers carry the speaker's display name and the permission's end date.
 
 ### For contributors
 
-- The bug report is a form, like the other Fel's Studio apps', and asks for the Lab's own report.
-- CONTRIBUTING says to run the CPU smoke pass where the models have PyTorch's ordinary CPU or CUDA build.
+- The bug report is a form, and CONTRIBUTING says where to run the CPU smoke pass.
 
 ## 1.0.0 — 2026-11-26
 

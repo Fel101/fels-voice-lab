@@ -5,7 +5,7 @@ only, and describe the new version in CHANGELOG.md. Keep this file at the root f
 """
 
 APP_NAME = "Fel's Voice Lab"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 # Where its releases are published: Check for updates and update.bat ask GitHub for the newest release here, tagged v<version>.
 REPOSITORY = "Fel101/fels-voice-lab"
 # The Lab's suite API: the number other apps of Fel's Studio read in /api/health's `fels` block (fels_suite.py, contract 1).
